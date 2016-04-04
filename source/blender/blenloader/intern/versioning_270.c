@@ -1058,6 +1058,47 @@ void blo_do_versions_270(FileData *fd, Library *UNUSED(lib), Main *main)
 		}
 	}
 
+	/* XXX I don't know against which version I should test */
+	if (!MAIN_VERSION_ATLEAST(main, 277, 0)) {
+		{
+			World *wo;
+			for (wo = main->world.first; wo; wo = wo->id.next) {
+				wo->probesize = 512;
+				wo->probeflags = (WO_PROBE_AUTO_UPDATE | WO_PROBE_COMPUTE_SH);
+				wo->probeshres = 64;
+			}
+		}
+
+		{
+			Object *ob;
+			for (ob = main->object.first; ob; ob = ob->id.next) {
+				ob->probesize = 256;
+				ob->probeflags = (OB_PROBE_AUTO_UPDATE | OB_PROBE_COMPUTE_SH);
+				ob->probeclipsta = 0.1f;
+				ob->probeclipend = 1000.0f;
+				ob->probeshres = 32;
+			}
+		}
+	}
+
+	/* XXX Testing all files */
+	{
+		bScreen *sc;
+		for (sc = main->screen.first; sc; sc = sc->id.next) {
+			ScrArea *sa;
+			for (sa = sc->areabase.first; sa; sa = sa->next) {
+				SpaceLink *sl;
+				for (sl = sa->spacedata.first; sl; sl = sl->next) {
+					if (sl->spacetype == SPACE_VIEW3D) {
+						View3D *v3d = (View3D *)sl;
+						if (v3d->pbr_samples == 0)
+							v3d->pbr_samples = 1;
+					}
+				}
+			}
+		}
+	}
+
 	if (!MAIN_VERSION_ATLEAST(main, 277, 1)) {
 		for (Scene *scene = main->scene.first; scene; scene = scene->id.next) {
 			ParticleEditSettings *pset = &scene->toolsettings->particle;

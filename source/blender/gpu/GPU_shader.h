@@ -47,6 +47,10 @@ enum {
 	GPU_SHADER_FLAGS_NONE = 0,
 	GPU_SHADER_FLAGS_SPECIAL_OPENSUBDIV = (1 << 0),
 	GPU_SHADER_FLAGS_NEW_SHADING        = (1 << 1),
+	GPU_SHADER_FLAGS_PROBE_BOX_CORREC   = (1 << 2),
+	GPU_SHADER_FLAGS_PROBE_ELIPS_CORREC = (1 << 3),
+	GPU_SHADER_FLAGS_PROBE_PLANAR       = (1 << 4),
+	GPU_SHADER_FLAGS_ALPHA_DEPTH        = (1 << 5),
 };
 
 GPUShader *GPU_shader_create(
@@ -88,9 +92,12 @@ typedef enum GPUBuiltinShader {
 	GPU_SHADER_SEP_GAUSSIAN_BLUR = 1,
 	GPU_SHADER_SMOKE             = 2,
 	GPU_SHADER_SMOKE_FIRE        = 3,
-	GPU_SHADER_COMPUTE_SH        = 4,
-	GPU_SHADER_DISPLAY_SH        = 5,
+	GPU_SHADER_DISPLAY_SH        = 4,
+
+	GPU_SHADER_COMPUTE_SH        = 5, /* This reserves the MAX_SH_SAMPLES following values */
 } GPUBuiltinShader;
+
+#define MAX_SH_SAMPLES 10
 
 GPUShader *GPU_shader_get_builtin_shader(GPUBuiltinShader shader);
 GPUShader *GPU_shader_get_builtin_fx_shader(int effects, bool persp);

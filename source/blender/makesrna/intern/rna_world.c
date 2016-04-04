@@ -36,6 +36,8 @@
 #include "DNA_texture_types.h"
 #include "DNA_world_types.h"
 
+#include "GPU_shader.h"  /* needed for MAX_SH_SAMPLES */
+
 #include "WM_types.h"
 
 #ifdef RNA_RUNTIME
@@ -47,6 +49,8 @@
 #include "BKE_main.h"
 #include "BKE_texture.h"
 
+#include "BLI_math_base.h"
+
 #include "ED_node.h"
 
 #include "WM_api.h"
@@ -56,6 +60,30 @@ static PointerRNA rna_World_lighting_get(PointerRNA *ptr)
 	return rna_pointer_inherit_refine(ptr, &RNA_WorldLighting, ptr->id.data);
 }
 
+static void rna_World_probe_sh_res_set(PointerRNA *ptr, int value)
+{
+	World *wo = (World *)ptr->id.data;
+
+	CLAMP(value, 1, (1 << MAX_SH_SAMPLES));
+	CLAMP_MAX(value, wo->probesize);
+	/* Jumping to next value based on difference so user can use UI */
+	if (value < wo->probeshres)
+		wo->probeshres = power_of_2_min_u(value);
+	else
+		wo->probeshres = power_of_2_max_u(value);
+}
+
+static void rna_World_probe_size_set(PointerRNA *ptr, int value)
+{
+	World *wo = (World *)ptr->id.data;
+
+	CLAMP(value, 16, 10240);
+	wo->probesize = value;
+	wo->probesize &= (~15); /* round to multiple of 16 */
+
+	if (wo->probeshres > wo->probesize)
+		rna_World_probe_sh_res_set(ptr, wo->probesize);
+}
 
 static PointerRNA rna_World_mist_get(PointerRNA *ptr)
 {
@@ -529,6 +557,31 @@ void RNA_def_world(BlenderRNA *brna)
 	RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
 	RNA_def_property_ui_text(prop, "Use Nodes", "Use shader nodes to render the world");
 	RNA_def_property_update(prop, 0, "rna_World_use_nodes_update");
+
+	/* viewport probes */
+	prop = RNA_def_property(srna, "probe_refresh_auto", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "probeflags", WO_PROBE_AUTO_UPDATE);
+	RNA_def_property_ui_text(prop, "Probe Auto Refresh", "Auto update");
+	RNA_def_property_update(prop, NC_WORLD | ND_WORLD_DRAW, "rna_World_update");
+
+	prop = RNA_def_property(srna, "probe_compute_sh", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "probeflags", WO_PROBE_COMPUTE_SH);
+	RNA_def_property_ui_text(prop, "Compute Diffuse", "Enable computation of diffuse lighting");
+	RNA_def_property_update(prop, NC_WORLD | ND_WORLD_DRAW, "rna_World_update");
+
+	prop = RNA_def_property(srna, "probe_size", PROP_INT, PROP_UNSIGNED);
+	RNA_def_property_int_sdna(prop, NULL, "probesize");
+	RNA_def_property_range(prop, 16, 2048);
+	RNA_def_property_ui_text(prop, "Buffer Size", "Resolution of the probe buffer texture");
+	RNA_def_property_update(prop, NC_WORLD | ND_WORLD_DRAW, "rna_World_update");
+	RNA_def_property_int_funcs(prop, NULL, "rna_World_probe_size_set", NULL);
+
+	prop = RNA_def_property(srna, "probe_sh_quality", PROP_INT, PROP_UNSIGNED);
+	RNA_def_property_int_sdna(prop, NULL, "probeshres");
+	RNA_def_property_range(prop, 1, (1 << MAX_SH_SAMPLES));
+	RNA_def_property_ui_text(prop, "Irradiance Precision", "Resolution of the diffuse precomputation. Should not be higher than the buffer size");
+	RNA_def_property_update(prop, NC_WORLD | ND_WORLD_DRAW, "rna_World_update");
+	RNA_def_property_int_funcs(prop, NULL, "rna_World_probe_sh_res_set", NULL);
 
 	rna_def_lighting(brna);
 	rna_def_world_mist(brna);

@@ -3737,7 +3737,7 @@ static void draw_em_fancy(Scene *scene, ARegion *ar, View3D *v3d,
 		}
 		else if (check_object_draw_texture(scene, v3d, dt)) {
 			if (draw_glsl_material(scene, ob, v3d, dt)) {
-				glFrontFace((ob->transflag & OB_NEG_SCALE) ? GL_CW : GL_CCW);
+				glFrontFace(((ob->transflag & OB_NEG_SCALE) != (v3d->flag3 & V3D_REFLECTION_PASS)) ? GL_CW : GL_CCW);
 
 				finalDM->drawMappedFacesGLSL(finalDM, GPU_object_material_bind,
 				                             draw_em_fancy__setGLSLFaceOpts, em);
@@ -3750,7 +3750,7 @@ static void draw_em_fancy(Scene *scene, ARegion *ar, View3D *v3d,
 			}
 		}
 		else {
-			glFrontFace((ob->transflag & OB_NEG_SCALE) ? GL_CW : GL_CCW);
+			glFrontFace(((ob->transflag & OB_NEG_SCALE) != (v3d->flag3 & V3D_REFLECTION_PASS)) ? GL_CW : GL_CCW);
 			finalDM->drawMappedFaces(finalDM, draw_em_fancy__setFaceOpts, GPU_object_material_bind, NULL, me->edit_btmesh, DM_DRAW_SKIP_HIDDEN | DM_DRAW_NEED_NORMALS);
 
 			glFrontFace(GL_CCW);
@@ -3998,7 +3998,7 @@ static void draw_mesh_fancy(Scene *scene, ARegion *ar, View3D *v3d, RegionView3D
 	}
 
 	/* vertexpaint, faceselect wants this, but it doesnt work for shaded? */
-	glFrontFace((ob->transflag & OB_NEG_SCALE) ? GL_CW : GL_CCW);
+	glFrontFace(((ob->transflag & OB_NEG_SCALE) != (v3d->flag3 & V3D_REFLECTION_PASS)) ? GL_CW : GL_CCW);
 
 	if (dt == OB_BOUNDBOX) {
 		if (((v3d->flag2 & V3D_RENDER_OVERRIDE) && v3d->drawtype >= OB_WIRE) == 0)
@@ -4030,7 +4030,7 @@ static void draw_mesh_fancy(Scene *scene, ARegion *ar, View3D *v3d, RegionView3D
 		if (draw_glsl_material(scene, ob, v3d, dt) && !(draw_flags & DRAW_MODIFIERS_PREVIEW)) {
 			Paint *p;
 
-			glFrontFace((ob->transflag & OB_NEG_SCALE) ? GL_CW : GL_CCW);
+			glFrontFace(((ob->transflag & OB_NEG_SCALE) != (v3d->flag3 & V3D_REFLECTION_PASS)) ? GL_CW : GL_CCW);
 
 			if ((v3d->flag2 & V3D_SHOW_SOLID_MATCAP) && ob->sculpt && (p = BKE_paint_get_active(scene))) {
 				GPUVertexAttribs gattribs;
@@ -4122,7 +4122,7 @@ static void draw_mesh_fancy(Scene *scene, ARegion *ar, View3D *v3d, RegionView3D
 				draw_mesh_object_outline(v3d, ob, dm);
 			}
 
-			glFrontFace((ob->transflag & OB_NEG_SCALE) ? GL_CW : GL_CCW);
+			glFrontFace(((ob->transflag & OB_NEG_SCALE) != (v3d->flag3 & V3D_REFLECTION_PASS)) ? GL_CW : GL_CCW);
 
 			if (ob->sculpt && (p = BKE_paint_get_active(scene))) {
 				float planes[4][4];
@@ -4584,7 +4584,7 @@ static bool drawCurveDerivedMesh(Scene *scene, View3D *v3d, RegionView3D *rv3d, 
 
 	DM_update_materials(dm, ob);
 
-	glFrontFace((ob->transflag & OB_NEG_SCALE) ? GL_CW : GL_CCW);
+	glFrontFace(((ob->transflag & OB_NEG_SCALE) != (v3d->flag3 & V3D_REFLECTION_PASS)) ? GL_CW : GL_CCW);
 
 	if (dt > OB_WIRE && dm->getNumPolys(dm)) {
 		bool glsl = draw_glsl_material(scene, ob, v3d, dt);
@@ -4754,10 +4754,10 @@ static bool drawDispList(Scene *scene, View3D *v3d, RegionView3D *rv3d, Base *ba
 		GLenum mode;
 
 		if (ob->type == OB_MBALL) {
-			mode = (ob->transflag & OB_NEG_SCALE) ? GL_CW : GL_CCW;
+			mode = ((ob->transflag & OB_NEG_SCALE) != (v3d->flag3 & V3D_REFLECTION_PASS)) ? GL_CW : GL_CCW;
 		}
 		else {
-			mode = (ob->transflag & OB_NEG_SCALE) ? GL_CCW : GL_CW;
+			mode = ((ob->transflag & OB_NEG_SCALE) != (v3d->flag3 & V3D_REFLECTION_PASS)) ? GL_CCW : GL_CW;
 		}
 
 		glFrontFace(mode);
@@ -8512,7 +8512,7 @@ static void draw_object_mesh_instance(Scene *scene, View3D *v3d, RegionView3D *r
 			GPU_begin_object_materials(v3d, rv3d, scene, ob, glsl, NULL);
 		}
 		
-		glFrontFace((ob->transflag & OB_NEG_SCALE) ? GL_CW : GL_CCW);
+		glFrontFace(((ob->transflag & OB_NEG_SCALE) != (v3d->flag3 & V3D_REFLECTION_PASS)) ? GL_CW : GL_CCW);
 		
 		if (dm) {
 			dm->drawFacesSolid(dm, NULL, 0, GPU_object_material_bind);

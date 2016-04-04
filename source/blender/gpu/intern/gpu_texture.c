@@ -663,9 +663,9 @@ GPUTexture *GPU_texture_create_1D_procedural(int w, const float *pixels, char er
 	return tex;
 }
 
-GPUTexture *GPU_texture_create_cube_probe(int w, char err_out[256])
+GPUTexture *GPU_texture_create_cube_probe(int size, char err_out[256])
 {
-	GPUTexture *tex = GPU_texture_create_cube(w, GPU_HDR_HALF_FLOAT, err_out);
+	GPUTexture *tex = GPU_texture_create_cube(size, GPU_HDR_HALF_FLOAT, err_out);
 
 	if (tex)
 		GPU_texture_unbind(tex);
@@ -673,6 +673,20 @@ GPUTexture *GPU_texture_create_cube_probe(int w, char err_out[256])
 	return tex;
 }
 
+GPUTexture *GPU_texture_create_planar_probe(int size, char err_out[256])
+{
+	GPUTexture *tex = GPU_texture_create_nD(size, size, 2, NULL, 0, GPU_HDR_HALF_FLOAT, 4, 0, err_out);
+
+	if (tex) {
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_GENERATE_MIPMAP, GL_TRUE);
+
+		GPU_texture_unbind(tex);
+	}
+
+	return tex;
+}
 
 GPUTexture *GPU_texture_create_sh_filter_target(char err_out[256])
 {

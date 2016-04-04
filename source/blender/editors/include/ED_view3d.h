@@ -324,7 +324,7 @@ void *ED_view3d_mats_rv3d_backup(struct RegionView3D *rv3d);
 void  ED_view3d_mats_rv3d_restore(struct RegionView3D *rv3d, void *rv3dmat_pt);
 
 bool ED_view3d_context_activate(struct bContext *C);
-void ED_view3d_draw_offscreen_init(struct Scene *scene, struct View3D *v3d);
+void ED_view3d_draw_offscreen_init(struct Scene *scene, struct View3D *v3d, struct ARegion *ar);
 void ED_view3d_draw_offscreen(
         struct Scene *scene, struct View3D *v3d, struct ARegion *ar, int winx, int winy, float viewmat[4][4],
         float winmat[4][4], bool do_bgpic, bool do_sky, bool is_persp, bool do_meshes, const char *viewname,

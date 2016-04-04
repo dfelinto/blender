@@ -177,6 +177,10 @@ GPUPass *GPU_generate_pass(ListBase *nodes, struct GPUNodeLink *outlink,
                            const GPUMatType type, const char *name,
                            const bool use_opensubdiv,
                            const bool use_new_shading,
+                           const bool use_planar_probe,
+                           const bool use_box_correction,
+                           const bool use_ellipsoid_correction,
+                           const bool use_alpha_as_depth,
                            const int samplecount);
 
 struct GPUShader *GPU_pass_shader(GPUPass *pass);

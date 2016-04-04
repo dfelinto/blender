@@ -73,7 +73,7 @@ static struct GPUShadersGlobal {
 		GPUShader *sep_gaussian_blur;
 		GPUShader *smoke;
 		GPUShader *smoke_fire;
-		GPUShader *compute_sh;
+		GPUShader *compute_sh[MAX_SH_SAMPLES];
 		GPUShader *display_sh;
 		/* cache for shader fx. Those can exist in combinations so store them here */
 		GPUShader *fx_shaders[MAX_FX_SHADERS * 2];
@@ -197,6 +197,10 @@ static void gpu_shader_standard_extensions(char defines[MAX_EXT_DEFINE_LENGTH], 
 static void gpu_shader_standard_defines(char defines[MAX_DEFINE_LENGTH],
                                         bool use_opensubdiv,
                                         bool use_new_shading,
+                                        bool use_box_correction,
+                                        bool use_ellipsoid_correction,
+                                        bool use_planar_probe,
+                                        bool use_alpha_as_depth,
                                         int importance_sample_count)
 {
 	/* some useful defines to detect GPU type */
@@ -238,6 +242,21 @@ static void gpu_shader_standard_defines(char defines[MAX_DEFINE_LENGTH],
 
 	if (use_new_shading) {
 		strcat(defines, "#define USE_NEW_SHADING\n");
+	}
+
+	if (use_box_correction)
+		strcat(defines, "#define CORRECTION_BOX\n");
+	else if (use_ellipsoid_correction)
+		strcat(defines, "#define CORRECTION_ELLIPSOID\n");
+	else
+		strcat(defines, "#define CORRECTION_NONE\n");
+
+	if (use_planar_probe) {
+		strcat(defines, "#define PLANAR_PROBE\n");
+	}
+
+	if (use_alpha_as_depth) {
+		strcat(defines, "#define ALPHA_AS_DEPTH\n");
 	}
 
 	if (!importance_sample_count) {
@@ -332,6 +351,10 @@ GPUShader *GPU_shader_create_ex(const char *vertexcode,
 	gpu_shader_standard_defines(standard_defines,
 	                            use_opensubdiv,
 	                            (flags & GPU_SHADER_FLAGS_NEW_SHADING) != 0,
+	                            (flags & GPU_SHADER_FLAGS_PROBE_BOX_CORREC) != 0,
+	                            (flags & GPU_SHADER_FLAGS_PROBE_ELIPS_CORREC) != 0,
+	                            (flags & GPU_SHADER_FLAGS_PROBE_PLANAR) != 0,
+	                            (flags & GPU_SHADER_FLAGS_ALPHA_DEPTH) != 0,
 	                            samplecount);
 	gpu_shader_standard_extensions(standard_extensions, geocode != NULL);
 
@@ -597,50 +620,61 @@ GPUShader *GPU_shader_get_builtin_shader(GPUBuiltinShader shader)
 {
 	GPUShader *retval = NULL;
 
-	switch (shader) {
-		case GPU_SHADER_VSM_STORE:
-			if (!GG.shaders.vsm_store)
-				GG.shaders.vsm_store = GPU_shader_create(
-				        datatoc_gpu_shader_vsm_store_vert_glsl, datatoc_gpu_shader_vsm_store_frag_glsl,
-				        NULL, NULL, NULL, 0, 0, 0);
-			retval = GG.shaders.vsm_store;
-			break;
-		case GPU_SHADER_SEP_GAUSSIAN_BLUR:
-			if (!GG.shaders.sep_gaussian_blur)
-				GG.shaders.sep_gaussian_blur = GPU_shader_create(
-				        datatoc_gpu_shader_sep_gaussian_blur_vert_glsl,
-				        datatoc_gpu_shader_sep_gaussian_blur_frag_glsl,
-				        NULL, NULL, NULL, 0, 0, 0);
-			retval = GG.shaders.sep_gaussian_blur;
-			break;
-		case GPU_SHADER_SMOKE:
-			if (!GG.shaders.smoke)
-				GG.shaders.smoke = GPU_shader_create(
-				        datatoc_gpu_shader_smoke_vert_glsl, datatoc_gpu_shader_smoke_frag_glsl,
-				        NULL, NULL, NULL, 0, 0, 0);
-			retval = GG.shaders.smoke;
-			break;
-		case GPU_SHADER_SMOKE_FIRE:
-			if (!GG.shaders.smoke_fire)
-				GG.shaders.smoke_fire = GPU_shader_create(
-				        datatoc_gpu_shader_smoke_vert_glsl, datatoc_gpu_shader_smoke_frag_glsl,
-				        NULL, NULL, "#define USE_FIRE;\n", 0, 0, 0);
-			retval = GG.shaders.smoke_fire;
-			break;
-		case GPU_SHADER_COMPUTE_SH:
-			if (!GG.shaders.compute_sh)
-				GG.shaders.compute_sh = GPU_shader_create(
-				        datatoc_gpu_shader_probe_sh_compute_vert_glsl, datatoc_gpu_shader_probe_sh_compute_frag_glsl,
-				        NULL, NULL, "#define CUBEMAP_RES 64\n", 0, 0, 0);
-			retval = GG.shaders.compute_sh;
-			break;
-		case GPU_SHADER_DISPLAY_SH:
-			if (!GG.shaders.display_sh)
-				GG.shaders.display_sh = GPU_shader_create(
-				        datatoc_gpu_shader_display_sh_vert_glsl, datatoc_gpu_shader_display_sh_frag_glsl,
-				        NULL, NULL, NULL, 0, 0, 0);
-			retval = GG.shaders.display_sh;
-			break;
+	if (shader >= GPU_SHADER_COMPUTE_SH && shader < GPU_SHADER_COMPUTE_SH + MAX_SH_SAMPLES) {
+		int shadn = shader - GPU_SHADER_COMPUTE_SH;
+
+		if (!GG.shaders.compute_sh[shadn]) {
+			char buf[32];
+			int samples = (1 << shadn);
+
+			CLAMP_MIN(samples, 1);
+			sprintf(buf, "#define CUBEMAP_RES %d \n", samples);
+
+			GG.shaders.compute_sh[shadn] = GPU_shader_create(
+			        datatoc_gpu_shader_probe_sh_compute_vert_glsl, datatoc_gpu_shader_probe_sh_compute_frag_glsl,
+			        NULL, NULL, buf, 0, 0, 0);
+		}
+		retval = GG.shaders.compute_sh[shadn];
+	}
+	else {
+		switch (shader) {
+			case GPU_SHADER_VSM_STORE:
+				if (!GG.shaders.vsm_store)
+					GG.shaders.vsm_store = GPU_shader_create(
+					        datatoc_gpu_shader_vsm_store_vert_glsl, datatoc_gpu_shader_vsm_store_frag_glsl,
+					        NULL, NULL, NULL, 0, 0, 0);
+				retval = GG.shaders.vsm_store;
+				break;
+			case GPU_SHADER_SEP_GAUSSIAN_BLUR:
+				if (!GG.shaders.sep_gaussian_blur)
+					GG.shaders.sep_gaussian_blur = GPU_shader_create(
+					        datatoc_gpu_shader_sep_gaussian_blur_vert_glsl,
+					        datatoc_gpu_shader_sep_gaussian_blur_frag_glsl,
+					        NULL, NULL, NULL, 0, 0, 0);
+				retval = GG.shaders.sep_gaussian_blur;
+				break;
+			case GPU_SHADER_SMOKE:
+				if (!GG.shaders.smoke)
+					GG.shaders.smoke = GPU_shader_create(
+					        datatoc_gpu_shader_smoke_vert_glsl, datatoc_gpu_shader_smoke_frag_glsl,
+					        NULL, NULL, NULL, 0, 0, 0);
+				retval = GG.shaders.smoke;
+				break;
+			case GPU_SHADER_SMOKE_FIRE:
+				if (!GG.shaders.smoke_fire)
+					GG.shaders.smoke_fire = GPU_shader_create(
+					        datatoc_gpu_shader_smoke_vert_glsl, datatoc_gpu_shader_smoke_frag_glsl,
+					        NULL, NULL, "#define USE_FIRE;\n", 0, 0, 0);
+				retval = GG.shaders.smoke_fire;
+				break;
+			case GPU_SHADER_DISPLAY_SH:
+				if (!GG.shaders.display_sh)
+					GG.shaders.display_sh = GPU_shader_create(
+					        datatoc_gpu_shader_display_sh_vert_glsl, datatoc_gpu_shader_display_sh_frag_glsl,
+					        NULL, NULL, NULL, 0, 0, 0);
+				retval = GG.shaders.display_sh;
+				break;
+		}
 	}
 
 	if (retval == NULL)
@@ -754,9 +788,12 @@ void GPU_shader_free_builtin_shaders(void)
 		GG.shaders.smoke_fire = NULL;
 	}
 
-	if (GG.shaders.compute_sh) {
-		GPU_shader_free(GG.shaders.compute_sh);
-		GG.shaders.compute_sh = NULL;
+
+	for (i = 0; i < MAX_SH_SAMPLES; i++) {
+		if (GG.shaders.compute_sh[i]) {
+			GPU_shader_free(GG.shaders.compute_sh[i]);
+			GG.shaders.compute_sh[i] = NULL;
+		}
 	}
 
 	if (GG.shaders.display_sh) {

@@ -117,6 +117,11 @@ void BKE_world_init(World *wrld)
 	wrld->preview = NULL;
 	wrld->miststa = 5.0f;
 	wrld->mistdist = 25.0f;
+
+	/* Viewport Probe defaults */
+	wrld->probesize = 512;
+	wrld->probeshres = 64;
+	wrld->probeflags = (WO_PROBE_AUTO_UPDATE | WO_PROBE_COMPUTE_SH);
 }
 
 World *add_world(Main *bmain, const char *name)

@@ -1048,6 +1048,14 @@ void BKE_object_init(Object *ob)
 	ob->col_mask = 0xffff;
 	ob->preview = NULL;
 
+	/* Viewport Probe defaults */
+	ob->probesize = 256;
+	ob->probeshres = 32;
+	ob->probeflags = (OB_PROBE_AUTO_UPDATE | OB_PROBE_COMPUTE_SH);
+	ob->probeclipsta = 0.1f;
+	ob->probeclipend = 1000.0f;
+	ob->probeclipbias = 0.01f;
+
 	/* NT fluid sim defaults */
 	ob->fluidsimSettings = NULL;
 

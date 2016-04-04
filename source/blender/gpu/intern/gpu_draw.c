@@ -1598,6 +1598,11 @@ static struct GPUMaterialState {
 	int lastmatnr, lastretval;
 	GPUBlendMode lastalphablend;
 	bool is_opensubdiv;
+	bool is_planar_probe;
+	bool is_realistic_mat;
+	bool is_alpha_as_depth;
+	int pbr_samples;
+	int parallax_correc;
 
 } GMS = {NULL};
 
@@ -1686,7 +1691,6 @@ void GPU_begin_object_materials(
 	const bool new_shading_nodes = BKE_scene_use_new_shading_nodes(scene);
 	const bool use_matcap = (v3d->flag2 & V3D_SHOW_SOLID_MATCAP) != 0;  /* assumes v3d->defmaterial->preview is set */
 	bool use_opensubdiv = false;
-	int pbr_samples = 16 * v3d->pbr_samples;
 
 #ifdef WITH_OPENSUBDIV
 	{
@@ -1744,6 +1748,17 @@ void GPU_begin_object_materials(
 	GMS.gviewmat = rv3d->viewmat;
 	GMS.gviewinv = rv3d->viewinv;
 	GMS.gviewcamtexcofac = rv3d->viewcamtexcofac;
+	GMS.is_realistic_mat = (v3d->flag3 & V3D_REALISTIC_MAT);
+	GMS.is_alpha_as_depth = (v3d->flag3 & V3D_REFLECTION_PASS);
+	GMS.gprobe = NULL;
+
+	/* This prevent from generating and keeping lots of shaders in memory
+	 * if realistic mat is turned off. */
+	if (GMS.is_realistic_mat)
+		GMS.pbr_samples = (v3d->pbr_samples <= 0) ? 16 : 16 * v3d->pbr_samples;
+	else
+		GMS.pbr_samples = 0;
+
 
 	/* alpha pass setup. there's various cases to handle here:
 	 * - object transparency on: only solid materials draw in the first pass,
@@ -1777,7 +1792,54 @@ void GPU_begin_object_materials(
 		GMS.alphablend[0] = GPU_BLEND_SOLID;
 	}
 	else {
-	
+		GMS.is_planar_probe = false;
+		GMS.parallax_correc = 0;
+
+		if (new_shading_nodes && (v3d->flag3 & V3D_REALISTIC_MAT) && !(v3d->flag2 & V3D_RENDER_SHADOW)) {
+			/* Picking the right probe */
+			/* XXX need to be done clearer */
+			if (ob->probetype == OB_PROBE_CUBEMAP || ob->probetype == OB_PROBE_PLANAR) {
+
+				GMS.is_planar_probe = (ob->probetype == OB_PROBE_PLANAR);
+
+				if (GMS.is_planar_probe && (v3d->flag3 & V3D_PROBE_CAPTURE)) {
+					if (ob->probe && ob->probe->probetype == OB_PROBE_CUBEMAP) {
+						GMS.gprobe = GPU_probe_object(scene, ob->probe);
+						GMS.parallax_correc = ob->probe->probeparallax;
+						GMS.is_planar_probe = false;
+					}
+					else {
+						/* it will later get the world probe eventualy */
+					}
+				}
+				else {
+					GMS.gprobe = GPU_probe_object(scene, ob);
+
+					if (ob->probetype == OB_PROBE_CUBEMAP)
+						GMS.parallax_correc = ob->probeparallax;
+					else if (ob->probe && ob->probe->probetype == OB_PROBE_CUBEMAP)
+						GMS.parallax_correc = ob->probe->probeparallax;
+				}
+			}
+			else if (ob->probetype == OB_PROBE_OBJECT && ob->probe) {
+				/* check if we are not rendering this particular probe to avoid feedback loop */
+				if (!((v3d->flag3 & V3D_PROBE_CAPTURE) && (ob->probe == v3d->probe_source))) {
+					if (ob->probe->probetype == OB_PROBE_CUBEMAP || ob->probe->probetype == OB_PROBE_PLANAR) {
+						GMS.is_planar_probe = (ob->probe->probetype == OB_PROBE_PLANAR);
+						GMS.gprobe = GPU_probe_object(scene, ob->probe);
+
+						if (ob->probe->probetype == OB_PROBE_CUBEMAP)
+							GMS.parallax_correc = ob->probe->probeparallax;
+					}
+				}
+			}
+
+			/* Default : use the world probe if it exists */
+			if (!GMS.gprobe && scene->world) {
+				GMS.gprobe = GPU_probe_world(scene, scene->world);
+			}
+		}
+
 		/* no materials assigned? */
 		if (ob->totcol == 0) {
 			gpu_material_to_fixed(&GMS.matbuf[0], &defmaterial, 0, ob, new_shading_nodes, true);
@@ -1787,27 +1849,12 @@ void GPU_begin_object_materials(
 
 			if (glsl) {
 				GMS.gmatbuf[0] = &defmaterial;
-				GPU_material_from_blender(GMS.gscene, &defmaterial, GMS.is_opensubdiv, (v3d->flag3 & V3D_REALISTIC_MAT), pbr_samples);
+				GPU_material_from_blender(GMS.gscene, &defmaterial, GMS.is_opensubdiv, GMS.is_realistic_mat, GMS.is_planar_probe, GMS.is_alpha_as_depth, GMS.pbr_samples, GMS.parallax_correc);
 			}
 
 			GMS.alphablend[0] = GPU_BLEND_SOLID;
 		}
 
-		if (new_shading_nodes && (v3d->flag3 & V3D_REALISTIC_MAT) && !(v3d->flag2 & V3D_RENDER_SHADOW)) {
-			bool use_object_probe = false;
-
-			if (ob->probe)
-				if (!((v3d->flag3 & V3D_PROBE_CAPTURE) && (ob->probe == v3d->probe_source)) && ob->probe->isprobe)
-					use_object_probe = true;
-
-			if (use_object_probe)
-				GMS.gprobe = GPU_probe_object(scene, ob->probe);
-			else if (ob->isprobe)
-				GMS.gprobe = GPU_probe_object(scene, ob);
-			else if (scene->world)
-				GMS.gprobe = GPU_probe_world(scene, scene->world);
-		}
-		
 		/* setup materials */
 		for (a = 1; a <= ob->totcol; a++) {
 			/* find a suitable material */
@@ -1816,7 +1863,7 @@ void GPU_begin_object_materials(
 			if (ma == NULL) ma = &defmaterial;
 
 			/* create glsl material if requested */
-			gpumat = glsl ? GPU_material_from_blender(GMS.gscene, ma, GMS.is_opensubdiv, (v3d->flag3 & V3D_REALISTIC_MAT), pbr_samples) : NULL;
+			gpumat = glsl ? GPU_material_from_blender(GMS.gscene, ma, GMS.is_opensubdiv, GMS.is_realistic_mat, GMS.is_planar_probe, GMS.is_alpha_as_depth, GMS.pbr_samples, GMS.parallax_correc) : NULL;
 
 			if (gpumat) {
 				/* do glsl only if creating it succeed, else fallback */
@@ -1915,7 +1962,7 @@ int GPU_object_material_bind(int nr, void *attribs)
 	/* unbind glsl material */
 	if (GMS.gboundmat) {
 		if (GMS.is_alpha_pass) glDepthMask(0);
-		GPU_material_unbind(GPU_material_from_blender(GMS.gscene, GMS.gboundmat, GMS.is_opensubdiv, false, 0));
+		GPU_material_unbind(GPU_material_from_blender(GMS.gscene, GMS.gboundmat, GMS.is_opensubdiv, GMS.is_realistic_mat, GMS.is_planar_probe, GMS.is_alpha_as_depth, GMS.pbr_samples, GMS.parallax_correc));
 		GMS.gboundmat = NULL;
 	}
 
@@ -1942,7 +1989,7 @@ int GPU_object_material_bind(int nr, void *attribs)
 
 			float auto_bump_scale;
 
-			GPUMaterial *gpumat = GPU_material_from_blender(GMS.gscene, mat, GMS.is_opensubdiv, false, 0);
+			GPUMaterial *gpumat = GPU_material_from_blender(GMS.gscene, mat, GMS.is_opensubdiv, GMS.is_realistic_mat, GMS.is_planar_probe, GMS.is_alpha_as_depth, GMS.pbr_samples, GMS.parallax_correc);
 			GPU_material_vertex_attributes(gpumat, gattribs);
 
 			if (GMS.dob)
@@ -1955,8 +2002,7 @@ int GPU_object_material_bind(int nr, void *attribs)
 			auto_bump_scale = GMS.gob->derivedFinal != NULL ? GMS.gob->derivedFinal->auto_bump_scale : 1.0f;
 			GPU_material_bind_uniforms(gpumat, GMS.gob->obmat, GMS.gviewmat, GMS.gob->col, auto_bump_scale, &particle_info);
 
-			if (GMS.gprobe)
-				GPU_material_bind_uniforms_probe(gpumat, GMS.gprobe);
+			GPU_material_bind_uniforms_probe(gpumat, GMS.gprobe);
 
 			GMS.gboundmat = mat;
 
@@ -2044,7 +2090,7 @@ void GPU_object_material_unbind(void)
 			glDisable(GL_CULL_FACE);
 
 		if (GMS.is_alpha_pass) glDepthMask(0);
-		GPU_material_unbind(GPU_material_from_blender(GMS.gscene, GMS.gboundmat, GMS.is_opensubdiv, false, 0));
+		GPU_material_unbind(GPU_material_from_blender(GMS.gscene, GMS.gboundmat, GMS.is_opensubdiv, GMS.is_realistic_mat, GMS.is_planar_probe, GMS.is_alpha_as_depth, GMS.pbr_samples, GMS.parallax_correc));
 		GMS.gboundmat = NULL;
 	}
 	else
@@ -2342,7 +2388,11 @@ void GPU_draw_update_fvar_offset(DerivedMesh *dm)
 		gpu_material = GPU_material_from_blender(GMS.gscene,
 		                                         material,
 		                                         GMS.is_opensubdiv,
-		                                         false, 0);
+		                                         GMS.is_realistic_mat,
+		                                         GMS.is_planar_probe,
+		                                         GMS.is_alpha_as_depth,
+		                                         GMS.pbr_samples,
+		                                         GMS.parallax_correc);
 
 		GPU_material_update_fvar_offset(gpu_material, dm);
 	}

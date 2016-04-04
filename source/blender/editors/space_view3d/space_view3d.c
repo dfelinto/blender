@@ -35,6 +35,7 @@
 #include "DNA_material_types.h"
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
+#include "DNA_world_types.h"
 
 #include "MEM_guardedalloc.h"
 
@@ -802,8 +803,7 @@ static void view3d_recalc_used_layers(ARegion *ar, wmNotifier *wmn, Scene *scene
 static void view3d_tag_probes_update(ARegion *ar, wmNotifier *wmn, Scene *scene)
 {
 	wmWindow *win = wmn->wm->winactive;
-	ScrArea *sa;
-	unsigned int lay_used = 0;
+
 	Base *base;
 
 	if (!win) return;
@@ -815,13 +815,35 @@ static void view3d_tag_probes_update(ARegion *ar, wmNotifier *wmn, Scene *scene)
 		if (ob->gpuprobe.first) {
 			LinkData *link;
 			for (link = ob->gpuprobe.first; link; link = link->next) {
-				GPUProbe *ref = (GPUProbe *)link->data;
-				GPU_probe_set_update(ref, true);
+				GPUProbe *probe = (GPUProbe *)link->data;
+				GPU_probe_auto_update(probe);
 			}
 		}
 
 		base = base->next;
 	}
+}
+
+static void view3d_tag_world_probe_update(ARegion *ar, wmNotifier *wmn, Scene *scene)
+{
+	wmWindow *win = wmn->wm->winactive;
+
+	if (!win) return;
+
+	if (scene->world) {
+		World *wo = scene->world;
+
+		if (wo->gpuprobe.first) {
+			LinkData *link;
+			for (link = wo->gpuprobe.first; link; link = link->next) {
+				GPUProbe *probe = (GPUProbe *)link->data;
+				GPU_probe_auto_update(probe);
+			}
+		}
+	}
+
+	/* usualy other probes depends on the world lighting so update them */
+	view3d_tag_probes_update(ar, wmn, scene);
 }
 
 static void view3d_main_region_listener(bScreen *sc, ScrArea *sa, ARegion *ar, wmNotifier *wmn)
@@ -867,6 +889,7 @@ static void view3d_main_region_listener(bScreen *sc, ScrArea *sa, ARegion *ar, w
 					ED_region_tag_redraw(ar);
 					break;
 				case ND_WORLD:
+					view3d_tag_world_probe_update(ar, wmn, scene);
 					/* handled by space_view3d_listener() for v3d access */
 					break;
 				case ND_DRAW_RENDER_VIEWPORT:
@@ -971,7 +994,7 @@ static void view3d_main_region_listener(bScreen *sc, ScrArea *sa, ARegion *ar, w
 				}
 				case ND_SHADING_DRAW:
 				case ND_SHADING_LINKS:
-				view3d_tag_probes_update(ar, wmn, scene);
+					view3d_tag_probes_update(ar, wmn, scene);
 					ED_region_tag_redraw(ar);
 					break;
 			}
@@ -979,7 +1002,7 @@ static void view3d_main_region_listener(bScreen *sc, ScrArea *sa, ARegion *ar, w
 		case NC_WORLD:
 			switch (wmn->data) {
 				case ND_WORLD_DRAW:
-					view3d_tag_probes_update(ar, wmn, scene);
+					view3d_tag_world_probe_update(ar, wmn, scene);
 					/* handled by space_view3d_listener() for v3d access */
 					break;
 			}

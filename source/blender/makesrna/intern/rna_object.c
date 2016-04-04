@@ -53,6 +53,7 @@
 #include "RNA_enum_types.h"
 
 #include "rna_internal.h"
+#include "GPU_shader.h"  /* needed for MAX_SH_SAMPLES */
 
 #include "BLI_sys_types.h" /* needed for intptr_t used in ED_mesh.h */
 #include "ED_mesh.h"
@@ -197,26 +198,35 @@ EnumPropertyItem rna_enum_object_axis_items[] = {
 #include "ED_curve.h"
 #include "ED_lattice.h"
 
+
 static void rna_Object_internal_update(Main *UNUSED(bmain), Scene *UNUSED(scene), PointerRNA *ptr)
 {
 	DAG_id_tag_update(ptr->id.data, OB_RECALC_OB);
 }
 
-static int rna_Object_probeObject_poll(PointerRNA *ptr, PointerRNA value)
+static int rna_Object_probe_object_poll(PointerRNA *ptr, PointerRNA value)
 {
 	Object *ob = (Object *)ptr->id.data;
 	Object *probe = (Object *)value.data;
 
 	if (probe) {
-		if (probe->isprobe) {
-			return 1;
+		if (probe->probetype == OB_PROBE_CUBEMAP || probe->probetype == OB_PROBE_PLANAR) {
+			if (probe != ob) {
+				if (ob->probetype == OB_PROBE_PLANAR) {
+					if (probe->probetype == OB_PROBE_CUBEMAP)
+						return 1;
+				}
+				else {
+					return 1;
+				}
+			}
 		}
 	}
 
 	return 0;
 }
 
-static PointerRNA rna_Object_probeObject_get(PointerRNA *ptr)
+static PointerRNA rna_Object_probe_object_get(PointerRNA *ptr)
 {
 	Object *ob = (Object *)ptr->id.data;
 	Object *probe = ob->probe;
@@ -227,20 +237,47 @@ static PointerRNA rna_Object_probeObject_get(PointerRNA *ptr)
 	return rna_pointer_inherit_refine(ptr, NULL, NULL);
 }
 
-static void rna_Object_probeObject_set(PointerRNA *ptr, PointerRNA value)
+static void rna_Object_probe_object_set(PointerRNA *ptr, PointerRNA value)
 {
 	Object *ob = (Object *)ptr->id.data;
 	Object *probe = (Object *)value.data;
 
 	if (probe) {
-		if (probe->isprobe) {
-			ob->probe = probe;
-			id_lib_extern((ID *)probe);
+		if (probe->probetype == OB_PROBE_CUBEMAP || probe->probetype == OB_PROBE_PLANAR) {
+			if (probe != ob) {
+				ob->probe = probe;
+				id_lib_extern((ID *)probe);
+			}
 		}
 	}
 	else {
 		ob->probe = NULL;
 	}
+}
+
+static void rna_Object_probe_sh_res_set(PointerRNA *ptr, int value)
+{
+	Object *ob = (Object *)ptr->id.data;
+
+	CLAMP(value, 1, (1 << MAX_SH_SAMPLES));
+	CLAMP_MAX(value, ob->probesize);
+	/* Jumping to next value based on difference so user can use UI */
+	if (value < ob->probeshres)
+		ob->probeshres = power_of_2_min_u(value);
+	else
+		ob->probeshres = power_of_2_max_u(value);
+}
+
+static void rna_Object_probe_size_set(PointerRNA *ptr, int value)
+{
+	Object *ob = (Object *)ptr->id.data;
+
+	CLAMP(value, 16, 10240);
+	ob->probesize = value;
+	ob->probesize &= (~15); /* round to multiple of 16 */
+
+	if (ob->probeshres > ob->probesize)
+		rna_Object_probe_sh_res_set(ptr, ob->probesize);
 }
 
 static void rna_Object_matrix_world_update(Main *bmain, Scene *scene, PointerRNA *ptr)
@@ -2241,7 +2278,22 @@ static void rna_def_object(BlenderRNA *brna)
 		                     "Axis Angle (W+XYZ), defines a rotation around some axis defined by 3D-Vector"},
 		{0, NULL, 0, NULL, NULL}
 	};
+
+	static EnumPropertyItem probemode_items[] = {
+		{0, "NONE", 0, "None", "No probe capture"},
+		{OB_PROBE_OBJECT, "OBJECT", 0, "Object", "Use another object as probe"},
+		{OB_PROBE_CUBEMAP, "CUBE", 0, "Cubemap", "Capture environment in all direction from the object center"},
+		{OB_PROBE_PLANAR, "PLANE", 0, "Planar", "Capture environment from the symmetry camera to the XY axis plane of the object"},
+		{0, NULL, 0, NULL, NULL}
+	};
 	
+	static EnumPropertyItem probeparallaxmode_items[] = {
+		{0, "NONE", 0, "None", "No parallax correction"},
+		{OB_PROBE_PARRALAX_ELLIPSOID, "ELLIPSOID", 0, "Ellipsoid", "Use object bounding ellipsoid for parallax correction"},
+		{OB_PROBE_PARRALAX_BOX, "BOX", 0, "Cube", "Use object bounding box for parallax correction"},
+		{0, NULL, 0, NULL, NULL}
+	};
+
 	static float default_quat[4] = {1, 0, 0, 0};    /* default quaternion values */
 	static float default_axisAngle[4] = {0, 0, 1, 0};   /* default axis-angle rotation values */
 	static float default_scale[3] = {1, 1, 1}; /* default scale values */
@@ -2877,21 +2929,95 @@ static void rna_def_object(BlenderRNA *brna)
 	RNA_def_property_update(prop, NC_OBJECT | ND_LOD, NULL);
 
 	/* Viewport Probe */
-	prop = RNA_def_property(srna, "is_probe", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_sdna(prop, NULL, "isprobe", 1);
-	RNA_def_property_ui_text(prop, "Enable Probe Capture", "Use this object as a probe capture point");
+	prop = RNA_def_property(srna, "probe_type", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_sdna(prop, NULL, "probetype");
+	RNA_def_property_enum_items(prop, probemode_items);
+	RNA_def_property_ui_text(prop, "Probe Capture Type", "Type of capture for to use for the BSDFs");
 	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, NULL);
 
-	prop = RNA_def_property(srna, "env_probe", PROP_POINTER, PROP_NONE);
+	prop = RNA_def_property(srna, "probe_object", PROP_POINTER, PROP_NONE);
 	RNA_def_property_struct_type(prop, "Object");
 	RNA_def_property_pointer_sdna(prop, NULL, "probe");
 	RNA_def_property_flag(prop, PROP_EDITABLE);
 	RNA_def_property_ui_text(prop, "Probe Object",
-		                     "Probe object that defines the environment for the BSDFs");
+		                     "Probe object that defines the environment for the BSDFs of this object's materials");
 	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_Object_internal_update");
-	// RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, NULL);
-	RNA_def_property_pointer_funcs(prop, "rna_Object_probeObject_get", "rna_Object_probeObject_set", NULL,
-	                               "rna_Object_probeObject_poll");
+	RNA_def_property_pointer_funcs(prop, "rna_Object_probe_object_get", "rna_Object_probe_object_set", NULL,
+	                               "rna_Object_probe_object_poll");
+
+	prop = RNA_def_property(srna, "probe_reflection_plane", PROP_POINTER, PROP_NONE);
+	RNA_def_property_struct_type(prop, "Object");
+	RNA_def_property_pointer_sdna(prop, NULL, "reflectionplane");
+	RNA_def_property_flag(prop, PROP_EDITABLE);
+	RNA_def_property_ui_text(prop, "Reflection Plane",
+		                     "Use this object XY plane as the symmetry plane for the reflected camera");
+	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_Object_internal_update");
+
+	prop = RNA_def_property(srna, "probe_parallax_volume", PROP_POINTER, PROP_NONE);
+	RNA_def_property_struct_type(prop, "Object");
+	RNA_def_property_pointer_sdna(prop, NULL, "parallaxcorrect");
+	RNA_def_property_flag(prop, PROP_EDITABLE);
+	RNA_def_property_ui_text(prop, "Parallax Volume",
+		                     "Use object bounds to correct reflection & refraction rays");
+	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_Object_internal_update");
+
+	prop = RNA_def_property(srna, "probe_parallax_type", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_sdna(prop, NULL, "probeparallax");
+	RNA_def_property_enum_items(prop, probeparallaxmode_items);
+	RNA_def_property_ui_text(prop, "Probe Parallax Type", "Parallax correction to apply to the rays");
+	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_Object_internal_update");
+
+	prop = RNA_def_property(srna, "probe_refresh_auto", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "probeflags", OB_PROBE_AUTO_UPDATE);
+	RNA_def_property_ui_text(prop, "Probe Auto Refresh", "Cube Only : Auto update when a change in the scene occurs");
+	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_Object_internal_update");
+
+	prop = RNA_def_property(srna, "probe_refresh_double", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "probeflags", OB_PROBE_DOUBLE_UPDATE);
+	RNA_def_property_ui_text(prop, "Probe Double Refresh", "Update the probe another time after all other probes have been updated");
+	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_Object_internal_update");
+
+	prop = RNA_def_property(srna, "probe_compute_sh", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "probeflags", OB_PROBE_COMPUTE_SH);
+	RNA_def_property_ui_text(prop, "Compute Diffuse", "Cube Only : Enable computation of diffuse lighting");
+	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_Object_internal_update");
+
+	prop = RNA_def_property(srna, "probe_use_layers", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "probeflags", OB_PROBE_USE_LAYERS);
+	RNA_def_property_ui_text(prop, "Use Object Layers", "Render only the objects in the same layers");
+	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_Object_internal_update");
+
+	prop = RNA_def_property(srna, "probe_size", PROP_INT, PROP_UNSIGNED);
+	RNA_def_property_int_sdna(prop, NULL, "probesize");
+	RNA_def_property_range(prop, 16, 2048);
+	RNA_def_property_ui_text(prop, "Reflection Quality", "Resolution of the probe buffer texture");
+	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_Object_internal_update");
+	RNA_def_property_int_funcs(prop, NULL, "rna_Object_probe_size_set", NULL);
+
+	prop = RNA_def_property(srna, "probe_sh_quality", PROP_INT, PROP_UNSIGNED);
+	RNA_def_property_int_sdna(prop, NULL, "probeshres");
+	RNA_def_property_range(prop, 1, (1 << MAX_SH_SAMPLES));
+	RNA_def_property_ui_text(prop, "Diffuse Quality", "Cube Only : Resolution of the diffuse precomputation.");
+	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_Object_internal_update");
+	RNA_def_property_int_funcs(prop, NULL, "rna_Object_probe_sh_res_set", NULL);
+
+	prop = RNA_def_property(srna, "probe_clip_start", PROP_FLOAT, PROP_NONE | PROP_UNIT_LENGTH);
+	RNA_def_property_float_sdna(prop, NULL, "probeclipsta");
+	RNA_def_property_range(prop, 0.0001f, 999999.9f);
+	RNA_def_property_ui_text(prop, "Clip Start", "Capture camera near clip plane");
+	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_Object_internal_update");
+
+	prop = RNA_def_property(srna, "probe_clip_end", PROP_FLOAT, PROP_NONE | PROP_UNIT_LENGTH);
+	RNA_def_property_float_sdna(prop, NULL, "probeclipend");
+	RNA_def_property_range(prop, 0.0001f, 999999.9f);
+	RNA_def_property_ui_text(prop, "Clip End", "Capture camera end clip plane");
+	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_Object_internal_update");
+
+	prop = RNA_def_property(srna, "probe_clip_bias", PROP_FLOAT, PROP_NONE | PROP_UNIT_LENGTH);
+	RNA_def_property_float_sdna(prop, NULL, "probeclipbias");
+	RNA_def_property_range(prop, 0.0f, 999999.9f);
+	RNA_def_property_ui_text(prop, "Clip Bias", "Bias applied to the clip plane");
+	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_Object_internal_update");
 
 	RNA_api_object(srna);
 }

@@ -2611,15 +2611,18 @@ typedef struct View3DProbe {
 	GPUProbe *probe;
 } View3DProbe;
 
-static void gpu_update_probes(Scene *scene, View3D *v3d)
+static void gpu_update_probes(Scene *scene, View3D *v3d, ARegion *basear)
 {
 	ListBase probelist;
+	ListBase afterlist;
 	int i = 0;
+	bool do_sky = false;
 	View3DProbe *vprobe;
 	GPUProbe *probe;
 	Scene *sce_iter;
 	Object *ob;
 	Base *base;
+	RegionView3D *baserv3d = basear->regiondata;
 
 	/* Cycles Material Mode only */
 	if (!BKE_scene_use_new_shading_nodes(scene) || !(v3d->flag3 & V3D_REALISTIC_MAT))
@@ -2627,30 +2630,79 @@ static void gpu_update_probes(Scene *scene, View3D *v3d)
 
 	/* gathering probes */
 	BLI_listbase_clear(&probelist);
+	BLI_listbase_clear(&afterlist);
 
-	/* World Probe */
-	if (scene->world) {
-		probe = GPU_probe_world(scene, scene->world);
-
-		if (probe && GPU_probe_get_update(probe)) {
-			vprobe = MEM_callocN(sizeof(View3DProbe), "View3DProbe");
-			vprobe->probe = probe;
-			BLI_addtail(&probelist, vprobe);
-		}
-	}
+	/* Order matters : watch BLI_addhead and BLI_addtail
+	 * rendering the world first
+	 * then the cubemaps
+	 * finally the planar reflections. */
 
 	/* Objects Probe (don't do dupliobjects) */
 	for (SETLOOPER(scene, sce_iter, base)) {
 		ob = base->object;
 
-		if (ob->isprobe) {
+		if (ob->probetype == OB_PROBE_CUBEMAP || ob->probetype == OB_PROBE_PLANAR) {
 			probe = GPU_probe_object(scene, ob);
 
-			if (probe && GPU_probe_get_update(probe)) {
-				// TODO exclude layers
-				vprobe = MEM_callocN(sizeof(View3DProbe), "View3DProbe");
-				vprobe->probe = probe;
-				BLI_addtail(&probelist, vprobe);
+			/* XXX free probes if size or type changes */
+			if (probe && ((GPU_probe_get_size(probe) != ob->probesize) ||
+				(GPU_probe_get_type(probe) != ob->probetype))) {
+				if (ob->gpuprobe.first)
+					GPU_probe_free(&ob->gpuprobe);
+				probe = GPU_probe_object(scene, ob);
+			}
+
+			if (probe) {
+				if (ob->probetype == OB_PROBE_CUBEMAP) {
+					GPU_probe_update_layers(probe, ob->lay);
+
+					if (ob->parallaxcorrect)
+						GPU_probe_update_parallax(probe, ob->parallaxcorrect->obmat, ob->obmat);
+					else
+						GPU_probe_update_parallax(probe, ob->obmat, ob->obmat);
+
+					if (GPU_probe_get_update(probe)) {
+						GPU_probe_update_clip(probe, ob->probeclipsta, ob->probeclipend);
+						GPU_probe_update_sh_res(probe, ob->probeshres);
+
+						vprobe = MEM_callocN(sizeof(View3DProbe), "View3DProbe");
+						vprobe->probe = probe;
+						BLI_addhead(&probelist, vprobe);
+
+						if (ob->probeflags & OB_PROBE_DOUBLE_UPDATE) {
+							vprobe = MEM_callocN(sizeof(View3DProbe), "View3DProbe");
+							vprobe->probe = probe;
+							BLI_addhead(&afterlist, vprobe);
+						}
+					}
+				}
+				else if (ob->probetype == OB_PROBE_PLANAR) {
+
+					GPU_probe_update_layers(probe, ob->lay);
+					GPU_probe_update_clip(probe, ob->probeclipbias, ob->probeclipend);
+
+					if (ob->probe) {
+						if (ob->probe->parallaxcorrect)
+							GPU_probe_update_parallax(probe, ob->probe->parallaxcorrect->obmat, ob->probe->obmat);
+						else
+							GPU_probe_update_parallax(probe, ob->probe->obmat, ob->probe->obmat);
+					}
+
+					if (ob->reflectionplane)
+						GPU_probe_update_ref_plane(probe, ob->reflectionplane->obmat);
+					else
+						GPU_probe_update_ref_plane(probe, ob->obmat);
+
+					vprobe = MEM_callocN(sizeof(View3DProbe), "View3DProbe");
+					vprobe->probe = probe;
+					BLI_addtail(&probelist, vprobe);
+
+					if (ob->probeflags & OB_PROBE_DOUBLE_UPDATE) {
+						vprobe = MEM_callocN(sizeof(View3DProbe), "View3DProbe");
+						vprobe->probe = probe;
+						BLI_addtail(&afterlist, vprobe);
+					}
+				}
 			}
 		}
 		else {
@@ -2659,7 +2711,30 @@ static void gpu_update_probes(Scene *scene, View3D *v3d)
 		}
 	}
 
-	/* rendering cubemaps */
+	/* World Probe */
+	if (scene->world) {
+		do_sky = true;
+		probe = GPU_probe_world(scene, scene->world);
+
+		/* XXX free probes if size change */
+		if (probe && (GPU_probe_get_size(probe) != scene->world->probesize)) {
+			if (scene->world->gpuprobe.first)
+				GPU_probe_free(&scene->world->gpuprobe);
+			probe = GPU_probe_world(scene, scene->world);
+		}
+
+		if (probe && GPU_probe_get_update(probe)) {
+			GPU_probe_update_sh_res(probe, scene->world->probeshres);
+
+			vprobe = MEM_callocN(sizeof(View3DProbe), "View3DProbe");
+			vprobe->probe = probe;
+			BLI_addhead(&probelist, vprobe);
+		}
+	}
+
+	BLI_movelisttolist(&probelist, &afterlist);
+
+	/* Updating probes */
 	for (vprobe = probelist.first, i = 0; vprobe; vprobe = vprobe->next, i++) {
 
 		float viewmat[4][4], winmat[4][4];
@@ -2667,12 +2742,13 @@ static void gpu_update_probes(Scene *scene, View3D *v3d)
 		ARegion ar = {NULL};
 		RegionView3D rv3d = {{{0}}};
 		Object *ob = GPU_probe_get_object(vprobe->probe);
+		bool is_cubemap = (GPU_probe_get_type(vprobe->probe) == OB_PROBE_CUBEMAP);
 
 		drawtype = v3d->drawtype;
 		lay = v3d->lay;
 
 		v3d->drawtype = OB_MATERIAL;
-		//v3d->lay &= GPU_lamp_shadow_layer(shadow->lamp);
+		v3d->lay = GPU_probe_get_layers(vprobe->probe);
 		v3d->flag2 &= ~(V3D_SOLID_TEX | V3D_SHOW_SOLID_MATCAP);
 		v3d->flag2 |= V3D_RENDER_OVERRIDE;
 		v3d->flag3 |= V3D_SHOW_WORLD;
@@ -2684,26 +2760,70 @@ static void gpu_update_probes(Scene *scene, View3D *v3d)
 			ob->restrictflag |= OB_RESTRICT_VIEW;
 			v3d->probe_source = ob;
 		}
+		else {
+			v3d->probe_source = NULL;
+		}
 
 		GPU_probe_buffer_bind(vprobe->probe);
 
-		/* Cubemap */
-		for (int face = 0; face < 6; face++) {
+		/* cubemap */
+		if (is_cubemap) {
+			for (int face = 0; face < 6; face++) {
+				GPU_probe_switch_fb_cubeface(vprobe->probe, face, viewmat, &winsize, winmat);
 
-			GPU_probe_switch_fb_cubeface(vprobe->probe, face, viewmat, &winsize, winmat);
+				ar.regiondata = &rv3d;
+				ar.regiontype = RGN_TYPE_WINDOW;
+				rv3d.persp = RV3D_CAMOB;
+				copy_m4_m4(rv3d.winmat, winmat);
+				copy_m4_m4(rv3d.viewmat, viewmat);
+				invert_m4_m4(rv3d.viewinv, rv3d.viewmat);
+				mul_m4_m4m4(rv3d.persmat, rv3d.winmat, rv3d.viewmat);
+				invert_m4_m4(rv3d.persinv, rv3d.viewinv);
 
+				ED_view3d_draw_offscreen(
+		            scene, v3d, &ar, winsize, winsize, viewmat, winmat,
+		            false, do_sky, true, (bool)ob,
+		            NULL, NULL, NULL, NULL);
+			}
+		}
+		/* planar */
+		else {
 			ar.regiondata = &rv3d;
 			ar.regiontype = RGN_TYPE_WINDOW;
 			rv3d.persp = RV3D_CAMOB;
-			copy_m4_m4(rv3d.winmat, winmat);
+
+			/* Getting normal camera */
+			view3d_winmatrix_set(basear, v3d, NULL);
+			view3d_viewmatrix_set(scene, v3d, baserv3d);  /* note: calls BKE_object_where_is_calc for camera... */
+
+			/* Flip it along the plane */
+			GPU_probe_attach_planar_fb(vprobe->probe, baserv3d->viewmat, baserv3d->winmat, viewmat, &winsize, false);
+
 			copy_m4_m4(rv3d.viewmat, viewmat);
 			invert_m4_m4(rv3d.viewinv, rv3d.viewmat);
-			mul_m4_m4m4(rv3d.persmat, rv3d.winmat, rv3d.viewmat);
+			mul_m4_m4m4(rv3d.persmat, baserv3d->winmat, rv3d.viewmat);
 			invert_m4_m4(rv3d.persinv, rv3d.viewinv);
 
+			v3d->flag3 |= V3D_REFLECTION_PASS;
+
 			ED_view3d_draw_offscreen(
-	            scene, v3d, &ar, winsize, winsize, viewmat, winmat,
-	            false, true, true, (bool)ob,
+	            scene, v3d, &ar, winsize, winsize, viewmat, baserv3d->winmat,
+	            false, do_sky, true, true,
+	            NULL, NULL, NULL, NULL);
+
+			/* Non-fliped Camera for refraction */
+			GPU_probe_attach_planar_fb(vprobe->probe, baserv3d->viewmat, baserv3d->winmat, viewmat, &winsize, true);
+
+			copy_m4_m4(rv3d.viewmat, viewmat);
+			invert_m4_m4(rv3d.viewinv, rv3d.viewmat);
+			mul_m4_m4m4(rv3d.persmat, baserv3d->winmat, rv3d.viewmat);
+			invert_m4_m4(rv3d.persinv, rv3d.viewinv);
+
+			v3d->flag3 &= ~V3D_REFLECTION_PASS;
+
+			ED_view3d_draw_offscreen(
+	            scene, v3d, &ar, winsize, winsize, viewmat, baserv3d->winmat,
+	            false, do_sky, true, true,
 	            NULL, NULL, NULL, NULL);
 
 		}
@@ -3092,12 +3212,12 @@ void ED_view3d_mats_rv3d_restore(struct RegionView3D *rv3d, void *rv3dmat_pt)
 	rv3d->pixsize = rv3dmat->pixsize;
 }
 
-void ED_view3d_draw_offscreen_init(Scene *scene, View3D *v3d)
+void ED_view3d_draw_offscreen_init(Scene *scene, View3D *v3d, ARegion *ar)
 {
 	/* shadow buffers, before we setup matrices */
 	if (draw_glsl_material(scene, NULL, v3d, v3d->drawtype)){
 		gpu_update_lamps_shadows_world(scene, v3d);
-		gpu_update_probes(scene, v3d);
+		gpu_update_probes(scene, v3d, ar);
 	}
 }
 
@@ -3491,7 +3611,7 @@ ImBuf *ED_view3d_draw_offscreen_imbuf(
 		}
 	}
 
-	ED_view3d_draw_offscreen_init(scene, v3d);
+	ED_view3d_draw_offscreen_init(scene, v3d, ar);
 
 	GPU_offscreen_bind(ofs, true);
 
@@ -4014,7 +4134,7 @@ static void view3d_main_region_draw_objects(const bContext *C, Scene *scene, Vie
 	/* shadow buffers, before we setup matrices */
 	if (draw_glsl_material(scene, NULL, v3d, v3d->drawtype)) {
 		gpu_update_lamps_shadows_world(scene, v3d);
-		gpu_update_probes(scene, v3d);
+		gpu_update_probes(scene, v3d, ar);
 	}
 
 	/* reset default OpenGL lights if needed (i.e. after preferences have been altered) */

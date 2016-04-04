@@ -130,6 +130,11 @@ typedef struct World {
 
 	ListBase gpumaterial;		/* runtime */
 	ListBase gpuprobe;		/* runtime */
+
+	char probeflags, pad2[3];
+
+	unsigned int probesize, probeshres;
+	float pad3;
 } World;
 
 /* **************** WORLD ********************* */
@@ -200,6 +205,12 @@ enum {
 	 * otherwise anim-editors will not read correctly
 	 */
 #define WO_DS_SHOW_TEXS	(1<<2)
+
+/* (short) probeflags */
+enum {
+	WO_PROBE_AUTO_UPDATE	= 1 << 0,
+	WO_PROBE_COMPUTE_SH		= 1 << 1,
+};
 
 #endif
 

@@ -411,6 +411,10 @@ const char *GPU_builtin_name(GPUBuiltin builtin)
 		return "unfparticleangvel";
 	else if (builtin == GPU_PBR_PROBE)
 		return "unfprobe";
+	else if (builtin == GPU_PBR_PLANAR_REFLECT)
+		return "unfreflect";
+	else if (builtin == GPU_PBR_PLANAR_REFRACT)
+		return "unfrefract";
 	else if (builtin == GPU_PBR_LOD_FACTOR)
 		return "unflodfactor";
 	else if (builtin == GPU_PBR_SH0)
@@ -431,6 +435,14 @@ const char *GPU_builtin_name(GPUBuiltin builtin)
 		return "unfsh7";
 	else if (builtin == GPU_PBR_SH8)
 		return "unfsh8";
+	else if (builtin == GPU_PBR_CORRECTION_MATRIX)
+		return "unfprobecorrectionmat";
+	else if (builtin == GPU_PBR_PLANAR_RFL_MATRIX)
+		return "unfplanarreflectmat";
+	else if (builtin == GPU_PBR_PROBE_POSITION)
+		return "unfprobepos";
+	else if (builtin == GPU_PBR_PLANAR_VECTOR)
+		return "unfplanarvec";
 	else
 		return "";
 }
@@ -457,8 +469,8 @@ static void codegen_set_unique_ids(ListBase *nodes)
 	GPUNode *node;
 	GPUInput *input;
 	GPUOutput *output;
-	/* tex slot 0 is pbr envmap */
-	int id = 1, texid = 1;
+	/* tex slot (texid) 0-2 is pbr textures */
+	int id = 1, texid = 3;
 
 	bindhash = BLI_ghash_ptr_new("codegen_set_unique_ids1 gh");
 	definehash = BLI_ghash_ptr_new("codegen_set_unique_ids2 gh");
@@ -545,9 +557,15 @@ static int codegen_print_uniforms_functions(DynStr *ds, ListBase *nodes)
 					builtins |= input->builtin;
 					name = GPU_builtin_name(input->builtin);
 
+					if (input->builtin == GPU_VIEW_POSITION) {
+						/* XXX always here */
+						continue;
+					}
 					if (input->builtin == GPU_PBR_PROBE) {
-						BLI_dynstr_appendf(ds, "uniform samplerCube %s;\n"
-							, name);
+						BLI_dynstr_appendf(ds, "uniform samplerCube %s;\n", name);
+					}
+					else if (input->builtin == GPU_PBR_PLANAR_REFLECT || input->builtin == GPU_PBR_PLANAR_REFRACT) {
+						BLI_dynstr_appendf(ds, "uniform sampler2D %s;\n", name);
 					}
 					else if (gpu_str_prefix(name, "unf")) {
 						BLI_dynstr_appendf(ds, "uniform %s %s;\n",
@@ -679,9 +697,16 @@ static void codegen_call_functions(DynStr *ds, ListBase *nodes, GPUOutput *final
 		BLI_dynstr_append(ds, ");\n");
 	}
 
+	BLI_dynstr_appendf(ds, "#ifndef ALPHA_AS_DEPTH");
 	BLI_dynstr_append(ds, "\n\tgl_FragColor = ");
 	codegen_convert_datatype(ds, finaloutput->type, GPU_VEC4, "tmp", finaloutput->id);
 	BLI_dynstr_append(ds, ";\n");
+	BLI_dynstr_appendf(ds, "#else");
+	/* Encode Depth in Alpha if we are capturing for planar reflection */
+	BLI_dynstr_append(ds, "\n\tgl_FragColor = vec4(");
+	codegen_convert_datatype(ds, finaloutput->type, GPU_VEC3, "tmp", finaloutput->id);
+	BLI_dynstr_append(ds, ", -varposition.z + 1.0);\n");
+	BLI_dynstr_appendf(ds, "#endif\n");
 }
 
 static char *code_generate_fragment(ListBase *nodes, const GPUMatType type, GPUOutput *output)
@@ -710,6 +735,11 @@ static char *code_generate_fragment(ListBase *nodes, const GPUMatType type, GPUO
 	if (type == GPU_MATERIAL_TYPE_MESH_REAL_SH) {
 		BLI_dynstr_append(ds, datatoc_gpu_shader_material_bsdf_frag_glsl);
 	}
+
+
+	/* XXX */
+	BLI_dynstr_appendf(ds, "%s vec3 varposition;\n",
+		GLEW_VERSION_3_0 ? "in" : "varying");
 
 	BLI_dynstr_append(ds, "void main()\n{\n");
 
@@ -1680,6 +1710,10 @@ GPUPass *GPU_generate_pass(
         const GPUMatType type, const char *UNUSED(name),
         const bool use_opensubdiv,
         const bool use_new_shading,
+        const bool use_planar_probe,
+        const bool use_box_correction,
+		const bool use_ellipsoid_correction,
+		const bool use_alpha_as_depth,
         const int samplecount)
 {
 	GPUShader *shader;
@@ -1712,6 +1746,19 @@ GPUPass *GPU_generate_pass(
 	if (use_new_shading) {
 		flags |= GPU_SHADER_FLAGS_NEW_SHADING;
 	}
+	if (use_box_correction) {
+		flags |= GPU_SHADER_FLAGS_PROBE_BOX_CORREC;
+	}
+	if (use_ellipsoid_correction) {
+		flags |= GPU_SHADER_FLAGS_PROBE_ELIPS_CORREC;
+	}
+	if (use_planar_probe) {
+		flags |= GPU_SHADER_FLAGS_PROBE_PLANAR;
+	}
+	if (use_alpha_as_depth) {
+		flags |= GPU_SHADER_FLAGS_ALPHA_DEPTH;
+	}
+
 	shader = GPU_shader_create_ex(vertexcode,
 	                              fragmentcode,
 	                              geometrycode,

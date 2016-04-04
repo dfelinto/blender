@@ -272,6 +272,9 @@ void OBJECT_OT_bake(wmOperatorType *ot);
 void OBJECT_OT_lod_add(struct wmOperatorType *ot);
 void OBJECT_OT_lod_remove(struct wmOperatorType *ot);
 
+/* object_probe.c */
+void OBJECT_OT_probe_update(struct wmOperatorType *ot);
+
 /* object_random.c */
 void TRANSFORM_OT_vertex_random(struct wmOperatorType *ot);
 

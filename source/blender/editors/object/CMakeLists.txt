@@ -50,6 +50,7 @@ set(SRC
 	object_hook.c
 	object_lattice.c
 	object_lod.c
+	object_probe.c
 	object_modifier.c
 	object_ops.c
 	object_random.c

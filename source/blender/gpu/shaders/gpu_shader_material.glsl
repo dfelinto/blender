@@ -3851,16 +3851,16 @@ void node_tex_clouds(vec3 co, float size, out vec4 color, out float fac)
 	fac = 1.0;
 }
 
-vec4 sample_equirectangular_lod(vec3 co, sampler2D ima, float Lod)
+void node_tex_environment_equirectangular(vec3 co, sampler2D ima, out vec4 color)
 {
 	vec3 nco = normalize(co);
 	float u = -atan(nco.y, nco.x)/(M_2PI) + 0.5;
 	float v = atan(nco.z, hypot(nco.x, nco.y))/M_PI + 0.5;
 
-	return texture2DLod(ima, vec2(u, v), Lod);
+	color = texture2D(ima, vec2(u, v));
 }
 
-vec4 sample_mirror_ball_lod(vec3 co, sampler2D ima, float Lod)
+void node_tex_environment_mirror_ball(vec3 co, sampler2D ima, out vec4 color)
 {
 	vec3 nco = normalize(co);
 
@@ -3873,17 +3873,7 @@ vec4 sample_mirror_ball_lod(vec3 co, sampler2D ima, float Lod)
 	float u = 0.5*(nco.x + 1.0);
 	float v = 0.5*(nco.z + 1.0);
 
-	return texture2DLod(ima, vec2(u, v), Lod);
-}
-
-void node_tex_environment_equirectangular(vec3 co, sampler2D ima, out vec4 color)
-{
-	color = sample_equirectangular_lod(co, ima, 0.0);
-}
-
-void node_tex_environment_mirror_ball(vec3 co, sampler2D ima, out vec4 color)
-{
-	color = sample_mirror_ball_lod(co, ima, 0.0);
+	color = texture2D(ima, vec2(u, v));
 }
 
 void node_tex_environment_empty(vec3 co, out vec4 color)
@@ -4277,32 +4267,29 @@ void node_output_lamp(vec4 surface, out vec4 result)
 /* These are prototypes to be parse by gpu_parse_functions_string.
  * Functions are in gpu_shader_material_bsdf_frag.glsl */
 
-void env_sampling_reflect_glossy(vec3 I, vec3 N, float roughness, float precalc_lod_factor,
-	                             samplerCube probe, out vec3 result);
+void env_sampling_reflect_glossy(vec3 viewpos, mat4 invviewmat, mat4 viewmat, vec3 N, float roughness, float precalc_lod_factor,
+	                             samplerCube probe, sampler2D planar_reflection, sampler2D planar_refraction, mat4 correcmat, mat4 reflectmat, vec3 probevec, vec3 planarvec, out vec3 result);
 
-void env_sampling_reflect_aniso(vec3 I, vec3 N, float roughness, float anisotropy, float rotation, vec3 T,
-                                float precalc_lod_factor, samplerCube probe, out vec3 result);
+void env_sampling_reflect_aniso(vec3 viewpos, mat4 invviewmat, mat4 viewmat, vec3 N, float roughness, float anisotropy, float rotation, vec3 T,
+                                float precalc_lod_factor, samplerCube probe, sampler2D planar_reflection, sampler2D planar_refraction, mat4 correcmat, mat4 reflectmat, vec3 probevec, vec3 planarvec, out vec3 result);
 
-void env_sampling_refract_glossy(vec3 I, vec3 N, float ior, float roughness, float precalc_lod_factor,
-	                            samplerCube probe, out vec3 result);
+void env_sampling_refract_glossy(vec3 viewpos, mat4 invviewmat, mat4 viewmat, vec3 N, float ior, float roughness, float precalc_lod_factor,
+	                            samplerCube probe, sampler2D planar_reflection, sampler2D planar_refraction, mat4 correcmat, mat4 reflectmat, vec3 probevec, vec3 planarvec, out vec3 result);
 
-void env_sampling_glass_glossy(vec3 I, vec3 N, float ior, float roughness, float precalc_lod_factor,
-	                           samplerCube probe, out vec3 result);
+void env_sampling_glass_glossy(vec3 viewpos, mat4 invviewmat, mat4 viewmat, vec3 N, float ior, float roughness, float precalc_lod_factor,
+	                           samplerCube probe, sampler2D planar_reflection, sampler2D planar_refraction, mat4 correcmat, mat4 reflectmat, vec3 probevec, vec3 planarvec, out vec3 result);
 
-void env_sampling_glass_sharp(vec3 I, vec3 N, float ior, samplerCube probe, out vec3 result);
+void env_sampling_glass_sharp(vec3 viewpos, mat4 invviewmat, mat4 viewmat, vec3 N, float ior, samplerCube probe, sampler2D planar_reflection, sampler2D planar_refraction, mat4 correcmat, mat4 reflectmat, vec3 probevec, vec3 planarvec, out vec3 result);
 
-void env_sampling_reflect_sharp(vec3 I, vec3 N, samplerCube probe, out vec3 result);
+void env_sampling_reflect_sharp(vec3 viewpos, mat4 invviewmat, mat4 viewmat, vec3 N, samplerCube probe, sampler2D planar_reflection, sampler2D planar_refraction, mat4 correcmat, mat4 reflectmat, vec3 probevec, vec3 planarvec, out vec3 result);
 
-void env_sampling_refract_sharp(vec3 I, vec3 N, float eta, samplerCube probe, out vec3 result);
+void env_sampling_refract_sharp(vec3 viewpos, mat4 invviewmat, mat4 viewmat, vec3 N, float eta, samplerCube probe, sampler2D planar_reflection, sampler2D planar_refraction, mat4 correcmat, mat4 reflectmat, vec3 probevec, vec3 planarvec, out vec3 result);
 
-void env_sampling_diffuse(vec3 I, vec3 N, float roughness, vec3 sh0, vec3 sh1, vec3 sh2, vec3 sh3,
+void env_sampling_diffuse(vec3 viewpos, mat4 invviewmat, mat4 viewmat, vec3 N, float roughness, vec3 sh0, vec3 sh1, vec3 sh2, vec3 sh3,
 	                      vec3 sh4, vec3 sh5, vec3 sh6, vec3 sh7, vec3 sh8, out vec4 result);
 
-void env_sampling_transparent(vec3 I, samplerCube probe, out vec4 result)
-{
-	result = textureCube(probe, I);
-	srgb_to_linearrgb(result, result);
-}
+void env_sampling_transparent(vec3 viewpos, mat4 invviewmat, mat4 viewmat, samplerCube probe, sampler2D planar_reflection, sampler2D planar_refraction, mat4 correcmat, mat4 reflectmat, vec3 probevec, vec3 planarvec, out vec4 result);
+
 
 /* ********************** matcap style render ******************** */
 

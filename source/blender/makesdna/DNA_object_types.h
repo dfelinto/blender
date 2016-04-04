@@ -301,9 +301,22 @@ typedef struct Object {
 
 	struct PreviewImage *preview;
 
-	struct Object *probe;	/* for pbr viewport : the probe object used for rendering this object materials */
-	char isprobe; 			/* for pbr viewport : does this object generate lighting capture datas */
-	char pad3[7];
+	/* Probe options */
+	struct Object *probe;		/* the probe object used for rendering it's materials */
+	struct Object *parallaxcorrect;	/* the parallax bounding object used for rendering */
+	struct Object *reflectionplane;
+
+	char probeparallax;
+	char probeflags;
+	short probetype;
+
+	float probeclipsta;
+	float probeclipend;
+	unsigned int probesize;
+	unsigned int probeshres;
+
+	float probeclipbias;
+	int pad3[2];
 } Object;
 
 /* Warning, this is not used anymore because hooks are now modifiers */
@@ -492,6 +505,27 @@ enum {
 	OB_LOD_USE_MESH		= 1 << 0,
 	OB_LOD_USE_MAT		= 1 << 1,
 	OB_LOD_USE_HYST		= 1 << 2,
+};
+
+/* (short) probe type */
+enum {
+	OB_PROBE_OBJECT		= 1,
+	OB_PROBE_CUBEMAP	= 2,
+	OB_PROBE_PLANAR		= 3,
+};
+
+/* (short) probe parallax */
+enum {
+	OB_PROBE_PARRALAX_ELLIPSOID	= 1,
+	OB_PROBE_PARRALAX_BOX		= 2,
+};
+
+/* (short) probeflags */
+enum {
+	OB_PROBE_AUTO_UPDATE	= 1 << 0,
+	OB_PROBE_DOUBLE_UPDATE	= 1 << 1,
+	OB_PROBE_COMPUTE_SH		= 1 << 2,
+	OB_PROBE_USE_LAYERS		= 1 << 3,
 };
 
 

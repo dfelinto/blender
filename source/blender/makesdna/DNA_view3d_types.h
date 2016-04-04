@@ -320,6 +320,7 @@ typedef struct View3D {
 #define V3D_SHOW_WORLD_SH		(1 << 1)
 #define V3D_REALISTIC_MAT		(1 << 2)
 #define V3D_PROBE_CAPTURE		(1 << 3)	/* runtime flag */
+#define V3D_REFLECTION_PASS		(1 << 4)	/* invert culling during reflection pass */
 
 /* View3D->around */
 enum {

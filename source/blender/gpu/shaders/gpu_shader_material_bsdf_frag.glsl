@@ -1,6 +1,142 @@
 /* needed for uint type and bitwise operation */
 #extension GL_EXT_gpu_shader4: enable
 
+uniform mat4 rangemat = mat4(vec4(0.5, 0.0, 0.0, 0.0),
+                           vec4(0.0, 0.5, 0.0, 0.0),
+                           vec4(0.0, 0.0, 0.5, 0.0),
+                           vec4(0.5, 0.5, 0.5, 1.0));
+
+/* ----------- Parallax Correction -------------- */
+void correct_ray(inout vec3 L, vec3 worldpos, mat4 correcmat, vec3 probevec)
+{
+#ifdef CORRECTION_NONE
+	return;
+#else
+	vec3 localray = (correcmat * vec4(L, 0.0)).xyz;
+	vec3 localpos = (correcmat * vec4(worldpos, 1.0)).xyz;
+
+#ifdef CORRECTION_BOX
+	/* https://seblagarde.wordpress.com/2012/09/29/image-based-lighting-approaches-and-parallax-corrected-cubemap/ */
+	vec3 firstplane  = (vec3( 1.0) - localpos) / localray;
+	vec3 secondplane = (vec3(-1.0) - localpos) / localray;
+	vec3 furthestplane = max(firstplane, secondplane);
+	float dist = min(furthestplane.x, min(furthestplane.y, furthestplane.z));
+#endif
+
+#ifdef CORRECTION_ELLIPSOID
+	/* ray sphere intersection */
+	float a = dot(localray, localray);
+	float b = dot(localray, localpos);
+	float c = dot(localpos, localpos) - 1;
+
+	float dist = 1e15f;
+	float determinant = b * b - a * c;
+	if (determinant >= 0)
+		dist = (sqrt(determinant) - b) / a;
+#endif
+
+	/* Use Distance in WS directly to recover intersection */
+	vec3 intersection = worldpos + L * dist;
+	L = intersection - probevec;
+#endif
+}
+
+
+/* ----------- Probe sampling wrappers -------------- */
+#if 0
+float distance_based_roughness(float dist_intersection_to_shaded, float dist_intersection_to_reflectioncam, float roughness)
+{
+	/* from Sebastien Lagarde
+	* course_notes_moving_frostbite_to_pbr.pdf */
+	float newroughness = clamp(roughness * dist_intersection_to_shaded / dist_intersection_to_reflectioncam, 0, roughness);
+	return mix(newroughness, roughness, roughness);
+}
+#endif
+
+vec2 calculate_distortion(sampler2D planarprobe, vec3 screenvec, vec3 worldnor, mat4 viewmat, vec3 planarfac, vec3 I, vec3 planenormal, vec2 random, float roughness, inout float lod)
+{
+	vec3 viewnor = (viewmat * vec4(worldnor, 0.0)).xyz;
+	vec3 viewi = (viewmat * vec4(I, 0.0)).xyz;
+	vec2 distortion = vec2(dot(viewnor, vec3(1.0, 0.0, 0.0)) - planarfac.x,
+	                       dot(viewnor, vec3(0.0, 1.0, 0.0)) - planarfac.y);
+	distortion += random;
+
+	/* modulate intensity by distance to the viewer and by distance to the reflected object */
+	float dist_view_to_shaded = planarfac.z;
+	float dist_intersection_to_reflectioncam = texture2D(planarprobe, screenvec.xy + random / dist_view_to_shaded).a;
+	float dist_intersection_to_shaded = dist_intersection_to_reflectioncam - dist_view_to_shaded; /* depth in alpha */
+
+	/* test in case of background */
+	if (dist_intersection_to_shaded > 0.0) {
+		float distortion_scale = abs(dot(viewi * dist_intersection_to_shaded, -planenormal));
+		distortion *= distortion_scale / (dist_view_to_shaded + 1.0);
+	}
+
+	return screenvec.xy + distortion;
+}
+
+vec4 sampleProbeLod(samplerCube probe, sampler2D planarprobe, vec3 cubevec, vec3 screenvec, vec3 worldnor, vec3 worldpos, mat4 viewmat, mat4 correcmat, vec3 planarfac, vec3 probevec, vec3 planarvec, vec2 random, float roughness, vec3 I, float lod)
+{
+	vec4 sample;
+	correct_ray(cubevec, worldpos, correcmat, probevec);
+	sample = textureCubeLod(probe, cubevec, min(lod, 5.0));
+
+#ifdef PLANAR_PROBE
+	vec4 sample_plane = vec4(0.0);
+	vec2 co = calculate_distortion(planarprobe, screenvec, worldnor, viewmat, planarfac, I, planarvec, random, roughness, lod);
+
+	if (co.x > 0.0 && co.x < 1.0 && co.y > 0.0 && co.y < 1.0)
+		sample_plane = texture2DLod(planarprobe, co, lod);
+	else
+		sample_plane = sample;
+
+	sample = mix(sample_plane, sample, clamp(roughness * 2.0 - 0.5, 0.0, 1.0));
+#endif
+
+	srgb_to_linearrgb(sample, sample);
+	return sample;
+}
+
+vec4 sampleProbe(samplerCube probe, sampler2D planarprobe, vec3 cubevec, vec3 screenvec, vec3 worldnor, vec3 worldpos, mat4 viewmat, mat4 correcmat, vec3 planarfac, vec3 probevec, vec3 planarvec, vec2 random, float roughness, vec3 I)
+{
+	vec4 sample;
+	correct_ray(cubevec, worldpos, correcmat, probevec);
+	sample = textureCube(probe, cubevec);
+
+#ifdef PLANAR_PROBE
+	float lod = 0.0;
+	vec2 co = calculate_distortion(planarprobe, screenvec, worldnor, viewmat, planarfac, I, planarvec, random, roughness, lod);
+
+	if (co.x > 0.0 && co.x < 1.0 && co.y > 0.0 && co.y < 1.0)
+		sample = texture2D(planarprobe, co);
+#endif
+
+	srgb_to_linearrgb(sample, sample);
+	return sample;
+}
+
+vec3 vector_prepass(mat4 invviewmat, mat4 viewmat, mat4 reflectmat, vec3 viewpos, out vec3 worldpos, out vec3 refpos, inout vec3 planarvec, out vec3 planarfac)
+{
+	worldpos = (invviewmat * vec4(viewpos, 1.0)).xyz;
+
+	vec3 I;
+	shade_view(viewpos, I);
+	I = (invviewmat * vec4(I, 0.0)).xyz;
+
+#ifdef PLANAR_PROBE
+	/* transposing plane orientation to view space */
+	planarvec = (viewmat * vec4(planarvec, 0.0)).xyz;
+
+	planarfac.x = dot(planarvec, vec3(1.0, 0.0, 0.0));
+	planarfac.y = dot(planarvec, vec3(0.0, 1.0, 0.0));
+	planarfac.z = -viewpos.z + 1.0;
+
+	vec4 proj = rangemat * reflectmat * vec4(worldpos, 1.0);
+	refpos = proj.xyz/proj.w;
+#endif
+	return I;
+}
+
 /* Tiny Encryption Algorithm (used for noise generation) */
 uvec2 TEA(uvec2 v)
 {
@@ -9,17 +145,17 @@ uvec2 TEA(uvec2 v)
 	uint v1 = uint(v.y);
 	uint sum = 0u;
 
-    /* cache key */
-    uint k[4] = uint[4](0xA341316Cu , 0xC8013EA4u , 0xAD90777Du , 0x7E95761Eu );   
+	/* cache key */
+	uint k[4] = uint[4](0xA341316Cu , 0xC8013EA4u , 0xAD90777Du , 0x7E95761Eu );
 
-    /* basic cycle start */
-    for (int i = 0; i < 3; i++) {                       
-        sum += 0x9e3779b9u;  /* a key schedule constant */
-        v0 += ((v1 << 4u) + k[0]) ^ (v1 + sum) ^ ((v1 >> 5u) + k[1]);
-        v1 += ((v0 << 4u) + k[2]) ^ (v0 + sum) ^ ((v0 >> 5u) + k[3]);
-    }
+	/* basic cycle start */
+	for (int i = 0; i < 3; i++) {
+		sum += 0x9e3779b9u;  /* a key schedule constant */
+		v0 += ((v1 << 4u) + k[0]) ^ (v1 + sum) ^ ((v1 >> 5u) + k[1]);
+		v1 += ((v0 << 4u) + k[2]) ^ (v0 + sum) ^ ((v0 >> 5u) + k[3]);
+	}
 
-    return uvec2(v0, v1);
+	return uvec2(v0, v1);
 }
 
 /* Noise function could be replaced by a texture lookup */
@@ -90,16 +226,20 @@ vec3 importance_sample_GGX_aniso(vec2 Xi, float ax, float ay)
 	return normalize(vec3(x, y, z));
 }
 
-void env_sampling_reflect_glossy(vec3 I, vec3 N, float roughness, float precalc_lod_factor, 
-#ifndef REFLECTION_PLANAR
-	                             samplerCube probe, 
-#else
-	                             sampler2D probe, 
-#endif
+void env_sampling_reflect_glossy(vec3 viewpos, mat4 invviewmat, mat4 viewmat, vec3 N, float roughness, float precalc_lod_factor,
+	                             samplerCube probe,
+	                             sampler2D planar_reflection,
+	                             sampler2D planar_refraction,
+	                             mat4 correcmat,
+	                             mat4 reflectmat,
+	                             vec3 probevec,
+	                             vec3 planarvec,
 	                             out vec3 result)
 {
-	I = normalize(I);
-	N = normalize(N); vec3 T, B;
+	vec3 worldpos, refpos;
+	vec3 planarfac;
+	vec3 I = vector_prepass(invviewmat, viewmat, reflectmat, viewpos, worldpos, refpos, planarvec, planarfac);
+	vec3 T, B;
 	make_orthonormals(N, T, B); /* Generate tangent space */
 
 	uvec2 random = get_noise(); /* Noise to dither the samples */
@@ -117,7 +257,8 @@ void env_sampling_reflect_glossy(vec3 I, vec3 N, float roughness, float precalc_
 	float weight = 0.0;
 	for (uint i = 0u; i < NUM_SAMPLE; i++) {
 		vec2 Xi = hammersley_2d(i, NUM_SAMPLE, random);
-		vec3 H = from_tangent_to_world( importance_sample_GGX(Xi, a2), N, T, B); /* Microfacet normal */
+		vec3 Ht = importance_sample_GGX(Xi, a2);
+		vec3 H = from_tangent_to_world(Ht, N, T, B); /* Microfacet normal */
 		vec3 L = reflect(I, H);
 		float NL = max(0.0, dot(N, L));
 
@@ -129,12 +270,9 @@ void env_sampling_reflect_glossy(vec3 I, vec3 N, float roughness, float precalc_
 			float D = a2 / (M_PI * tmp*tmp) ;
 			float pdf = D * NH;
 
-			float distortion = sqrt(1.0 - L.z * L.z); /* Distortion for Equirectangular Env */
-			float Lod = precalc_lod_factor - 0.5 * log2( pdf * distortion);
+			float Lod = precalc_lod_factor - 0.5 * log2(pdf);
 
-			vec4 env_sample = textureCubeLod(probe, L, Lod);
-			srgb_to_linearrgb(env_sample, env_sample);
-			out_radiance += env_sample;
+			out_radiance += sampleProbeLod(probe, planar_reflection, L, refpos, N, worldpos, viewmat, correcmat, planarfac, probevec, planarvec, Ht.xy, roughness, I, Lod);
 			weight++;
 
 			/* Step 2 : Integrating BRDF : this must be replace by a LUT */
@@ -152,18 +290,20 @@ void env_sampling_reflect_glossy(vec3 I, vec3 N, float roughness, float precalc_
 	result = (out_radiance.rgb / weight) * (brdf / NUM_SAMPLE);
 }
 
-void env_sampling_reflect_aniso(vec3 I, vec3 N, float roughness, float anisotropy, float rotation, vec3 T, 
+void env_sampling_reflect_aniso(vec3 viewpos, mat4 invviewmat, mat4 viewmat, vec3 N, float roughness, float anisotropy, float rotation, vec3 T,
                                 float precalc_lod_factor,
-#ifndef REFLECTION_PLANAR
-	                            samplerCube probe, 
-#else
-	                            sampler2D probe, 
-#endif
+	                            samplerCube probe,
+	                            sampler2D planar_reflection,
+	                            sampler2D planar_refraction,
+	                            mat4 correcmat,
+	                            mat4 reflectmat,
+	                            vec3 probevec,
+	                            vec3 planarvec,
 	                            out vec3 result)
 {
-	I = normalize(I);
-	N = normalize(N);
-
+	vec3 worldpos, refpos;
+	vec3 planarfac;
+	vec3 I = vector_prepass(invviewmat, viewmat, reflectmat, viewpos, worldpos, refpos, planarvec, planarfac);
 	float rough_x, rough_y; vec3 B;
 	prepare_aniso(N, roughness, -rotation, T, anisotropy, rough_x, rough_y);
 	make_orthonormals_tangent(N, T, B);
@@ -200,8 +340,8 @@ void env_sampling_reflect_aniso(vec3 I, vec3 N, float roughness, float anisotrop
 		if (i >= NUM_SAMPLE) random = random2;
 
 		vec2 Xi = hammersley_2d(i % NUM_SAMPLE, NUM_SAMPLE, random);
-
-		vec3 H = from_tangent_to_world( importance_sample_GGX_aniso(Xi, ax, ay), N, T, B); /* Microfacet normal */
+		vec3 Ht = importance_sample_GGX_aniso(Xi, ax, ay);
+		vec3 H = from_tangent_to_world(Ht, N, T, B); /* Microfacet normal */
 		vec3 L = reflect(I, H);
 
 		vec3 H_brdf = from_tangent_to_world( importance_sample_GGX(Xi, max_a2), N, T, B); /* Microfacet normal for the brdf */
@@ -217,12 +357,9 @@ void env_sampling_reflect_aniso(vec3 I, vec3 N, float roughness, float anisotrop
 			float D = 1 / (M_PI * min_a2 * tmp*tmp); /* XXX : using min_a2 : better results */
 			float pdf = D * NH;
 
-			float distortion = sqrt(1.0 - L.z * L.z); /* Distortion for Equirectangular Env */
-			float Lod = precalc_lod_factor - 0.5 * log2( pdf * distortion);
+			float Lod = precalc_lod_factor - 0.5 * log2(pdf);
 
-			vec4 env_sample = textureCubeLod(probe, L, Lod);
-			srgb_to_linearrgb(env_sample, env_sample);
-			out_radiance += env_sample;
+			out_radiance += sampleProbeLod(probe, planar_reflection, L, refpos, N, worldpos, viewmat, correcmat, planarfac, probevec, planarvec, Ht.xy, roughness, I, Lod);
 			weight++;
 
 			/* Step 2 : Integrating BRDF : this must be replace by a LUT */
@@ -244,19 +381,20 @@ void env_sampling_reflect_aniso(vec3 I, vec3 N, float roughness, float anisotrop
 	result = (out_radiance.rgb / weight) * vec3(brdf / (NUM_SAMPLE * 2u));
 }
 
-void env_sampling_refract_glossy(vec3 I, vec3 N, float ior, float roughness, float precalc_lod_factor,
-#ifndef REFLECTION_PLANAR
-	                             samplerCube probe, 
-#else
-	                             sampler2D probe, 
-#endif
+void env_sampling_refract_glossy(vec3 viewpos, mat4 invviewmat, mat4 viewmat, vec3 N, float ior, float roughness, float precalc_lod_factor,
+	                             samplerCube probe,
+	                             sampler2D planar_reflection,
+	                             sampler2D planar_refraction,
+	                             mat4 correcmat,
+	                             mat4 reflectmat,
+	                             vec3 probevec,
+	                             vec3 planarvec,
 	                             out vec3 result)
 {
-	I = normalize(I);
-	N = normalize(N);
-
+	vec3 worldpos, refpos;
+	vec3 planarfac;
+	vec3 I = vector_prepass(invviewmat, viewmat, reflectmat, viewpos, worldpos, refpos, planarvec, planarfac);
 	vec3 T, B; make_orthonormals(N, T, B); /* Generate tangent space */
-
 	uvec2 random = get_noise(); /* Noise to dither the samples */
 
 	ior = max(ior, 1e-5);
@@ -274,7 +412,11 @@ void env_sampling_refract_glossy(vec3 I, vec3 N, float ior, float roughness, flo
 	float weight = 1e-8;
 
 	if (abs(ior - 1.0) < 1e-4) {
-		vec4 env_sample = textureCubeLod(probe, I, 0.0);
+#ifndef PLANAR_PROBE
+		vec4 env_sample = textureCube(probe, I);
+#else
+		vec4 env_sample = texture2D(planar_refraction, refpos.xy);
+#endif
 		srgb_to_linearrgb(env_sample, env_sample);
 		out_radiance = env_sample;
 		weight = 1.0;
@@ -283,7 +425,8 @@ void env_sampling_refract_glossy(vec3 I, vec3 N, float ior, float roughness, flo
 	else {
 		for (uint i = 0u; i < NUM_SAMPLE; i++) {
 			vec2 Xi = hammersley_2d(i, NUM_SAMPLE, random);
-			vec3 H = from_tangent_to_world( importance_sample_GGX(Xi, a2), N, T, B); /* Microfacet normal */
+			vec3 Ht = importance_sample_GGX(Xi, a2);
+			vec3 H = from_tangent_to_world(Ht, N, T, B); /* Microfacet normal */
 			float eta = 1.0/ior;
 			float fresnel = fresnel_dielectric(I, H, ior);
 
@@ -306,12 +449,9 @@ void env_sampling_refract_glossy(vec3 I, vec3 N, float ior, float roughness, flo
 				float D = a2 / (M_PI * tmp*tmp) ;
 				float pdf = (VH * abs(LH)) * (ior*ior) * D * Vis_SmithV / (Ht2 * NV);
 
-				float distortion = sqrt(1.0 - L.z * L.z); /* Distortion for Equirectangular Env */
-				float Lod = precalc_lod_factor - 0.5 * log2( pdf * distortion);
+				float Lod = precalc_lod_factor - 0.5 * log2(pdf);
 
-				vec4 env_sample = textureCubeLod(probe, L, Lod);
-				srgb_to_linearrgb(env_sample, env_sample);
-				out_radiance += env_sample;
+				out_radiance += sampleProbeLod(probe, planar_refraction, L, refpos, N, worldpos, viewmat, correcmat, planarfac, probevec, planarvec, Ht.xy, roughness, I, Lod);
 				weight++;
 
 				/* Step 2 : Integrating BRDF : this must be replace by a LUT */
@@ -330,19 +470,20 @@ void env_sampling_refract_glossy(vec3 I, vec3 N, float ior, float roughness, flo
 	result = (out_radiance.rgb / weight) * (brdf / weight); /* Dividing brdf by weight gives more brighter results */
 }
 
-void env_sampling_glass_glossy(vec3 I, vec3 N, float ior, float roughness, float precalc_lod_factor,
-#ifndef REFLECTION_PLANAR
-	                           samplerCube probe, 
-#else
-	                           sampler2D probe, 
-#endif
+void env_sampling_glass_glossy(vec3 viewpos, mat4 invviewmat, mat4 viewmat, vec3 N, float ior, float roughness, float precalc_lod_factor,
+	                           samplerCube probe,
+	                           sampler2D planar_reflection,
+	                           sampler2D planar_refraction,
+	                           mat4 correcmat,
+	                           mat4 reflectmat,
+	                           vec3 probevec,
+	                           vec3 planarvec,
 	                           out vec3 result)
 {
-	I = normalize(I);
-	N = normalize(N);
-
+	vec3 worldpos, refpos;
+	vec3 planarfac;
+	vec3 I = vector_prepass(invviewmat, viewmat, reflectmat, viewpos, worldpos, refpos, planarvec, planarfac);
 	vec3 T, B; make_orthonormals(N, T, B); /* Generate tangent space */
-
 	uvec2 random = get_noise(); /* Noise to dither the samples */
 
 	ior = max(ior, 1e-5);
@@ -357,15 +498,16 @@ void env_sampling_glass_glossy(vec3 I, vec3 N, float ior, float roughness, float
 	/* Integrating Envmap */
 	vec4 out_radiance_r = vec4(0.0);
 	vec4 out_radiance_t = vec4(0.0);
-	float brdf_r = 0.0;
-	float brdf_t = 0.0;
+	float brdf = 0.0;
+	float btdf = 0.0;
 	float weight_r = 1e-8;
 	float weight_t = 1e-8;
 	for (uint i = 0u; i < NUM_SAMPLE; i++) {
 		vec4 env_sample;
 
 		vec2 Xi = hammersley_2d(i, NUM_SAMPLE, random);
-		vec3 H = from_tangent_to_world( importance_sample_GGX(Xi, a2), N, T, B); /* Microfacet normal */
+		vec3 Ht = importance_sample_GGX(Xi, a2);
+		vec3 H = from_tangent_to_world(Ht, N, T, B); /* Microfacet normal */
 
 		/* TODO : For ior < 1.0 && roughness > 0.0 fresnel becomes not accurate.*/
 		float fresnel = fresnel_dielectric(I, H, (dot(H, -I) < 0.0) ? 1.0/ior : ior );
@@ -381,12 +523,9 @@ void env_sampling_glass_glossy(vec3 I, vec3 N, float ior, float roughness, float
 			float D = a2 / (M_PI * tmp*tmp) ;
 			float pdf = D * NH;
 
-			float distortion = sqrt(1.0 - L.z * L.z); /* Distortion for Equirectangular Env */
-			float Lod = precalc_lod_factor - 0.5 * log2( pdf * distortion);
+			float Lod = precalc_lod_factor - 0.5 * log2(pdf);
 
-			vec4 env_sample = textureCubeLod(probe, L, Lod);
-			srgb_to_linearrgb(env_sample, env_sample);
-			out_radiance_r += env_sample * fresnel;
+			out_radiance_r += sampleProbeLod(probe, planar_reflection, L, refpos, N, worldpos, viewmat, correcmat, planarfac, probevec, planarvec, Ht.xy, roughness, I, Lod) * fresnel;
 			weight_r++;
 
 			/* Step 2 : Integrating BRDF : this must be replace by a LUT */
@@ -394,7 +533,7 @@ void env_sampling_glass_glossy(vec3 I, vec3 N, float ior, float roughness, float
 			float G = Vis_SmithV * G1_Smith(NL, a2); /* rcp later */
 
 			/* See reflect glossy */
-			brdf_r += NL * 4.0 * VH / (NH * G);
+			brdf += NL * 4.0 * VH / (NH * G);
 		}
 
 
@@ -420,37 +559,37 @@ void env_sampling_glass_glossy(vec3 I, vec3 N, float ior, float roughness, float
 			float D = a2 / (M_PI * tmp*tmp) ;
 			float pdf = (VH * abs(LH)) * (ior*ior) * D * Vis_SmithV / (Ht2 * NV);
 
-			float distortion = sqrt(1.0 - L.z * L.z); /* Distortion for Equirectangular Env */
-			float Lod = precalc_lod_factor - 0.5 * log2( pdf * distortion);
+			float Lod = precalc_lod_factor - 0.5 * log2(pdf);
 
-			vec4 env_sample = textureCubeLod(probe, L, Lod);
-			srgb_to_linearrgb(env_sample, env_sample);
-			out_radiance_t += env_sample * (1.0 - fresnel);
+			out_radiance_t += sampleProbeLod(probe, planar_refraction, L, refpos, N, worldpos, viewmat, correcmat, planarfac, probevec, planarvec, Ht.xy, roughness, I, Lod) * (1.0 - fresnel);
 			weight_t++;
 
 			/* Step 2 : Integrating BRDF : this must be replace by a LUT */
 			float G_V = NL * 2.0 / G1_Smith(NL, a2); /* Balancing the adjustments made in G1_Smith */
 
 			/* See refract glossy */
-			brdf_t += G_V * abs(VH*LH) / (VH * abs(LH)); /* XXX : Not good enough, must be missing something */
+			btdf += G_V * abs(VH*LH) / (VH * abs(LH)); /* XXX : Not good enough, must be missing something */
 		}
 
 	}
 
-	result = (out_radiance_r.rgb / weight_r) * (brdf_r / NUM_SAMPLE) +
-	       (out_radiance_t.rgb / weight_t) * (brdf_t / weight_t);
+	result = (out_radiance_r.rgb / weight_r) * (brdf / NUM_SAMPLE) +
+	       (out_radiance_t.rgb / weight_t) * (btdf / weight_t);
 }
 
-void env_sampling_glass_sharp(vec3 I, vec3 N, float ior,
-#ifndef REFLECTION_PLANAR
-	                          samplerCube probe, 
-#else
-	                          sampler2D probe, 
-#endif
+void env_sampling_glass_sharp(vec3 viewpos, mat4 invviewmat, mat4 viewmat, vec3 N, float ior,
+	                          samplerCube probe,
+	                          sampler2D planar_reflection,
+	                          sampler2D planar_refraction,
+	                          mat4 correcmat,
+	                          mat4 reflectmat,
+	                          vec3 probevec,
+	                          vec3 planarvec,
 	                          out vec3 result)
 {
-	I = normalize(I);
-	N = normalize(N);
+	vec3 worldpos, refpos;
+	vec3 planarfac;
+	vec3 I = vector_prepass(invviewmat, viewmat, reflectmat, viewpos, worldpos, refpos, planarvec, planarfac);
 
 	float eta = (gl_FrontFacing) ? 1.0/ior : ior;
 	float fresnel = fresnel_dielectric(I, N, ior);
@@ -458,53 +597,61 @@ void env_sampling_glass_sharp(vec3 I, vec3 N, float ior,
 
 	/* reflection */
 	vec3 L = reflect(I, N);
-	env_sample = textureCube(probe, L);
-	srgb_to_linearrgb(env_sample, env_sample);
-	result += env_sample.rgb * fresnel;
+	result += sampleProbe(probe, planar_reflection, L, refpos, N, worldpos, viewmat, correcmat, planarfac, probevec, planarvec, vec2(0.0), 0.0, I).rgb * fresnel;
 
 	/* transmission */
 	L = refract(I, N, eta);
-	env_sample = textureCube(probe, L);
-	srgb_to_linearrgb(env_sample, env_sample);
-	result += env_sample.rgb * (1.0 - fresnel);
+	result += sampleProbe(probe, planar_refraction, L, refpos, N, worldpos, viewmat, correcmat, planarfac, probevec, planarvec, vec2(0.0), 0.0, I).rgb * (1.0 - fresnel);
 }
 
-void env_sampling_reflect_sharp(vec3 I, vec3 N,
-#ifndef REFLECTION_PLANAR
-                                samplerCube probe, 
-#else
-                                sampler2D probe, 
-#endif
+void env_sampling_reflect_sharp(vec3 viewpos, mat4 invviewmat, mat4 viewmat, vec3 N,
+                                samplerCube probe,
+                                sampler2D planar_reflection,
+                                sampler2D planar_refraction,
+                                mat4 correcmat,
+                                mat4 reflectmat,
+                                vec3 probevec,
+                                vec3 planarvec,
                                 out vec3 result)
 {
-	vec3 L = reflect(normalize(I), normalize(N));
-	vec4 env_sample = textureCube(probe, L);
-	srgb_to_linearrgb(env_sample, env_sample);
-	result = env_sample.rgb;
+	vec3 worldpos, refpos;
+	vec3 planarfac;
+	vec3 I = vector_prepass(invviewmat, viewmat, reflectmat, viewpos, worldpos, refpos, planarvec, planarfac);
+	vec3 L = reflect(I, N);
+
+	result = sampleProbe(probe, planar_reflection, L, refpos, N, worldpos, viewmat, correcmat, planarfac, probevec, planarvec, vec2(0.0), 0.0, I).rgb;
 }
 
-void env_sampling_refract_sharp(vec3 I, vec3 N, float eta,
-#ifndef REFLECTION_PLANAR
-                                samplerCube probe, 
-#else
-                                sampler2D probe, 
-#endif
+void env_sampling_refract_sharp(vec3 viewpos, mat4 invviewmat, mat4 viewmat, vec3 N, float eta,
+                                samplerCube probe,
+                                sampler2D planar_reflection,
+                                sampler2D planar_refraction,
+                                mat4 correcmat,
+                                mat4 reflectmat,
+                                vec3 probevec,
+                                vec3 planarvec,
 	                            out vec3 result)
 {
-	vec3 L = refract(normalize(I), normalize(N), (gl_FrontFacing) ? 1.0/eta : eta);
-	vec4 env_sample = textureCube(probe, L);
-	srgb_to_linearrgb(env_sample, env_sample);
-	result = env_sample.rgb;
+	vec3 worldpos, refpos;
+	vec3 planarfac;
+	vec3 I = vector_prepass(invviewmat, viewmat, reflectmat, viewpos, worldpos, refpos, planarvec, planarfac);
+	vec3 L = refract(I, N, (gl_FrontFacing) ? 1.0/eta : eta);
+
+	result = sampleProbe(probe, planar_refraction, L, refpos, N, worldpos, viewmat, correcmat, planarfac, probevec, planarvec, vec2(0.0), 0.0, I).rgb;
 }
 
-void env_sampling_diffuse(vec3 I, vec3 N, float roughness, vec3 sh0, vec3 sh1, vec3 sh2, vec3 sh3, 
-	                      vec3 sh4, vec3 sh5, vec3 sh6, vec3 sh7, vec3 sh8, 
-	                      out vec4 result)
+void env_sampling_diffuse(vec3 viewpos, mat4 invviewmat, mat4 viewmat, vec3 N, float roughness, vec3 sh0, vec3 sh1, vec3 sh2, vec3 sh3,
+	                      vec3 sh4, vec3 sh5, vec3 sh6, vec3 sh7, vec3 sh8, out vec4 result)
 {
-	shade_view(I, I); I = -I;
+	vec3 worldpos, refpos;
+	vec3 planarfac;
+	vec3 I;
+	shade_view(viewpos, I);
+	I = (invviewmat * vec4(I, 0.0)).xyz;
+	I = -I;
 
-	/* XXX : oren_nayar approximation for ambient 
-	 * We need Something better */
+	/* XXX : oren_nayar approximation for ambient
+		 * We need Something better */
 	float NV = clamp(dot(N, I), 0.0, 0.999);
 	float fac = 1.0 - pow(1.0 - NV, 1.3);
 	float oren_nayar_approx = mix(1.0, 0.78, fac*roughness);
@@ -528,3 +675,23 @@ void env_sampling_diffuse(vec3 I, vec3 N, float roughness, vec3 sh0, vec3 sh1, v
 	result = oren_nayar_approx * vec4(sh, 1.0);
 }
 
+void env_sampling_transparent(vec3 viewpos, mat4 invviewmat, mat4 viewmat,
+                              samplerCube probe,
+                              sampler2D planar_reflection,
+                              sampler2D planar_refraction,
+                              mat4 correcmat,
+                              mat4 reflectmat,
+                              vec3 probevec,
+                              vec3 planarvec,
+                              out vec4 result)
+{
+	vec3 worldpos, refpos;
+	vec3 planarfac;
+	vec3 I = vector_prepass(invviewmat, viewmat, reflectmat, viewpos, worldpos, refpos, planarvec, planarfac);
+#ifndef PLANAR_PROBE
+	result = textureCube(probe, I);
+#else
+	result = texture2D(planar_refraction, refpos.xy);
+#endif
+	srgb_to_linearrgb(result, result);
+}

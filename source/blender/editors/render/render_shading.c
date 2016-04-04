@@ -85,6 +85,8 @@
 #include "ED_render.h"
 #include "ED_screen.h"
 
+#include "GPU_material.h"
+
 #include "RNA_define.h"
 
 #include "UI_interface.h"
@@ -600,7 +602,7 @@ static int new_world_exec(bContext *C, wmOperator *UNUSED(op))
 		RNA_property_update(C, &ptr, prop);
 	}
 
-	WM_event_add_notifier(C, NC_WORLD | NA_ADDED, wo);
+	WM_event_add_notifier(C, NC_WORLD | NA_ADDED | ND_WORLD_DRAW, wo);
 	
 	return OPERATOR_FINISHED;
 }
@@ -617,6 +619,46 @@ void WORLD_OT_new(wmOperatorType *ot)
 
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_INTERNAL;
+}
+
+/********************** world probe operator *********************/
+
+static int world_probe_update_poll(bContext *C)
+{
+	World *wo = CTX_data_pointer_get_type(C, "world", &RNA_World).data;
+	return (wo != NULL);
+}
+
+static int world_probe_update_exec(bContext *C, wmOperator *UNUSED(op))
+{
+	World *wo = CTX_data_pointer_get_type(C, "world", &RNA_World).data;
+
+	if (wo && wo->gpuprobe.first) {
+		LinkData *link;
+		for (link = wo->gpuprobe.first; link; link = link->next) {
+			GPUProbe *ref = (GPUProbe *)link->data;
+			GPU_probe_set_update(ref, true);
+		}
+	}
+
+	WM_event_add_notifier(C, NC_WORLD | ND_WORLD_DRAW, wo);
+
+	return OPERATOR_FINISHED;
+}
+
+void WORLD_OT_probe_update(wmOperatorType *ot)
+{
+	/* identifiers */
+	ot->name = "Update Probe";
+	ot->description = "Update the environment probe";
+	ot->idname = "WORLD_OT_probe_update";
+
+	/* api callbacks */
+	ot->exec = world_probe_update_exec;
+	ot->poll = world_probe_update_poll;
+
+	/* flags */
+	ot->flag = OPTYPE_REGISTER;
 }
 
 /********************** render layer operators *********************/

@@ -312,8 +312,8 @@ static void material_changed(Main *bmain, Material *ma)
 			if (ob->gpuprobe.first) {
 				LinkData *link;
 				for (link = ob->gpuprobe.first; link; link = link->next) {
-					GPUProbe *ref = (GPUProbe *)link->data;
-					GPU_probe_set_update(ref, true);
+					GPUProbe *probe = (GPUProbe *)link->data;
+					GPU_probe_auto_update(probe);
 				}
 			}
 		}
@@ -371,8 +371,8 @@ static void lamp_changed(Main *bmain, Lamp *la)
 		if (ob->gpuprobe.first) {
 			LinkData *link;
 			for (link = ob->gpuprobe.first; link; link = link->next) {
-				GPUProbe *ref = (GPUProbe *)link->data;
-				GPU_probe_set_update(ref, true);
+				GPUProbe *probe = (GPUProbe *)link->data;
+				GPU_probe_auto_update(probe);
 			}
 		}
 	}
@@ -419,8 +419,8 @@ static void texture_changed(Main *bmain, Tex *tex)
 			if (ob->gpuprobe.first) {
 				LinkData *link;
 				for (link = ob->gpuprobe.first; link; link = link->next) {
-					GPUProbe *ref = (GPUProbe *)link->data;
-					GPU_probe_set_update(ref, true);
+					GPUProbe *probe = (GPUProbe *)link->data;
+					GPU_probe_auto_update(probe);
 				}
 			}
 		}
@@ -459,8 +459,8 @@ static void texture_changed(Main *bmain, Tex *tex)
 		if (wo->gpuprobe.first) {
 			LinkData *link;
 			for (link = wo->gpuprobe.first; link; link = link->next) {
-				GPUProbe *ref = (GPUProbe *)link->data;
-				GPU_probe_set_update(ref, true);
+				GPUProbe *probe = (GPUProbe *)link->data;
+				GPU_probe_auto_update(probe);
 			}
 		}
 
@@ -468,8 +468,8 @@ static void texture_changed(Main *bmain, Tex *tex)
 			if (ob->gpuprobe.first) {
 				LinkData *link;
 				for (link = ob->gpuprobe.first; link; link = link->next) {
-					GPUProbe *ref = (GPUProbe *)link->data;
-					GPU_probe_set_update(ref, true);
+					GPUProbe *probe = (GPUProbe *)link->data;
+					GPU_probe_auto_update(probe);
 				}
 			}
 		}
@@ -533,8 +533,8 @@ static void world_changed(Main *bmain, World *wo)
 	if (wo->gpuprobe.first){
 		LinkData *link;
 		for (link = wo->gpuprobe.first; link; link = link->next) {
-			GPUProbe *ref = (GPUProbe *)link->data;
-			GPU_probe_set_update(ref, true);
+			GPUProbe *probe = (GPUProbe *)link->data;
+			GPU_probe_auto_update(probe);
 		}
 	}
 
@@ -542,8 +542,8 @@ static void world_changed(Main *bmain, World *wo)
 		if (ob->gpuprobe.first) {
 			LinkData *link;
 			for (link = ob->gpuprobe.first; link; link = link->next) {
-				GPUProbe *ref = (GPUProbe *)link->data;
-				GPU_probe_set_update(ref, true);
+				GPUProbe *probe = (GPUProbe *)link->data;
+				GPU_probe_auto_update(probe);
 			}
 		}
 	}

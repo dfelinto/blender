@@ -324,9 +324,10 @@ class OBJECT_PT_relations_extras(ObjectButtonsPanel, Panel):
 
 
 class OBJECT_PT_probe_settings(ObjectButtonsPanel, Panel):
-    bl_label = "Viewport Probe Settings"
+    bl_label = "Viewport Probe"
     bl_context = "object"
     bl_options = {'DEFAULT_CLOSED'}
+    COMPAT_ENGINES = {'CYCLES'}
 
     @classmethod
     def poll(cls, context):
@@ -337,8 +338,52 @@ class OBJECT_PT_probe_settings(ObjectButtonsPanel, Panel):
 
         ob = context.object
 
-        layout.prop(ob, "env_probe", text="Probe object")
-        layout.prop(ob, "is_probe", text="Enable Probe Capture")
+        layout.prop(ob, "probe_type", expand=True)
+
+        if ob.probe_type == 'OBJECT':
+            layout.prop(ob, "probe_object")
+
+        elif ob.probe_type in {'CUBE', 'PLANE'}:
+            split = layout.split()
+
+            layout.operator("object.probe_update", text="Update Probe", icon="FILE_REFRESH")
+
+            col = split.column()
+            col.prop(ob, "probe_refresh_auto", text="Auto Refresh")
+            col.prop(ob, "probe_compute_sh")
+            col = split.column()
+            col.prop(ob, "probe_refresh_double", text="Double Refresh")
+            col.prop(ob, "probe_use_layers")
+
+            split = layout.split()
+
+            col = split.column(align=True)
+            col.label(text="Quality:")
+            col.prop(ob, "probe_size", text="Reflection")
+            col.prop(ob, "probe_sh_quality", text="Diffuse")
+
+            col = split.column(align=True)
+            col.label(text="Clipping:")
+
+            if ob.probe_type == 'PLANE':
+                col.prop(ob, "probe_clip_bias", text="Bias")
+            else :
+                col.prop(ob, "probe_clip_start", text="Start")
+
+            col.prop(ob, "probe_clip_end", text="End")
+
+            if ob.probe_type == 'PLANE':
+                row = layout.row()
+                row.prop(ob, "probe_reflection_plane", text="Reflection Plane")
+                layout.prop(ob, "probe_object", text="Default Cube Probe")
+
+            elif ob.probe_type == 'CUBE':
+                row = layout.row()
+                row.prop(ob, "probe_parallax_type", text="Parallax")
+
+                row = layout.row()
+                row.active = (ob.probe_parallax_type in {"ELLIPSOID", "BOX"})
+                row.prop(ob, "probe_parallax_volume", text="Parallax Volume")
 
 
 from bl_ui.properties_animviz import (

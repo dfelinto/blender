@@ -243,6 +243,30 @@ class WORLD_PT_mist(WorldButtonsPanel, Panel):
         layout.prop(world.mist_settings, "falloff")
 
 
+class WORLD_PT_probe_settings(WorldButtonsPanel, Panel):
+    bl_label = "Viewport Probe"
+    bl_options = {'DEFAULT_CLOSED'}
+    COMPAT_ENGINES = {'CYCLES'}
+
+    def draw(self, context):
+        layout = self.layout
+
+        world = context.world
+        split = layout.split()
+
+        col = split.column()
+        col.prop(world, "probe_refresh_auto")
+        col = split.column()
+        col.prop(world, "probe_compute_sh")
+
+        layout.operator("world.probe_update", text="Update Probe", icon="FILE_REFRESH")
+
+        layout.label(text="Quality:")
+        row = layout.row(align=True)
+        row.prop(world, "probe_size")
+        row.prop(world, "probe_sh_quality")
+
+
 class WORLD_PT_custom_props(WorldButtonsPanel, PropertyPanel, Panel):
     COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_GAME'}
     _context_path = "world"
