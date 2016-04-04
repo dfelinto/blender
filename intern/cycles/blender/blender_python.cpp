@@ -138,19 +138,29 @@ void python_thread_state_restore(void **python_thread_state)
 
 static const char *PyC_UnicodeAsByte(PyObject *py_str, PyObject **coerce)
 {
-#ifdef WIN32
-	/* bug [#31856] oddly enough, Python3.2 --> 3.3 on Windows will throw an
-	 * exception here this needs to be fixed in python:
-	 * see: bugs.python.org/issue15859 */
-	if(!PyUnicode_Check(py_str)) {
-		PyErr_BadArgument();
-		return "";
+	const char *result = _PyUnicode_AsString(py_str);
+	if(result) {
+		/* 99% of the time this is enough but we better support non unicode
+		 * chars since blender doesnt limit this.
+		 */
+		return result;
 	}
-#endif
-	if((*coerce = PyUnicode_EncodeFSDefault(py_str))) {
-		return PyBytes_AS_STRING(*coerce);
+	else {
+		PyErr_Clear();
+		if(PyBytes_Check(py_str)) {
+			return PyBytes_AS_STRING(py_str);
+		}
+		else if((*coerce = PyUnicode_EncodeFSDefault(py_str))) {
+			return PyBytes_AS_STRING(*coerce);
+		}
+		else {
+			/* Clear the error, so Cycles can be at leadt used without
+			 * GPU and OSL support,
+			 */
+			PyErr_Clear();
+			return "";
+		}
 	}
-	return "";
 }
 
 static PyObject *init_func(PyObject * /*self*/, PyObject *args)
@@ -628,6 +638,24 @@ static PyObject *debug_flags_reset_func(PyObject * /*self*/, PyObject * /*args*/
 	Py_RETURN_NONE;
 }
 
+static PyObject *set_resumable_chunks_func(PyObject * /*self*/, PyObject *args)
+{
+	int num_resumable_chunks, current_resumable_chunk;
+	if(!PyArg_ParseTuple(args, "ii",
+	                     &num_resumable_chunks,
+	                     &current_resumable_chunk)) {
+		return NULL;
+	}
+
+	VLOG(1) << "Initialized resumable render: "
+	        << "num_resumable_chunks=" << num_resumable_chunks << ", "
+	        << "current_resumable_chunk=" << current_resumable_chunk;
+	BlenderSession::num_resumable_chunks = num_resumable_chunks;
+	BlenderSession::current_resumable_chunk = current_resumable_chunk;
+
+	Py_RETURN_NONE;
+}
+
 static PyMethodDef methods[] = {
 	{"init", init_func, METH_VARARGS, ""},
 	{"exit", exit_func, METH_VARARGS, ""},
@@ -647,8 +675,14 @@ static PyMethodDef methods[] = {
 #ifdef WITH_OPENCL
 	{"opencl_disable", opencl_disable_func, METH_NOARGS, ""},
 #endif
+
+	/* Debugging routines */
 	{"debug_flags_update", debug_flags_update_func, METH_VARARGS, ""},
 	{"debug_flags_reset", debug_flags_reset_func, METH_NOARGS, ""},
+
+	/* Resumable render */
+	{"set_resumable_chunks", set_resumable_chunks_func, METH_VARARGS, ""},
+
 	{NULL, NULL, 0, NULL},
 };
 

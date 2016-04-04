@@ -63,7 +63,6 @@
 #include "BLI_dial.h"
 #include "BLI_dynstr.h" /*for WM_operator_pystring */
 #include "BLI_linklist.h"
-#include "BLI_linklist_stack.h"
 #include "BLI_math.h"
 #include "BLI_memarena.h"
 #include "BLI_utildefines.h"
@@ -3902,12 +3901,39 @@ static void radial_control_update_header(wmOperator *op, bContext *C)
 	char msg[WM_RADIAL_CONTROL_HEADER_LENGTH];
 	ScrArea *sa = CTX_wm_area(C);
 	Scene *scene = CTX_data_scene(C);
-
-	if (sa && hasNumInput(&rc->num_input)) {
-		char num_str[NUM_STR_REP_LEN];
-		outputNumInput(&rc->num_input, num_str, &scene->unit);
-		BLI_snprintf(msg, WM_RADIAL_CONTROL_HEADER_LENGTH, "%s: %s", RNA_property_ui_name(rc->prop), num_str);
-		ED_area_headerprint(sa, msg);
+	
+	if (sa) {
+		if (hasNumInput(&rc->num_input)) {
+			char num_str[NUM_STR_REP_LEN];
+			outputNumInput(&rc->num_input, num_str, &scene->unit);
+			BLI_snprintf(msg, WM_RADIAL_CONTROL_HEADER_LENGTH, "%s: %s", RNA_property_ui_name(rc->prop), num_str);
+			ED_area_headerprint(sa, msg);
+		}
+		else {
+			const char *ui_name = RNA_property_ui_name(rc->prop);
+			switch (rc->subtype) {
+				case PROP_NONE:
+				case PROP_DISTANCE:
+					BLI_snprintf(msg, WM_RADIAL_CONTROL_HEADER_LENGTH, "%s: %0.4f", ui_name, rc->current_value);
+					break;
+				case PROP_PIXEL:
+					BLI_snprintf(msg, WM_RADIAL_CONTROL_HEADER_LENGTH, "%s: %d", ui_name, (int)rc->current_value); /* XXX: round to nearest? */
+					break;
+				case PROP_PERCENTAGE:
+					BLI_snprintf(msg, WM_RADIAL_CONTROL_HEADER_LENGTH, "%s: %3.1f%%", ui_name, rc->current_value);
+					break;
+				case PROP_FACTOR:
+					BLI_snprintf(msg, WM_RADIAL_CONTROL_HEADER_LENGTH, "%s: %1.3f", ui_name, rc->current_value);
+					break;
+				case PROP_ANGLE:
+					BLI_snprintf(msg, WM_RADIAL_CONTROL_HEADER_LENGTH, "%s: %3.2f", ui_name, RAD2DEGF(rc->current_value));
+					break;
+				default:
+					BLI_snprintf(msg, WM_RADIAL_CONTROL_HEADER_LENGTH, "%s", ui_name); /* XXX: No value? */
+					break;
+			}
+			ED_area_headerprint(sa, msg);
+		}
 	}
 }
 
@@ -4068,14 +4094,14 @@ static void radial_control_paint_cursor(bContext *C, int x, int y, void *customd
 			r2 = tex_radius = WM_RADIAL_CONTROL_DISPLAY_SIZE;
 			rmin = WM_RADIAL_CONTROL_DISPLAY_MIN_SIZE;
 			alpha = rc->current_value / 2.0f + 0.5f;
-			BLI_snprintf(str, WM_RADIAL_MAX_STR, "%1.2f", rc->current_value);
+			BLI_snprintf(str, WM_RADIAL_MAX_STR, "%1.3f", rc->current_value);
 			strdrawlen = BLI_strlen_utf8(str);
 			break;
 		case PROP_ANGLE:
 			r1 = r2 = tex_radius = WM_RADIAL_CONTROL_DISPLAY_SIZE;
 			alpha = 0.75;
 			rmin = WM_RADIAL_CONTROL_DISPLAY_MIN_SIZE;
-			BLI_snprintf(str, WM_RADIAL_MAX_STR, "%3f", RAD2DEGF(rc->current_value));
+			BLI_snprintf(str, WM_RADIAL_MAX_STR, "%3.2f", RAD2DEGF(rc->current_value));
 			strdrawlen = BLI_strlen_utf8(str);
 			break;
 		default:
@@ -4124,12 +4150,12 @@ static void radial_control_paint_cursor(bContext *C, int x, int y, void *customd
 		glutil_draw_lined_arc(0.0, (float)(M_PI * 2.0), rmin, 40);
 
 	BLF_size(fontid, 1.5 * fstyle_points, 1.0f / U.dpi);
-	BLF_width_and_height(fontid, str, strdrawlen, &strwidth, &strheight);
 	BLF_enable(fontid, BLF_SHADOW);
 	BLF_shadow(fontid, 3, 0.0f, 0.0f, 0.0f, 0.5f);
 	BLF_shadow_offset(fontid, 1, -1);
 
 	/* draw value */
+	BLF_width_and_height(fontid, str, strdrawlen, &strwidth, &strheight);
 	BLF_position(fontid, -0.5f * strwidth, -0.5f * strheight, 0.0f);
 	BLF_draw(fontid, str, strdrawlen);
 
@@ -4614,6 +4640,7 @@ static int radial_control_modal(bContext *C, wmOperator *op, const wmEvent *even
 	}
 
 	ED_region_tag_redraw(CTX_wm_region(C));
+	radial_control_update_header(op, C);
 
 	if (ret != OPERATOR_RUNNING_MODAL)
 		radial_control_cancel(C, op);
@@ -4866,12 +4893,10 @@ static void WM_OT_dependency_relations(wmOperatorType *ot)
 
 /* *************************** Mat/tex/etc. previews generation ************* */
 
-typedef struct PreviewsIDEnsureStack {
+typedef struct PreviewsIDEnsureData {
 	bContext *C;
 	Scene *scene;
-
-	BLI_LINKSTACK_DECLARE(id_stack, ID *);
-} PreviewsIDEnsureStack;
+} PreviewsIDEnsureData;
 
 static void previews_id_ensure(bContext *C, Scene *scene, ID *id)
 {
@@ -4885,55 +4910,51 @@ static void previews_id_ensure(bContext *C, Scene *scene, ID *id)
 	}
 }
 
-static bool previews_id_ensure_callback(void *todo_v, ID **idptr, int UNUSED(cd_flag))
+static int previews_id_ensure_callback(void *userdata, ID *UNUSED(self_id), ID **idptr, int UNUSED(cd_flag))
 {
-	PreviewsIDEnsureStack *todo = todo_v;
+	PreviewsIDEnsureData *data = userdata;
 	ID *id = *idptr;
 
 	if (id && (id->tag & LIB_TAG_DOIT)) {
-		if (ELEM(GS(id->name), ID_MA, ID_TE, ID_IM, ID_WO, ID_LA)) {
-			previews_id_ensure(todo->C, todo->scene, id);
-		}
-		id->tag &= ~LIB_TAG_DOIT;  /* Tag the ID as done in any case. */
-		BLI_LINKSTACK_PUSH(todo->id_stack, id);
+		BLI_assert(ELEM(GS(id->name), ID_MA, ID_TE, ID_IM, ID_WO, ID_LA));
+		previews_id_ensure(data->C, data->scene, id);
+		id->tag &= ~LIB_TAG_DOIT;
 	}
 
-	return true;
+	return IDWALK_RET_NOP;
 }
 
 static int previews_ensure_exec(bContext *C, wmOperator *UNUSED(op))
 {
 	Main *bmain = CTX_data_main(C);
 	ListBase *lb[] = {&bmain->mat, &bmain->tex, &bmain->image, &bmain->world, &bmain->lamp, NULL};
-	PreviewsIDEnsureStack preview_id_stack;
+	PreviewsIDEnsureData preview_id_data;
 	Scene *scene;
 	ID *id;
 	int i;
 
 	/* We use LIB_TAG_DOIT to check whether we have already handled a given ID or not. */
-	BKE_main_id_tag_all(bmain, LIB_TAG_DOIT, true);
-
-	BLI_LINKSTACK_INIT(preview_id_stack.id_stack);
-
-	for (scene = bmain->scene.first; scene; scene = scene->id.next) {
-		preview_id_stack.scene = scene;
-		preview_id_stack.C = C;
-		id = (ID *)scene;
-
-		do {
-			/* This will loop over all IDs linked by current one, render icons for them if needed,
-			 * and add them to 'todo' preview_id_stack. */
-			BKE_library_foreach_ID_link(id, previews_id_ensure_callback, &preview_id_stack, IDWALK_READONLY);
-		} while ((id = BLI_LINKSTACK_POP(preview_id_stack.id_stack)));
+	BKE_main_id_tag_all(bmain, LIB_TAG_DOIT, false);
+	for (i = 0; lb[i]; i++) {
+		BKE_main_id_tag_listbase(lb[i], LIB_TAG_DOIT, true);
 	}
 
-	BLI_LINKSTACK_FREE(preview_id_stack.id_stack);
+	preview_id_data.C = C;
+	for (scene = bmain->scene.first; scene; scene = scene->id.next) {
+		preview_id_data.scene = scene;
+		id = (ID *)scene;
+
+		BKE_library_foreach_ID_link(id, previews_id_ensure_callback, &preview_id_data, IDWALK_RECURSE);
+	}
 
 	/* Check a last time for ID not used (fake users only, in theory), and
 	 * do our best for those, using current scene... */
 	for (i = 0; lb[i]; i++) {
 		for (id = lb[i]->first; id; id = id->next) {
-			previews_id_ensure(C, NULL, id);
+			if (id->tag & LIB_TAG_DOIT) {
+				previews_id_ensure(C, NULL, id);
+				id->tag &= ~LIB_TAG_DOIT;
+			}
 		}
 	}
 

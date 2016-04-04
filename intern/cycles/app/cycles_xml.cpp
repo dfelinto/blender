@@ -470,8 +470,7 @@ static void xml_read_shader_graph(const XMLReadState& state, Shader *shader, pug
 		}
 		else if(string_iequals(node.name(), "sky_texture")) {
 			SkyTextureNode *sky = new SkyTextureNode();
-			
-			xml_read_enum(&sky->type, SkyTextureNode::type_enum, node, "type");
+
 			xml_read_float3(&sky->sun_direction, node, "sun_direction");
 			xml_read_float(&sky->turbidity, node, "turbidity");
 			xml_read_float(&sky->ground_albedo, node, "ground_albedo");
@@ -1008,6 +1007,8 @@ static void xml_read_mesh(const XMLReadState& state, pugi::xml_node node)
 					fdata[2] = make_float3(UV[v2*2], UV[v2*2+1], 0.0);
 					fdata += 3;
 				}
+
+				index_offset += nverts[i];
 			}
 		}
 	}

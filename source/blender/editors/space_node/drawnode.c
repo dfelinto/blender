@@ -910,12 +910,9 @@ static void node_shader_buts_tex_environment_ex(uiLayout *layout, bContext *C, P
 
 static void node_shader_buts_tex_sky(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
 {	
-	uiItemR(layout, ptr, "sky_type", 0, "", ICON_NONE);
 	uiItemR(layout, ptr, "sun_direction", 0, "", ICON_NONE);
 	uiItemR(layout, ptr, "turbidity", 0, NULL, ICON_NONE);
-
-	if (RNA_enum_get(ptr, "sky_type") == SHD_SKY_NEW)
-		uiItemR(layout, ptr, "ground_albedo", 0, NULL, ICON_NONE);
+	uiItemR(layout, ptr, "ground_albedo", 0, NULL, ICON_NONE);
 }
 
 static void node_shader_buts_tex_gradient(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
@@ -961,6 +958,11 @@ static void node_shader_buts_tex_pointdensity(uiLayout *layout, bContext *UNUSED
 {
 	bNode *node = ptr->data;
 	NodeShaderTexPointDensity *shader_point_density = node->storage;
+	Object *ob = (Object *)node->id;
+	PointerRNA ob_ptr, obdata_ptr;
+
+	RNA_id_pointer_create((ID *)ob, &ob_ptr);
+	RNA_id_pointer_create(ob ? (ID *)ob->data : NULL, &obdata_ptr);
 
 	uiItemR(layout, ptr, "point_source", UI_ITEM_R_EXPAND, NULL, ICON_NONE);
 	uiItemR(layout, ptr, "object", 0, NULL, ICON_NONE);
@@ -976,7 +978,18 @@ static void node_shader_buts_tex_pointdensity(uiLayout *layout, bContext *UNUSED
 	uiItemR(layout, ptr, "interpolation", 0, NULL, ICON_NONE);
 	uiItemR(layout, ptr, "resolution", 0, NULL, ICON_NONE);
 	if (shader_point_density->point_source == SHD_POINTDENSITY_SOURCE_PSYS) {
-		uiItemR(layout, ptr, "color_source", 0, NULL, ICON_NONE);
+		uiItemR(layout, ptr, "particle_color_source", 0, NULL, ICON_NONE);
+	}
+	else {
+		uiItemR(layout, ptr, "vertex_color_source", 0, NULL, ICON_NONE);
+		if (shader_point_density->ob_color_source == SHD_POINTDENSITY_COLOR_VERTWEIGHT) {
+			if (ob_ptr.data)
+				uiItemPointerR(layout, ptr, "vertex_attribute_name", &ob_ptr, "vertex_groups", "", ICON_NONE);
+		}
+		if (shader_point_density->ob_color_source == SHD_POINTDENSITY_COLOR_VERTCOL) {
+			if (obdata_ptr.data)
+				uiItemPointerR(layout, ptr, "vertex_attribute_name", &obdata_ptr, "vertex_colors", "", ICON_NONE);
+		}
 	}
 }
 

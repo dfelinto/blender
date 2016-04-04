@@ -718,10 +718,10 @@ typedef struct NodeTexBase {
 
 typedef struct NodeTexSky {
 	NodeTexBase base;
-	int sky_model;
 	float sun_direction[3];
 	float turbidity;
 	float ground_albedo;
+	int pad;
 } NodeTexSky;
 
 typedef struct NodeTexImage {
@@ -808,7 +808,8 @@ typedef struct NodeShaderTexPointDensity {
 	short space;
 	short interpolation;
 	short color_source;
-	short pad2;
+	short ob_color_source;
+	char vertex_attribute_name[64]; /* vertex attribute layer for color source, MAX_CUSTOMDATA_LAYER_NAME */
 	PointDensity pd;
 } NodeShaderTexPointDensity;
 
@@ -977,10 +978,6 @@ typedef struct NodeSunBeams {
 #define SHD_WAVE_PROFILE_SIN	0
 #define SHD_WAVE_PROFILE_SAW	1
 
-/* sky texture */
-#define SHD_SKY_OLD		0
-#define SHD_SKY_NEW		1
-
 /* image/environment texture */
 #define SHD_COLORSPACE_NONE		0
 #define SHD_COLORSPACE_COLOR	1
@@ -1141,6 +1138,12 @@ enum {
 	SHD_POINTDENSITY_COLOR_PARTAGE   = 1,
 	SHD_POINTDENSITY_COLOR_PARTSPEED = 2,
 	SHD_POINTDENSITY_COLOR_PARTVEL   = 3,
+};
+
+enum {
+	SHD_POINTDENSITY_COLOR_VERTCOL      = 0,
+	SHD_POINTDENSITY_COLOR_VERTWEIGHT   = 1,
+	SHD_POINTDENSITY_COLOR_VERTNOR      = 2,
 };
 
 #endif
