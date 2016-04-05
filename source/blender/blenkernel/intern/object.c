@@ -697,7 +697,18 @@ void BKE_object_unlink(Main *bmain, Object *ob)
 				lod->source = NULL;
 		}
 
+		/* probe */
+		if (obt->probe == ob)
+			ob->probe = NULL;
+
+		if (obt->parallaxcorrect == ob)
+			ob->parallaxcorrect = NULL;
+
+		if (obt->reflectionplane == ob)
+			ob->reflectionplane = NULL;
+
 		obt = obt->id.next;
+
 	}
 	
 	/* materials */

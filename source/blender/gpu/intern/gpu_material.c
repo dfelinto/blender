@@ -2951,22 +2951,9 @@ void GPU_probe_free(ListBase *gpuprobe)
 {
 	GPUProbe *probe;
 	LinkData *link;
-	Scene *sce_iter;
-	Base *base;
-	Object *ob;
 
 	for (link = gpuprobe->first; link; link = link->next) {
 		probe = (GPUProbe *)link->data;
-
-		/* unlink this probe from other objects */
-		if (probe->ob) {
-			for (SETLOOPER(probe->scene, sce_iter, base)) {
-				ob = base->object;
-
-				if (ob->probe == probe->ob)
-					ob->probe = NULL;
-			}
-		}
 
 		gpu_probe_buffers_free(probe);
 
