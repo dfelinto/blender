@@ -2917,8 +2917,6 @@ void GPU_materials_free(void)
 
 static void gpu_probe_buffers_free(GPUProbe *probe)
 {
-	int i = 0;
-
 	if (probe->shtex) {
 		GPU_texture_free(probe->shtex);
 		probe->shtex = NULL;

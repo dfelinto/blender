@@ -158,6 +158,7 @@ World *BKE_world_copy(World *wrld)
 		wrldn->preview = BKE_previewimg_copy(wrld->preview);
 
 	BLI_listbase_clear(&wrldn->gpumaterial);
+	BLI_listbase_clear(&wrldn->gpuprobe);
 
 	if (wrld->id.lib) {
 		BKE_id_lib_local_paths(G.main, wrld->id.lib, &wrldn->id);
@@ -188,6 +189,7 @@ World *localize_world(World *wrld)
 	wrldn->preview = NULL;
 	
 	BLI_listbase_clear(&wrldn->gpumaterial);
+	BLI_listbase_clear(&wrldn->gpuprobe);
 	
 	return wrldn;
 }

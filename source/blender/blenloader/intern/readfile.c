@@ -3550,7 +3550,6 @@ static void direct_link_world(FileData *fd, World *wrld)
 	wrld->preview = direct_link_preview_image(fd, wrld->preview);
 	BLI_listbase_clear(&wrld->gpumaterial);
 	BLI_listbase_clear(&wrld->gpuprobe);
-	BLI_listbase_clear(&wrld->gpuprobe);
 }
 
 
@@ -5482,6 +5481,8 @@ static void direct_link_object(FileData *fd, Object *ob)
 
 	link_list(fd, &ob->lodlevels);
 	ob->currentlod = ob->lodlevels.first;
+
+	BLI_listbase_clear(&ob->gpuprobe);
 
 	ob->preview = direct_link_preview_image(fd, ob->preview);
 }
