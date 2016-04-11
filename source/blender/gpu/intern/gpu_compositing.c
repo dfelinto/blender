@@ -1165,6 +1165,7 @@ bool GPU_fx_do_composite_pass(
 					}
 				}
 
+				SWAP(GPUTexture *, target, src);
 				numslots = 0;
 			}
 		}

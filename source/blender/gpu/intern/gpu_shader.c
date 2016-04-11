@@ -770,7 +770,7 @@ GPUShader *GPU_shader_get_builtin_fx_shader(int effect, bool persp)
 				break;
 
 			case GPU_SHADER_FX_COLORMANAGE:
-				GG.shaders.fx_shaders[offset] = GPU_shader_create(datatoc_gpu_shader_fx_vert_glsl, datatoc_gpu_shader_fx_colormanage_frag_glsl, NULL, datatoc_gpu_shader_fx_lib_glsl, defines, 0, 0, 0);
+				shader = GPU_shader_create(datatoc_gpu_shader_fx_vert_glsl, datatoc_gpu_shader_fx_colormanage_frag_glsl, NULL, datatoc_gpu_shader_fx_lib_glsl, defines, 0, 0, 0);
 				break;
 		}
 
