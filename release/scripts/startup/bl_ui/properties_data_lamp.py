@@ -389,7 +389,7 @@ class DATA_PT_falloff_curve(DataButtonsPanel, Panel):
         self.layout.template_curve_mapping(lamp, "falloff_curve", use_negative_slope=True)
 
 class DATA_PT_viewport(DataButtonsPanel, Panel):
-    bl_label = "Viewport Shadows"
+    bl_label = "Viewport Settings"
     bl_options = {'DEFAULT_CLOSED'}
     COMPAT_ENGINES = {'CYCLES'}
 
@@ -398,33 +398,41 @@ class DATA_PT_viewport(DataButtonsPanel, Panel):
         lamp = context.lamp
         engine = context.scene.render.engine
 
-        return (lamp and lamp.type in {'SPOT','SUN','AREA'}) and (engine in cls.COMPAT_ENGINES)
-
-    def draw_header(self, context):
-        lamp = context.lamp
-
-        self.layout.prop(lamp, "use_shadow", text="")
+        return lamp and (engine in cls.COMPAT_ENGINES)
 
     def draw(self, context):
         layout = self.layout
 
         lamp = context.lamp
 
-        layout.active = lamp.use_shadow
+        split = layout.split()
+        col = split.column()
+        col.prop(lamp, "use_specular")
+        col.prop(lamp, "use_diffuse")
 
-        col = layout.column(align=True)
-        col.prop(lamp, "ge_shadow_buffer_type", text="", toggle=True)
-        col.prop(lamp, "shadow_buffer_size", text="Size")
-        col.prop(lamp, "shadow_buffer_bias", text="Bias")
-        col.prop(lamp, "shadow_buffer_bleed_bias", text="Bleed Bias")
 
-        row = layout.row(align=True)
-        row.prop(lamp, "shadow_buffer_clip_start", text="Clip Start")
-        row.prop(lamp, "shadow_buffer_clip_end", text="Clip End")
+        if lamp.type in {'SPOT','SUN','AREA'}:
 
-        if lamp.type == 'SUN':
-            row = layout.row()
-            row.prop(lamp, "shadow_frustum_size", text="Frustum Size")
+            col = split.column()
+            col.prop(lamp, "use_shadow", text="Use Shadow")
+
+            layout.label(text="Shadow Settings:")
+
+            col = layout.column(align=True)
+            col.active = lamp.use_shadow
+            col.prop(lamp, "ge_shadow_buffer_type", text="", toggle=True)
+            col.prop(lamp, "shadow_buffer_size", text="Size")
+            col.prop(lamp, "shadow_buffer_bias", text="Bias")
+            col.prop(lamp, "shadow_buffer_bleed_bias", text="Bleed Bias")
+
+            row = layout.row(align=True)
+            row.active = lamp.use_shadow
+            row.prop(lamp, "shadow_buffer_clip_start", text="Clip Start")
+            row.prop(lamp, "shadow_buffer_clip_end", text="Clip End")
+
+            if lamp.type == 'SUN':
+                row = layout.row()
+                row.prop(lamp, "shadow_frustum_size", text="Frustum Size")
 
 
 class DATA_PT_custom_props_lamp(DataButtonsPanel, PropertyPanel, Panel):

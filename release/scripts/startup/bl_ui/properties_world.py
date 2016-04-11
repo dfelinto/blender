@@ -263,8 +263,8 @@ class WORLD_PT_probe_settings(WorldButtonsPanel, Panel):
 
         layout.label(text="Quality:")
         row = layout.row(align=True)
-        row.prop(world, "probe_size")
-        row.prop(world, "probe_sh_quality")
+        row.prop(world, "probe_size", text="Reflection")
+        row.prop(world, "probe_sh_quality", text="Diffuse")
 
 
 class WORLD_PT_custom_props(WorldButtonsPanel, PropertyPanel, Panel):

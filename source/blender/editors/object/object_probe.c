@@ -33,6 +33,8 @@
 
 #include "BKE_context.h"
 
+#include "BLI_listbase.h"
+
 #include "WM_api.h"
 #include "WM_types.h"
 
@@ -46,34 +48,115 @@
 
 #include "object_intern.h"
 
-static int object_probe_update_exec(bContext *C, wmOperator *UNUSED(op))
-{
-	Object *ob = ED_object_context(C);
+enum {
+	UPDATE_PROBE_ACTIVE           = 1,
+	UPDATE_PROBE_SELECTED         = 2,
+	UPDATE_PROBE_ALL              = 3,
+};
 
-	if (ob->gpuprobe.first) {
-		LinkData *link;
-		for (link = ob->gpuprobe.first; link; link = link->next) {
-			GPUProbe *ref = (GPUProbe *)link->data;
-			GPU_probe_set_update(ref, true);
+static int object_probe_update_exec(bContext *C, wmOperator *op)
+{
+	const int mode = RNA_enum_get(op->ptr, "type");
+
+	if (mode == UPDATE_PROBE_ACTIVE) {
+		Object *ob = ED_object_context(C);
+		if (ob->gpuprobe.first) {
+			LinkData *link;
+			for (link = ob->gpuprobe.first; link; link = link->next) {
+				GPUProbe *ref = (GPUProbe *)link->data;
+				GPU_probe_set_update(ref, true);
+			}
 		}
 	}
+	else if (mode == UPDATE_PROBE_SELECTED) {
+		CTX_DATA_BEGIN(C, Object *, ob, selected_objects) {
+			if (ob->gpuprobe.first) {
+				LinkData *link;
+				for (link = ob->gpuprobe.first; link; link = link->next) {
+					GPUProbe *ref = (GPUProbe *)link->data;
+					GPU_probe_set_update(ref, true);
+				}
+			}
+		}
+		CTX_DATA_END;
+	}
+	else if (mode == UPDATE_PROBE_ALL) {
+		CTX_DATA_BEGIN(C, Object *, ob, editable_objects) {
+			if (ob->gpuprobe.first) {
+				LinkData *link;
+				for (link = ob->gpuprobe.first; link; link = link->next) {
+					GPUProbe *ref = (GPUProbe *)link->data;
+					GPU_probe_set_update(ref, true);
+				}
+			}
+		}
+		CTX_DATA_END;
+	}
 
-	WM_event_add_notifier(C, NC_OBJECT | ND_DRAW, ob);
+	WM_event_add_notifier(C, NC_OBJECT | ND_DRAW, NULL);
 
 	return OPERATOR_FINISHED;
 }
 
 void OBJECT_OT_probe_update(wmOperatorType *ot)
 {
+	static EnumPropertyItem type_items[] = {
+		{UPDATE_PROBE_ACTIVE, "ACTIVE_PROBE", 0, "Active Probes", ""},
+		{UPDATE_PROBE_SELECTED, "SELECT_PROBE", 0, "Selected Probes", ""},
+		{UPDATE_PROBE_ALL, "ALL_PROBE", 0, "All Probes", ""},
+		{0, NULL, 0, NULL, NULL}
+	};
+
 	/* identifiers */
 	ot->name = "Update Probe";
-	ot->description = "Update the captured of this object environment";
+	ot->description = "Update the environment captured by Probe objects";
 	ot->idname = "OBJECT_OT_probe_update";
 
 	/* api callbacks */
+	ot->invoke = WM_menu_invoke;
 	ot->exec = object_probe_update_exec;
 	ot->poll = ED_operator_object_active;
 
 	/* flags */
 	ot->flag = OPTYPE_REGISTER;
+
+	/* properties */
+	ot->prop = RNA_def_enum(ot->srna, "type", type_items, 1, "Type", "");
+}
+
+/* ************ Active as Probe ************** */
+
+static int object_active_as_probe_exec(bContext *C, wmOperator *UNUSED(op))
+{
+	Object *obt = ED_object_context(C);
+
+	CTX_DATA_BEGIN(C, Object *, ob, selected_objects) {
+		if (ob != obt) {
+			if (obt->probetype == OB_PROBE_CUBEMAP || obt->probetype == OB_PROBE_PLANAR) {
+				if (!ob->probetype)
+					ob->probetype = OB_PROBE_OBJECT;
+				ob->probe = obt;
+			}
+		}
+	}
+	CTX_DATA_END;
+
+	WM_event_add_notifier(C, NC_OBJECT | ND_DRAW, NULL);
+
+	return OPERATOR_FINISHED;
+}
+
+void OBJECT_OT_probe_set_active_as_probe(wmOperatorType *ot)
+{
+	/* identifiers */
+	ot->name = "Set Active as Probe";
+	ot->description = "Make selected objects use the active Probe";
+	ot->idname = "OBJECT_OT_probe_set_active_as_probe";
+
+	/* api callbacks */
+	ot->exec = object_active_as_probe_exec;
+	ot->poll = ED_operator_object_active;
+
+	/* flags */
+	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }

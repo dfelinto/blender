@@ -2132,12 +2132,28 @@ static void prep_brdf_input(GPUBrdfInput *brdf)
 	brdf->aniso_tangent = aniso_tangent;
 }
 
+static bool do_light(GPUBrdfInput *brdf, GPULamp *lamp)
+{
+	if (lamp->mode & LA_NO_DIFF)
+		if (brdf->type == GPU_BRDF_DIFFUSE || brdf->type == GPU_BRDF_TRANSLUCENT)
+			return false;
+
+	if (lamp->mode & LA_NO_SPEC)
+		if (!(brdf->type == GPU_BRDF_DIFFUSE || brdf->type == GPU_BRDF_TRANSLUCENT))
+			return false;
+
+	return true;
+}
+
 static void shade_one_brdf_light(GPUBrdfInput *brdf, GPULamp *lamp)
 {
 	GPUMaterial *mat = brdf->mat;
 	GPUNodeLink *lco, *lv, *dist, *visifac, *vn, *view;
 	GPUNodeLink *shadfac = NULL, *lcol, *inp, *inpr, *output, *tmp;
 	float one = 1.0f, sun_fac = 1.0f;
+
+	/* Early out */
+	if (!do_light(brdf, lamp)) return;
 
 	/* from get_lamp_visibility */
 	if (lamp->type == LA_SUN || lamp->type == LA_HEMI) {

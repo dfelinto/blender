@@ -625,13 +625,15 @@ void WORLD_OT_new(wmOperatorType *ot)
 
 static int world_probe_update_poll(bContext *C)
 {
-	World *wo = CTX_data_pointer_get_type(C, "world", &RNA_World).data;
+	Scene *scene = CTX_data_scene(C);
+	World *wo = scene->world;
 	return (wo != NULL);
 }
 
 static int world_probe_update_exec(bContext *C, wmOperator *UNUSED(op))
 {
-	World *wo = CTX_data_pointer_get_type(C, "world", &RNA_World).data;
+	Scene *scene = CTX_data_scene(C);
+	World *wo = scene->world;
 
 	if (wo && wo->gpuprobe.first) {
 		LinkData *link;
@@ -649,7 +651,7 @@ static int world_probe_update_exec(bContext *C, wmOperator *UNUSED(op))
 void WORLD_OT_probe_update(wmOperatorType *ot)
 {
 	/* identifiers */
-	ot->name = "Update Probe";
+	ot->name = "Update World Probe";
 	ot->description = "Update the environment probe";
 	ot->idname = "WORLD_OT_probe_update";
 

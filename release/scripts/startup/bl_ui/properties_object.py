@@ -346,7 +346,7 @@ class OBJECT_PT_probe_settings(ObjectButtonsPanel, Panel):
         elif ob.probe_type in {'CUBE', 'PLANE'}:
             split = layout.split()
 
-            layout.operator("object.probe_update", text="Update Probe", icon="FILE_REFRESH")
+            layout.operator("object.probe_update", text="Update Probe", icon="FILE_REFRESH").type = 'ACTIVE_PROBE'
 
             col = split.column()
             col.prop(ob, "probe_refresh_auto", text="Auto Refresh")
