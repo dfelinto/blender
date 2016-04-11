@@ -227,7 +227,7 @@ static LinkNode *mesh_calc_path_region_elem(
 		for (pass = 1; (STACK_SIZE(stack) != 0); pass++) {
 			while (STACK_SIZE(stack) != 0) {
 				BMVert *v_a = STACK_POP(stack);
-				const int v_a_index = BM_elem_index_get(v_a);
+				// const int v_a_index = BM_elem_index_get(v_a);  /* only for assert */
 				BMEdge *e = v_a->e;
 
 				do {
@@ -258,7 +258,7 @@ static LinkNode *mesh_calc_path_region_elem(
 #ifdef USE_EDGE_CHAIN
 							BLI_assert(!BM_vert_is_edge_pair(v_b));
 #endif
-							BLI_assert(pass == depths[side][v_a_index] + 1);
+							BLI_assert(pass == depths[side][BM_elem_index_get(v_a)] + 1);
 							depths[side][v_b_index] = pass;
 							if (!BM_elem_flag_test(v_b, BM_ELEM_TAG)) {
 								STACK_PUSH(stack_other, v_b);
@@ -315,12 +315,27 @@ static LinkNode *mesh_calc_path_region_elem(
 				BMLoop *l_first, *l_iter;
 				l_iter = l_first = BM_FACE_FIRST_LOOP(f);
 				bool ok = true;
+#if 0
 				do {
 					if (!bm_vert_region_test_chain(l_iter->v, depths, pass)) {
 						ok = false;
 						break;
 					}
 				} while ((l_iter = l_iter->next) != l_first);
+#else
+				/* Allowing a single failure on a face gives fewer 'gaps'.
+				 * While correct, in practice they're often part of what a user would consider the 'region'. */
+				int ok_tests = f->len > 3 ? 1 : 0;  /* how many times we may fail */
+				do {
+					if (!bm_vert_region_test_chain(l_iter->v, depths, pass)) {
+						if (ok_tests == 0) {
+							ok = false;
+							break;
+						}
+						ok_tests--;
+					}
+				} while ((l_iter = l_iter->next) != l_first);
+#endif
 
 				if (ok) {
 					BLI_linklist_prepend(&path, f);

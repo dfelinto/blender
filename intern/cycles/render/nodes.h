@@ -184,12 +184,16 @@ public:
 	float turbidity;
 	float ground_albedo;
 
+	ustring type;
+	static ShaderEnum type_enum;
+
 	virtual bool equals(const ShaderNode *other) {
 		const SkyTextureNode *sky_node = (const SkyTextureNode*)other;
 		return TextureNode::equals(other) &&
 		       sun_direction == sky_node->sun_direction &&
 		       turbidity == sky_node->turbidity &&
-		       ground_albedo == sky_node->ground_albedo;
+		       ground_albedo == sky_node->ground_albedo &&
+		       type == sky_node->type;
 	}
 };
 
@@ -615,6 +619,7 @@ class LightFalloffNode : public ShaderNode {
 public:
 	SHADER_NODE_CLASS(LightFalloffNode)
 	bool has_spatial_varying() { return true; }
+	virtual int get_group() { return NODE_GROUP_LEVEL_2; }
 };
 
 class ObjectInfoNode : public ShaderNode {
