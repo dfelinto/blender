@@ -1803,10 +1803,12 @@ void GPU_begin_object_materials(
 				GMS.is_planar_probe = (ob->probetype == OB_PROBE_PLANAR);
 
 				if (GMS.is_planar_probe && (v3d->flag3 & V3D_PROBE_CAPTURE)) {
+					/* Disable planar reflection in probe capture */
+					GMS.is_planar_probe = false;
+
 					if (ob->probe && ob->probe->probetype == OB_PROBE_CUBEMAP) {
 						GMS.gprobe = GPU_probe_object(scene, ob->probe);
 						GMS.parallax_correc = ob->probe->probeparallax;
-						GMS.is_planar_probe = false;
 					}
 					else {
 						/* it will later get the world probe eventualy */
