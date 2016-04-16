@@ -2550,31 +2550,29 @@ float bsdf_ashikhmin_velvet(vec3 N, vec3 L, vec3 V, float sigma)
 	V = normalize(V);
 	vec3 H = normalize(L + V);
 
-	float NL = dot(N, L);
-	if(NL > 0) {
-		float NV = dot(N, V);
-		float NH = dot(N, H);
-		float VH = abs(dot(V, H));
+	float NL = max(dot(N, L), 0.0);
+	float NV = max(dot(N, V), 1e-5);
+	float NH = dot(N, H);
+	float VH = max(abs(dot(V, H)), 1e-5);
 
-		if(abs(NV) > 1e-5 && abs(NH) < 1.0-1e-5 && VH > 1e-5) {
-			float NHdivVH = NH / VH;
-			NHdivVH = max(NHdivVH, 1e-5);
+	if(abs(NH) < 1.0-1e-5) {
+		float NHdivVH = NH / VH;
+		NHdivVH = max(NHdivVH, 1e-5);
 
-			float fac1 = 2 * abs(NHdivVH * NV);
-			float fac2 = 2 * abs(NHdivVH * NL);
+		float fac1 = 2 * abs(NHdivVH * NV);
+		float fac2 = 2 * abs(NHdivVH * NL);
 
-			float sinNH2 = 1 - NH * NH;
-			float sinNH4 = sinNH2 * sinNH2;
-			float cotan2 = (NH * NH) / sinNH2;
+		float sinNH2 = 1 - NH * NH;
+		float sinNH4 = sinNH2 * sinNH2;
+		float cotan2 = (NH * NH) / sinNH2;
 
-			float D = exp(-cotan2 * m_1_sig2) * m_1_sig2 * M_1_PI / sinNH4;
-			float G = min(1.0, min(fac1, fac2)); // TODO: derive G from D analytically
+		float D = exp(-cotan2 * m_1_sig2) * m_1_sig2 * M_1_PI / sinNH4;
+		float G = min(1.0, min(fac1, fac2)); // TODO: derive G from D analytically
 
-			return 0.25 * (D * G) / NV;
-		}
+		return 0.25 * (D * G) / NV;
 	}
-	else
-		return 0.0;
+
+	return 0.0;
 }
 
 /* *** Oren Nayar Functions *** */
@@ -2593,11 +2591,11 @@ float bsdf_oren_nayar(float NL, vec3 N, vec3 L, vec3 V, float roughness)
 
 	float s = LV - NL * NV;
 	float t = mix(1.0, max(NL, NV), step(0.0, s));
-	float oren_nayer_diff = NL * (A + B * s / t);
+	float oren_nayar_diff = NL * (A + B * s / t);
 
 	float lambert_diff = NL * M_1_PI;
 
-	return mix(lambert_diff, oren_nayer_diff, roughness);
+	return mix(lambert_diff, oren_nayar_diff, roughness);
 }
 
 /* *** Energy Conversion for lights *** */
@@ -4295,8 +4293,10 @@ void env_sampling_reflect_sharp(vec3 viewpos, mat4 invviewmat, mat4 viewmat, vec
 
 void env_sampling_refract_sharp(vec3 viewpos, mat4 invviewmat, mat4 viewmat, vec3 N, float eta, samplerCube probe, sampler2D planar_reflection, sampler2D planar_refraction, mat4 correcmat, mat4 reflectmat, vec3 probevec, vec3 planarvec, out vec3 result);
 
-void env_sampling_diffuse(vec3 viewpos, mat4 invviewmat, mat4 viewmat, vec3 N, float roughness, vec3 sh0, vec3 sh1, vec3 sh2, vec3 sh3,
-	                      vec3 sh4, vec3 sh5, vec3 sh6, vec3 sh7, vec3 sh8, out vec4 result);
+void env_sampling_velvet(vec3 viewpos, mat4 invviewmat, mat4 viewmat, vec3 N, float sigma, float precalc_lod_factor, samplerCube probe, sampler2D planar_reflection, sampler2D planar_refraction, mat4 correcmat, mat4 reflectmat, vec3 probevec, vec3 planarvec, out vec3 result);
+
+void env_sampling_diffuse(vec3 viewpos, mat4 invviewmat, mat4 viewmat, vec3 N, float roughness, float precalc_lod_factor, samplerCube probe, sampler2D planar_reflection, sampler2D planar_refraction, mat4 correcmat, mat4 reflectmat, vec3 probevec, vec3 planarvec,
+                          vec3 sh0, vec3 sh1, vec3 sh2, vec3 sh3, vec3 sh4, vec3 sh5, vec3 sh6, vec3 sh7, vec3 sh8, out vec4 result);
 
 void env_sampling_transparent(vec3 viewpos, mat4 invviewmat, mat4 viewmat, samplerCube probe, sampler2D planar_reflection, sampler2D planar_refraction, mat4 correcmat, mat4 reflectmat, vec3 probevec, vec3 planarvec, out vec4 result);
 

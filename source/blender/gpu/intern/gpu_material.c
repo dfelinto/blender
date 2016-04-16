@@ -2419,11 +2419,13 @@ static GPUNodeLink *brdf_sample_env(GPUBrdfInput *brdf)
 		case GPU_BRDF_TRANSPARENT :
 			GPU_link(mat, "env_sampling_transparent", GPU_builtin(GPU_VIEW_POSITION), GPU_builtin(GPU_INVERSE_VIEW_MATRIX), GPU_builtin(GPU_VIEW_MATRIX), GPU_builtin(GPU_PBR_PROBE), GPU_builtin(GPU_PBR_PLANAR_REFLECT), GPU_builtin(GPU_PBR_PLANAR_REFRACT), GPU_builtin(GPU_PBR_CORRECTION_MATRIX), GPU_builtin(GPU_PBR_PLANAR_RFL_MATRIX), GPU_builtin(GPU_PBR_PROBE_POSITION), GPU_builtin(GPU_PBR_PLANAR_VECTOR), &envlight);
 			break;
+		case GPU_BRDF_VELVET :
+			GPU_link(mat, "env_sampling_velvet", GPU_builtin(GPU_VIEW_POSITION), GPU_builtin(GPU_INVERSE_VIEW_MATRIX), GPU_builtin(GPU_VIEW_MATRIX), brdf->normal, brdf->sigma, GPU_builtin(GPU_PBR_LOD_FACTOR), GPU_builtin(GPU_PBR_PROBE), GPU_builtin(GPU_PBR_PLANAR_REFLECT), GPU_builtin(GPU_PBR_PLANAR_REFRACT), GPU_builtin(GPU_PBR_CORRECTION_MATRIX), GPU_builtin(GPU_PBR_PLANAR_RFL_MATRIX), GPU_builtin(GPU_PBR_PROBE_POSITION), GPU_builtin(GPU_PBR_PLANAR_VECTOR), &envlight);
+			break;
 		case GPU_BRDF_DIFFUSE :
 		case GPU_BRDF_TRANSLUCENT :
-		case GPU_BRDF_VELVET :
 		default :
-			GPU_link(mat, "env_sampling_diffuse", GPU_builtin(GPU_VIEW_POSITION), GPU_builtin(GPU_INVERSE_VIEW_MATRIX), GPU_builtin(GPU_VIEW_MATRIX), brdf->normal, brdf->roughness, GPU_builtin(GPU_PBR_SH0), GPU_builtin(GPU_PBR_SH1), GPU_builtin(GPU_PBR_SH2), GPU_builtin(GPU_PBR_SH3), GPU_builtin(GPU_PBR_SH4), GPU_builtin(GPU_PBR_SH5), GPU_builtin(GPU_PBR_SH6), GPU_builtin(GPU_PBR_SH7), GPU_builtin(GPU_PBR_SH8), &envlight);
+			GPU_link(mat, "env_sampling_diffuse", GPU_builtin(GPU_VIEW_POSITION), GPU_builtin(GPU_INVERSE_VIEW_MATRIX), GPU_builtin(GPU_VIEW_MATRIX), brdf->normal, brdf->roughness, GPU_builtin(GPU_PBR_LOD_FACTOR), GPU_builtin(GPU_PBR_PROBE), GPU_builtin(GPU_PBR_PLANAR_REFLECT), GPU_builtin(GPU_PBR_PLANAR_REFRACT), GPU_builtin(GPU_PBR_CORRECTION_MATRIX), GPU_builtin(GPU_PBR_PLANAR_RFL_MATRIX), GPU_builtin(GPU_PBR_PROBE_POSITION), GPU_builtin(GPU_PBR_PLANAR_VECTOR), GPU_builtin(GPU_PBR_SH0), GPU_builtin(GPU_PBR_SH1), GPU_builtin(GPU_PBR_SH2), GPU_builtin(GPU_PBR_SH3), GPU_builtin(GPU_PBR_SH4), GPU_builtin(GPU_PBR_SH5), GPU_builtin(GPU_PBR_SH6), GPU_builtin(GPU_PBR_SH7), GPU_builtin(GPU_PBR_SH8), &envlight);
 			break;
 	}
 

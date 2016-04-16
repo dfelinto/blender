@@ -184,6 +184,18 @@ vec2 hammersley_2d(uint i, uint N, uvec2 random) {
 	return vec2( E1, E2 );
 }
 
+vec3 importance_sample_hemisphere(vec2 Xi)
+{
+	float phi = M_2PI * Xi.y;
+
+	float z = Xi.x; /* cos theta */
+	float r = sqrt( 1.0f - z*z ); /* sin theta */
+	float x = r * cos(phi);
+	float y = r * sin(phi);
+
+	return normalize(vec3(x, y, z));
+}
+
 vec3 importance_sample_GGX(vec2 Xi, float a2)
 {
 	float phi = M_2PI * Xi.y;
@@ -224,6 +236,27 @@ vec3 importance_sample_GGX_aniso(vec2 Xi, float ax, float ay)
 	float z = sqrt( 1.0 - x*x - y*y ); /* reconstructing Z */
 
 	return normalize(vec3(x, y, z));
+}
+
+/* Second order Spherical Harmonics */
+/* http://seblagarde.wordpress.com/2012/01/08/pi-or-not-to-pi-in-game-lighting-equation/ */
+vec3 spherical_harmonics_L2(vec3 N, vec3 sh0, vec3 sh1, vec3 sh2, vec3 sh3, vec3 sh4, vec3 sh5, vec3 sh6, vec3 sh7, vec3 sh8)
+{
+	vec3 sh = vec3(0.0);
+
+	sh += 0.282095 * sh0;
+
+	sh += -0.488603 * N.z * sh1;
+	sh += 0.488603 * N.y * sh2;
+	sh += -0.488603 * N.x * sh3;
+
+	sh += 1.092548 * N.x * N.z * sh4;
+	sh += -1.092548 * N.z * N.y * sh5;
+	sh += 0.315392 * (3.0 * N.y * N.y - 1.0) * sh6;
+	sh += -1.092548 * N.x * N.y * sh7;
+	sh += 0.546274 * (N.x * N.x - N.z * N.z) * sh8;
+
+	return sh;
 }
 
 void env_sampling_reflect_glossy(vec3 viewpos, mat4 invviewmat, mat4 viewmat, vec3 N, float roughness, float precalc_lod_factor,
@@ -640,39 +673,139 @@ void env_sampling_refract_sharp(vec3 viewpos, mat4 invviewmat, mat4 viewmat, vec
 	result = sampleProbe(probe, planar_refraction, L, refpos, N, worldpos, viewmat, correcmat, planarfac, probevec, planarvec, vec2(0.0), 0.0, I).rgb;
 }
 
-void env_sampling_diffuse(vec3 viewpos, mat4 invviewmat, mat4 viewmat, vec3 N, float roughness, vec3 sh0, vec3 sh1, vec3 sh2, vec3 sh3,
-	                      vec3 sh4, vec3 sh5, vec3 sh6, vec3 sh7, vec3 sh8, out vec4 result)
+void env_sampling_velvet(vec3 viewpos, mat4 invviewmat, mat4 viewmat, vec3 N, float sigma, float precalc_lod_factor,
+                         samplerCube probe,
+                         sampler2D planar_reflection,
+                         sampler2D planar_refraction,
+                         mat4 correcmat,
+                         mat4 reflectmat,
+                         vec3 probevec,
+                         vec3 planarvec,
+                         out vec3 result)
 {
 	vec3 worldpos, refpos;
 	vec3 planarfac;
-	vec3 I;
-	shade_view(viewpos, I);
-	I = (invviewmat * vec4(I, 0.0)).xyz;
-	I = -I;
+	vec3 I = vector_prepass(invviewmat, viewmat, reflectmat, viewpos, worldpos, refpos, planarvec, planarfac);
+	vec3 T, B; make_orthonormals(N, T, B); /* Generate tangent space */
 
-	/* XXX : oren_nayar approximation for ambient
-		 * We need Something better */
-	float NV = clamp(dot(N, I), 0.0, 0.999);
-	float fac = 1.0 - pow(1.0 - NV, 1.3);
-	float oren_nayar_approx = mix(1.0, 0.78, fac*roughness);
+	uvec2 random = get_noise(); /* Noise to dither the samples */
 
-	/* Second order Spherical Harmonics */
-	/* http://seblagarde.wordpress.com/2012/01/08/pi-or-not-to-pi-in-game-lighting-equation/ */
-	vec3 sh = vec3(0.0);
+	/* Precomputation */
+	sigma = max(sigma, 1e-2);
+	float m_1_sig2 = 1 / (sigma * sigma);
+	float NV = max(1e-5, abs(dot(I, N)));
 
-	sh += 0.282095 * sh0;
+	/* Integrating Envmap */
+	vec4 out_radiance = vec4(0.0);
+	for (uint i = 0u; i < NUM_SAMPLE; i++) {
+		vec2 Xi = hammersley_2d(i, NUM_SAMPLE, random);
+		vec3 Ht = importance_sample_hemisphere(Xi);
+		vec3 L = from_tangent_to_world(Ht, N, T, B);
+		vec3 H = normalize(L - I);
 
-	sh += -0.488603 * N.z * sh1;
-	sh += 0.488603 * N.y * sh2;
-	sh += -0.488603 * N.x * sh3;
+		float NL = max(0.0, dot(N, L));
+		float NH = dot(N, H); /* cosTheta */
 
-	sh += 1.092548 * N.x * N.z * sh4;
-	sh += -1.092548 * N.z * N.y * sh5;
-	sh += 0.315392 * (3.0 * N.y * N.y - 1.0) * sh6;
-	sh += -1.092548 * N.x * N.y * sh7;
-	sh += 0.546274 * (N.x * N.x - N.z * N.z) * sh8;
+		if (NL != 0.0 && abs(NH) < 1.0-1e-5) {
+			/* Step 1 : Sampling Environment */
+			const float pdf = 0.5 * M_1_PI;
+			float Lod = precalc_lod_factor - 0.5 * log2(pdf);
+			vec4 irradiance = sampleProbeLod(probe, planar_reflection, L, refpos, N, worldpos, viewmat, correcmat, planarfac, probevec, planarvec, Ht.xy, 1.0, I, Lod);
 
-	result = oren_nayar_approx * vec4(sh, 1.0);
+			/* Step 2 : Integrating BRDF*/
+			float VH = max(abs(dot(I, H)), 1e-5);
+
+			float NHdivVH = NH / VH;
+			NHdivVH = max(NHdivVH, 1e-5);
+
+			float fac1 = 2 * abs(NHdivVH * NV);
+			float fac2 = 2 * abs(NHdivVH * NL);
+
+			float sinNH2 = 1 - NH * NH;
+			float sinNH4 = sinNH2 * sinNH2;
+			float cotan2 = (NH * NH) / sinNH2;
+
+			float D = exp(-cotan2 * m_1_sig2) * m_1_sig2 * M_1_PI / sinNH4;
+			float G = min(1.0, min(fac1, fac2)); // TODO: derive G from D analytically
+
+			/* 0.25 * (D * G) / (NV * pdf); */
+			float brdf = 0.5 * M_PI * (D * G) / NV;
+
+			out_radiance += irradiance * brdf;
+		}
+	}
+
+	result = out_radiance.rgb / NUM_SAMPLE;
+}
+
+
+
+void env_sampling_diffuse(vec3 viewpos, mat4 invviewmat, mat4 viewmat, vec3 N, float roughness, float precalc_lod_factor,
+                          samplerCube probe,
+                          sampler2D planar_reflection,
+                          sampler2D planar_refraction,
+                          mat4 correcmat,
+                          mat4 reflectmat,
+                          vec3 probevec,
+                          vec3 planarvec,
+                          vec3 sh0, vec3 sh1, vec3 sh2, vec3 sh3,
+                          vec3 sh4, vec3 sh5, vec3 sh6, vec3 sh7, vec3 sh8, out vec4 result)
+{
+	/* Lambert */
+	vec3 lambert_diff = spherical_harmonics_L2(N, sh0, sh1, sh2, sh3, sh4, sh5, sh6, sh7, sh8);
+
+	if (roughness < 1e-5) {
+		/* early out */
+		result = vec4(lambert_diff, 1.0);
+		return;
+	}
+
+	/* Oren Nayar */
+	vec3 worldpos, refpos;
+	vec3 planarfac;
+	vec3 I = vector_prepass(invviewmat, viewmat, reflectmat, viewpos, worldpos, refpos, planarvec, planarfac);
+	vec3 T, B; make_orthonormals(N, T, B); /* Generate tangent space */
+
+	uvec2 random = get_noise(); /* Noise to dither the samples */
+
+	float NV = max(1e-8, abs(dot(I, N)));
+
+	/* Integrating Envmap */
+	vec4 out_radiance = vec4(0.0);
+	for (uint i = 0u; i < NUM_SAMPLE; i++) {
+		vec2 Xi = hammersley_2d(i, NUM_SAMPLE, random);
+		vec3 Ht = importance_sample_hemisphere(Xi);
+		vec3 L = from_tangent_to_world(Ht, N, T, B);
+		vec3 H = normalize(L - I);
+
+		float NL = max(0.0, dot(N, L));
+
+		if (NL != 0.0) {
+			/* Step 1 : Sampling Environment */
+			const float pdf = 0.5 * M_1_PI;
+			float Lod = precalc_lod_factor - 0.5 * log2(pdf);
+			vec4 irradiance = sampleProbeLod(probe, planar_reflection, L, refpos, N, worldpos, viewmat, correcmat, planarfac, probevec, planarvec, Ht.xy, 1.0, I, Lod);
+
+			/* Step 2 : Integrating BRDF*/
+			float LV = max(0.0, dot(L, -I) );
+			float sigma = roughness;
+			float div = 1.0 / (M_PI + ((3.0 * M_PI - 4.0) / 6.0) * sigma);
+
+			float A = 1.0 * div;
+			float B = sigma * div;
+
+			float s = LV - NL * NV;
+			float t = mix(1.0, max(NL, NV), step(0.0, s));
+
+			float brdf = NL * (A + B * s / t);
+
+			out_radiance += irradiance * brdf * 2.0 * M_PI; /* 1/pdf */
+		}
+	}
+
+	vec3 oren_nayar_diff = out_radiance.rgb / NUM_SAMPLE;
+
+	result = vec4(mix(lambert_diff, oren_nayar_diff, roughness), 1.0);
 }
 
 void env_sampling_transparent(vec3 viewpos, mat4 invviewmat, mat4 viewmat,
