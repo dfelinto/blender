@@ -56,7 +56,7 @@ static int node_shader_gpu_light_falloff(GPUMaterial *mat, bNode *UNUSED(node), 
 	}
 	else {
 		float lamppos[4] = {0.0f};
-		return GPU_stack_link(mat, "node_light_falloff", in, out, GPU_uniform(&lamppos), GPU_builtin(GPU_VIEW_POSITION));
+		return GPU_stack_link(mat, "node_light_falloff", in, out, GPU_uniform((float *)lamppos), GPU_builtin(GPU_VIEW_POSITION));
 	}
 }
 

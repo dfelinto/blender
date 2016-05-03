@@ -29,7 +29,7 @@ void correct_ray(inout vec3 L, vec3 worldpos, mat4 correcmat, vec3 probevec)
 	float b = dot(localray, localpos);
 	float c = dot(localpos, localpos) - 1;
 
-	float dist = 1e15f;
+	float dist = 1e15;
 	float determinant = b * b - a * c;
 	if (determinant >= 0)
 		dist = (sqrt(determinant) - b) / a;
@@ -79,7 +79,7 @@ vec4 sampleProbeLod(samplerCube probe, sampler2D planarprobe, vec3 cubevec, vec3
 {
 	vec4 sample;
 	correct_ray(cubevec, worldpos, correcmat, probevec);
-	sample = textureCubeLod(probe, cubevec, min(lod, 5.0));
+	sample = textureCubeLod(probe, cubevec, lod);
 
 #ifdef PLANAR_PROBE
 	vec4 sample_plane = vec4(0.0);
@@ -305,8 +305,7 @@ void env_sampling_reflect_glossy(vec3 viewpos, mat4 invviewmat, mat4 viewmat, ve
 
 			float Lod = precalc_lod_factor - 0.5 * log2(pdf);
 
-			out_radiance += sampleProbeLod(probe, planar_reflection, L, refpos, N, worldpos, viewmat, correcmat, planarfac, probevec, planarvec, Ht.xy, roughness, I, Lod);
-			weight++;
+			vec4 sample = sampleProbeLod(probe, planar_reflection, L, refpos, N, worldpos, viewmat, correcmat, planarfac, probevec, planarvec, Ht.xy, roughness, I, Lod);
 
 			/* Step 2 : Integrating BRDF : this must be replace by a LUT */
 			float VH = max(1e-8, -dot(I, H));
@@ -315,12 +314,14 @@ void env_sampling_reflect_glossy(vec3 viewpos, mat4 invviewmat, mat4 viewmat, ve
 			/* Li = SampleColor * NL
 			 * brdf = D*G / (4*NL*NV) [denominator canceled by G]
 			 * pdf = D * NH / (4 * VH) [D canceled later by D in brdf]
-			 * out_radiance = Li * Spec / pdf; */
-			brdf += NL * 4.0 * VH / (NH * G);
+			 * out_radiance = Li * brdf / pdf; */
+			float brdf = 4.0 * VH / (NH * G);
+
+			out_radiance += NL * sample * brdf;
 		}
 	}
 
-	result = (out_radiance.rgb / weight) * (brdf / NUM_SAMPLE);
+	result = (out_radiance.rgb / NUM_SAMPLE);
 }
 
 void env_sampling_reflect_aniso(vec3 viewpos, mat4 invviewmat, mat4 viewmat, vec3 N, float roughness, float anisotropy, float rotation, vec3 T,
@@ -639,6 +640,10 @@ void env_sampling_glass_sharp(vec3 viewpos, mat4 invviewmat, mat4 viewmat, vec3 
 
 void env_sampling_reflect_sharp(vec3 viewpos, mat4 invviewmat, mat4 viewmat, vec3 N,
                                 samplerCube probe,
+                                sampler2D ssr_buffer,
+                                vec4 ssr_parameters,
+                                vec2 ssr_parameters2,
+                                mat4 pixelprojmat,
                                 sampler2D planar_reflection,
                                 sampler2D planar_refraction,
                                 mat4 correcmat,
@@ -651,8 +656,36 @@ void env_sampling_reflect_sharp(vec3 viewpos, mat4 invviewmat, mat4 viewmat, vec
 	vec3 planarfac;
 	vec3 I = vector_prepass(invviewmat, viewmat, reflectmat, viewpos, worldpos, refpos, planarvec, planarfac);
 	vec3 L = reflect(I, N);
+	vec3 vL = (viewmat * vec4(L, 0.0)).xyz;
 
-	result = sampleProbe(probe, planar_reflection, L, refpos, N, worldpos, viewmat, correcmat, planarfac, probevec, planarvec, vec2(0.0), 0.0, I).rgb;
+	/* Probe */
+	vec4 sample_probe = sampleProbe(probe, planar_reflection, L, refpos, N, worldpos, viewmat, correcmat, planarfac, probevec, planarvec, vec2(0.0), 0.0, I);
+
+	/* SSR */
+#ifdef USE_SSR
+	/* ssr_parameters */
+	float thickness = 	ssr_parameters.x; /* Camera space thickness to ascribe to each pixel in the depth buffer */
+	float nearz = 		ssr_parameters.y; /* Near plane distance (Negative number) */
+	float stride = 		ssr_parameters.z; /* 2D : Step in horizontal or vertical pixels between samples. 3D : View space step between samples */
+	float maxstep = 	ssr_parameters.w; /* Maximum number of iteration when raymarching */
+	float maxdistance = ssr_parameters2.x; /* Maximum distance from ray origin */
+	float attenuation = ssr_parameters2.y; /* Attenuation factor for screen edges and ray step fading */
+
+	ivec2 c = ivec2(gl_FragCoord.xy);
+	float jitter = float((c.x+c.y)&1) * 0.5; // Number between 0 and 1 for how far to bump the ray in stride units to conceal banding artifacts
+
+	vec2 hitpixel; vec3 hitco; float hitstep;
+
+	bool hit = raycast(viewpos, vL, pixelprojmat, ssr_buffer, thickness, nearz, stride, jitter, maxstep, maxdistance, hitstep, hitpixel, hitco);
+	float contrib = ssr_contribution(viewpos, hitstep, maxstep, maxdistance, attenuation, hit, hitco);
+
+	vec4 sample_ssr = texture2DLod(ssr_buffer, hitco.xy, 0);
+	srgb_to_linearrgb(sample_ssr, sample_ssr);
+
+	result = mix(sample_probe.rgb, sample_ssr.rgb, contrib);
+#else
+	result = sample_probe.rgb;
+#endif
 }
 
 void env_sampling_refract_sharp(vec3 viewpos, mat4 invviewmat, mat4 viewmat, vec3 N, float eta,

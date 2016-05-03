@@ -3253,10 +3253,25 @@ class VIEW3D_PT_view3d_shading(Panel):
                 col.prop(view, "show_textured_shadeless")
 
         if scene.render.use_shading_nodes and view.viewport_shade == 'MATERIAL' :
-            col.prop(view, "use_realistic_mat")
-            if view.use_realistic_mat:
+            pbr_settings = view.pbr_settings
+
+            col.prop(pbr_settings, "use_realistic_mat")
+            if pbr_settings.use_realistic_mat:
+                brdf_settings = pbr_settings.brdf;
                 subcol = col.column(align=True)
-                subcol.prop(view, "pbr_samples")
+                subcol.prop(brdf_settings, "samples")
+                subcol.prop(brdf_settings, "lodbias")
+
+                col.prop(pbr_settings, "use_ssr")
+                if pbr_settings.use_ssr:
+                    ssr_settings = pbr_settings.ssr;
+                    subcol = col.column(align=True)
+                    subcol.prop(ssr_settings, "thickness")
+                    subcol.prop(ssr_settings, "stride")
+                    subcol.prop(ssr_settings, "distance_max")
+                    subcol.prop(ssr_settings, "attenuation")
+                    subcol.prop(ssr_settings, "steps")
+                    subcol.prop(ssr_settings, "downsampling")
 
         col.prop(view, "show_backface_culling")
 

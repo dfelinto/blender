@@ -741,6 +741,15 @@ static EnumPropertyItem *rna_SpaceView3D_stereo3d_camera_itemf(bContext *UNUSED(
 		return stereo3d_camera_items;
 }
 
+
+static void rna_GPUPBRSettings_update(Main *UNUSED(bmain), Scene *UNUSED(scene), PointerRNA *ptr)
+{
+	GPUPBRSettings *pbr_settings = ptr->data;
+
+	GPU_pbr_settings_validate(pbr_settings);
+}
+
+
 /* Space Image Editor */
 
 static PointerRNA rna_SpaceImageEditor_uvedit_get(PointerRNA *ptr)
@@ -2305,6 +2314,100 @@ static void rna_def_backgroundImages(BlenderRNA *brna, PropertyRNA *cprop)
 	RNA_def_function_ui_description(func, "Remove all background images");
 }
 
+static void rna_def_gpu_pbr_brdf(BlenderRNA *brna)
+{
+	StructRNA *srna;
+	PropertyRNA *prop;
+
+	srna = RNA_def_struct(brna, "GPUBRDFSettings", NULL);
+	RNA_def_struct_ui_text(srna, "GPU Sampling", "Settings for GLSL materials and lights sampling");
+	RNA_def_struct_ui_icon(srna, ICON_MATERIAL);
+
+	prop = RNA_def_property(srna, "lodbias", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_ui_text(prop, "Bias", "Bias the LOD sampled by the ray. Higher values give more correct but noisy results.");
+	RNA_def_property_range(prop, -100.0f, 100.0f);
+	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
+
+	prop = RNA_def_property(srna, "samples", PROP_INT, PROP_NONE);
+	RNA_def_property_ui_text(prop, "Quality", "Define the quality of brdf sampling.");
+	RNA_def_property_range(prop, 1, 64);
+	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
+}
+
+static void rna_def_gpu_pbr_ssr(BlenderRNA *brna)
+{
+	StructRNA *srna;
+	PropertyRNA *prop;
+
+	srna = RNA_def_struct(brna, "GPUSSRSettings", NULL);
+	RNA_def_struct_ui_text(srna, "GPU SSR", "Settings for GPU based screen space reflections");
+	RNA_def_struct_ui_icon(srna, ICON_MATERIAL);
+
+	prop = RNA_def_property(srna, "stride", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_ui_text(prop, "Offset", "Offset for each raymarching step");
+	RNA_def_property_range(prop, 0.00001f, 250.0f);
+	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
+
+	prop = RNA_def_property(srna, "distance_max", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_ui_text(prop, "Distance", "Max distance traveled by the reflected ray");
+	RNA_def_property_range(prop, 0.00001f, 100000.0f);
+	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
+
+	prop = RNA_def_property(srna, "attenuation", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_ui_text(prop, "Attenuation", "Attenuation for distance and screen border fade");
+	RNA_def_property_range(prop, 1.0f, 20.0f);
+	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
+
+	prop = RNA_def_property(srna, "thickness", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_ui_text(prop, "Thickness", "Minimum Pixel thickness when testing intersection");
+	RNA_def_property_range(prop, 0.000001f, 100000.0f);
+	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
+
+	prop = RNA_def_property(srna, "steps", PROP_INT, PROP_NONE);
+	RNA_def_property_ui_text(prop, "Steps", "Number of samples");
+	RNA_def_property_range(prop, 1, 128);
+	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
+
+	prop = RNA_def_property(srna, "downsampling", PROP_INT, PROP_NONE);
+	RNA_def_property_ui_text(prop, "Downsampling", "Downsample Ssr buffer to increase performance");
+	RNA_def_property_range(prop, 0, 8);
+	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
+}
+
+static void rna_def_gpu_pbr(BlenderRNA *brna)
+{
+	StructRNA *srna;
+	PropertyRNA *prop;
+
+	rna_def_gpu_pbr_brdf(brna);
+	rna_def_gpu_pbr_ssr(brna);
+
+	srna = RNA_def_struct(brna, "GPUPBRSettings", NULL);
+	RNA_def_struct_ui_text(srna, "GPU PBR Settings", "Settings for GLSL PBR materials");
+	RNA_def_struct_ui_icon(srna, ICON_MATERIAL);
+
+	/* BRDF */
+	prop = RNA_def_property(srna, "brdf", PROP_POINTER, PROP_NONE);
+	RNA_def_property_flag(prop, PROP_NEVER_NULL);
+	RNA_def_property_struct_type(prop, "GPUBRDFSettings");
+	RNA_def_property_ui_text(prop, "PBR Sampling settings", "");
+
+	prop = RNA_def_property(srna, "use_realistic_mat", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "pbr_flag", GPU_PBR_FLAG_ENABLE);
+	RNA_def_property_ui_text(prop, "Realistic Material Preview", "Use a more accurate preview of the shaders in the viewport");
+	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, "rna_GPUPBRSettings_update");
+
+	/* SSR */
+	prop = RNA_def_property(srna, "ssr", PROP_POINTER, PROP_NONE);
+	RNA_def_property_flag(prop, PROP_NEVER_NULL);
+	RNA_def_property_struct_type(prop, "GPUSSRSettings");
+	RNA_def_property_ui_text(prop, "Screen Space Reflections settings", "");
+
+	prop = RNA_def_property(srna, "use_ssr", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "pbr_flag", GPU_PBR_FLAG_SSR);
+	RNA_def_property_ui_text(prop, "Screen Space Reflections", "Use screen data to reflect objects");
+	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, "rna_GPUPBRSettings_update");
+}
 
 static void rna_def_space_view3d(BlenderRNA *brna)
 {
@@ -2574,20 +2677,9 @@ static void rna_def_space_view3d(BlenderRNA *brna)
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
 
 	prop = RNA_def_property(srna, "show_world_sh", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_sdna(prop, NULL, "flag3", V3D_SHOW_WORLD_SH);
+	RNA_def_property_boolean_sdna(prop, NULL, "flag3", V3D_SHOW_WORLD_DIFFUSE);
 	RNA_def_property_ui_text(prop, "Use Diffuse Background", "Show diffuse world lighting in the background");
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, "rna_SpaceView3D_world_background_shader_update");
-
-	prop = RNA_def_property(srna, "use_realistic_mat", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_sdna(prop, NULL, "flag3", V3D_REALISTIC_MAT);
-	RNA_def_property_ui_text(prop, "Realistic Material Preview", "Use a more accurate preview of the shaders in the viewport");
-	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, "rna_SpaceView3D_viewport_real_shading_update");
-
-	prop = RNA_def_property(srna, "pbr_samples", PROP_INT, PROP_NONE);
-	RNA_def_property_int_sdna(prop, NULL, "pbr_samples");
-	RNA_def_property_ui_text(prop, "Quality", "Define the quality of brdf sampling.");
-	RNA_def_property_range(prop, 1, 64);
-	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, "rna_SpaceView3D_viewport_real_shading_update");
 
 	prop = RNA_def_property(srna, "use_occlude_geometry", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "flag", V3D_ZBUF_SELECT);
@@ -2726,6 +2818,10 @@ static void rna_def_space_view3d(BlenderRNA *brna)
 
 	prop = RNA_def_property(srna, "fx_settings", PROP_POINTER, PROP_NONE);
 	RNA_def_property_ui_text(prop, "FX Options", "Options used for real time compositing");
+	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
+
+	prop = RNA_def_property(srna, "pbr_settings", PROP_POINTER, PROP_NONE);
+	RNA_def_property_ui_text(prop, "PBR Options", "Options used for advance glsl shading");
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
 
 	/* Stereo Settings */
@@ -4751,6 +4847,8 @@ static void rna_def_space_clip(BlenderRNA *brna)
 
 void RNA_def_space(BlenderRNA *brna)
 {
+	rna_def_gpu_pbr(brna);
+
 	rna_def_space(brna);
 	rna_def_space_image(brna);
 	rna_def_space_sequencer(brna);

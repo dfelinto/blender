@@ -68,6 +68,7 @@
 #include "GPU_shader.h"
 #include "GPU_texture.h"
 #include "GPU_draw.h"
+#include "GPU_ssr.h"
 
 #include "gpu_codegen.h"
 
@@ -148,7 +149,7 @@ struct GPUMaterial {
 	/* for binding the material */
 	GPUPass *pass;
 	GPUVertexAttribs attribs;
-	int builtins;
+	int builtins, pbrbuiltins;
 	int alpha, obcolalpha;
 	int dynproperty;
 
@@ -170,9 +171,12 @@ struct GPUMaterial {
 	int correcmatloc, planarreflloc, planarobjloc;
 	int probecoloc, planarvecloc;
 	int shloc[9];
+	int ssrloc, ssrparamsloc, ssrparams2loc;
+	int pixelprojmatloc;
 	GPUTexture *bindedcubeprobe;
 	GPUTexture *bindedreflprobe;
 	GPUTexture *bindedrefrprobe;
+	GPUTexture *bindedssr;
 
 	ListBase lamps;
 	bool bound;
@@ -187,6 +191,7 @@ struct GPUMaterial {
 	int parallax_correc;
 	bool is_planar_probe;
 	bool is_alpha_as_depth;
+	bool use_ssr;
 	
 	bool is_opensubdiv;
 };
@@ -294,8 +299,9 @@ static int GPU_material_construct_end(GPUMaterial *material, const char *passnam
 {
 	if (material->outlink) {
 		GPUNodeLink *outlink = material->outlink;
+
 		material->pass = GPU_generate_pass(&material->nodes, outlink,
-			&material->attribs, &material->builtins, material->type,
+			&material->attribs, &material->builtins, &material->pbrbuiltins, material->type,
 			passname,
 			material->is_opensubdiv,
 			GPU_material_use_new_shading_nodes(material),
@@ -303,6 +309,7 @@ static int GPU_material_construct_end(GPUMaterial *material, const char *passnam
 			material->parallax_correc & OB_PROBE_PARRALAX_BOX,
 			material->parallax_correc & OB_PROBE_PARRALAX_ELLIPSOID,
 			material->is_alpha_as_depth,
+			material->use_ssr,
 			material->samplecount);
 
 		if (!material->pass)
@@ -338,40 +345,50 @@ static int GPU_material_construct_end(GPUMaterial *material, const char *passnam
 			material->partvel = GPU_shader_get_uniform(shader, GPU_builtin_name(GPU_PARTICLE_VELOCITY));
 		if (material->builtins & GPU_PARTICLE_ANG_VELOCITY)
 			material->partangvel = GPU_shader_get_uniform(shader, GPU_builtin_name(GPU_PARTICLE_ANG_VELOCITY));
-		if (material->builtins & GPU_PBR_LOD_FACTOR)
-			material->lodfactorloc = GPU_shader_get_uniform(shader, GPU_builtin_name(GPU_PBR_LOD_FACTOR));
-		if (material->builtins & GPU_PBR_PROBE)
-			material->probeloc = GPU_shader_get_uniform(shader, GPU_builtin_name(GPU_PBR_PROBE));
-		if (material->builtins & GPU_PBR_PLANAR_REFLECT)
-			material->reflectloc = GPU_shader_get_uniform(shader, GPU_builtin_name(GPU_PBR_PLANAR_REFLECT));
-		if (material->builtins & GPU_PBR_PLANAR_REFRACT)
-			material->refractloc = GPU_shader_get_uniform(shader, GPU_builtin_name(GPU_PBR_PLANAR_REFRACT));
-		if (material->builtins & GPU_PBR_SH0)
-			material->shloc[0] = GPU_shader_get_uniform(shader, GPU_builtin_name(GPU_PBR_SH0));
-		if (material->builtins & GPU_PBR_SH1)
-			material->shloc[1] = GPU_shader_get_uniform(shader, GPU_builtin_name(GPU_PBR_SH1));
-		if (material->builtins & GPU_PBR_SH2)
-			material->shloc[2] = GPU_shader_get_uniform(shader, GPU_builtin_name(GPU_PBR_SH2));
-		if (material->builtins & GPU_PBR_SH3)
-			material->shloc[3] = GPU_shader_get_uniform(shader, GPU_builtin_name(GPU_PBR_SH3));
-		if (material->builtins & GPU_PBR_SH4)
-			material->shloc[4] = GPU_shader_get_uniform(shader, GPU_builtin_name(GPU_PBR_SH4));
-		if (material->builtins & GPU_PBR_SH5)
-			material->shloc[5] = GPU_shader_get_uniform(shader, GPU_builtin_name(GPU_PBR_SH5));
-		if (material->builtins & GPU_PBR_SH6)
-			material->shloc[6] = GPU_shader_get_uniform(shader, GPU_builtin_name(GPU_PBR_SH6));
-		if (material->builtins & GPU_PBR_SH7)
-			material->shloc[7] = GPU_shader_get_uniform(shader, GPU_builtin_name(GPU_PBR_SH7));
-		if (material->builtins & GPU_PBR_SH8)
-			material->shloc[8] = GPU_shader_get_uniform(shader, GPU_builtin_name(GPU_PBR_SH8));
-		if (material->builtins & GPU_PBR_CORRECTION_MATRIX)
-			material->correcmatloc = GPU_shader_get_uniform(shader, GPU_builtin_name(GPU_PBR_CORRECTION_MATRIX));
-		if (material->builtins & GPU_PBR_PLANAR_RFL_MATRIX)
-			material->planarreflloc = GPU_shader_get_uniform(shader, GPU_builtin_name(GPU_PBR_PLANAR_RFL_MATRIX));
-		if (material->builtins & GPU_PBR_PROBE_POSITION)
-			material->probecoloc = GPU_shader_get_uniform(shader, GPU_builtin_name(GPU_PBR_PROBE_POSITION));
-		if (material->builtins & GPU_PBR_PLANAR_VECTOR)
-			material->planarvecloc = GPU_shader_get_uniform(shader, GPU_builtin_name(GPU_PBR_PLANAR_VECTOR));
+
+		if (material->pbrbuiltins & GPU_PROBE)
+			material->probeloc = GPU_shader_get_uniform(shader, GPU_pbrbuiltin_name(GPU_PROBE));
+		if (material->pbrbuiltins & GPU_LOD_FACTOR)
+			material->lodfactorloc = GPU_shader_get_uniform(shader, GPU_pbrbuiltin_name(GPU_LOD_FACTOR));
+		if (material->pbrbuiltins & GPU_PLANAR_REFLECT)
+			material->reflectloc = GPU_shader_get_uniform(shader, GPU_pbrbuiltin_name(GPU_PLANAR_REFLECT));
+		if (material->pbrbuiltins & GPU_PLANAR_REFRACT)
+			material->refractloc = GPU_shader_get_uniform(shader, GPU_pbrbuiltin_name(GPU_PLANAR_REFRACT));
+		if (material->pbrbuiltins & GPU_SH0)
+			material->shloc[0] = GPU_shader_get_uniform(shader, GPU_pbrbuiltin_name(GPU_SH0));
+		if (material->pbrbuiltins & GPU_SH1)
+			material->shloc[1] = GPU_shader_get_uniform(shader, GPU_pbrbuiltin_name(GPU_SH1));
+		if (material->pbrbuiltins & GPU_SH2)
+			material->shloc[2] = GPU_shader_get_uniform(shader, GPU_pbrbuiltin_name(GPU_SH2));
+		if (material->pbrbuiltins & GPU_SH3)
+			material->shloc[3] = GPU_shader_get_uniform(shader, GPU_pbrbuiltin_name(GPU_SH3));
+		if (material->pbrbuiltins & GPU_SH4)
+			material->shloc[4] = GPU_shader_get_uniform(shader, GPU_pbrbuiltin_name(GPU_SH4));
+		if (material->pbrbuiltins & GPU_SH5)
+			material->shloc[5] = GPU_shader_get_uniform(shader, GPU_pbrbuiltin_name(GPU_SH5));
+		if (material->pbrbuiltins & GPU_SH6)
+			material->shloc[6] = GPU_shader_get_uniform(shader, GPU_pbrbuiltin_name(GPU_SH6));
+		if (material->pbrbuiltins & GPU_SH7)
+			material->shloc[7] = GPU_shader_get_uniform(shader, GPU_pbrbuiltin_name(GPU_SH7));
+		if (material->pbrbuiltins & GPU_SH8)
+			material->shloc[8] = GPU_shader_get_uniform(shader, GPU_pbrbuiltin_name(GPU_SH8));
+		if (material->pbrbuiltins & GPU_CORRECTION_MATRIX)
+			material->correcmatloc = GPU_shader_get_uniform(shader, GPU_pbrbuiltin_name(GPU_CORRECTION_MATRIX));
+		if (material->pbrbuiltins & GPU_PLANAR_RFL_MATRIX)
+			material->planarreflloc = GPU_shader_get_uniform(shader, GPU_pbrbuiltin_name(GPU_PLANAR_RFL_MATRIX));
+		if (material->pbrbuiltins & GPU_PROBE_POSITION)
+			material->probecoloc = GPU_shader_get_uniform(shader, GPU_pbrbuiltin_name(GPU_PROBE_POSITION));
+		if (material->pbrbuiltins & GPU_PLANAR_VECTOR)
+			material->planarvecloc = GPU_shader_get_uniform(shader, GPU_pbrbuiltin_name(GPU_PLANAR_VECTOR));
+		if (material->pbrbuiltins & GPU_SSR)
+			material->ssrloc = GPU_shader_get_uniform(shader, GPU_pbrbuiltin_name(GPU_SSR));
+		if (material->pbrbuiltins & GPU_SSR_PARAMETERS)
+			material->ssrparamsloc = GPU_shader_get_uniform(shader, GPU_pbrbuiltin_name(GPU_SSR_PARAMETERS));
+		if (material->pbrbuiltins & GPU_SSR_PARAMETERS2)
+			material->ssrparams2loc = GPU_shader_get_uniform(shader, GPU_pbrbuiltin_name(GPU_SSR_PARAMETERS2));
+		if (material->pbrbuiltins & GPU_PIXEL_PROJ_MATRIX)
+			material->pixelprojmatloc = GPU_shader_get_uniform(shader, GPU_pbrbuiltin_name(GPU_PIXEL_PROJ_MATRIX));
+
 		return 1;
 	}
 
@@ -504,6 +521,7 @@ void GPU_material_bind(
 		material->bindedcubeprobe = NULL;
 		material->bindedreflprobe = NULL;
 		material->bindedrefrprobe = NULL;
+		material->bindedssr = NULL;
 	}
 }
 
@@ -561,14 +579,50 @@ void GPU_material_bind_uniforms(
 	}
 }
 
-void GPU_material_bind_uniforms_probe(GPUMaterial *material, GPUProbe *probe)
+void GPU_material_bind_uniforms_probe(GPUMaterial *material, GPUProbe *probe, GPUSSR *ssr, GPUSSRSettings *ssr_settings, GPUBRDFSettings *brdf_settings)
 {
 	if (material->pass) {
 		GPUShader *shader = GPU_pass_shader(material->pass);
+		if (ssr) {
+			if (material->pbrbuiltins & GPU_SSR) {
+				material->bindedssr = ssr->tex;
+				GPU_texture_bind(material->bindedssr, 3);
+				GPU_shader_uniform_texture(shader, material->ssrloc, material->bindedssr);
+			}
+			if (material->pbrbuiltins & GPU_PIXEL_PROJ_MATRIX) {
+				GPU_shader_uniform_vector(shader, material->pixelprojmatloc, 16, 1, (float *)ssr->pixelprojmat);
+			}
+			if (material->pbrbuiltins & GPU_SSR_PARAMETERS) {
+				/* ssr_parameters
+				 * x : thickness : Camera space thickness to ascribe to each pixel in the depth buffer
+				 * y : nearz : Near plane distance (Negative number)
+				 * z : stride : Step in horizontal or vertical pixels between samples.
+				 * w : maxstep : Maximum number of iteration when raymarching */
+
+				float ssrparams[4];
+				ssrparams[0] = ssr_settings->thickness;
+				ssrparams[1] = -ssr->clipsta; /* Negative */
+				ssrparams[2] = ssr_settings->stride;
+				ssrparams[3] = (float)ssr_settings->steps;
+
+				GPU_shader_uniform_vector(shader, material->ssrparamsloc, 4, 1, ssrparams);
+			}
+			if (material->pbrbuiltins & GPU_SSR_PARAMETERS2) {
+				/* ssr_parameters2
+				 * x : maxdistance : Maximum number of iteration when raymarching
+				 * y : attenuation : Attenuation factor for screen edges and ray step fading */
+
+				float ssrparams2[2];
+				ssrparams2[0] = ssr_settings->distance_max;
+				ssrparams2[1] = ssr_settings->attenuation;
+
+				GPU_shader_uniform_vector(shader, material->ssrparams2loc, 2, 1, &ssr_settings->distance_max);
+			}
+		}
 
 		if (probe) {
 			/* handle per object probes */
-			if (material->builtins & GPU_PBR_PROBE) {
+			if (material->pbrbuiltins & GPU_PROBE) {
 				if (probe->type == GPU_PROBE_PLANAR) {
 					GPUProbe *fallbackprobe = NULL;
 					/* XXX : this should be moved elsewhere */
@@ -588,7 +642,7 @@ void GPU_material_bind_uniforms_probe(GPUMaterial *material, GPUProbe *probe)
 				GPU_texture_bind(material->bindedcubeprobe, 0);
 				GPU_shader_uniform_texture(shader, material->probeloc, material->bindedcubeprobe);
 			}
-			if (material->builtins & GPU_PBR_PLANAR_REFLECT && probe->type == GPU_PROBE_PLANAR) {
+			if (material->pbrbuiltins & GPU_PLANAR_REFLECT && probe->type == GPU_PROBE_PLANAR) {
 				/* XXX : save the reflection for unbinding */
 				material->bindedreflprobe = probe->texreflect;
 				material->bindedrefrprobe = probe->texrefract;
@@ -598,40 +652,39 @@ void GPU_material_bind_uniforms_probe(GPUMaterial *material, GPUProbe *probe)
 				GPU_texture_bind(material->bindedrefrprobe, 2);
 				GPU_shader_uniform_texture(shader, material->refractloc, material->bindedrefrprobe);
 			}
-			if (material->builtins & GPU_PBR_PLANAR_RFL_MATRIX && probe->type == GPU_PROBE_PLANAR) {
+			if (material->pbrbuiltins & GPU_PLANAR_RFL_MATRIX && probe->type == GPU_PROBE_PLANAR) {
 				GPU_shader_uniform_vector(shader, material->planarreflloc, 16, 1, (float *)probe->reflectionmat);
 			}
-			if (material->builtins & GPU_PBR_LOD_FACTOR) {
+			if (material->pbrbuiltins & GPU_LOD_FACTOR) {
 				float lodfactor;
 				float samplenum = (float)(material->samplecount);
 
 				//maxlod = log((float)probe->size) / log(2);
 				lodfactor = 0.5f * log( ( (float)(probe->size * probe->size) / samplenum ) ) / log(2);
+				lodfactor -= brdf_settings->lodbias;
 
-				/* Biasing the factor to get more accurate sampling for higher sample count */
-				lodfactor -= (samplenum - 16.0f) / 128.0f;
 				GPU_shader_uniform_vector(shader, material->lodfactorloc, 1, 1, &lodfactor);
 			}
-			if (material->builtins & GPU_PBR_SH0) {
+			if (material->pbrbuiltins & GPU_SH0) {
 				int i;
 				/* Making the asumption that we need all of them */
 				for (i = 0; i < 9; ++i) {
 					GPU_shader_uniform_vector(shader, material->shloc[i], 3, 1, &probe->shcoefs[i*3]);
 				}
 			}
-			if (material->builtins & GPU_PBR_CORRECTION_MATRIX) {
+			if (material->pbrbuiltins & GPU_CORRECTION_MATRIX) {
 				GPU_shader_uniform_vector(shader, material->correcmatloc, 16, 1, (float *)probe->correctionmat);
 			}
-			if (material->builtins & GPU_PBR_PROBE_POSITION) {
+			if (material->pbrbuiltins & GPU_PROBE_POSITION) {
 				GPU_shader_uniform_vector(shader, material->probecoloc, 3, 1, probe->co);
 			}
-			if (material->builtins & GPU_PBR_PLANAR_VECTOR) {
+			if (material->pbrbuiltins & GPU_PLANAR_VECTOR) {
 				GPU_shader_uniform_vector(shader, material->planarvecloc, 3, 1, probe->planevec);
 			}
 		}
 		else {
 			/* avoid objects with the same material and no probe attached to have the same SH binded */
-			if (material->builtins & GPU_PBR_SH0) {
+			if (material->pbrbuiltins & GPU_SH0) {
 				int i;
 				float black[3] = {0.0f, 0.0f, 0.0f};
 				/* Making the asumption that we need all of them */
@@ -653,6 +706,8 @@ void GPU_material_unbind(GPUMaterial *material)
 			GPU_texture_unbind(material->bindedreflprobe);
 		if (material->bindedrefrprobe)
 			GPU_texture_unbind(material->bindedrefrprobe);
+		if (material->bindedssr)
+			GPU_texture_unbind(material->bindedssr);
 
 		material->bound = 0;
 		GPU_pass_unbind(material->pass);
@@ -2396,36 +2451,36 @@ static GPUNodeLink *brdf_sample_env(GPUBrdfInput *brdf)
 		GPU_link(mat, "vec_math_negate", brdf->normal, &brdf->normal);
 	switch (brdf->type) {
 		case GPU_BRDF_GLOSSY_SHARP :
-			GPU_link(mat, "env_sampling_reflect_sharp", GPU_builtin(GPU_VIEW_POSITION), GPU_builtin(GPU_INVERSE_VIEW_MATRIX), GPU_builtin(GPU_VIEW_MATRIX), brdf->normal, GPU_builtin(GPU_PBR_PROBE), GPU_builtin(GPU_PBR_PLANAR_REFLECT), GPU_builtin(GPU_PBR_PLANAR_REFRACT), GPU_builtin(GPU_PBR_CORRECTION_MATRIX), GPU_builtin(GPU_PBR_PLANAR_RFL_MATRIX), GPU_builtin(GPU_PBR_PROBE_POSITION), GPU_builtin(GPU_PBR_PLANAR_VECTOR), &envlight);
+			GPU_link(mat, "env_sampling_reflect_sharp", GPU_builtin(GPU_VIEW_POSITION), GPU_builtin(GPU_INVERSE_VIEW_MATRIX), GPU_builtin(GPU_VIEW_MATRIX), brdf->normal, GPU_pbr_builtin(GPU_PROBE), GPU_pbr_builtin(GPU_SSR), GPU_pbr_builtin(GPU_SSR_PARAMETERS), GPU_pbr_builtin(GPU_SSR_PARAMETERS2), GPU_pbr_builtin(GPU_PIXEL_PROJ_MATRIX), GPU_pbr_builtin(GPU_PLANAR_REFLECT), GPU_pbr_builtin(GPU_PLANAR_REFRACT), GPU_pbr_builtin(GPU_CORRECTION_MATRIX), GPU_pbr_builtin(GPU_PLANAR_RFL_MATRIX), GPU_pbr_builtin(GPU_PROBE_POSITION), GPU_pbr_builtin(GPU_PLANAR_VECTOR), &envlight);
 			break;
 		case GPU_BRDF_GLOSSY_GGX :
-			GPU_link(mat, "env_sampling_reflect_glossy", GPU_builtin(GPU_VIEW_POSITION), GPU_builtin(GPU_INVERSE_VIEW_MATRIX), GPU_builtin(GPU_VIEW_MATRIX), brdf->normal, brdf->roughness, GPU_builtin(GPU_PBR_LOD_FACTOR), GPU_builtin(GPU_PBR_PROBE), GPU_builtin(GPU_PBR_PLANAR_REFLECT), GPU_builtin(GPU_PBR_PLANAR_REFRACT), GPU_builtin(GPU_PBR_CORRECTION_MATRIX), GPU_builtin(GPU_PBR_PLANAR_RFL_MATRIX), GPU_builtin(GPU_PBR_PROBE_POSITION), GPU_builtin(GPU_PBR_PLANAR_VECTOR), &envlight);
+			GPU_link(mat, "env_sampling_reflect_glossy", GPU_builtin(GPU_VIEW_POSITION), GPU_builtin(GPU_INVERSE_VIEW_MATRIX), GPU_builtin(GPU_VIEW_MATRIX), brdf->normal, brdf->roughness, GPU_pbr_builtin(GPU_LOD_FACTOR), GPU_pbr_builtin(GPU_PROBE), GPU_pbr_builtin(GPU_PLANAR_REFLECT), GPU_pbr_builtin(GPU_PLANAR_REFRACT), GPU_pbr_builtin(GPU_CORRECTION_MATRIX), GPU_pbr_builtin(GPU_PLANAR_RFL_MATRIX), GPU_pbr_builtin(GPU_PROBE_POSITION), GPU_pbr_builtin(GPU_PLANAR_VECTOR), &envlight);
 			break;
 		case GPU_BRDF_ANISO_GGX :
-			GPU_link(mat, "env_sampling_reflect_aniso", GPU_builtin(GPU_VIEW_POSITION), GPU_builtin(GPU_INVERSE_VIEW_MATRIX), GPU_builtin(GPU_VIEW_MATRIX), brdf->normal, brdf->roughness, brdf->anisotropy, brdf->aniso_rotation, brdf->aniso_tangent, GPU_builtin(GPU_PBR_LOD_FACTOR), GPU_builtin(GPU_PBR_PROBE), GPU_builtin(GPU_PBR_PLANAR_REFLECT), GPU_builtin(GPU_PBR_PLANAR_REFRACT), GPU_builtin(GPU_PBR_CORRECTION_MATRIX), GPU_builtin(GPU_PBR_PLANAR_RFL_MATRIX), GPU_builtin(GPU_PBR_PROBE_POSITION), GPU_builtin(GPU_PBR_PLANAR_VECTOR), &envlight);
+			GPU_link(mat, "env_sampling_reflect_aniso", GPU_builtin(GPU_VIEW_POSITION), GPU_builtin(GPU_INVERSE_VIEW_MATRIX), GPU_builtin(GPU_VIEW_MATRIX), brdf->normal, brdf->roughness, brdf->anisotropy, brdf->aniso_rotation, brdf->aniso_tangent, GPU_pbr_builtin(GPU_LOD_FACTOR), GPU_pbr_builtin(GPU_PROBE), GPU_pbr_builtin(GPU_PLANAR_REFLECT), GPU_pbr_builtin(GPU_PLANAR_REFRACT), GPU_pbr_builtin(GPU_CORRECTION_MATRIX), GPU_pbr_builtin(GPU_PLANAR_RFL_MATRIX), GPU_pbr_builtin(GPU_PROBE_POSITION), GPU_pbr_builtin(GPU_PLANAR_VECTOR), &envlight);
 			break;
 		case GPU_BRDF_REFRACT_SHARP :
-			GPU_link(mat, "env_sampling_refract_sharp", GPU_builtin(GPU_VIEW_POSITION), GPU_builtin(GPU_INVERSE_VIEW_MATRIX), GPU_builtin(GPU_VIEW_MATRIX), brdf->normal, brdf->ior, GPU_builtin(GPU_PBR_PROBE), GPU_builtin(GPU_PBR_PLANAR_REFLECT), GPU_builtin(GPU_PBR_PLANAR_REFRACT), GPU_builtin(GPU_PBR_CORRECTION_MATRIX), GPU_builtin(GPU_PBR_PLANAR_RFL_MATRIX), GPU_builtin(GPU_PBR_PROBE_POSITION), GPU_builtin(GPU_PBR_PLANAR_VECTOR), &envlight);
+			GPU_link(mat, "env_sampling_refract_sharp", GPU_builtin(GPU_VIEW_POSITION), GPU_builtin(GPU_INVERSE_VIEW_MATRIX), GPU_builtin(GPU_VIEW_MATRIX), brdf->normal, brdf->ior, GPU_pbr_builtin(GPU_PROBE), GPU_pbr_builtin(GPU_PLANAR_REFLECT), GPU_pbr_builtin(GPU_PLANAR_REFRACT), GPU_pbr_builtin(GPU_CORRECTION_MATRIX), GPU_pbr_builtin(GPU_PLANAR_RFL_MATRIX), GPU_pbr_builtin(GPU_PROBE_POSITION), GPU_pbr_builtin(GPU_PLANAR_VECTOR), &envlight);
 			break;
 		case GPU_BRDF_REFRACT_GGX :
-			GPU_link(mat, "env_sampling_refract_glossy", GPU_builtin(GPU_VIEW_POSITION), GPU_builtin(GPU_INVERSE_VIEW_MATRIX), GPU_builtin(GPU_VIEW_MATRIX), brdf->normal, brdf->ior,	brdf->roughness, GPU_builtin(GPU_PBR_LOD_FACTOR), GPU_builtin(GPU_PBR_PROBE), GPU_builtin(GPU_PBR_PLANAR_REFLECT), GPU_builtin(GPU_PBR_PLANAR_REFRACT), GPU_builtin(GPU_PBR_CORRECTION_MATRIX), GPU_builtin(GPU_PBR_PLANAR_RFL_MATRIX), GPU_builtin(GPU_PBR_PROBE_POSITION), GPU_builtin(GPU_PBR_PLANAR_VECTOR), &envlight);
+			GPU_link(mat, "env_sampling_refract_glossy", GPU_builtin(GPU_VIEW_POSITION), GPU_builtin(GPU_INVERSE_VIEW_MATRIX), GPU_builtin(GPU_VIEW_MATRIX), brdf->normal, brdf->ior,	brdf->roughness, GPU_pbr_builtin(GPU_LOD_FACTOR), GPU_pbr_builtin(GPU_PROBE), GPU_pbr_builtin(GPU_PLANAR_REFLECT), GPU_pbr_builtin(GPU_PLANAR_REFRACT), GPU_pbr_builtin(GPU_CORRECTION_MATRIX), GPU_pbr_builtin(GPU_PLANAR_RFL_MATRIX), GPU_pbr_builtin(GPU_PROBE_POSITION), GPU_pbr_builtin(GPU_PLANAR_VECTOR), &envlight);
 			break;
 		case GPU_BRDF_GLASS_SHARP :
-			GPU_link(mat, "env_sampling_glass_sharp", GPU_builtin(GPU_VIEW_POSITION), GPU_builtin(GPU_INVERSE_VIEW_MATRIX), GPU_builtin(GPU_VIEW_MATRIX), brdf->normal, brdf->ior, GPU_builtin(GPU_PBR_PROBE), GPU_builtin(GPU_PBR_PLANAR_REFLECT), GPU_builtin(GPU_PBR_PLANAR_REFRACT), GPU_builtin(GPU_PBR_CORRECTION_MATRIX), GPU_builtin(GPU_PBR_PLANAR_RFL_MATRIX), GPU_builtin(GPU_PBR_PROBE_POSITION), GPU_builtin(GPU_PBR_PLANAR_VECTOR), &envlight);
+			GPU_link(mat, "env_sampling_glass_sharp", GPU_builtin(GPU_VIEW_POSITION), GPU_builtin(GPU_INVERSE_VIEW_MATRIX), GPU_builtin(GPU_VIEW_MATRIX), brdf->normal, brdf->ior, GPU_pbr_builtin(GPU_PROBE), GPU_pbr_builtin(GPU_PLANAR_REFLECT), GPU_pbr_builtin(GPU_PLANAR_REFRACT), GPU_pbr_builtin(GPU_CORRECTION_MATRIX), GPU_pbr_builtin(GPU_PLANAR_RFL_MATRIX), GPU_pbr_builtin(GPU_PROBE_POSITION), GPU_pbr_builtin(GPU_PLANAR_VECTOR), &envlight);
 			break;
 		case GPU_BRDF_GLASS_GGX :
-			GPU_link(mat, "env_sampling_glass_glossy", GPU_builtin(GPU_VIEW_POSITION), GPU_builtin(GPU_INVERSE_VIEW_MATRIX), GPU_builtin(GPU_VIEW_MATRIX), brdf->normal, brdf->ior, brdf->roughness, GPU_builtin(GPU_PBR_LOD_FACTOR), GPU_builtin(GPU_PBR_PROBE), GPU_builtin(GPU_PBR_PLANAR_REFLECT), GPU_builtin(GPU_PBR_PLANAR_REFRACT), GPU_builtin(GPU_PBR_CORRECTION_MATRIX), GPU_builtin(GPU_PBR_PLANAR_RFL_MATRIX), GPU_builtin(GPU_PBR_PROBE_POSITION), GPU_builtin(GPU_PBR_PLANAR_VECTOR), &envlight);
+			GPU_link(mat, "env_sampling_glass_glossy", GPU_builtin(GPU_VIEW_POSITION), GPU_builtin(GPU_INVERSE_VIEW_MATRIX), GPU_builtin(GPU_VIEW_MATRIX), brdf->normal, brdf->ior, brdf->roughness, GPU_pbr_builtin(GPU_LOD_FACTOR), GPU_pbr_builtin(GPU_PROBE), GPU_pbr_builtin(GPU_PLANAR_REFLECT), GPU_pbr_builtin(GPU_PLANAR_REFRACT), GPU_pbr_builtin(GPU_CORRECTION_MATRIX), GPU_pbr_builtin(GPU_PLANAR_RFL_MATRIX), GPU_pbr_builtin(GPU_PROBE_POSITION), GPU_pbr_builtin(GPU_PLANAR_VECTOR), &envlight);
 			break;
 		case GPU_BRDF_TRANSPARENT :
-			GPU_link(mat, "env_sampling_transparent", GPU_builtin(GPU_VIEW_POSITION), GPU_builtin(GPU_INVERSE_VIEW_MATRIX), GPU_builtin(GPU_VIEW_MATRIX), GPU_builtin(GPU_PBR_PROBE), GPU_builtin(GPU_PBR_PLANAR_REFLECT), GPU_builtin(GPU_PBR_PLANAR_REFRACT), GPU_builtin(GPU_PBR_CORRECTION_MATRIX), GPU_builtin(GPU_PBR_PLANAR_RFL_MATRIX), GPU_builtin(GPU_PBR_PROBE_POSITION), GPU_builtin(GPU_PBR_PLANAR_VECTOR), &envlight);
+			GPU_link(mat, "env_sampling_transparent", GPU_builtin(GPU_VIEW_POSITION), GPU_builtin(GPU_INVERSE_VIEW_MATRIX), GPU_builtin(GPU_VIEW_MATRIX), GPU_pbr_builtin(GPU_PROBE), GPU_pbr_builtin(GPU_PLANAR_REFLECT), GPU_pbr_builtin(GPU_PLANAR_REFRACT), GPU_pbr_builtin(GPU_CORRECTION_MATRIX), GPU_pbr_builtin(GPU_PLANAR_RFL_MATRIX), GPU_pbr_builtin(GPU_PROBE_POSITION), GPU_pbr_builtin(GPU_PLANAR_VECTOR), &envlight);
 			break;
 		case GPU_BRDF_VELVET :
-			GPU_link(mat, "env_sampling_velvet", GPU_builtin(GPU_VIEW_POSITION), GPU_builtin(GPU_INVERSE_VIEW_MATRIX), GPU_builtin(GPU_VIEW_MATRIX), brdf->normal, brdf->sigma, GPU_builtin(GPU_PBR_LOD_FACTOR), GPU_builtin(GPU_PBR_PROBE), GPU_builtin(GPU_PBR_PLANAR_REFLECT), GPU_builtin(GPU_PBR_PLANAR_REFRACT), GPU_builtin(GPU_PBR_CORRECTION_MATRIX), GPU_builtin(GPU_PBR_PLANAR_RFL_MATRIX), GPU_builtin(GPU_PBR_PROBE_POSITION), GPU_builtin(GPU_PBR_PLANAR_VECTOR), &envlight);
+			GPU_link(mat, "env_sampling_velvet", GPU_builtin(GPU_VIEW_POSITION), GPU_builtin(GPU_INVERSE_VIEW_MATRIX), GPU_builtin(GPU_VIEW_MATRIX), brdf->normal, brdf->sigma, GPU_pbr_builtin(GPU_LOD_FACTOR), GPU_pbr_builtin(GPU_PROBE), GPU_pbr_builtin(GPU_PLANAR_REFLECT), GPU_pbr_builtin(GPU_PLANAR_REFRACT), GPU_pbr_builtin(GPU_CORRECTION_MATRIX), GPU_pbr_builtin(GPU_PLANAR_RFL_MATRIX), GPU_pbr_builtin(GPU_PROBE_POSITION), GPU_pbr_builtin(GPU_PLANAR_VECTOR), &envlight);
 			break;
 		case GPU_BRDF_DIFFUSE :
 		case GPU_BRDF_TRANSLUCENT :
 		default :
-			GPU_link(mat, "env_sampling_diffuse", GPU_builtin(GPU_VIEW_POSITION), GPU_builtin(GPU_INVERSE_VIEW_MATRIX), GPU_builtin(GPU_VIEW_MATRIX), brdf->normal, brdf->roughness, GPU_builtin(GPU_PBR_LOD_FACTOR), GPU_builtin(GPU_PBR_PROBE), GPU_builtin(GPU_PBR_PLANAR_REFLECT), GPU_builtin(GPU_PBR_PLANAR_REFRACT), GPU_builtin(GPU_PBR_CORRECTION_MATRIX), GPU_builtin(GPU_PBR_PLANAR_RFL_MATRIX), GPU_builtin(GPU_PBR_PROBE_POSITION), GPU_builtin(GPU_PBR_PLANAR_VECTOR), GPU_builtin(GPU_PBR_SH0), GPU_builtin(GPU_PBR_SH1), GPU_builtin(GPU_PBR_SH2), GPU_builtin(GPU_PBR_SH3), GPU_builtin(GPU_PBR_SH4), GPU_builtin(GPU_PBR_SH5), GPU_builtin(GPU_PBR_SH6), GPU_builtin(GPU_PBR_SH7), GPU_builtin(GPU_PBR_SH8), &envlight);
+			GPU_link(mat, "env_sampling_diffuse", GPU_builtin(GPU_VIEW_POSITION), GPU_builtin(GPU_INVERSE_VIEW_MATRIX), GPU_builtin(GPU_VIEW_MATRIX), brdf->normal, brdf->roughness, GPU_pbr_builtin(GPU_LOD_FACTOR), GPU_pbr_builtin(GPU_PROBE), GPU_pbr_builtin(GPU_PLANAR_REFLECT), GPU_pbr_builtin(GPU_PLANAR_REFRACT), GPU_pbr_builtin(GPU_CORRECTION_MATRIX), GPU_pbr_builtin(GPU_PLANAR_RFL_MATRIX), GPU_pbr_builtin(GPU_PROBE_POSITION), GPU_pbr_builtin(GPU_PLANAR_VECTOR), GPU_pbr_builtin(GPU_SH0), GPU_pbr_builtin(GPU_SH1), GPU_pbr_builtin(GPU_SH2), GPU_pbr_builtin(GPU_SH3), GPU_pbr_builtin(GPU_SH4), GPU_pbr_builtin(GPU_SH5), GPU_pbr_builtin(GPU_SH6), GPU_pbr_builtin(GPU_SH7), GPU_pbr_builtin(GPU_SH8), &envlight);
 			break;
 	}
 
@@ -2837,7 +2892,7 @@ GPUMaterial *GPU_material_world(struct Scene *scene, struct World *wo)
 	return mat;
 }
 
-GPUMaterial *GPU_material_from_blender(Scene *scene, Material *ma, bool use_opensubdiv, bool use_realistic_preview, bool use_planar_probe, bool use_alpha_as_depth, int samplecount, int parallax_correc)
+GPUMaterial *GPU_material_from_blender(Scene *scene, Material *ma, bool use_opensubdiv, bool use_realistic_preview, bool use_planar_probe, bool use_alpha_as_depth, bool use_ssr, int samplecount, int parallax_correc)
 {
 	GPUMaterial *mat;
 	GPUNodeLink *outlink;
@@ -2852,6 +2907,7 @@ GPUMaterial *GPU_material_from_blender(Scene *scene, Material *ma, bool use_open
 		    current_material->is_alpha_as_depth == use_alpha_as_depth &&
 		    current_material->samplecount == samplecount &&
 		    current_material->is_planar_probe == use_planar_probe &&
+		    current_material->use_ssr == use_ssr &&
 		    current_material->parallax_correc == parallax_correc)
 		{
 			return current_material;
@@ -2867,6 +2923,7 @@ GPUMaterial *GPU_material_from_blender(Scene *scene, Material *ma, bool use_open
 	mat->parallax_correc = parallax_correc;
 	mat->is_planar_probe = use_planar_probe;
 	mat->is_alpha_as_depth = use_alpha_as_depth;
+	mat->use_ssr = use_ssr;
 
 	/* render pipeline option */
 	bool new_shading_nodes = BKE_scene_use_new_shading_nodes(scene);
@@ -3079,6 +3136,20 @@ static void gpu_probe_from_blender(Scene *scene, World *wo, Object *ob, GPUProbe
 			return;
 		}
 
+		/* Refraction */
+		probe->texrefract = GPU_texture_create_planar_probe(probe->size, NULL);
+		if (!probe->texrefract) {
+			gpu_probe_buffers_free(probe);
+			return;
+		}
+
+		if (!GPU_framebuffer_texture_attach(probe->fb, probe->texrefract, 0, NULL)) {
+			gpu_probe_buffers_free(probe);
+			return;
+		}
+
+		GPU_framebuffer_texture_detach(probe->texrefract);
+
 		/* Reflection */
 		probe->texreflect = GPU_texture_create_planar_probe(probe->size, NULL);
 		if (!probe->texreflect) {
@@ -3087,18 +3158,6 @@ static void gpu_probe_from_blender(Scene *scene, World *wo, Object *ob, GPUProbe
 		}
 
 		if (!GPU_framebuffer_texture_attach(probe->fb, probe->texreflect, 0, NULL)) {
-			gpu_probe_buffers_free(probe);
-			return;
-		}
-
-		/* Refraction */
-		probe->texrefract = GPU_texture_create_planar_probe(probe->size, NULL);
-		if (!probe->texrefract) {
-			gpu_probe_buffers_free(probe);
-			return;
-		}
-
-		if (!GPU_framebuffer_texture_attach(probe->fb, probe->texrefract, 1, NULL)) {
 			gpu_probe_buffers_free(probe);
 			return;
 		}
@@ -4049,7 +4108,7 @@ GPUShaderExport *GPU_shader_export(struct Scene *scene, struct Material *ma)
 	int liblen, fraglen;
 
 	/* TODO(sergey): How to determine whether we need OSD or not here? */
-	GPUMaterial *mat = GPU_material_from_blender(scene, ma, false, false, false, false, 0, 0);
+	GPUMaterial *mat = GPU_material_from_blender(scene, ma, false, false, false, false, false, 0, 0);
 	GPUPass *pass = (mat) ? mat->pass : NULL;
 
 	if (pass && pass->fragmentcode && pass->vertexcode) {
@@ -4270,3 +4329,27 @@ void GPU_material_update_fvar_offset(GPUMaterial *gpu_material,
 	GPU_shader_unbind();
 }
 #endif
+
+static void GPU_pbr_init_brdf_settings(GPUBRDFSettings *brdf_settings)
+{
+	brdf_settings->lodbias = 0.0f;
+	brdf_settings->samples = 1;
+}
+
+void GPU_pbr_settings_validate(GPUPBRSettings *pbr_settings)
+{
+	/* Setting all at once */
+	if ((pbr_settings->brdf == NULL) &&
+	    (pbr_settings->pbr_flag & GPU_PBR_FLAG_ENABLE))
+	{
+		GPUBRDFSettings *brdf_settings;
+		GPUSSRSettings *ssr_settings;
+
+		brdf_settings = pbr_settings->brdf = MEM_callocN(sizeof(GPUBRDFSettings), __func__);
+		ssr_settings = pbr_settings->ssr = MEM_callocN(sizeof(GPUSSRSettings), __func__);
+
+		GPU_pbr_init_brdf_settings(brdf_settings);
+		GPU_pbr_init_ssr_settings(ssr_settings);
+	}
+
+}

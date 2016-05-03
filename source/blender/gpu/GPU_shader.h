@@ -51,6 +51,7 @@ enum {
 	GPU_SHADER_FLAGS_PROBE_ELIPS_CORREC = (1 << 3),
 	GPU_SHADER_FLAGS_PROBE_PLANAR       = (1 << 4),
 	GPU_SHADER_FLAGS_ALPHA_DEPTH        = (1 << 5),
+	GPU_SHADER_FLAGS_SSR                = (1 << 6),
 };
 
 GPUShader *GPU_shader_create(

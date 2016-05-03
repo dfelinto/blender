@@ -4417,7 +4417,6 @@ static void rna_def_gpu_ssao_fx(BlenderRNA *brna)
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
 }
 
-
 static void rna_def_gpu_fx(BlenderRNA *brna)
 {
 	StructRNA *srna;

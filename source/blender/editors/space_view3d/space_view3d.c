@@ -58,6 +58,7 @@
 #include "GPU_compositing.h"
 #include "GPU_framebuffer.h"
 #include "GPU_material.h"
+#include "GPU_ssr.h"
 
 #include "BIF_gl.h"
 
@@ -429,10 +430,18 @@ static void view3d_free(SpaceLink *sl)
 		MEM_freeN(vd->defmaterial);
 	}
 
+	if (vd->ssr_buffer)
+		GPU_ssr_free(vd->ssr_buffer);
+
 	if (vd->fx_settings.ssao)
 		MEM_freeN(vd->fx_settings.ssao);
 	if (vd->fx_settings.dof)
 		MEM_freeN(vd->fx_settings.dof);
+
+	if (vd->pbr_settings.brdf)
+		MEM_freeN(vd->pbr_settings.brdf);
+	if (vd->pbr_settings.ssr)
+		MEM_freeN(vd->pbr_settings.ssr);
 }
 
 
@@ -462,6 +471,7 @@ static SpaceLink *view3d_duplicate(SpaceLink *sl)
 	/* copy or clear inside new stuff */
 
 	v3dn->defmaterial = NULL;
+	v3dn->ssr_buffer = NULL;
 
 	BLI_duplicatelist(&v3dn->bgpicbase, &v3do->bgpicbase);
 	for (bgpic = v3dn->bgpicbase.first; bgpic; bgpic = bgpic->next) {
@@ -478,6 +488,11 @@ static SpaceLink *view3d_duplicate(SpaceLink *sl)
 		v3dn->fx_settings.dof = MEM_dupallocN(v3do->fx_settings.dof);
 	if (v3dn->fx_settings.ssao)
 		v3dn->fx_settings.ssao = MEM_dupallocN(v3do->fx_settings.ssao);
+
+	if (v3dn->pbr_settings.brdf)
+		v3dn->pbr_settings.brdf = MEM_dupallocN(v3do->pbr_settings.brdf);
+	if (v3dn->pbr_settings.ssr)
+		v3dn->pbr_settings.ssr = MEM_dupallocN(v3do->pbr_settings.ssr);
 
 	return (SpaceLink *)v3dn;
 }

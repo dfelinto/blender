@@ -32,6 +32,41 @@
 #ifndef __DNA_GPU_TYPES_H__
 #define __DNA_GPU_TYPES_H__
 
+/* ********** GPU PBR *********** */
+
+/* Screen space reflection settings */
+typedef struct GPUSSRSettings {
+	float stride;
+	float distance_max;
+	float attenuation;
+	float thickness;
+	int steps;
+	int downsampling;
+} GPUSSRSettings;
+
+/* Material surfaces and sampling settings */
+typedef struct GPUBRDFSettings {
+	float lodbias;
+	float pad;
+	int samples;
+	int pad2;
+} GPUBRDFSettings;
+
+typedef struct GPUPBRSettings {
+	GPUBRDFSettings *brdf;
+	GPUSSRSettings *ssr;
+	char pbr_flag;  /* eGPUPBRFlags */
+	char pad[7];
+} GPUPBRSettings;
+
+/* pbrshader enables */
+typedef enum eGPUPBRFlags {
+	GPU_PBR_FLAG_ENABLE           = (1 << 0),
+	GPU_PBR_FLAG_SSR              = (1 << 1),
+} eGPUPBRFlags;
+
+/* ********** GPU POST FX *********** */
+
 /* properties for dof effect */
 typedef struct GPUDOFSettings {
 	float focus_distance; /* focal distance for depth of field */

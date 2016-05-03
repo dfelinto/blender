@@ -4289,7 +4289,7 @@ void env_sampling_glass_glossy(vec3 viewpos, mat4 invviewmat, mat4 viewmat, vec3
 
 void env_sampling_glass_sharp(vec3 viewpos, mat4 invviewmat, mat4 viewmat, vec3 N, float ior, samplerCube probe, sampler2D planar_reflection, sampler2D planar_refraction, mat4 correcmat, mat4 reflectmat, vec3 probevec, vec3 planarvec, out vec3 result);
 
-void env_sampling_reflect_sharp(vec3 viewpos, mat4 invviewmat, mat4 viewmat, vec3 N, samplerCube probe, sampler2D planar_reflection, sampler2D planar_refraction, mat4 correcmat, mat4 reflectmat, vec3 probevec, vec3 planarvec, out vec3 result);
+void env_sampling_reflect_sharp(vec3 viewpos, mat4 invviewmat, mat4 viewmat, vec3 N, samplerCube probe, sampler2D ssr_buffer, vec4 ssr_parameters, vec2 ssr_parameters2, mat4 pixelprojmat, sampler2D planar_reflection, sampler2D planar_refraction, mat4 correcmat, mat4 reflectmat, vec3 probevec, vec3 planarvec, out vec3 result);
 
 void env_sampling_refract_sharp(vec3 viewpos, mat4 invviewmat, mat4 viewmat, vec3 N, float eta, samplerCube probe, sampler2D planar_reflection, sampler2D planar_refraction, mat4 correcmat, mat4 reflectmat, vec3 probevec, vec3 planarvec, out vec3 result);
 

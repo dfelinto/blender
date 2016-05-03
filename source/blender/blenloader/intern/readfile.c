@@ -6932,6 +6932,7 @@ static bool direct_link_screen(FileData *fd, bScreen *sc)
 				BLI_listbase_clear(&v3d->afterdraw_xraytransp);
 				v3d->properties_storage = NULL;
 				v3d->defmaterial = NULL;
+				v3d->ssr_buffer = NULL;
 				
 				/* render can be quite heavy, set to solid on load */
 				if (v3d->drawtype == OB_RENDER)
@@ -6941,6 +6942,11 @@ static bool direct_link_screen(FileData *fd, bScreen *sc)
 					v3d->fx_settings.dof = newdataadr(fd, v3d->fx_settings.dof);
 				if (v3d->fx_settings.ssao)
 					v3d->fx_settings.ssao = newdataadr(fd, v3d->fx_settings.ssao);
+
+				if (v3d->pbr_settings.ssr)
+					v3d->pbr_settings.ssr = newdataadr(fd, v3d->pbr_settings.ssr);
+				if (v3d->pbr_settings.brdf)
+					v3d->pbr_settings.brdf = newdataadr(fd, v3d->pbr_settings.brdf);
 				
 				blo_do_versions_view3d_split_250(v3d, &sl->regionbase);
 			}

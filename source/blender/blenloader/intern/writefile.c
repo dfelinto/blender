@@ -2775,6 +2775,11 @@ static void write_screens(WriteData *wd, ListBase *scrbase)
 						writestruct(wd, DATA, "GPUSSAOSettings", 1, v3d->fx_settings.ssao);
 					if (v3d->fx_settings.dof)
 						writestruct(wd, DATA, "GPUDOFSettings", 1, v3d->fx_settings.dof);
+
+					if (v3d->pbr_settings.brdf)
+						writestruct(wd, DATA, "GPUBRDFSettings", 1, v3d->pbr_settings.brdf);
+					if (v3d->pbr_settings.ssr)
+						writestruct(wd, DATA, "GPUSSRSettings", 1, v3d->pbr_settings.ssr);
 				}
 				else if (sl->spacetype==SPACE_IPO) {
 					SpaceIpo *sipo= (SpaceIpo *)sl;

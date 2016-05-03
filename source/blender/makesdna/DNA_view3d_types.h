@@ -45,6 +45,7 @@ struct SmoothView3DStore;
 struct wmTimer;
 struct Material;
 struct GPUFX;
+struct GPUSSR;
 
 /* This is needed to not let VC choke on near and far... old
  * proprietary MS extensions... */
@@ -240,8 +241,8 @@ typedef struct View3D {
 
 	/* Pbr options */
 	struct Object *probe_source; /* runtime : the probe that is being updated when V3D_PROBE_CAPTURE */
-	int pbr_samples;
-	int pad5;
+	struct GPUPBRSettings pbr_settings;
+	struct GPUSSR *ssr_buffer;
 } View3D;
 
 
@@ -317,8 +318,8 @@ typedef struct View3D {
 
 /* View3d->flag3 (short) */
 #define V3D_SHOW_WORLD			(1 << 0)
-#define V3D_SHOW_WORLD_SH		(1 << 1)
-#define V3D_REALISTIC_MAT		(1 << 2)
+#define V3D_SHOW_WORLD_DIFFUSE	(1 << 1)
+/*#define V3D_REALISTIC_MAT		(1 << 2)*/  /* UNUSED */
 #define V3D_PROBE_CAPTURE		(1 << 3)	/* runtime flag */
 #define V3D_REFLECTION_PASS		(1 << 4)	/* invert culling during reflection pass */
 
