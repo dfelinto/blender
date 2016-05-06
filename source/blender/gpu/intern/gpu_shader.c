@@ -203,8 +203,7 @@ static void gpu_shader_standard_defines(char defines[MAX_DEFINE_LENGTH],
                                         bool use_ellipsoid_correction,
                                         bool use_planar_probe,
                                         bool use_alpha_as_depth,
-                                        bool use_ssr,
-                                        int importance_sample_count)
+                                        bool use_ssr)
 {
 	/* some useful defines to detect GPU type */
 	if (GPU_type_matches(GPU_DEVICE_ATI, GPU_OS_ANY, GPU_DRIVER_ANY)) {
@@ -262,18 +261,10 @@ static void gpu_shader_standard_defines(char defines[MAX_DEFINE_LENGTH],
 	if (use_alpha_as_depth)
 		strcat(defines, "#define ALPHA_AS_DEPTH\n");
 
-	if (!importance_sample_count) {
-		importance_sample_count = 1;
-	}
-
-	/* XXX : this must be here for the NUM_SAMPLE to work */
+	/* XXX : this must be here for the BSDF_SAMPLES to work */
 	strcat(defines, "#if __VERSION__ < 130\n"
 		            "#define uint unsigned int\n"
 		            "#endif\n");
-
-	char buffer[32];
-	sprintf(buffer, "#define NUM_SAMPLE uint(%d)\n", importance_sample_count);
-	strcat(defines, buffer);
 
 	return;
 }
@@ -295,8 +286,7 @@ GPUShader *GPU_shader_create(const char *vertexcode,
 	                            input,
 	                            output,
 	                            number,
-	                            GPU_SHADER_FLAGS_NONE,
-	                            0);
+	                            GPU_SHADER_FLAGS_NONE);
 }
 
 GPUShader *GPU_shader_create_ex(const char *vertexcode,
@@ -307,8 +297,7 @@ GPUShader *GPU_shader_create_ex(const char *vertexcode,
                                 int input,
                                 int output,
                                 int number,
-                                const int flags,
-                                const int samplecount)
+                                const int flags)
 {
 #ifdef WITH_OPENSUBDIV
 	/* TODO(sergey): used to add #version 150 to the geometry shader.
@@ -358,8 +347,7 @@ GPUShader *GPU_shader_create_ex(const char *vertexcode,
 	                            (flags & GPU_SHADER_FLAGS_PROBE_ELIPS_CORREC) != 0,
 	                            (flags & GPU_SHADER_FLAGS_PROBE_PLANAR) != 0,
 	                            (flags & GPU_SHADER_FLAGS_ALPHA_DEPTH) != 0,
-	                            (flags & GPU_SHADER_FLAGS_SSR) != 0,
-	                            samplecount);
+	                            (flags & GPU_SHADER_FLAGS_SSR) != 0);
 	gpu_shader_standard_extensions(standard_extensions, geocode != NULL);
 
 	if (vertexcode) {

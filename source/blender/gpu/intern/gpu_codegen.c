@@ -56,8 +56,17 @@
 #include <stdarg.h>
 
 extern char datatoc_gpu_shader_material_glsl[];
-extern char datatoc_gpu_shader_material_bsdf_frag_glsl[];
-extern char datatoc_gpu_shader_material_ssr_frag_glsl[];
+extern char datatoc_gpu_shader_material_new_shading_glsl[];
+extern char datatoc_gpu_shader_material_bsdf_anisotropic_glsl[];
+extern char datatoc_gpu_shader_material_bsdf_velvet_glsl[];
+extern char datatoc_gpu_shader_material_bsdf_diffuse_glsl[];
+extern char datatoc_gpu_shader_material_bsdf_glossy_glsl[];
+extern char datatoc_gpu_shader_material_bsdf_refraction_glsl[];
+extern char datatoc_gpu_shader_material_bsdf_glass_glsl[];
+extern char datatoc_gpu_shader_material_bsdf_translucent_glsl[];
+extern char datatoc_gpu_shader_material_bsdf_transparent_glsl[];
+extern char datatoc_gpu_shader_material_bsdf_toon_glsl[];
+extern char datatoc_gpu_shader_material_utils_glsl[];
 extern char datatoc_gpu_shader_vertex_glsl[];
 extern char datatoc_gpu_shader_vertex_world_glsl[];
 extern char datatoc_gpu_shader_geometry_glsl[];
@@ -410,54 +419,8 @@ const char *GPU_builtin_name(GPUBuiltin builtin)
 		return "unfparticlevel";
 	else if (builtin == GPU_PARTICLE_ANG_VELOCITY)
 		return "unfparticleangvel";
-	else
-		return "";
-}
-	
-const char *GPU_pbrbuiltin_name(GPUPBRBuiltin pbrbuiltin)
-{
-	if (pbrbuiltin == GPU_PROBE)
-		return "unfprobe";
-	else if (pbrbuiltin == GPU_PLANAR_REFLECT)
-		return "unfreflect";
-	else if (pbrbuiltin == GPU_PLANAR_REFRACT)
-		return "unfrefract";
-	else if (pbrbuiltin == GPU_LOD_FACTOR)
-		return "unflodfactor";
-	else if (pbrbuiltin == GPU_SH0)
-		return "unfsh0";
-	else if (pbrbuiltin == GPU_SH1)
-		return "unfsh1";
-	else if (pbrbuiltin == GPU_SH2)
-		return "unfsh2";
-	else if (pbrbuiltin == GPU_SH3)
-		return "unfsh3";
-	else if (pbrbuiltin == GPU_SH4)
-		return "unfsh4";
-	else if (pbrbuiltin == GPU_SH5)
-		return "unfsh5";
-	else if (pbrbuiltin == GPU_SH6)
-		return "unfsh6";
-	else if (pbrbuiltin == GPU_SH7)
-		return "unfsh7";
-	else if (pbrbuiltin == GPU_SH8)
-		return "unfsh8";
-	else if (pbrbuiltin == GPU_CORRECTION_MATRIX)
-		return "unfprobecorrectionmat";
-	else if (pbrbuiltin == GPU_PLANAR_RFL_MATRIX)
-		return "unfplanarreflectmat";
-	else if (pbrbuiltin == GPU_PROBE_POSITION)
-		return "unfprobepos";
-	else if (pbrbuiltin == GPU_PLANAR_VECTOR)
-		return "unfplanarvec";
-	else if (pbrbuiltin == GPU_SSR)
-		return "unfssr";
-	else if (pbrbuiltin == GPU_SSR_PARAMETERS)
-		return "unfssrparam";
-	else if (pbrbuiltin == GPU_SSR_PARAMETERS2)
-		return "unfssrparam2";
-	else if (pbrbuiltin == GPU_PIXEL_PROJ_MATRIX)
-		return "unfpixelprojmat";
+	else if (builtin == GPU_PBR)
+		return "unfpbr"; /* Placeholder : does not actualy contains data */
 	else
 		return "";
 }
@@ -484,8 +447,8 @@ static void codegen_set_unique_ids(ListBase *nodes)
 	GPUNode *node;
 	GPUInput *input;
 	GPUOutput *output;
-	/* tex slot (texid) 0-3 are pbr textures */
-	int id = 1, texid = 4;
+	/* tex slot (texid) 0-5 are pbr textures */
+	int id = 1, texid = 6;
 
 	bindhash = BLI_ghash_ptr_new("codegen_set_unique_ids1 gh");
 	definehash = BLI_ghash_ptr_new("codegen_set_unique_ids2 gh");
@@ -587,24 +550,6 @@ static int codegen_print_uniforms_functions(DynStr *ds, ListBase *nodes)
 					}
 				}
 			}
-			else if (input->source == GPU_SOURCE_PBR_BUILTIN) {
-				/* only define each builtin uniform/varying once */
-				if (!(pbrbuiltins & input->pbrbuiltin)) {
-					pbrbuiltins |= input->pbrbuiltin;
-					name = GPU_pbrbuiltin_name(input->pbrbuiltin);
-
-					if (input->pbrbuiltin == GPU_PROBE) {
-						BLI_dynstr_appendf(ds, "uniform samplerCube %s;\n", name);
-					}
-					else if (input->pbrbuiltin & (GPU_PLANAR_REFLECT | GPU_PLANAR_REFRACT | GPU_SSR)) {
-						BLI_dynstr_appendf(ds, "uniform sampler2D %s;\n", name);
-					}
-					else {
-						BLI_dynstr_appendf(ds, "uniform %s %s;\n",
-							GPU_DATATYPE_STR[input->type], name);
-					}
-				}
-			}
 			else if (input->source == GPU_SOURCE_VEC_UNIFORM) {
 				if (input->dynamicvec) {
 					/* only create uniforms for dynamic vectors */
@@ -696,9 +641,6 @@ static void codegen_call_functions(DynStr *ds, ListBase *nodes, GPUOutput *final
 				else
 					BLI_dynstr_append(ds, GPU_builtin_name(input->builtin));
 			}
-			else if (input->source == GPU_SOURCE_PBR_BUILTIN) {
-				BLI_dynstr_append(ds, GPU_pbrbuiltin_name(input->pbrbuiltin));
-			}
 			else if (input->source == GPU_SOURCE_VEC_UNIFORM) {
 				if (input->dynamicvec)
 					BLI_dynstr_appendf(ds, "unf%d", input->id);
@@ -761,11 +703,6 @@ static char *code_generate_fragment(ListBase *nodes, const GPUMatType type, GPUO
 	if (G.debug & G_DEBUG)
 		BLI_dynstr_appendf(ds, "/* %s */\n", name);
 #endif
-
-	if (type == GPU_MATERIAL_TYPE_MESH_REAL_SH) {
-		BLI_dynstr_append(ds, datatoc_gpu_shader_material_ssr_frag_glsl);
-		BLI_dynstr_append(ds, datatoc_gpu_shader_material_bsdf_frag_glsl);
-	}
 
 	/* XXX */
 	BLI_dynstr_appendf(ds, "%s vec3 varposition;\n",
@@ -997,8 +934,20 @@ void GPU_code_generate_glsl_lib(void)
 
 	ds = BLI_dynstr_new();
 
+	/* Orders matters : some functions must be initialized for the later files 
+	 * This is in order to avoid unecessary early declarations */
 	BLI_dynstr_append(ds, datatoc_gpu_shader_material_glsl);
-
+	BLI_dynstr_append(ds, datatoc_gpu_shader_material_utils_glsl);
+	BLI_dynstr_append(ds, datatoc_gpu_shader_material_bsdf_glossy_glsl);
+	BLI_dynstr_append(ds, datatoc_gpu_shader_material_bsdf_diffuse_glsl);
+	BLI_dynstr_append(ds, datatoc_gpu_shader_material_bsdf_anisotropic_glsl);
+	BLI_dynstr_append(ds, datatoc_gpu_shader_material_bsdf_velvet_glsl);
+	BLI_dynstr_append(ds, datatoc_gpu_shader_material_bsdf_transparent_glsl);
+	BLI_dynstr_append(ds, datatoc_gpu_shader_material_bsdf_refraction_glsl);
+	BLI_dynstr_append(ds, datatoc_gpu_shader_material_bsdf_glass_glsl);
+	BLI_dynstr_append(ds, datatoc_gpu_shader_material_bsdf_translucent_glsl);
+	BLI_dynstr_append(ds, datatoc_gpu_shader_material_bsdf_toon_glsl);
+	BLI_dynstr_append(ds, datatoc_gpu_shader_material_new_shading_glsl);
 
 	glsl_material_library = BLI_dynstr_get_cstring(ds);
 
@@ -1057,7 +1006,6 @@ static void gpu_nodes_extract_dynamic_inputs(GPUPass *pass, ListBase *nodes)
 #endif
 			}
 			if (input->source == GPU_SOURCE_BUILTIN ||
-				input->source == GPU_SOURCE_PBR_BUILTIN ||
 			    input->source == GPU_SOURCE_OPENGL_BUILTIN)
 			{
 				continue;
@@ -1241,14 +1189,6 @@ static void gpu_node_input_link(GPUNode *node, GPUNodeLink *link, const GPUType 
 		input->type = type;
 		input->source = GPU_SOURCE_BUILTIN;
 		input->builtin = link->builtin;
-
-		MEM_freeN(link);
-	}
-	else if (link->pbrbuiltin) {
-		/* builtin uniform */
-		input->type = type;
-		input->source = GPU_SOURCE_PBR_BUILTIN;
-		input->pbrbuiltin = link->pbrbuiltin;
 
 		MEM_freeN(link);
 	}
@@ -1469,16 +1409,11 @@ static void gpu_nodes_get_builtin_flag(ListBase *nodes, int *builtin, int *pbrbu
 	GPUInput *input;
 	
 	*builtin = 0;
-	*pbrbuiltin = 0;
 
-	for (node = nodes->first; node; node = node->next) {
-		for (input = node->inputs.first; input; input = input->next) {
+	for (node = nodes->first; node; node = node->next)
+		for (input = node->inputs.first; input; input = input->next)
 			if (input->source == GPU_SOURCE_BUILTIN)
 				*builtin |= input->builtin;
-			else if (input->source == GPU_SOURCE_PBR_BUILTIN)
-				*pbrbuiltin |= input->pbrbuiltin;
-		}
-	}
 }
 
 /* varargs linking  */
@@ -1580,15 +1515,6 @@ GPUNodeLink *GPU_builtin(GPUBuiltin builtin)
 	GPUNodeLink *link = GPU_node_link_create();
 
 	link->builtin = builtin;
-
-	return link;
-}
-
-GPUNodeLink *GPU_pbr_builtin(GPUPBRBuiltin builtin)
-{
-	GPUNodeLink *link = GPU_node_link_create();
-
-	link->pbrbuiltin = builtin;
 
 	return link;
 }
@@ -1767,8 +1693,7 @@ GPUPass *GPU_generate_pass(
         const bool use_box_correction,
 		const bool use_ellipsoid_correction,
 		const bool use_alpha_as_depth,
-		const bool use_ssr,
-        const int samplecount)
+		const bool use_ssr)
 {
 	GPUShader *shader;
 	GPUPass *pass;
@@ -1823,8 +1748,7 @@ GPUPass *GPU_generate_pass(
 	                              0,
 	                              0,
 	                              0,
-	                              flags,
-	                              samplecount);
+	                              flags);
 
 	/* failed? */
 	if (!shader) {

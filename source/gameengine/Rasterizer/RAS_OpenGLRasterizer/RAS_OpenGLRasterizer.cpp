@@ -806,7 +806,7 @@ void RAS_OpenGLRasterizer::DrawDerivedMesh(class RAS_MeshSlot &ms)
 		Material* blmat = current_polymat->GetBlenderMaterial();
 		Scene* blscene = current_polymat->GetBlenderScene();
 		if (!current_wireframe && blscene && blmat)
-			GPU_material_vertex_attributes(GPU_material_from_blender(blscene, blmat, false, false, false, false, false, 0, 0), &current_gpu_attribs);
+			GPU_material_vertex_attributes(GPU_material_from_blender(blscene, blmat, false, false, false, false, false, 0), &current_gpu_attribs);
 		else
 			memset(&current_gpu_attribs, 0, sizeof(current_gpu_attribs));
 		// DM draw can mess up blending mode, restore at the end

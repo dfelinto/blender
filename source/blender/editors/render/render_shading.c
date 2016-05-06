@@ -86,6 +86,7 @@
 #include "ED_screen.h"
 
 #include "GPU_material.h"
+#include "GPU_probe.h"
 
 #include "RNA_define.h"
 

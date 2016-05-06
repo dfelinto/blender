@@ -51,6 +51,7 @@
 #include "BKE_world.h"
 
 #include "GPU_material.h"
+#include "GPU_probe.h"
 
 void BKE_world_free_ex(World *wrld, bool do_id_user)
 {

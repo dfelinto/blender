@@ -243,6 +243,7 @@ typedef struct View3D {
 	struct Object *probe_source; /* runtime : the probe that is being updated when V3D_PROBE_CAPTURE */
 	struct GPUPBRSettings pbr_settings;
 	struct GPUSSR *ssr_buffer;
+	struct GPUPBR *pbr; /* hold the luts */
 } View3D;
 
 

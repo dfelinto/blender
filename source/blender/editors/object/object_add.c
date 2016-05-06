@@ -110,6 +110,7 @@
 #include "UI_resources.h"
 
 #include "GPU_material.h"
+#include "GPU_probe.h"
 
 #include "object_intern.h"
 

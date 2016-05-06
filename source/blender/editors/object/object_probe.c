@@ -41,7 +41,7 @@
 #include "RNA_access.h"
 #include "RNA_define.h"
 
-#include "GPU_material.h"
+#include "GPU_probe.h"
 
 #include "ED_screen.h"
 #include "ED_object.h"

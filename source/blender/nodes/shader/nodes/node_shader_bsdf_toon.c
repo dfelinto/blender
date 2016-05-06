@@ -42,14 +42,54 @@ static bNodeSocketTemplate sh_node_bsdf_toon_out[] = {
 	{	-1, 0, ""	}
 };
 
-static int node_shader_gpu_bsdf_toon(GPUMaterial *mat, bNode *UNUSED(node), bNodeExecData *UNUSED(execdata), GPUNodeStack *in, GPUNodeStack *out)
-{
-	if (!in[3].link)
-		in[3].link = GPU_builtin(GPU_VIEW_NORMAL);
-	else
-		GPU_link(mat, "direction_transform_m4v3", in[3].link, GPU_builtin(GPU_VIEW_MATRIX), &in[3].link);
+#define IN_COLOR 0
+#define IN_SIZE 1
+#define IN_SMOOTH 2
+#define IN_NORMAL 3
 
-	return GPU_stack_link(mat, "node_bsdf_toon", in, out);
+/* XXX this is also done as a local static function in gpu_codegen.c,
+ * but we need this to hack around the crappy material node.
+ */
+static GPUNodeLink *gpu_get_input_link(GPUNodeStack *in)
+{
+	if (in->link)
+		return in->link;
+	else
+		return GPU_uniform(in->vec);
+}
+
+static int node_shader_gpu_bsdf_toon(GPUMaterial *mat, bNode *node, bNodeExecData *UNUSED(execdata), GPUNodeStack *in, GPUNodeStack *out)
+{
+	if (!in[IN_NORMAL].link)
+		in[IN_NORMAL].link = GPU_builtin(GPU_VIEW_NORMAL);
+	else {
+		/* Convert to view space normal in case a Normal is plugged. This is because cycles uses world normals */
+		GPU_link(mat, "direction_transform_m4v3", in[IN_NORMAL].link, GPU_builtin(GPU_VIEW_MATRIX), &in[IN_NORMAL].link);
+	}
+
+	if (GPU_material_get_type(mat) == GPU_MATERIAL_TYPE_MESH_REAL_SH) {
+		GPUBrdfInput brdf;
+
+		GPU_brdf_input_initialize(&brdf);
+
+		brdf.mat         = mat;
+		brdf.type        = (node->custom1 == SHD_TOON_DIFFUSE) ? GPU_BRDF_TOON_DIFFUSE : GPU_BRDF_TOON_GLOSSY;
+		brdf.color       = gpu_get_input_link(&in[IN_COLOR]);
+		brdf.toon_size   = gpu_get_input_link(&in[IN_SIZE]);
+		brdf.toon_smooth = gpu_get_input_link(&in[IN_SMOOTH]);
+		brdf.normal      = gpu_get_input_link(&in[IN_NORMAL]);
+
+		GPU_shade_BRDF(&brdf);
+
+		out[0].link = brdf.output;
+		return 1;
+	}
+	else {
+		if (node->custom1 == SHD_TOON_DIFFUSE)
+			return GPU_stack_link(mat, "node_bsdf_toon_diffuse_lights", in, out, GPU_builtin(GPU_VIEW_POSITION), GPU_get_world_horicol());
+		else
+			return GPU_stack_link(mat, "node_bsdf_toon_glossy_lights", in, out, GPU_builtin(GPU_VIEW_POSITION), GPU_get_world_horicol());
+	}
 }
 
 /* node type definition */

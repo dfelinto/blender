@@ -100,7 +100,9 @@
 #include "GPU_material.h"
 #include "GPU_compositing.h"
 #include "GPU_extensions.h"
-#include "GPU_ssr.h"
+#include "GPU_ssfx.h"
+#include "GPU_probe.h"
+#include "GPU_luts.h"
 
 #include "view3d_intern.h"  /* own include */
 
@@ -3293,6 +3295,10 @@ void ED_view3d_draw_offscreen_init(Scene *scene, View3D *v3d, ARegion *ar)
 		/* Cycles Material Mode only */
 		if (BKE_scene_use_new_shading_nodes(scene) && (v3d->pbr_settings.pbr_flag & GPU_PBR_FLAG_ENABLE)) {
 			GPU_pbr_settings_validate(&v3d->pbr_settings);
+
+			if (!v3d->pbr)
+				v3d->pbr = GPU_pbr_create();
+
 			gpu_update_probes(scene, v3d, ar);
 			if (v3d->pbr_settings.pbr_flag & GPU_PBR_FLAG_SSR)
 				gpu_update_reflection_buffer(scene, v3d, ar);
@@ -4222,6 +4228,10 @@ static void view3d_main_region_draw_objects(const bContext *C, Scene *scene, Vie
 
 		if (BKE_scene_use_new_shading_nodes(scene) && (v3d->pbr_settings.pbr_flag & GPU_PBR_FLAG_ENABLE)) {
 			GPU_pbr_settings_validate(&v3d->pbr_settings);
+
+			if (!v3d->pbr)
+				v3d->pbr = GPU_pbr_create();
+
 			gpu_update_probes(scene, v3d, ar);
 
 			if (v3d->pbr_settings.pbr_flag & GPU_PBR_FLAG_SSR)

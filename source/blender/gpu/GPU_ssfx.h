@@ -25,12 +25,12 @@
  * ***** END GPL LICENSE BLOCK *****
  */
 
-/** \file GPU_ssr.h
+/** \file GPU_ssfx.h
  *  \ingroup gpu
  */
 
-#ifndef __GPU_SSR_H__
-#define __GPU_SSR_H__
+#ifndef __GPU_SSFX_H__
+#define __GPU_SSFX_H__
 
 #include "BLI_sys_types.h" /* for bool */
 
@@ -44,7 +44,7 @@ typedef struct GPUSSR {
 
 	/* Matrix that project to pixel coordinate (not Normalized Device Coordinates) */
 	float pixelprojmat[4][4];
-	
+
 	struct GPUTexture *tex;
 	struct GPUTexture *depth;
 	struct GPUFrameBuffer *fb;
@@ -61,4 +61,4 @@ void GPU_pbr_init_ssr_settings(struct GPUSSRSettings *ssr_settings);
 }
 #endif
 
-#endif /*__GPU_SSR_H__*/
+#endif /*__GPU_SSFX_H__*/

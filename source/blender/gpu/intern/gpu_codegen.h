@@ -54,7 +54,6 @@ struct PreviewImage;
 typedef enum GPUDataSource {
 	GPU_SOURCE_VEC_UNIFORM,
 	GPU_SOURCE_BUILTIN,
-	GPU_SOURCE_PBR_BUILTIN,
 	GPU_SOURCE_OPENGL_BUILTIN,
 	GPU_SOURCE_TEX_PIXEL,
 	GPU_SOURCE_TEX,
@@ -107,7 +106,6 @@ struct GPUNodeLink {
 
 	GPUBuiltin builtin;
 	GPUOpenGLBuiltin oglbuiltin;
-	GPUPBRBuiltin pbrbuiltin;
 
 	struct GPUOutput *output;
 };
@@ -156,7 +154,6 @@ typedef struct GPUInput {
 	char attribname[MAX_CUSTOMDATA_LAYER_NAME]; /* attribute name */
 	int attribfirst;             /* this is the first one that is bound */
 	GPUBuiltin builtin;          /* builtin uniform */
-	GPUPBRBuiltin pbrbuiltin;    /* PBR builtin uniform */
 	GPUOpenGLBuiltin oglbuiltin; /* opengl built in varying */
 } GPUInput;
 
@@ -184,8 +181,7 @@ GPUPass *GPU_generate_pass(ListBase *nodes, struct GPUNodeLink *outlink,
                            const bool use_box_correction,
                            const bool use_ellipsoid_correction,
                            const bool use_alpha_as_depth,
-                           const bool use_ssr,
-                           const int samplecount);
+                           const bool use_ssr);
 
 struct GPUShader *GPU_pass_shader(GPUPass *pass);
 
@@ -201,7 +197,6 @@ void gpu_codegen_exit(void);
 /* Material calls */
 
 const char *GPU_builtin_name(GPUBuiltin builtin);
-const char *GPU_pbrbuiltin_name(GPUBuiltin builtin);
 void gpu_material_add_node(struct GPUMaterial *material, struct GPUNode *node);
 int GPU_link_changed(struct GPUNodeLink *link);
 

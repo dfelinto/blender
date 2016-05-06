@@ -1,0 +1,365 @@
+/* -------- Utils Functions --------- */
+
+vec3 sample_ggx(float nsample, float a2, vec3 N, vec3 T, vec3 B)
+{
+	vec3 Xi = hammersley_2d(nsample);
+
+	float z = sqrt( (1.0 - Xi.x) / ( 1.0 + a2 * Xi.x - Xi.x ) ); /* cos theta */
+	float r = sqrt( 1.0 - z * z ); /* sin theta */
+	float x = r * Xi.y;
+	float y = r * Xi.z;
+
+	/* Global variable */
+	Ht = vec3(x, y, z);
+
+	return from_tangent_to_world(Ht, N, T, B);
+}
+
+float D_ggx_opti(float NH, float a2)
+{
+	float tmp = (NH * a2 - NH) * NH + 1.0;
+	return M_PI * tmp*tmp; /* Doing RCP and mul a2 at the end */
+}
+
+float pdf_ggx_reflect(float NH, float a2)
+{
+	return NH * a2 / D_ggx_opti(NH, a2);
+}
+
+void prepare_ggx(float roughness, out float a, out float a2)
+{
+	/* Artifacts appear with roughness below this threshold */
+	/* XXX TODO : find why flooring is necessary */
+	a  = clamp(roughness, 1e-4, 0.9999999);
+	a2 = max(1e-8, a*a);
+}
+
+float G1_Smith(float NX, float a2)
+{
+	/* Using Brian Karis approach and refactoring by NX/NX
+	 * this way the (2*NL)*(2*NV) in G = G1(V) * G1(L) gets canceled by the brdf denominator 4*NL*NV
+	 * Rcp is done on the whole G later
+	 * Note that this is not convenient for the transmition formula */
+	return NX + sqrt( NX * (NX - NX * a2) + a2 );
+	/* return 2 / (1 + sqrt(1 + a2 * (1 - NX*NX) / (NX*NX) ) ); /* Reference function */
+}
+
+/* -------- BSDF --------- */
+
+float bsdf_ggx(vec3 N, vec3 L, vec3 V, float roughness)
+{
+	float a, a2; prepare_ggx(roughness, a, a2);
+
+	vec3 H = normalize(L + V);
+	float NH = clamp(dot(N, H), 1e-8, 1);
+	float NL = clamp(dot(N, L), 1e-8, 1);
+	float NV = clamp(dot(N, V), 1e-8, 1);
+
+	float G = G1_Smith(NV, a2) * G1_Smith(NL, a2); /* Doing RCP at the end */
+	float D = D_ggx_opti(NH, a2);
+
+	/* Denominator is canceled by G1_Smith */
+	/* bsdf = D * G / (4.0 * NL * NV); /* Reference function */
+	return NL * a2 / (D * G); /* NL to Fit cycles Equation : line. 345 in bsdf_microfacet.h */
+}
+
+/* This one returns the brdf already divided by the pdf */
+float bsdf_ggx_pdf(float a2, float NH, float NL, float VH, float G1_V)
+{
+	float G = G1_V * G1_Smith(NL, a2); /* Doing RCP at the end */
+
+	/* Denominator is canceled by G1_Smith
+	 * brdf = D * G / (4.0 * NL * NV) [denominator canceled by G]
+	 * pdf = D * NH / (4 * VH) [D canceled later by D in brdf] */
+	return 4.0 * VH / (NH * G); /* brdf / pdf */
+}
+
+/* -------- Preview Lights --------- */
+
+void node_bsdf_glossy_lights(vec4 color, float roughness, vec3 N, vec3 V, vec4 ambient_light, out vec4 result)
+{
+	vec3 accumulator = ambient_light.rgb;
+
+	if (roughness <= 1e-4) {
+		result = vec4(accumulator * color.rgb, 1.0);
+		return;
+	}
+
+	shade_view(V, V); V = -V;
+	N = normalize(N);
+
+	/* directional lights */
+	for(int i = 0; i < NUM_LIGHTS; i++) {
+		vec3 L = gl_LightSource[i].position.xyz;
+		vec3 light_color = gl_LightSource[i].specular.rgb;
+
+		accumulator += light_color * bsdf_ggx(N, L, V, roughness);
+	}
+
+	result = vec4(accumulator * color.rgb, 1.0);
+}
+
+
+/* -------- Physical Lights --------- */
+
+/* GLOSSY SHARP */
+
+void bsdf_glossy_sharp_sphere_light(
+	vec3 N, vec3 T, vec3 L, vec3 V,
+	vec3 l_coords, float l_distance, float l_areasizex, float l_areasizey, vec2 l_areascale, mat4 l_mat,
+	float roughness, float ior, float sigma, float toon_size, float toon_smooth, float anisotropy, float aniso_rotation,
+	out float bsdf)
+{
+	float l_radius = l_areasizex;
+	L = l_distance * L;
+	vec3 R = -reflect(V, N);
+
+	/* Does not behave well when light get very close to the surface or penetrate it */
+	vec3 C = max(0.0, dot(L, R)) * R - L;
+	bsdf = ( length(C) < l_radius ) ? 1.0 : 0.0;
+
+	/* Energy conservation + cycle matching */
+	bsdf *= sphere_energy(l_radius);
+}
+
+void bsdf_glossy_sharp_area_light(
+	vec3 N, vec3 T, vec3 L, vec3 V,
+	vec3 l_coords, float l_distance, float l_areasizex, float l_areasizey, vec2 l_areascale, mat4 l_mat,
+	float roughness, float ior, float sigma, float toon_size, float toon_smooth, float anisotropy, float aniso_rotation,
+	out float bsdf)
+{
+	if (max(l_areasizex, l_areasizey) < 1e-6) {
+		bsdf = 0.0;
+		return;
+	}
+
+	L = l_distance * L;
+
+	vec3 lampx = normalize( (l_mat * vec4(1.0,0.0,0.0,0.0) ).xyz ); //lamp right axis
+	vec3 lampy = normalize( (l_mat * vec4(0.0,1.0,0.0,0.0) ).xyz ); //lamp up axis
+	vec3 lampz = normalize( (l_mat * vec4(0.0,0.0,1.0,0.0) ).xyz ); //lamp projection axis
+
+	l_areasizex *= l_areascale.x;
+	l_areasizey *= l_areascale.y;
+	float width = l_areasizex / 2.0;
+	float height = l_areasizey / 2.0;
+
+	/* Find the intersection point E between the reflection vector and the light plane */
+	vec3 R = reflect(V, N);
+	vec3 E = line_plane_intersect(vec3(0.0), R, L, lampz);
+
+	/* Project it onto the light plane */
+	vec3 projection = E - L;
+	float A = dot(lampx, projection);
+	float B = dot(lampy, projection);
+
+	bsdf = (A < width && B < height) ? 1.0 : 0.0;
+	bsdf *= (A > -width && B > -height) ? 1.0 : 0.0;
+
+	/* Masking */
+	bsdf *= (dot(-L, lampz) > 0.0) ? 1.0 : 0.0;
+	bsdf *= (dot(R, lampz) > 0.0) ? 1.0 : 0.0;
+
+	/* Energy conservation + cycle matching */
+	bsdf *= rectangle_energy(l_areasizex, l_areasizey);
+}
+
+void bsdf_glossy_sharp_sun_light(
+	vec3 N, vec3 T, vec3 L, vec3 V,
+	vec3 l_coords, float l_distance, float l_areasizex, float l_areasizey, vec2 l_areascale, mat4 l_mat,
+	float roughness, float ior, float sigma, float toon_size, float toon_smooth, float anisotropy, float aniso_rotation,
+	out float bsdf)
+{
+	//TODO Find a better approximation
+	bsdf = 0.0;
+}
+
+/* GLOSSY GGX */
+
+void bsdf_glossy_ggx_sphere_light(
+	vec3 N, vec3 T, vec3 L, vec3 V,
+	vec3 l_coords, float l_distance, float l_areasizex, float l_areasizey, vec2 l_areascale, mat4 l_mat,
+	float roughness, float ior, float sigma, float toon_size, float toon_smooth, float anisotropy, float aniso_rotation,
+	out float bsdf)
+{
+	if (roughness < 1e-4 && l_areasizex == 0) {
+		bsdf = 0.0;
+		return;
+	}
+
+	float l_radius = l_areasizex;
+
+	vec3 R = reflect(V, N);
+
+	float energy_conservation = 1.0;
+	most_representative_point(l_radius, 0.0, vec3(0.0), l_distance, R, L, roughness, energy_conservation);
+	bsdf = bsdf_ggx(N, L, V, roughness);
+
+	bsdf *= energy_conservation / (l_distance * l_distance);
+	bsdf *= sphere_energy(l_radius) * max(l_radius * l_radius, 1e-16); /* l_radius is already inside energy_conservation */
+	bsdf *= M_PI; /* XXX : !!! Very Empirical, Fit cycles power */
+}
+
+void bsdf_glossy_ggx_area_light(
+	vec3 N, vec3 T, vec3 L, vec3 V,
+	vec3 l_coords, float l_distance, float l_areasizex, float l_areasizey, vec2 l_areascale, mat4 l_mat,
+	float roughness, float ior, float sigma, float toon_size, float toon_smooth, float anisotropy, float aniso_rotation,
+	out float bsdf)
+{
+	if (min(l_areasizex, l_areasizey) < 1e-6) {
+		bsdf = 0.0;
+		return;
+	}
+
+	l_areasizex *= l_areascale.x;
+	l_areasizey *= l_areascale.y;
+
+	/* Used later for Masking : Use the real Light Vector */
+	vec3 lampz = normalize( (l_mat * vec4(0.0,0.0,1.0,0.0) ).xyz ); //lamp projection axis
+	float masking = max(dot( normalize(-L), lampz), 0.0);
+
+	vec3 R = reflect(V, N);
+	//R = normalize(mix(N, R, 1 - roughness)); //Dominant Direction
+
+	float max_size = max(l_areasizex, l_areasizey);
+	float min_size = min(l_areasizex, l_areasizey);
+	vec3 lampVec = (l_areasizex > l_areasizey) ? normalize( (l_mat * vec4(1.0,0.0,0.0,0.0) ).xyz ) : normalize( (l_mat * vec4(0.0,1.0,0.0,0.0) ).xyz );
+
+	float energy_conservation = 1.0;
+	most_representative_point(min_size/2, max_size-min_size, lampVec, l_distance, R, L, roughness, energy_conservation);
+	bsdf = bsdf_ggx(N, L, V, roughness);
+
+	/* energy_conservation */
+	float LineAngle = clamp( (max_size-min_size) / l_distance, 0.0, 1.0);
+	float energy_conservation_line = energy_conservation * ( roughness / clamp(roughness + 0.5 * LineAngle, 0.0, 1.1));
+
+	/* XXX : Empirical modification for low roughness matching */
+	float energy_conservation_mod = energy_conservation * (1 + roughness) / ( max_size/min_size );
+	energy_conservation = mix(energy_conservation_mod, energy_conservation_line, min(roughness/0.3, 0.9*(1.1-roughness)/0.1));
+
+	/* As we represent the Area Light by a tube light we must use a custom energy conservation */
+	bsdf *= energy_conservation / (l_distance * l_distance);
+	bsdf *= masking;
+	bsdf *= 23.2; /* XXX : !!! Very Empirical, Fit cycles power */
+}
+
+void bsdf_glossy_ggx_sun_light(
+	vec3 N, vec3 T, vec3 L, vec3 V,
+	vec3 l_coords, float l_distance, float l_areasizex, float l_areasizey, vec2 l_areascale, mat4 l_mat,
+	float roughness, float ior, float sigma, float toon_size, float toon_smooth, float anisotropy, float aniso_rotation,
+	out float bsdf)
+{
+	//TODO Find a better approximation
+	if (roughness < 1e-4 && l_areasizex == 0) {
+		bsdf = 0.0;
+		return;
+	}
+
+	float l_radius = l_areasizex;
+
+	vec3 R = reflect(V, N);
+	float energy_conservation = 1.0;
+
+	/* GGX Spec */
+	if(l_radius > 0.0){
+		//roughness = max(3e-3, roughness); /* Artifacts appear with roughness below this threshold */
+
+		/* energy preservation */
+		// float SphereAngle = clamp( l_radius / l_distance, 0.0, 1.0);
+		// energy_conservation = 2*a / (2*a + SphereAngle); //( x / (x + 0.5 * y))^2;
+		// energy_conservation *= energy_conservation;
+
+		float radius = sin(l_radius); //Disk radius
+		float distance = cos(l_radius); // Distance to disk
+
+		/* disk light */
+		float LR = dot(L, R);
+		vec3 S = normalize(R - LR * L);
+		L = LR < distance ? normalize(distance * L + S * radius) : R;
+	}
+
+	L = normalize(L);
+	bsdf = bsdf_ggx(N, L, V, roughness);
+	bsdf *= energy_conservation;
+}
+
+
+/* -------- Image Based Lighting --------- */
+
+void env_sampling_glossy_sharp(
+	float pbr, vec3 viewpos, mat4 invviewmat, mat4 viewmat,
+	vec3 N, vec3 T, float roughness, float ior, float sigma,
+	float toon_size, float toon_smooth, float anisotropy, float aniso_rotation,
+	out vec3 result)
+{
+	/* Setup */
+	vector_prepass(viewpos, N, invviewmat, viewmat);
+
+	/* Precomputation */
+	vec3 L = reflect(I, N);
+	vec3 vL = (viewmat * vec4(L, 0.0)).xyz;
+
+	/* Probe */
+	vec4 sample_probe = sample_reflect(L);
+
+#ifdef USE_SSR
+	/* SSR */
+	ivec2 c = ivec2(gl_FragCoord.xy);
+	float jitter = float((c.x+c.y)&1) * 0.5; // Number between 0 and 1 for how far to bump the ray in stride units to conceal banding artifacts
+
+	vec2 hitpixel; vec3 hitco; float hitstep;
+
+	bool hit = raycast(viewpos, vL, jitter, hitstep, hitpixel, hitco);
+	float contrib = ssr_contribution(viewpos, hitstep, hit, hitco);
+
+	vec4 sample_ssr = texture2DLod(unfssr, hitco.xy, 0);
+	srgb_to_linearrgb(sample_ssr, sample_ssr);
+
+	result = mix(sample_probe.rgb, sample_ssr.rgb, contrib);
+#else
+	result = sample_probe.rgb;
+#endif
+}
+
+void env_sampling_glossy_ggx(
+	float pbr, vec3 viewpos, mat4 invviewmat, mat4 viewmat,
+	vec3 N, vec3 T, float roughness, float ior, float sigma,
+	float toon_size, float toon_smooth, float anisotropy, float aniso_rotation,
+	out vec3 result)
+{
+	/* Setup */
+	vector_prepass(viewpos, N, invviewmat, viewmat);
+	make_orthonormals(N, T, B); /* Generate tangent space */
+	setup_noise(gl_FragCoord.xy); /* Noise to dither the samples */
+	float a, a2; prepare_ggx(roughness, a, a2);
+
+	/* Precomputation */
+	float NV = max(1e-8, abs(dot(I, N)));
+	float G1_V = G1_Smith(NV, a2);
+
+	/* Integrating Envmap */
+	vec4 out_radiance = vec4(0.0);
+	for (float i = 0, iu = 0u; i < BSDF_SAMPLES && i < unfbsdfsamples.x; i++, iu++) {
+		vec3 H = sample_ggx(i, a2, N, T, B); /* Microfacet normal */
+		vec3 L = reflect(I, H);
+		float NL = max(0.0, dot(N, L));
+
+		if (NL > 0.0) {
+			/* Step 1 : Sampling Environment */
+			float NH = max(1e-8, dot(N, H)); /* cosTheta */
+			float VH = max(1e-8, -dot(I, H));
+
+			float pdf = pdf_ggx_reflect(NH, a2);
+
+			vec4 sample = sample_reflect_pdf(L, roughness, pdf);
+
+			/* Step 2 : Integrating BRDF */
+			float brdf_pdf = bsdf_ggx_pdf(a2, NH, NL, VH, G1_V);
+
+			out_radiance += NL * sample * brdf_pdf;
+		}
+	}
+
+	result = out_radiance.rgb * unfbsdfsamples.y;
+}
+

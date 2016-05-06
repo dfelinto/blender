@@ -6933,6 +6933,7 @@ static bool direct_link_screen(FileData *fd, bScreen *sc)
 				v3d->properties_storage = NULL;
 				v3d->defmaterial = NULL;
 				v3d->ssr_buffer = NULL;
+				v3d->pbr = NULL;
 				
 				/* render can be quite heavy, set to solid on load */
 				if (v3d->drawtype == OB_RENDER)

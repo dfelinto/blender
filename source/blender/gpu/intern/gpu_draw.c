@@ -82,6 +82,9 @@
 #include "GPU_material.h"
 #include "GPU_shader.h"
 #include "GPU_texture.h"
+#include "GPU_ssfx.h"
+#include "GPU_probe.h"
+#include "GPU_luts.h"
 
 #include "PIL_time.h"
 
@@ -1582,6 +1585,7 @@ static struct GPUMaterialState {
 	Scene *gscene;
 	GPUProbe *gprobe;
 	GPUSSR *gssr;
+	GPUPBR *gpbr;
 	int glay;
 	bool gscenelock;
 	float (*gviewmat)[4];
@@ -1603,7 +1607,6 @@ static struct GPUMaterialState {
 	bool is_realistic_mat;
 	bool is_alpha_as_depth;
 	bool use_ssr;
-	int pbr_samples;
 	int parallax_correc;
 	GPUBRDFSettings *gbrdfsettings;
 	GPUSSRSettings *gssrsettings;
@@ -1755,6 +1758,7 @@ void GPU_begin_object_materials(
 	GMS.is_alpha_as_depth = (v3d->flag3 & (V3D_REFLECTION_PASS | V3D_PROBE_CAPTURE));
 	GMS.gprobe = NULL;
 	GMS.gssr = NULL;
+	GMS.gpbr = NULL;
 	GMS.gbrdfsettings = NULL;
 	GMS.gssrsettings = NULL;
 
@@ -1790,20 +1794,14 @@ void GPU_begin_object_materials(
 		GMS.alphablend[0] = GPU_BLEND_SOLID;
 	}
 	else {
-
-		GMS.pbr_samples = 0;
 		GMS.is_planar_probe = false;
 		GMS.parallax_correc = 0;
 
 		if (GMS.is_realistic_mat && !(v3d->flag2 & V3D_RENDER_SHADOW)) {
-
-			/* This prevent from generating and keeping lots of shaders in memory
-			 * if realistic mat is turned off. */
-			GMS.pbr_samples = (v3d->pbr_settings.brdf->samples <= 0) ? 16 : 16 * v3d->pbr_settings.brdf->samples;
-
 			GMS.use_ssr = (v3d->pbr_settings.pbr_flag & GPU_PBR_FLAG_SSR);
 			GMS.gbrdfsettings = v3d->pbr_settings.brdf;
 			GMS.gssrsettings = v3d->pbr_settings.ssr;
+			GMS.gpbr = v3d->pbr;
 
 			/* Screen space reflections */
 			if (v3d->ssr_buffer && !(v3d->flag3 & V3D_PROBE_CAPTURE) && (v3d->pbr_settings.pbr_flag & GPU_PBR_FLAG_SSR))
@@ -1864,7 +1862,7 @@ void GPU_begin_object_materials(
 
 			if (glsl) {
 				GMS.gmatbuf[0] = &defmaterial;
-				GPU_material_from_blender(GMS.gscene, &defmaterial, GMS.is_opensubdiv, GMS.is_realistic_mat, GMS.is_planar_probe, GMS.is_alpha_as_depth, GMS.use_ssr, GMS.pbr_samples, GMS.parallax_correc);
+				GPU_material_from_blender(GMS.gscene, &defmaterial, GMS.is_opensubdiv, GMS.is_realistic_mat, GMS.is_planar_probe, GMS.is_alpha_as_depth, GMS.use_ssr, GMS.parallax_correc);
 			}
 
 			GMS.alphablend[0] = GPU_BLEND_SOLID;
@@ -1878,7 +1876,7 @@ void GPU_begin_object_materials(
 			if (ma == NULL) ma = &defmaterial;
 
 			/* create glsl material if requested */
-			gpumat = glsl ? GPU_material_from_blender(GMS.gscene, ma, GMS.is_opensubdiv, GMS.is_realistic_mat, GMS.is_planar_probe, GMS.is_alpha_as_depth, GMS.use_ssr, GMS.pbr_samples, GMS.parallax_correc) : NULL;
+			gpumat = glsl ? GPU_material_from_blender(GMS.gscene, ma, GMS.is_opensubdiv, GMS.is_realistic_mat, GMS.is_planar_probe, GMS.is_alpha_as_depth, GMS.use_ssr, GMS.parallax_correc) : NULL;
 
 			if (gpumat) {
 				/* do glsl only if creating it succeed, else fallback */
@@ -1977,7 +1975,7 @@ int GPU_object_material_bind(int nr, void *attribs)
 	/* unbind glsl material */
 	if (GMS.gboundmat) {
 		if (GMS.is_alpha_pass) glDepthMask(0);
-		GPU_material_unbind(GPU_material_from_blender(GMS.gscene, GMS.gboundmat, GMS.is_opensubdiv, GMS.is_realistic_mat, GMS.is_planar_probe, GMS.is_alpha_as_depth, GMS.use_ssr, GMS.pbr_samples, GMS.parallax_correc));
+		GPU_material_unbind(GPU_material_from_blender(GMS.gscene, GMS.gboundmat, GMS.is_opensubdiv, GMS.is_realistic_mat, GMS.is_planar_probe, GMS.is_alpha_as_depth, GMS.use_ssr, GMS.parallax_correc));
 		GMS.gboundmat = NULL;
 	}
 
@@ -2004,7 +2002,7 @@ int GPU_object_material_bind(int nr, void *attribs)
 
 			float auto_bump_scale;
 
-			GPUMaterial *gpumat = GPU_material_from_blender(GMS.gscene, mat, GMS.is_opensubdiv, GMS.is_realistic_mat, GMS.is_planar_probe, GMS.is_alpha_as_depth, GMS.use_ssr, GMS.pbr_samples, GMS.parallax_correc);
+			GPUMaterial *gpumat = GPU_material_from_blender(GMS.gscene, mat, GMS.is_opensubdiv, GMS.is_realistic_mat, GMS.is_planar_probe, GMS.is_alpha_as_depth, GMS.use_ssr, GMS.parallax_correc);
 			GPU_material_vertex_attributes(gpumat, gattribs);
 
 			if (GMS.dob)
@@ -2017,7 +2015,7 @@ int GPU_object_material_bind(int nr, void *attribs)
 			auto_bump_scale = GMS.gob->derivedFinal != NULL ? GMS.gob->derivedFinal->auto_bump_scale : 1.0f;
 			GPU_material_bind_uniforms(gpumat, GMS.gob->obmat, GMS.gviewmat, GMS.gob->col, auto_bump_scale, &particle_info);
 
-			GPU_material_bind_uniforms_probe(gpumat, GMS.gprobe, GMS.gssr, GMS.gssrsettings, GMS.gbrdfsettings);
+			GPU_material_bind_uniforms_pbr(gpumat, GMS.gpbr, GMS.gprobe, GMS.gssr, GMS.gssrsettings, GMS.gbrdfsettings);
 
 			GMS.gboundmat = mat;
 
@@ -2105,7 +2103,7 @@ void GPU_object_material_unbind(void)
 			glDisable(GL_CULL_FACE);
 
 		if (GMS.is_alpha_pass) glDepthMask(0);
-		GPU_material_unbind(GPU_material_from_blender(GMS.gscene, GMS.gboundmat, GMS.is_opensubdiv, GMS.is_realistic_mat, GMS.is_planar_probe, GMS.is_alpha_as_depth, GMS.use_ssr, GMS.pbr_samples, GMS.parallax_correc));
+		GPU_material_unbind(GPU_material_from_blender(GMS.gscene, GMS.gboundmat, GMS.is_opensubdiv, GMS.is_realistic_mat, GMS.is_planar_probe, GMS.is_alpha_as_depth, GMS.use_ssr, GMS.parallax_correc));
 		GMS.gboundmat = NULL;
 	}
 	else
@@ -2407,7 +2405,6 @@ void GPU_draw_update_fvar_offset(DerivedMesh *dm)
 		                                         GMS.is_planar_probe,
 		                                         GMS.is_alpha_as_depth,
 		                                         GMS.use_ssr,
-		                                         GMS.pbr_samples,
 		                                         GMS.parallax_correc);
 
 		GPU_material_update_fvar_offset(gpu_material, dm);

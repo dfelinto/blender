@@ -58,7 +58,9 @@
 #include "GPU_compositing.h"
 #include "GPU_framebuffer.h"
 #include "GPU_material.h"
-#include "GPU_ssr.h"
+#include "GPU_ssfx.h"
+#include "GPU_probe.h"
+#include "GPU_luts.h"
 
 #include "BIF_gl.h"
 
@@ -432,6 +434,8 @@ static void view3d_free(SpaceLink *sl)
 
 	if (vd->ssr_buffer)
 		GPU_ssr_free(vd->ssr_buffer);
+	if (vd->pbr)
+		GPU_pbr_free(vd->pbr);
 
 	if (vd->fx_settings.ssao)
 		MEM_freeN(vd->fx_settings.ssao);
@@ -472,6 +476,7 @@ static SpaceLink *view3d_duplicate(SpaceLink *sl)
 
 	v3dn->defmaterial = NULL;
 	v3dn->ssr_buffer = NULL;
+	v3dn->pbr = NULL;
 
 	BLI_duplicatelist(&v3dn->bgpicbase, &v3do->bgpicbase);
 	for (bgpic = v3dn->bgpicbase.first; bgpic; bgpic = bgpic->next) {

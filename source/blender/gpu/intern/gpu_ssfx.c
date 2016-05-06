@@ -20,15 +20,19 @@
  *
  * The Original Code is: all of this file.
  *
- * Contributor(s): Brecht Van Lommel.
+ * Contributor(s): Clement Foucault.
  *
  * ***** END GPL LICENSE BLOCK *****
  */
 
-/** \file blender/gpu/intern/gpu_ssr.c
+/** \file blender/gpu/intern/gpu_ssfx.c
  *  \ingroup gpu
  *
- * Manages Screen Space Reflections.
+ * Manages screen space effects inside materials and 
+ * the necessary buffers:
+ * - Screen space reflection
+ *
+ * NOTICE : These are not post process effects
  */
 
 
@@ -42,7 +46,7 @@
 
 #include "GPU_texture.h"
 #include "GPU_framebuffer.h"
-#include "GPU_ssr.h"
+#include "GPU_ssfx.h"
 
 #include "gpu_codegen.h"
 

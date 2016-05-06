@@ -37,8 +37,6 @@
 #include "BLI_listbase.h"
 #include "BLI_linklist.h"
 
-#include "BLI_rand.h"
-
 #include "BKE_colortools.h"
 #include "BKE_scene.h"
 
@@ -57,6 +55,7 @@
 #include "GPU_glew.h"
 #include "GPU_shader.h"
 #include "GPU_texture.h"
+#include "GPU_luts.h"
 
 #include "MEM_guardedalloc.h"
 
@@ -208,41 +207,6 @@ struct GPUFX {
 	unsigned int vbuffer;
 };
 
-#if 0
-/* concentric mapping, see "A Low Distortion Map Between Disk and Square" and
- * http://psgraphics.blogspot.nl/2011/01/improved-code-for-concentric-map.html */
-static GPUTexture * create_concentric_sample_texture(int side)
-{
-	GPUTexture *tex;
-	float midpoint = 0.5f * (side - 1);
-	float *texels = (float *)MEM_mallocN(sizeof(float) * 2 * side * side, "concentric_tex");
-	int i, j;
-
-	for (i = 0; i < side; i++) {
-		for (j = 0; j < side; j++) {
-			int index = (i * side + j) * 2;
-			float a = 1.0f - i / midpoint;
-			float b = 1.0f - j / midpoint;
-			float phi, r;
-			if (a * a > b * b) {
-				r = a;
-				phi = (M_PI_4) * (b / a);
-			}
-			else {
-				r = b;
-				phi = M_PI_2 - (M_PI_4) * (a / b);
-			}
-			texels[index] = r * cos(phi);
-			texels[index + 1] = r * sin(phi);
-		}
-	}
-
-	tex = GPU_texture_create_1D_procedural(side * side, texels, NULL);
-	MEM_freeN(texels);
-	return tex;
-}
-#endif
-
 static GPUTexture *create_3DLUT_from_display_settings(GPUFX *fx, Scene *scene)
 {
 	const int LUT3D_EDGE_SIZE = 16;
@@ -301,27 +265,6 @@ static GPUTexture *create_3DLUT_from_display_settings(GPUFX *fx, Scene *scene)
 	MEM_freeN(view_settings_mod);
 	MEM_freeN(display_settings_mod);
 
-	return tex;
-}
-
-static GPUTexture *create_spiral_sample_texture(int numsaples)
-{
-	GPUTexture *tex;
-	float (*texels)[2] = MEM_mallocN(sizeof(float[2]) * numsaples, "concentric_tex");
-	const float numsaples_inv = 1.0f / numsaples;
-	int i;
-	/* arbitrary number to ensure we don't get conciding samples every circle */
-	const float spirals = 7.357;
-
-	for (i = 0; i < numsaples; i++) {
-		float r = (i + 0.5f) * numsaples_inv;
-		float phi = r * spirals * (float)(2.0 * M_PI);
-		texels[i][0] = r * cosf(phi);
-		texels[i][1] = r * sinf(phi);
-	}
-
-	tex = GPU_texture_create_1D_procedural(numsaples, (float *)texels, NULL);
-	MEM_freeN(texels);
 	return tex;
 }
 
@@ -433,21 +376,6 @@ void GPU_fx_compositor_destroy(GPUFX *fx)
 	glDeleteBuffers(1, &fx->vbuffer);
 	MEM_freeN(fx);
 }
-
-static GPUTexture * create_jitter_texture(void)
-{
-	float jitter[64 * 64][2];
-	int i;
-
-	for (i = 0; i < 64 * 64; i++) {
-		jitter[i][0] = 2.0f * BLI_frand() - 1.0f;
-		jitter[i][1] = 2.0f * BLI_frand() - 1.0f;
-		normalize_v2(jitter[i]);
-	}
-
-	return GPU_texture_create_2D_procedural(64, 64, &jitter[0][0], true, NULL);
-}
-
 
 bool GPU_fx_compositor_initialize_passes(
         GPUFX *fx, const rcti *rect, const rcti *scissor_rect,

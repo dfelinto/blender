@@ -127,6 +127,7 @@
 #include "CCGSubSurf.h"
 
 #include "GPU_material.h"
+#include "GPU_probe.h"
 
 /* Vertex parent modifies original BMesh which is not safe for threading.
  * Ideally such a modification should be handled as a separate DAG update

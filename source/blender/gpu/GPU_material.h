@@ -56,6 +56,7 @@ struct GPUMaterial;
 struct GPUTexture;
 struct GPULamp;
 struct GPUProbe;
+struct GPUSSR;
 struct PreviewImage;
 struct World;
 
@@ -64,8 +65,6 @@ typedef struct GPUNodeLink GPUNodeLink;
 typedef struct GPUMaterial GPUMaterial;
 typedef struct GPULamp GPULamp;
 typedef struct GPUParticleInfo GPUParticleInfo;
-typedef struct GPUProbe GPUProbe;
-typedef struct GPUSSR GPUSSR;
 
 /* Functions to create GPU Materials nodes */
 
@@ -101,31 +100,8 @@ typedef enum GPUBuiltin {
 	GPU_PARTICLE_ANG_VELOCITY = (1 << 12),
 	GPU_LOC_TO_VIEW_MATRIX =    (1 << 13),
 	GPU_INVERSE_LOC_TO_VIEW_MATRIX = (1 << 14),
+	GPU_PBR =                   (1 << 15),
 } GPUBuiltin;
-
-typedef enum GPUPBRBuiltin {
-	GPU_LOD_FACTOR =        (1 << 0),
-	GPU_PROBE =             (1 << 1),
-	GPU_PLANAR_REFLECT =    (1 << 2),
-	GPU_PLANAR_REFRACT =    (1 << 3),
-	GPU_SH0 =               (1 << 4),
-	GPU_SH1 =               (1 << 5),
-	GPU_SH2 =               (1 << 6),
-	GPU_SH3 =               (1 << 7),
-	GPU_SH4 =               (1 << 8),
-	GPU_SH5 =               (1 << 9),
-	GPU_SH6 =               (1 << 10),
-	GPU_SH7 =               (1 << 11),
-	GPU_SH8 =               (1 << 12),
-	GPU_CORRECTION_MATRIX = (1 << 13),
-	GPU_PLANAR_RFL_MATRIX = (1 << 14),
-	GPU_PROBE_POSITION =    (1 << 15),
-	GPU_PLANAR_VECTOR =     (1 << 16),
-	GPU_SSR =               (1 << 17),
-	GPU_SSR_PARAMETERS =    (1 << 18),
-	GPU_SSR_PARAMETERS2 =   (1 << 19),
-	GPU_PIXEL_PROJ_MATRIX = (1 << 20),
-} GPUPBRBuiltin;
 
 typedef enum GPUOpenGLBuiltin {
 	GPU_MATCAP_NORMAL = 1,
@@ -238,7 +214,6 @@ GPUNodeLink *GPU_image_preview(struct PreviewImage *prv);
 GPUNodeLink *GPU_texture(int size, float *pixels);
 GPUNodeLink *GPU_dynamic_texture(struct GPUTexture *tex, GPUDynamicType dynamictype, void *data);
 GPUNodeLink *GPU_builtin(GPUBuiltin builtin);
-GPUNodeLink *GPU_pbr_builtin(GPUPBRBuiltin builtin);
 GPUNodeLink *GPU_opengl_builtin(GPUOpenGLBuiltin builtin);
 void GPU_node_link_set_type(GPUNodeLink *link, GPUType type);
 
@@ -262,7 +237,7 @@ GPUBlendMode GPU_material_alpha_blend(GPUMaterial *material, float obcol[4]);
 GPUMaterial *GPU_material_world(struct Scene *scene, struct World *wo);
 
 GPUMaterial *GPU_material_from_blender(struct Scene *scene, struct Material *ma, bool use_opensubdiv,
-		bool use_realistic_preview, bool use_planar_probe, bool use_alpha_as_depth, bool use_ssr, int samplecount, int parallax_correc);
+		bool use_realistic_preview, bool use_planar_probe, bool use_alpha_as_depth, bool use_ssr, int parallax_correc);
 GPUMaterial *GPU_material_matcap(struct Scene *scene, struct Material *ma, bool use_opensubdiv);
 void GPU_material_free(struct ListBase *gpumaterial);
 
@@ -275,7 +250,7 @@ void GPU_material_bind(
 void GPU_material_bind_uniforms(
         GPUMaterial *material, float obmat[4][4], float viewmat[4][4], float obcol[4],
         float autobumpscale, GPUParticleInfo *pi);
-void GPU_material_bind_uniforms_probe(GPUMaterial *material, GPUProbe *probe, GPUSSR *ssr,struct GPUSSRSettings *ssr_settings,struct GPUBRDFSettings *brdf_settings);
+void GPU_material_bind_uniforms_pbr(GPUMaterial *material, struct GPUPBR *pbr, struct GPUProbe *probe, struct GPUSSR *ssr, struct GPUSSRSettings *ssr_settings, struct GPUBRDFSettings *brdf_settings);
 void GPU_material_unbind(GPUMaterial *material);
 bool GPU_material_bound(GPUMaterial *material);
 struct Scene *GPU_material_scene(GPUMaterial *material);
@@ -314,7 +289,9 @@ typedef enum GPUBrdfType {
 	GPU_BRDF_VELVET                   = 15,
 	GPU_BRDF_TRANSLUCENT              = 16,
 	GPU_BRDF_TRANSPARENT              = 17,
-	GPU_BRDF_TOON                     = 18,
+
+	GPU_BRDF_TOON_DIFFUSE             = 18,
+	GPU_BRDF_TOON_GLOSSY              = 19,
 } GPUBrdfType;
 
 typedef struct GPUBrdfInput {
@@ -421,39 +398,6 @@ int GPU_lamp_shadow_layer(GPULamp *lamp);
 GPUNodeLink *GPU_lamp_get_data(
         GPUMaterial *mat, GPULamp *lamp,
         GPUNodeLink **r_col, GPUNodeLink **r_lv, GPUNodeLink **r_dist, GPUNodeLink **r_shadow, GPUNodeLink **r_energy);
-
-/* Probes */
-
-/* Keep this enum in sync with DNA_object_types.h */
-typedef enum GPUProbeType {
-	GPU_PROBE_CUBE		= 2,
-	GPU_PROBE_PLANAR	= 3,
-} GPUProbeType;
-
-GPUProbe *GPU_probe_world(struct Scene *scene, struct World *wo);
-GPUProbe *GPU_probe_object(struct Scene *scene, struct Object *ob);
-void GPU_probe_free(ListBase *gpuprobe);
-
-void GPU_probe_buffer_bind(GPUProbe *probe);
-void GPU_probe_switch_fb_cubeface(GPUProbe *probe, int cubeface, float viewmat[4][4], int *winsize, float winmat[4][4]);
-void GPU_probe_attach_planar_fb(GPUProbe *probe, float camviewmat[4][4], float camwinmat[4][4], float viewmat[4][4], int *winsize, bool refraction);
-void GPU_probe_buffer_unbind(GPUProbe *probe);
-void GPU_probe_rebuild_mipmaps(GPUProbe *probe);
-void GPU_probe_sh_compute(GPUProbe *probe);
-void GPU_probe_sh_shader_bind(GPUProbe *probe);
-void GPU_probe_sh_shader_unbind(void);
-void GPU_probe_auto_update(GPUProbe *probe);
-void GPU_probe_set_update(GPUProbe *probe, bool val);
-bool GPU_probe_get_update(GPUProbe *probe);
-struct Object *GPU_probe_get_object(GPUProbe *probe);
-int GPU_probe_get_size(GPUProbe *probe);
-int GPU_probe_get_type(GPUProbe *probe);
-void GPU_probe_update_clip(GPUProbe *probe, float clipsta, float clipend);
-void GPU_probe_update_layers(GPUProbe *probe, unsigned int lay);
-unsigned int GPU_probe_get_layers(GPUProbe *probe);
-void GPU_probe_update_sh_res(GPUProbe *probe, int res);
-void GPU_probe_update_parallax(GPUProbe *probe, float correctionmat[4][4], float obmat[4][4]);
-void GPU_probe_update_ref_plane(GPUProbe *probe, float obmat[4][4]);
 
 /* World */
 

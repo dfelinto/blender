@@ -10,27 +10,8 @@ uniform float lut_size = 16.0;
 uniform float displayspace_is_srgb;
 uniform float is_offscreen;
 
-// jitter texture for ssao
-//uniform sampler2D jitter_tex;
-
-// concentric sample texture for ssao
-//uniform sampler1D ssao_concentric_tex;
-
-// depth buffer
-//uniform sampler2D depthbuffer;
 // coordinates on framebuffer in normalized (0.0-1.0) uv space
 varying vec4 uvcoordsvar;
-
-/* ssao_params.x : pixel scale for the ssao radious */
-/* ssao_params.y : factor for the ssao darkening */
-//uniform vec4 ssao_params;
-//uniform vec3 ssao_sample_params;
-//uniform vec4 ssao_color;
-
-/* store the view space vectors for the corners of the view frustum here.
- * It helps to quickly reconstruct view space vectors by using uv coordinates,
- * see http://www.derschmale.com/2014/01/26/reconstructing-positions-from-the-depth-buffer */
-//uniform vec4 viewvecs[3];
 
 float srgb_to_linearrgb(float c)
 {

@@ -55,10 +55,12 @@ set(SRC
 	intern/gpu_extensions.c
 	intern/gpu_framebuffer.c
 	intern/gpu_init_exit.c
+	intern/gpu_luts.c
 	intern/gpu_material.c
+	intern/gpu_probe.c
 	intern/gpu_select.c
 	intern/gpu_shader.c
-	intern/gpu_ssr.c
+	intern/gpu_ssfx.c
 	intern/gpu_texture.c
 
 	shaders/gpu_shader_fx_lib.glsl
@@ -70,8 +72,17 @@ set(SRC
 	shaders/gpu_shader_fx_dof_hq_geo.glsl
 	shaders/gpu_shader_fx_vert.glsl
 	shaders/gpu_shader_material.glsl
-	shaders/gpu_shader_material_bsdf_frag.glsl
-	shaders/gpu_shader_material_ssr_frag.glsl
+	shaders/gpu_shader_material_bsdf_anisotropic.glsl
+	shaders/gpu_shader_material_bsdf_velvet.glsl
+	shaders/gpu_shader_material_bsdf_diffuse.glsl
+	shaders/gpu_shader_material_bsdf_glass.glsl
+	shaders/gpu_shader_material_bsdf_translucent.glsl
+	shaders/gpu_shader_material_bsdf_transparent.glsl
+	shaders/gpu_shader_material_bsdf_glossy.glsl
+	shaders/gpu_shader_material_bsdf_refraction.glsl
+	shaders/gpu_shader_material_bsdf_toon.glsl
+	shaders/gpu_shader_material_new_shading.glsl
+	shaders/gpu_shader_material_utils.glsl
 	shaders/gpu_shader_sep_gaussian_blur_frag.glsl
 	shaders/gpu_shader_sep_gaussian_blur_vert.glsl
 	shaders/gpu_shader_basic_frag.glsl
@@ -98,10 +109,12 @@ set(SRC
 	GPU_framebuffer.h
 	GPU_glew.h
 	GPU_init_exit.h
+	GPU_luts.h
 	GPU_material.h
+	GPU_probe.h
 	GPU_select.h
 	GPU_shader.h
-	GPU_ssr.h
+	GPU_ssfx.h
 	GPU_texture.h
 	intern/gpu_codegen.h
 	intern/gpu_private.h
@@ -111,8 +124,17 @@ data_to_c_simple(shaders/gpu_shader_geometry.glsl SRC)
 data_to_c_simple(shaders/gpu_shader_smoke_frag.glsl SRC)
 data_to_c_simple(shaders/gpu_shader_smoke_vert.glsl SRC)
 data_to_c_simple(shaders/gpu_shader_material.glsl SRC)
-data_to_c_simple(shaders/gpu_shader_material_bsdf_frag.glsl SRC)
-data_to_c_simple(shaders/gpu_shader_material_ssr_frag.glsl SRC)
+data_to_c_simple(shaders/gpu_shader_material_bsdf_anisotropic.glsl SRC)
+data_to_c_simple(shaders/gpu_shader_material_bsdf_velvet.glsl SRC)
+data_to_c_simple(shaders/gpu_shader_material_bsdf_diffuse.glsl SRC)
+data_to_c_simple(shaders/gpu_shader_material_bsdf_glass.glsl SRC)
+data_to_c_simple(shaders/gpu_shader_material_bsdf_translucent.glsl SRC)
+data_to_c_simple(shaders/gpu_shader_material_bsdf_transparent.glsl SRC)
+data_to_c_simple(shaders/gpu_shader_material_bsdf_glossy.glsl SRC)
+data_to_c_simple(shaders/gpu_shader_material_bsdf_refraction.glsl SRC)
+data_to_c_simple(shaders/gpu_shader_material_bsdf_toon.glsl SRC)
+data_to_c_simple(shaders/gpu_shader_material_new_shading.glsl SRC)
+data_to_c_simple(shaders/gpu_shader_material_utils.glsl SRC)
 data_to_c_simple(shaders/gpu_shader_sep_gaussian_blur_frag.glsl SRC)
 data_to_c_simple(shaders/gpu_shader_sep_gaussian_blur_vert.glsl SRC)
 data_to_c_simple(shaders/gpu_shader_basic_frag.glsl SRC)

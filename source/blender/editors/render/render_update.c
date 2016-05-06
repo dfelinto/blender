@@ -56,6 +56,7 @@
 
 #include "GPU_material.h"
 #include "GPU_buffers.h"
+#include "GPU_probe.h"
 
 #include "RE_engine.h"
 #include "RE_pipeline.h"
