@@ -58,8 +58,8 @@ float texel_solid_angle(vec2 co, float halfpix)
 
 void main()
 {
-	const float step = 1.0 / CUBEMAP_RES;
-	const float halfpix = step / 2.0;
+	const float pixstep = 1.0 / CUBEMAP_RES;
+	const float halfpix = pixstep / 2.0;
 
 	vec2 pos = ceil(gl_FragCoord.xy);
 
@@ -74,9 +74,9 @@ void main()
 
 	for (int face = 0; face < 6; ++face)
 	{
-		for (float x = halfpix; x < 1.0; x += step)
+		for (float x = halfpix; x < 1.0; x += pixstep)
 		{
-			for (float y = halfpix; y < 1.0; y += step)
+			for (float y = halfpix; y < 1.0; y += pixstep)
 			{
 				float shcoef;
 
@@ -84,17 +84,15 @@ void main()
 				vec3 cubevec = get_cubemap_vector(facecoord, face);
 				float weight = texel_solid_angle(facecoord, halfpix);
 
-				switch (shnbr) {
-					case 1:	shcoef = 0.282095; break;
-					case 2:	shcoef = -0.488603 * cubevec.z * 2.0 / 3.0; break;
-					case 3:	shcoef = 0.488603 * cubevec.y * 2.0 / 3.0; break;
-					case 4:	shcoef = -0.488603 * cubevec.x * 2.0 / 3.0; break;
-					case 5:	shcoef = 1.092548 * cubevec.x * cubevec.z * 1.0 / 4.0; break;
-					case 6:	shcoef = -1.092548 * cubevec.z * cubevec.y * 1.0 / 4.0; break;
-					case 7:	shcoef = 0.315392 * (3.0 * cubevec.y * cubevec.y - 1.0) * 1.0 / 4.0; break;
-					case 8:	shcoef = 1.092548 * cubevec.x * cubevec.y * 1.0 / 4.0; break;
-					case 9:	shcoef = 0.546274 * (cubevec.x * cubevec.x - cubevec.z * cubevec.z) * 1.0 / 4.0; break;
-				}
+				if (shnbr == 1) 		shcoef = 0.282095;
+				else if (shnbr == 2) 	shcoef = -0.488603 * cubevec.z * 2.0 / 3.0;
+				else if (shnbr == 3) 	shcoef = 0.488603 * cubevec.y * 2.0 / 3.0;
+				else if (shnbr == 4) 	shcoef = -0.488603 * cubevec.x * 2.0 / 3.0;
+				else if (shnbr == 5) 	shcoef = 1.092548 * cubevec.x * cubevec.z * 1.0 / 4.0;
+				else if (shnbr == 6) 	shcoef = -1.092548 * cubevec.z * cubevec.y * 1.0 / 4.0;
+				else if (shnbr == 7) 	shcoef = 0.315392 * (3.0 * cubevec.y * cubevec.y - 1.0) * 1.0 / 4.0;
+				else if (shnbr == 8) 	shcoef = 1.092548 * cubevec.x * cubevec.y * 1.0 / 4.0;
+				else /* (shnbr == 9) */ shcoef = 0.546274 * (cubevec.x * cubevec.x - cubevec.z * cubevec.z) * 1.0 / 4.0;
 
 				vec4 sample = textureCubeLod(probe, cubevec, 0.0);
 				srgb_to_linearrgb(sample, sample);
