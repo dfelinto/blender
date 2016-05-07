@@ -447,8 +447,8 @@ static void codegen_set_unique_ids(ListBase *nodes)
 	GPUNode *node;
 	GPUInput *input;
 	GPUOutput *output;
-	/* tex slot (texid) 0-5 are pbr textures */
-	int id = 1, texid = 6;
+	/* tex slot (texid) 0-7 are pbr textures */
+	int id = 1, texid = 8;
 
 	bindhash = BLI_ghash_ptr_new("codegen_set_unique_ids1 gh");
 	definehash = BLI_ghash_ptr_new("codegen_set_unique_ids2 gh");

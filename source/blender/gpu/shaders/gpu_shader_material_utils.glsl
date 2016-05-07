@@ -10,6 +10,9 @@
 /* Importance sampling Max iterations */
 #define BSDF_SAMPLES 1024
 
+/* Linearly Transformed Cosines  */
+#define LTC_LUT_SIZE 64
+
 /* needed for uint type and bitwise operation */
 #extension GL_EXT_gpu_shader4: enable
 
@@ -18,6 +21,8 @@
 uniform samplerCube unfprobe;
 uniform sampler2D unfreflect;
 uniform sampler2D unfrefract;
+uniform sampler2D unfltcmat;
+uniform sampler2D unfltcmag;
 uniform sampler2D unfssr;
 uniform sampler2D unfjitter;
 uniform sampler1D unflutsamples;
@@ -49,6 +54,9 @@ vec3 I, B, Ht;
 vec2 jitternoise;
 
 /* ------- Convenience functions --------- */
+
+vec3 mul(mat3 m, vec3 v) { return m * v; }
+mat3 mul(mat3 m1, mat3 m2) { return m1 * m2; }
 
 float saturate(float a) { return clamp(a, 0.0, 1.0); }
 
@@ -108,9 +116,15 @@ vec3 from_world_to_tangent( vec3 vector, vec3 N, vec3 T, vec3 B)
 	return vec3( dot(T, vector), dot(B, vector), dot(N, vector));
 }
 
-vec3 line_plane_intersect(vec3 LineOrigin, vec3 LineVec, vec3 PlaneOrigin, vec3 PlaneNormal)
+float line_plane_intersect_dist(vec3 lineorigin, vec3 linedirection, vec3 planeorigin, vec3 planenormal)
 {
-	return LineOrigin + LineVec * ( dot(PlaneNormal, PlaneOrigin - LineOrigin) / dot(PlaneNormal, LineVec) );
+    return dot(planenormal, planeorigin - lineorigin) / dot(planenormal, linedirection);
+}
+
+vec3 line_plane_intersect(vec3 lineorigin, vec3 linedirection, vec3 planeorigin, vec3 planenormal)
+{
+	float dist = line_plane_intersect_dist(lineorigin, linedirection, planeorigin, planenormal);
+	return lineorigin + linedirection * dist;
 }
 
 void most_representative_point(float l_radius, float l_lenght, vec3 l_Y,
@@ -158,6 +172,222 @@ void most_representative_point(float l_radius, float l_lenght, vec3 l_Y,
 	}
 
 	L = normalize(L);
+}
+
+vec2 area_light_prepass(mat4 lmat, inout float areasizex, inout float areasizey, vec2 areascale, out vec3 lampx, out vec3 lampy, out vec3 lampz)
+{
+	lampx = normalize( (lmat * vec4(1.0,0.0,0.0,0.0) ).xyz ); //lamp right axis
+	lampy = normalize( (lmat * vec4(0.0,1.0,0.0,0.0) ).xyz ); //lamp up axis
+	lampz = normalize( (lmat * vec4(0.0,0.0,1.0,0.0) ).xyz ); //lamp projection axis
+
+	areasizex *= areascale.x;
+	areasizey *= areascale.y;
+
+	return vec2(areasizex / 2.0, areasizey / 2.0);
+}
+
+
+/* ------ Linearly Transformed Cosines ------ */
+/* From https://eheitzresearch.wordpress.com/415-2/ */
+
+void area_light_points(vec3 lco, vec2 halfsize, vec3 lampx, vec3 lampy, out vec3 points[4])
+{
+	vec3 ex = lampx * halfsize.x;
+	vec3 ey = lampy * halfsize.y;
+
+	points[0] = lco - ex + ey;
+	points[1] = lco + ex + ey;
+	points[2] = lco + ex - ey;
+	points[3] = lco - ex - ey;
+}
+
+float integrate_edge(vec3 v1, vec3 v2)
+{
+    float cosTheta = dot(v1, v2);
+    cosTheta = clamp(cosTheta, -0.9999, 0.9999);
+
+    float theta = acos(cosTheta);
+    float res = cross(v1, v2).z * theta / sin(theta);
+
+    return res;
+}
+
+int clip_quad_to_horizon(inout vec3 L[5])
+{
+	// detect clipping config
+	int config = 0;
+	if (L[0].z > 0.0) config += 1;
+	if (L[1].z > 0.0) config += 2;
+	if (L[2].z > 0.0) config += 4;
+	if (L[3].z > 0.0) config += 8;
+
+	// clip
+	int n = 0;
+
+	if (config == 0)
+	{
+		// clip all
+	}
+	else if (config == 1) // V1 clip V2 V3 V4
+	{
+		n = 3;
+		L[1] = -L[1].z * L[0] + L[0].z * L[1];
+		L[2] = -L[3].z * L[0] + L[0].z * L[3];
+	}
+	else if (config == 2) // V2 clip V1 V3 V4
+	{
+		n = 3;
+		L[0] = -L[0].z * L[1] + L[1].z * L[0];
+		L[2] = -L[2].z * L[1] + L[1].z * L[2];
+	}
+	else if (config == 3) // V1 V2 clip V3 V4
+	{
+		n = 4;
+		L[2] = -L[2].z * L[1] + L[1].z * L[2];
+		L[3] = -L[3].z * L[0] + L[0].z * L[3];
+	}
+	else if (config == 4) // V3 clip V1 V2 V4
+	{
+		n = 3;
+		L[0] = -L[3].z * L[2] + L[2].z * L[3];
+		L[1] = -L[1].z * L[2] + L[2].z * L[1];
+	}
+	else if (config == 5) // V1 V3 clip V2 V4) impossible
+	{
+		n = 0;
+	}
+	else if (config == 6) // V2 V3 clip V1 V4
+	{
+		n = 4;
+		L[0] = -L[0].z * L[1] + L[1].z * L[0];
+		L[3] = -L[3].z * L[2] + L[2].z * L[3];
+	}
+	else if (config == 7) // V1 V2 V3 clip V4
+	{
+		n = 5;
+		L[4] = -L[3].z * L[0] + L[0].z * L[3];
+		L[3] = -L[3].z * L[2] + L[2].z * L[3];
+	}
+	else if (config == 8) // V4 clip V1 V2 V3
+	{
+		n = 3;
+		L[0] = -L[0].z * L[3] + L[3].z * L[0];
+		L[1] = -L[2].z * L[3] + L[3].z * L[2];
+		L[2] =  L[3];
+	}
+	else if (config == 9) // V1 V4 clip V2 V3
+	{
+		n = 4;
+		L[1] = -L[1].z * L[0] + L[0].z * L[1];
+		L[2] = -L[2].z * L[3] + L[3].z * L[2];
+	}
+	else if (config == 10) // V2 V4 clip V1 V3) impossible
+	{
+		n = 0;
+	}
+	else if (config == 11) // V1 V2 V4 clip V3
+	{
+		n = 5;
+		L[4] = L[3];
+		L[3] = -L[2].z * L[3] + L[3].z * L[2];
+		L[2] = -L[2].z * L[1] + L[1].z * L[2];
+	}
+	else if (config == 12) // V3 V4 clip V1 V2
+	{
+		n = 4;
+		L[1] = -L[1].z * L[2] + L[2].z * L[1];
+		L[0] = -L[0].z * L[3] + L[3].z * L[0];
+	}
+	else if (config == 13) // V1 V3 V4 clip V2
+	{
+		n = 5;
+		L[4] = L[3];
+		L[3] = L[2];
+		L[2] = -L[1].z * L[2] + L[2].z * L[1];
+		L[1] = -L[1].z * L[0] + L[0].z * L[1];
+	}
+	else if (config == 14) // V2 V3 V4 clip V1
+	{
+		n = 5;
+		L[4] = -L[0].z * L[3] + L[3].z * L[0];
+		L[0] = -L[0].z * L[1] + L[1].z * L[0];
+	}
+	else if (config == 15) // V1 V2 V3 V4
+	{
+		n = 4;
+	}
+
+	if (n == 3)
+		L[3] = L[0];
+	if (n == 4)
+		L[4] = L[0];
+
+	return n;
+}
+
+vec2 ltc_coords(float cosTheta, float roughness)
+{
+	float theta = acos(cosTheta);
+	vec2 coords = vec2(roughness, theta/(0.5*3.14159));
+
+	// scale and bias coordinates, for correct filtered lookup
+	return coords * (LTC_LUT_SIZE - 1.0) / LTC_LUT_SIZE + 0.5 / LTC_LUT_SIZE;
+}
+
+mat3 ltc_matrix(vec2 coord)
+{
+	// load inverse matrix
+	vec4 t = texture2D(unfltcmat, coord);
+	mat3 Minv = mat3(
+		vec3(  1,   0, t.y),
+		vec3(  0, t.z,   0),
+		vec3(t.w,   0, t.x)
+	);
+
+	return Minv;
+}
+
+float ltc_evaluate(vec3 N, vec3 V, vec3 P, mat3 Minv, vec3 points[4])
+{
+	// construct orthonormal basis around N
+	vec3 T1, T2;
+	T1 = normalize(V - N*dot(V, N));
+	T2 = cross(N, T1);
+
+	// rotate area light in (T1, T2, R) basis
+	Minv = mul(Minv, transpose(mat3(T1, T2, N)));
+
+	// polygon (allocate 5 vertices for clipping)
+	vec3 L[5];
+	L[0] = mul(Minv, points[0] - P);
+	L[1] = mul(Minv, points[1] - P);
+	L[2] = mul(Minv, points[2] - P);
+	L[3] = mul(Minv, points[3] - P);
+
+	int n = clip_quad_to_horizon(L);
+
+	if (n == 0)
+		return 0.0;
+
+	// project onto sphere
+	L[0] = normalize(L[0]);
+	L[1] = normalize(L[1]);
+	L[2] = normalize(L[2]);
+	L[3] = normalize(L[3]);
+	L[4] = normalize(L[4]);
+
+	// integrate
+	float sum = 0.0;
+
+	sum += integrate_edge(L[0], L[1]);
+	sum += integrate_edge(L[1], L[2]);
+	sum += integrate_edge(L[2], L[3]);
+	if (n >= 4)
+		sum += integrate_edge(L[3], L[4]);
+	if (n == 5)
+		sum += integrate_edge(L[4], L[0]);
+
+	return max(0.0, -sum); /* One sided */
 }
 
 /* ------- Fresnel ---------*/

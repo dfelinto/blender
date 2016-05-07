@@ -138,40 +138,25 @@ void bsdf_diffuse_area_light(
 	float roughness, float ior, float sigma, float toon_size, float toon_smooth, float anisotropy, float aniso_rotation,
 	out float bsdf)
 {
-	N = -N;
-
-	vec3 lampx = normalize( (l_mat * vec4(1.0,0.0,0.0,0.0) ).xyz ); //lamp right axis
-	vec3 lampy = normalize( (l_mat * vec4(0.0,1.0,0.0,0.0) ).xyz ); //lamp up axis
-	vec3 lampz = normalize( (l_mat * vec4(0.0,0.0,1.0,0.0) ).xyz ); //lamp projection axis
-
-	bsdf = 0.0;
-
-	l_areasizex *= l_areascale.x;
-	l_areasizey *= l_areascale.y;
-
-	if ( dot(-L, lampz) > 0.0 )
-	{
-		float width = l_areasizex / 2.0;
-		float height = l_areasizey / 2.0;
-
-		vec3 p0 = l_coords + lampx * -width + lampy *  height;
-		vec3 p1 = l_coords + lampx * -width + lampy * -height;
-		vec3 p2 = l_coords + lampx *  width + lampy * -height;
-		vec3 p3 = l_coords + lampx *  width + lampy *  height;
-
-		float solidAngle = rectangleSolidAngle(V, p0, p1, p2, p3);
-
-		bsdf = solidAngle * 0.2 * (
-			max(0.0, dot( normalize(p0 - V), N) ) +
-			max(0.0, dot( normalize(p1 - V), N) ) +
-			max(0.0, dot( normalize(p2 - V), N) ) +
-			max(0.0, dot( normalize(p3 - V), N) ) +
-			max(0.0, dot( -L, N) )
-		);
+	if (min(l_areasizex, l_areasizey) < 1e-6) {
+		bsdf = 0.0;
+		return;
 	}
 
+	vec3 pos = V;
+	V = -normalize(V);
+	N = -N;
+
+	vec3 lampx, lampy, lampz;
+	vec2 halfsize = area_light_prepass(l_mat, l_areasizex, l_areasizey, l_areascale, lampx, lampy, lampz);
+
+	vec3 points[4];
+	area_light_points(l_coords, halfsize, lampx, lampy, points);
+
+	bsdf += ltc_evaluate(N, V, pos, mat3(1), points);
+
 	/* Energy conservation + cycle matching */
-	bsdf = max(bsdf, 0.0) * M_1_PI;
+	bsdf *= M_1_2PI;
 	bsdf *= rectangle_energy(l_areasizex, l_areasizey);
 }
 

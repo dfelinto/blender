@@ -84,14 +84,8 @@ void bsdf_refract_sharp_area_light(vec3 N, vec3 T, vec3 L, vec3 V, vec3 l_coords
 
 	L = l_distance * L;
 
-	vec3 lampx = normalize( (l_mat * vec4(1.0,0.0,0.0,0.0) ).xyz ); //lamp right axis
-	vec3 lampy = normalize( (l_mat * vec4(0.0,1.0,0.0,0.0) ).xyz ); //lamp up axis
-	vec3 lampz = normalize( (l_mat * vec4(0.0,0.0,1.0,0.0) ).xyz ); //lamp projection axis
-
-	l_areasizex *= l_areascale.x;
-	l_areasizey *= l_areascale.y;
-	float width = l_areasizex / 2.0;
-	float height = l_areasizey / 2.0;
+	vec3 lampx, lampy, lampz;
+	vec2 halfsize = area_light_prepass(l_mat, l_areasizex, l_areasizey, l_areascale, lampx, lampy, lampz);
 
 	/* Find the intersection point E between the reflection vector and the light plane */
 	vec3 R = refract(-V, N, (gl_FrontFacing) ? 1.0/ior : ior);
@@ -102,8 +96,7 @@ void bsdf_refract_sharp_area_light(vec3 N, vec3 T, vec3 L, vec3 V, vec3 l_coords
 	float A = dot(lampx, projection);
 	float B = dot(lampy, projection);
 
-	bsdf = (A < width && B < height) ? 1.0 : 0.0;
-	bsdf *= (A > -width && B > -height) ? 1.0 : 0.0;
+	bsdf = (abs(A) < halfsize.x && abs(B) < halfsize.y) ? 1.0 : 0.0;
 
 	/* Masking */
 	bsdf *= (dot(-L, lampz) > 0.0) ? 1.0 : 0.0;

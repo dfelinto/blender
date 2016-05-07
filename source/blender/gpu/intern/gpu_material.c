@@ -130,6 +130,7 @@ struct GPUMaterial {
 
 	/* Probe binding */
 	int brdfsamplesloc, lutsamplesloc, jitterloc;
+	int ltcmatloc, ltcmagloc;
 	int probeloc, reflectloc, refractloc;
 	int lodfactorloc;
 	int correcmatloc, planarreflloc, planarobjloc;
@@ -142,6 +143,8 @@ struct GPUMaterial {
 	GPUTexture *bindedrefrprobe;
 	GPUTexture *bindedhammersley;
 	GPUTexture *bindedjitter;
+	GPUTexture *bindedltcmat;
+	GPUTexture *bindedltcmag;
 	GPUTexture *bindedssr;
 
 	ListBase lamps;
@@ -320,6 +323,8 @@ static int GPU_material_construct_end(GPUMaterial *material, const char *passnam
 
 		if (material->builtins & GPU_PBR) {
 			material->brdfsamplesloc	= GPU_shader_get_uniform(shader, "unfbsdfsamples");
+			material->ltcmatloc			= GPU_shader_get_uniform(shader, "unfltcmat");
+			material->ltcmagloc			= GPU_shader_get_uniform(shader, "unfltcmag");
 			material->jitterloc			= GPU_shader_get_uniform(shader, "unfjitter");
 			material->lutsamplesloc 	= GPU_shader_get_uniform(shader, "unflutsamples");
 			material->probeloc 			= GPU_shader_get_uniform(shader, "unfprobe");
@@ -480,6 +485,8 @@ void GPU_material_bind(
 		material->bindedhammersley = NULL;
 		material->bindedssr = NULL;
 		material->bindedjitter = NULL;
+		material->bindedltcmat = NULL;
+		material->bindedltcmag = NULL;
 	}
 }
 
@@ -580,6 +587,14 @@ void GPU_material_bind_uniforms_pbr(GPUMaterial *material, GPUPBR *pbr, GPUProbe
 			material->bindedjitter = pbr->jitter;
 			GPU_texture_bind(material->bindedjitter, 5);
 			GPU_shader_uniform_texture(shader, material->jitterloc, material->bindedjitter);
+
+			material->bindedltcmat = pbr->ltc_mat_ggx;
+			GPU_texture_bind(material->bindedltcmat, 6);
+			GPU_shader_uniform_texture(shader, material->ltcmatloc, material->bindedltcmat);
+
+			material->bindedltcmag = pbr->ltc_mag_ggx;
+			GPU_texture_bind(material->bindedltcmag, 7);
+			GPU_shader_uniform_texture(shader, material->ltcmagloc, material->bindedltcmag);
 		}
 
 		if (probe) {
@@ -669,6 +684,10 @@ void GPU_material_unbind(GPUMaterial *material)
 			GPU_texture_unbind(material->bindedhammersley);
 		if (material->bindedjitter)
 			GPU_texture_unbind(material->bindedjitter);
+		if (material->bindedltcmat)
+			GPU_texture_unbind(material->bindedltcmat);
+		if (material->bindedltcmag)
+			GPU_texture_unbind(material->bindedltcmag);
 
 		material->bound = 0;
 		GPU_pass_unbind(material->pass);
@@ -2426,7 +2445,7 @@ static void shade_one_brdf_light(GPUBrdfInput *brdf, GPULamp *lamp)
 	visifac = lamp_get_visibility(mat, lamp, &lv, &dist);
 
 	/* View Position */
-	if ((brdf->type == GPU_BRDF_TRANSLUCENT || brdf->type == GPU_BRDF_DIFFUSE) && (lamp->type == LA_AREA))
+	if ((brdf->type == GPU_BRDF_TRANSLUCENT || brdf->type == GPU_BRDF_DIFFUSE || brdf->type == GPU_BRDF_GLOSSY_GGX) && (lamp->type == LA_AREA))
 		GPU_link(mat, "set_rgb", GPU_builtin(GPU_VIEW_POSITION), &view);
 	else
 		GPU_link(mat, "shade_view", GPU_builtin(GPU_VIEW_POSITION), &view);

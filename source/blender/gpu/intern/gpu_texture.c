@@ -195,6 +195,22 @@ static GPUTexture *GPU_texture_create_nD(
 					break;
 			}
 		}
+		else if (components == 1) {
+			format = GL_RED;
+			switch (hdr_type) {
+				case GPU_HDR_NONE:
+					internalformat = GL_R8;
+					break;
+				case GPU_HDR_HALF_FLOAT:
+					internalformat = GL_R16F;
+					break;
+				case GPU_HDR_FULL_FLOAT:
+					internalformat = GL_R32F;
+					break;
+				default:
+					break;
+			}
+		}
 
 		if (fpixels && hdr_type == GPU_HDR_NONE) {
 			type = GL_UNSIGNED_BYTE;
@@ -628,9 +644,9 @@ GPUTexture *GPU_texture_create_vsm_shadow_map(int size, char err_out[256])
 	return tex;
 }
 
-GPUTexture *GPU_texture_create_2D_procedural(int w, int h, const float *pixels, bool repeat, char err_out[256])
+GPUTexture *GPU_texture_create_2D_procedural(int w, int h, const float *pixels, bool repeat, bool filtering, int channels, char err_out[256])
 {
-	GPUTexture *tex = GPU_texture_create_nD(w, h, 2, pixels, 0, GPU_HDR_HALF_FLOAT, 2, 0, err_out);
+	GPUTexture *tex = GPU_texture_create_nD(w, h, 2, pixels, 0, GPU_HDR_HALF_FLOAT, channels, 0, err_out);
 
 	if (tex) {
 		/* Now we tweak some of the settings */
@@ -638,8 +654,10 @@ GPUTexture *GPU_texture_create_2D_procedural(int w, int h, const float *pixels, 
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 		}
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		if (!filtering) {
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		}
 
 		GPU_texture_unbind(tex);
 	}
@@ -647,9 +665,9 @@ GPUTexture *GPU_texture_create_2D_procedural(int w, int h, const float *pixels, 
 	return tex;
 }
 
-GPUTexture *GPU_texture_create_1D_procedural(int w, const float *pixels, char err_out[256])
+GPUTexture *GPU_texture_create_1D_procedural(int w, const float *pixels, int channels, char err_out[256])
 {
-	GPUTexture *tex = GPU_texture_create_nD(w, 0, 1, pixels, 0, GPU_HDR_HALF_FLOAT, 2, 0, err_out);
+	GPUTexture *tex = GPU_texture_create_nD(w, 0, 1, pixels, 0, GPU_HDR_HALF_FLOAT, channels, 0, err_out);
 
 	if (tex) {
 		/* Now we tweak some of the settings */

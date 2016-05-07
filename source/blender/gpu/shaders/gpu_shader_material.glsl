@@ -146,6 +146,8 @@ void linearrgb_to_srgb(vec4 col_from, out vec4 col_to)
 #define M_PI2 9.86960440108935861
 #define M_1_PI 0.31830988618379069
 #define M_1_PI2 0.10132118364233777
+#define M_2_PI 0.63661977236758134
+#define M_1_2PI 0.15915494309189533
 
 /*********** SHADER NODES ***************/
 

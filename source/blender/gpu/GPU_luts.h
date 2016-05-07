@@ -41,6 +41,8 @@ struct GPUTexture;
 typedef struct GPUPBR {
 	struct GPUTexture *hammersley;
 	struct GPUTexture *jitter;
+	struct GPUTexture *ltc_mat_ggx;
+	struct GPUTexture *ltc_mag_ggx;
 } GPUPBR;
 
 struct GPUTexture *create_jitter_texture(void);

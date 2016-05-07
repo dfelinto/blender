@@ -135,14 +135,8 @@ void bsdf_glossy_sharp_area_light(
 
 	L = l_distance * L;
 
-	vec3 lampx = normalize( (l_mat * vec4(1.0,0.0,0.0,0.0) ).xyz ); //lamp right axis
-	vec3 lampy = normalize( (l_mat * vec4(0.0,1.0,0.0,0.0) ).xyz ); //lamp up axis
-	vec3 lampz = normalize( (l_mat * vec4(0.0,0.0,1.0,0.0) ).xyz ); //lamp projection axis
-
-	l_areasizex *= l_areascale.x;
-	l_areasizey *= l_areascale.y;
-	float width = l_areasizex / 2.0;
-	float height = l_areasizey / 2.0;
+	vec3 lampx, lampy, lampz;
+	vec2 halfsize = area_light_prepass(l_mat, l_areasizex, l_areasizey, l_areascale, lampx, lampy, lampz);
 
 	/* Find the intersection point E between the reflection vector and the light plane */
 	vec3 R = reflect(V, N);
@@ -153,8 +147,7 @@ void bsdf_glossy_sharp_area_light(
 	float A = dot(lampx, projection);
 	float B = dot(lampy, projection);
 
-	bsdf = (A < width && B < height) ? 1.0 : 0.0;
-	bsdf *= (A > -width && B > -height) ? 1.0 : 0.0;
+	bsdf = (abs(A) < halfsize.x && abs(B) < halfsize.y) ? 1.0 : 0.0;
 
 	/* Masking */
 	bsdf *= (dot(-L, lampz) > 0.0) ? 1.0 : 0.0;
@@ -211,36 +204,24 @@ void bsdf_glossy_ggx_area_light(
 		return;
 	}
 
-	l_areasizex *= l_areascale.x;
-	l_areasizey *= l_areascale.y;
+	vec3 pos = V;
+	V = -normalize(V);
+	N = -N;
 
-	/* Used later for Masking : Use the real Light Vector */
-	vec3 lampz = normalize( (l_mat * vec4(0.0,0.0,1.0,0.0) ).xyz ); //lamp projection axis
-	float masking = max(dot( normalize(-L), lampz), 0.0);
+	vec3 lampx, lampy, lampz;
+	vec2 halfsize = area_light_prepass(l_mat, l_areasizex, l_areasizey, l_areascale, lampx, lampy, lampz);
 
-	vec3 R = reflect(V, N);
-	//R = normalize(mix(N, R, 1 - roughness)); //Dominant Direction
+	vec3 points[4];
+	area_light_points(l_coords, halfsize, lampx, lampy, points);
 
-	float max_size = max(l_areasizex, l_areasizey);
-	float min_size = min(l_areasizex, l_areasizey);
-	vec3 lampVec = (l_areasizex > l_areasizey) ? normalize( (l_mat * vec4(1.0,0.0,0.0,0.0) ).xyz ) : normalize( (l_mat * vec4(0.0,1.0,0.0,0.0) ).xyz );
+	vec2 uv = ltc_coords(dot(N, V), sqrt(roughness));
+	mat3 ltcmat = ltc_matrix(uv);
 
-	float energy_conservation = 1.0;
-	most_representative_point(min_size/2, max_size-min_size, lampVec, l_distance, R, L, roughness, energy_conservation);
-	bsdf = bsdf_ggx(N, L, V, roughness);
+	bsdf = ltc_evaluate(N, V, pos, ltcmat, points);
+	bsdf *= texture2D(unfltcmag, uv).r; /* Bsdf matching */
 
-	/* energy_conservation */
-	float LineAngle = clamp( (max_size-min_size) / l_distance, 0.0, 1.0);
-	float energy_conservation_line = energy_conservation * ( roughness / clamp(roughness + 0.5 * LineAngle, 0.0, 1.1));
-
-	/* XXX : Empirical modification for low roughness matching */
-	float energy_conservation_mod = energy_conservation * (1 + roughness) / ( max_size/min_size );
-	energy_conservation = mix(energy_conservation_mod, energy_conservation_line, min(roughness/0.3, 0.9*(1.1-roughness)/0.1));
-
-	/* As we represent the Area Light by a tube light we must use a custom energy conservation */
-	bsdf *= energy_conservation / (l_distance * l_distance);
-	bsdf *= masking;
-	bsdf *= 23.2; /* XXX : !!! Very Empirical, Fit cycles power */
+	bsdf *= M_1_2PI;
+	bsdf *= rectangle_energy(l_areasizex, l_areasizey);
 }
 
 void bsdf_glossy_ggx_sun_light(

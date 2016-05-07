@@ -535,7 +535,7 @@ bool GPU_fx_compositor_initialize_passes(
 					return false;
 				}
 				if (!(fx->dof_nearfar_coc = GPU_texture_create_2D_procedural(
-				      fx->dof_downsampled_w, fx->dof_downsampled_h, NULL, false, err_out)))
+					fx->dof_downsampled_w, fx->dof_downsampled_h, NULL, false, false, 2, err_out)))
 				{
 					printf("%.256s\n", err_out);
 					cleanup_fx_gl_data(fx, true);
