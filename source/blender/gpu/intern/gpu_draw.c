@@ -1797,7 +1797,7 @@ void GPU_begin_object_materials(
 		GMS.is_planar_probe = false;
 		GMS.parallax_correc = 0;
 
-		if (GMS.is_realistic_mat && !(v3d->flag2 & V3D_RENDER_SHADOW)) {
+		if (glsl && new_shading_nodes && GMS.is_realistic_mat && !(v3d->flag2 & V3D_RENDER_SHADOW)) {
 			GMS.use_ssr = (v3d->pbr_settings.pbr_flag & GPU_PBR_FLAG_SSR);
 			GMS.gbrdfsettings = v3d->pbr_settings.brdf;
 			GMS.gssrsettings = v3d->pbr_settings.ssr;
