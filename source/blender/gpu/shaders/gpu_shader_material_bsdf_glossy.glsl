@@ -220,6 +220,7 @@ void bsdf_glossy_ggx_area_light(
 	bsdf = ltc_evaluate(N, V, pos, ltcmat, points);
 	bsdf *= texture2D(unfltcmag, uv).r; /* Bsdf matching */
 
+	bsdf *= step(0.0, -dot(L, lampz));
 	bsdf *= M_1_2PI;
 	bsdf *= rectangle_energy(l_areasizex, l_areasizey);
 }

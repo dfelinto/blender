@@ -153,7 +153,8 @@ void bsdf_diffuse_area_light(
 	vec3 points[4];
 	area_light_points(l_coords, halfsize, lampx, lampy, points);
 
-	bsdf += ltc_evaluate(N, V, pos, mat3(1), points);
+	bsdf = ltc_evaluate(N, V, pos, mat3(1), points);
+	bsdf *= step(0.0, -dot(L, lampz));
 
 	/* Energy conservation + cycle matching */
 	bsdf *= M_1_2PI;
