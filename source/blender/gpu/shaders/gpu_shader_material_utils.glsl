@@ -127,9 +127,30 @@ vec3 line_plane_intersect(vec3 lineorigin, vec3 linedirection, vec3 planeorigin,
 	return lineorigin + linedirection * dist;
 }
 
+/* from cycles ray_aligned_disk_intersect */
+float line_aligned_plane_intersect_dist(vec3 lineorigin, vec3 linedirection, vec3 planeorigin)
+{
+	/* aligned plane normal */
+	vec3 L = planeorigin - lineorigin;
+	float diskdist = length(L);
+	vec3 planenormal = -normalize(L);
+	return -diskdist / dot(planenormal, linedirection);
+}
+
+vec3 line_aligned_plane_intersect(vec3 lineorigin, vec3 linedirection, vec3 planeorigin)
+{
+	float dist = line_aligned_plane_intersect_dist(lineorigin, linedirection, planeorigin);
+	if (dist < 0) {
+		/* if intersection is behind we fake the intersection to be
+		 * really far and (hopefully) not inside the radius of interest */
+		dist = 1e16;
+	}
+	return lineorigin + linedirection * dist;
+}
+
 void most_representative_point(float l_radius, float l_lenght, vec3 l_Y,
-	                                     float l_distance, vec3 R, inout vec3 L,
-	                                     inout float roughness, inout float energy_conservation)
+                               float l_distance, vec3 R, inout vec3 L,
+                               inout float roughness, inout float energy_conservation)
 {
 	L = l_distance * L;
 
@@ -165,7 +186,32 @@ void most_representative_point(float l_radius, float l_lenght, vec3 l_Y,
 		energy_conservation *= pow(roughness / saturate(roughness + 0.5 * SphereAngle), 2.0);
 
 		/* sphere light */
-		vec3 closest_point_on_ray =  dot(L, R) * R;
+		//float dist = line_aligned_plane_intersect_dist(vec3(0.0), R, L);
+		float dist = dot(L, R);
+		vec3 closest_point_on_ray = dist * R;
+		vec3 center_to_ray = closest_point_on_ray - L;
+		/* closest point on sphere */
+		L = L + center_to_ray * saturate(l_radius * inverse_distance(center_to_ray));
+	}
+
+	L = normalize(L);
+}
+
+void most_representative_point_disk(float l_radius, float l_distance, vec3 R, inout vec3 L,
+                                    inout float roughness, inout float energy_conservation)
+{
+	L = l_distance * L;
+
+	/* Sphere Light */
+	if(l_radius>0){
+		roughness = max(3e-3, roughness); /* Artifacts appear with roughness below this threshold */
+
+		/* energy preservation */
+		float SphereAngle = saturate(l_radius / l_distance);
+		energy_conservation *= pow(roughness / saturate(roughness + 0.5 * SphereAngle), 2.0);
+
+		/* sphere light */
+		vec3 closest_point_on_ray = line_plane_intersect(vec3(0.0), R, L, -normalize(L));
 		vec3 center_to_ray = closest_point_on_ray - L;
 		/* closest point on sphere */
 		L = L + center_to_ray * saturate(l_radius * inverse_distance(center_to_ray));
@@ -613,7 +659,7 @@ vec4 sample_refract(vec3 L)
 
 void setup_noise(vec2 fragcoord)
 {
-	ivec2 texel = ivec2( mod(fragcoord.x, 64), mod(fragcoord.y, 64));
+	ivec2 texel = ivec2(mod(fragcoord.x, 64), mod(fragcoord.y, 64));
 	jitternoise = texelFetch(unfjitter, texel, 0).rg * 0.5 + 1.0; /* Global variable */
 }
 

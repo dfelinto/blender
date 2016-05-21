@@ -80,10 +80,16 @@ static int node_shader_gpu_bsdf_glossy(GPUMaterial *mat, bNode *node, bNodeExecD
 		GPU_brdf_input_initialize(&brdf);
 
 		brdf.mat       = mat;
-		brdf.type      = (node->custom1 == SHD_GLOSSY_SHARP) ? GPU_BRDF_GLOSSY_SHARP : GPU_BRDF_GLOSSY_GGX;
 		brdf.color     = gpu_get_input_link(&in[IN_COLOR]);
 		brdf.roughness = gpu_get_input_link(&in[IN_ROUGHNESS]);
 		brdf.normal    = gpu_get_input_link(&in[IN_NORMAL]);
+
+		if (node->custom1 == SHD_GLOSSY_BECKMANN)
+			brdf.type = GPU_BRDF_GLOSSY_BECKMANN;
+		else if (node->custom1 == SHD_GLOSSY_SHARP)
+			brdf.type = GPU_BRDF_GLOSSY_SHARP;
+		else
+			brdf.type = GPU_BRDF_GLOSSY_GGX;
 
 		GPU_shade_BRDF(&brdf);
 

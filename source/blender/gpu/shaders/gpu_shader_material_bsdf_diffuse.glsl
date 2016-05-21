@@ -114,12 +114,10 @@ void bsdf_diffuse_sphere_light(
 	float h2 = h*h;
 
 	bsdf = 0.0;
-	if ( costheta * costheta > h2 )
-	{
+	if ( costheta * costheta > h2 ) {
 		bsdf = M_PI * h2 * clamp(costheta, 0.0, 1.0);
 	}
-	else
-	{
+	else {
 		float sintheta = sqrt(1.0 - costheta * costheta);
 		float x = sqrt(1.0 / h2 - 1.0);
 		float y = -x * ( costheta / sintheta );
@@ -128,7 +126,8 @@ void bsdf_diffuse_sphere_light(
 	}
 
 	/* Energy conservation + cycle matching */
-	bsdf = max(bsdf, 0.0) * M_1_PI;
+	bsdf = max(bsdf, 0.0);
+	bsdf *= M_1_PI;
 	bsdf *= sphere_energy(l_radius);
 }
 
@@ -160,7 +159,8 @@ void bsdf_diffuse_area_light(
 	bsdf *= M_1_2PI;
 	bsdf *= rectangle_energy(l_areasizex, l_areasizey);
 }
-
+float cot(float x){ return cos(x) / sin(x);}
+float acot(float x){ return atan(1 / x);}
 void bsdf_diffuse_sun_light(
 	vec3 N, vec3 T, vec3 L, vec3 V,
 	vec3 l_coords, float l_distance, float l_areasizex, float l_areasizey, vec2 l_areascale, mat4 l_mat,
@@ -169,26 +169,27 @@ void bsdf_diffuse_sun_light(
 {
 	float l_radius = max(l_areasizex, 0.0001);
 	float costheta = clamp(dot(N, L), -0.999, 0.999);
-	float h = min(l_radius / l_distance , 0.9999);
-	float h2 = h*h;
+	float sintheta = sqrt(1.0 - costheta * costheta);
+	float h = 1 / l_radius;
+	float h2 = h * h;
 
-	bsdf = 0.0 ;
-	if ( costheta * costheta > h2 )
-	{
-		bsdf = M_PI * h2 * clamp(costheta, 0.0, 1.0);
+	if (acos(costheta) < atan(h)) {
+		bsdf = M_PI * (1 / (1 + h2)) * costheta;
 	}
-	else
-	{
-		float sintheta = sqrt(1.0 - costheta * costheta);
-		float x = sqrt(1.0 / h2 - 1.0);
-		float y = -x * ( costheta / sintheta );
-		float sinthetasqrty = sintheta * sqrt(1.0 - y * y);
-		bsdf = (costheta * acos(y) - x * sinthetasqrty ) * h2 + atan(sinthetasqrty / x);
+	else {
+		float cottheta = costheta / sintheta;
+		float x = sqrt(1 - h2 * cottheta * cottheta);
+		bsdf = (-h * x + costheta * (M_PI - acos(h * cottheta))) / (1 + h2) + atan(x / h);
 	}
-
 	/* Energy conservation + cycle matching */
-	bsdf = max(bsdf, 0.0);
-	bsdf *= disk_energy(l_radius);
+	float disk_energy = disk_energy(l_radius);
+	bsdf = max(bsdf, 0.0) * disk_energy;
+	/* TODO Refine this :
+	 * We can try to add contribution of infinitely many point lights at the border of the disk if we know their intensity
+	 * Border intensity should be added to the above uniform disk calculation and should be complementary */
+	//bsdf += sqrt(1.0 - abs(costheta * costheta * costheta)) * saturate(M_1_2PI - disk_energy);
+	bsdf *= M_1_PI;
+
 }
 
 

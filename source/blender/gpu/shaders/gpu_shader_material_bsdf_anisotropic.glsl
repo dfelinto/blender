@@ -91,7 +91,7 @@ float bsdf_ggx_aniso(vec3 N, vec3 T, vec3 L, vec3 V, float roughness_x, float ro
 	/* G_Smith_GGX */
 	float alphaV2 = (VX2 * ax2 + VY2 * ay2) / (VX2 + VY2);
 	float alphaL2 = (LX2 * ax2 + LY2 * ay2) / (LX2 + LY2);
-	float G = (G1_Smith(NV, alphaV2) * G1_Smith(NL, alphaL2)); /* Doing RCP at the end */
+	float G = G1_Smith(NV, alphaV2) * G1_Smith(NL, alphaL2); /* Doing RCP at the end */
 
 	/* D_GGX */
 	float D = D_ggx_aniso_opti(NH, XH2, YH2, a2, ax2, ay2);
@@ -264,8 +264,8 @@ void env_sampling_aniso_ggx(
 	/* Setup */
 	vector_prepass(viewpos, N, invviewmat, viewmat);
 	float rough_x, rough_y; prepare_aniso(N, roughness, -aniso_rotation, T, anisotropy, rough_x, rough_y);
-	float ax, ax2; prepare_ggx(rough_x, ax, ax2);
-	float ay, ay2; prepare_ggx(rough_y, ay, ay2);
+	float ax, ax2; prepare_glossy(rough_x, ax, ax2);
+	float ay, ay2; prepare_glossy(rough_y, ay, ay2);
 	make_orthonormals_tangent(N, T, B);
 	setup_noise(gl_FragCoord.xy); /* Noise to dither the samples */
 

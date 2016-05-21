@@ -19,7 +19,7 @@ float bsdf_ggx_refract(float Ht2, float NH, float NL, float NV, float VH, float 
 float bsdf_ggx_refract(vec3 N, vec3 L, vec3 V, float eta, float roughness)
 {
 	/* GGX Spec Isotropic Transmited */
-	float a, a2; prepare_ggx(roughness, a, a2);
+	float a, a2; prepare_glossy(roughness, a, a2);
 
 	vec3 ht = -(eta * L + V);
 	vec3 Ht = normalize(ht);
@@ -61,12 +61,10 @@ void bsdf_refract_sharp_sphere_light(vec3 N, vec3 T, vec3 L, vec3 V, vec3 l_coor
 {
 	float l_radius = l_areasizex;
 	L = l_distance * L;
+	vec3 R = -refract(-V, N, (gl_FrontFacing) ? 1.0/ior : ior);
 
-	vec3 R = refract(-V, N, (gl_FrontFacing) ? 1.0/ior : ior);
-
-	/* Does not behave well when light get very close to the surface or penetrate it */
-	vec3 C = max(0.0, dot(L, R)) * R - L;
-	bsdf = ( length(C) < l_radius ) ? 1.0 : 0.0;
+	vec3 P = line_aligned_plane_intersect(vec3(0.0), R, L);
+	bsdf = (distance_squared(P, L) < l_radius * l_radius) ? 1.0 : 0.0;
 
 	/* Energy conservation + cycle matching */
 	bsdf *= sphere_energy(l_radius);
@@ -88,7 +86,8 @@ void bsdf_refract_sharp_area_light(vec3 N, vec3 T, vec3 L, vec3 V, vec3 l_coords
 	vec2 halfsize = area_light_prepass(l_mat, l_areasizex, l_areasizey, l_areascale, lampx, lampy, lampz);
 
 	/* Find the intersection point E between the reflection vector and the light plane */
-	vec3 R = refract(-V, N, (gl_FrontFacing) ? 1.0/ior : ior);
+	float eta = (gl_FrontFacing) ? ior : 1.0/ior;
+	vec3 R = refract(-V, N, 1.0/eta);
 	vec3 E = line_plane_intersect(vec3(0.0), R, L, lampz);
 
 	/* Project it onto the light plane */
@@ -111,8 +110,21 @@ void bsdf_refract_sharp_sun_light(vec3 N, vec3 T, vec3 L, vec3 V, vec3 l_coords,
 	                              float roughness, float ior, float sigma, float toon_size, float toon_smooth, float anisotropy, float aniso_rotation,
 	                              out float bsdf)
 {
-	//TODO Find a better approximation
-	bsdf = 0.0;
+	float eta = (gl_FrontFacing) ? ior : 1.0/ior;
+	vec3 R = refract(-V, N, 1.0/eta);
+
+	float l_radius = l_areasizex;
+	float angle = atan(l_radius);
+
+	float costheta = dot(L, R);
+	float cosangle = cos(angle);
+
+	bsdf = (costheta > cosangle) ? 1.0 : 0.0;
+
+	/* Energy conservation + cycle matching */
+	bsdf *= disk_energy(l_radius);
+	bsdf /= costheta * costheta * costheta;
+	bsdf *= M_PI;
 }
 
 /* REFRACT GGX */
@@ -127,22 +139,13 @@ void bsdf_refract_ggx_sphere_light(vec3 N, vec3 T, vec3 L, vec3 V, vec3 l_coords
 		return;
 	}
 
+#if 1
 	float l_radius = l_areasizex;
 
-
-	if (abs(ior - 1.0) < 1e-4) {
-		L = l_distance * L;
-		vec3 C = min(0.0, dot(L, V)) * V - L;
-		if ( length(C) < l_radius ) {
-			/* Use direct refraction because of artifacts inside the energy conservation approximation */
-			bsdf = 1.0;
-			bsdf *= sphere_energy(l_radius);
-			return;
-		}
-	}
-
+	shade_view(V, V);
 	float eta = (gl_FrontFacing) ? ior : 1.0/ior;
 	vec3 R = refract(-V, N, 1.0/eta);
+
 	float energy_conservation = 1.0;
 	most_representative_point(l_radius, 0.0, vec3(0.0), l_distance, R, L, roughness, energy_conservation);
 	bsdf = bsdf_ggx_refract(N, L, V, eta, roughness);
@@ -150,6 +153,36 @@ void bsdf_refract_ggx_sphere_light(vec3 N, vec3 T, vec3 L, vec3 V, vec3 l_coords
 	bsdf *= energy_conservation / (l_distance * l_distance);
 	bsdf *= sphere_energy(l_radius) * max(l_radius * l_radius, 1e-16); /* l_radius is already inside energy_conservation */
 	bsdf *= M_PI; /* XXX : !!! Very Empirical, Fit cycles power */
+#else
+	float l_radius = max(0.007, l_areasizex);
+
+	vec3 pos = V;
+	shade_view(V, V);
+	vec3 R = -refract(-V, N, (gl_FrontFacing) ? 1.0/ior : ior);
+	L = l_distance * L;
+	V = -V;
+	N = -N;
+
+	vec3 P = line_aligned_plane_intersect(vec3(0.0), R, L);
+	vec3 Px = normalize(P - L) * l_radius;
+	vec3 Py = axis_angle_rotation(Px, R, M_PI_2);
+
+	vec3 points[4];
+	points[0] = l_coords + Px;
+	points[1] = l_coords - Py;
+	points[2] = l_coords - Px;
+	points[3] = l_coords + Py;
+
+	float NV = max(dot(N, V), 1e-8);
+	vec2 uv = ltc_coords(NV, sqrt(roughness));
+	mat3 ltcmat = ltc_matrix(uv);
+
+	bsdf = ltc_evaluate(N, V, pos, ltcmat, points);
+	bsdf *= texture2D(unfltcmag, uv).r; /* Bsdf matching */
+
+	bsdf *= M_1_2PI;
+	bsdf *= sphere_energy(l_radius);
+#endif
 }
 
 void bsdf_refract_ggx_area_light(vec3 N, vec3 T, vec3 L, vec3 V, vec3 l_coords,
@@ -199,38 +232,25 @@ void bsdf_refract_ggx_sun_light(vec3 N, vec3 T, vec3 L, vec3 V, vec3 l_coords,
 	                            float roughness, float ior, float sigma, float toon_size, float toon_smooth, float anisotropy, float aniso_rotation,
 	                            out float bsdf)
 {
-	//TODO Find a better approximation
+	/* Correct ligth shape but uniform intensity
+	 * Does not take into account the division by costheta^3 */
 	if (roughness < 1e-4 && l_areasizex == 0) {
 		bsdf = 0.0;
 		return;
 	}
 
-	float l_radius = l_areasizex;
-
-
 	float eta = (gl_FrontFacing) ? ior : 1.0/ior;
 	vec3 R = refract(-V, N, 1.0/eta);
+
+	float l_radius = l_areasizex;
+	float angle = atan(l_radius);
+
+	float costheta = dot(L, R);
+	float cosangle = cos(angle);
+
 	float energy_conservation = 1.0;
+	most_representative_point_disk(l_radius, 1.0, R, L, roughness, energy_conservation);
 
-	/* GGX Spec */
-	if(l_radius > 0.0){
-		//roughness = max(3e-3, roughness); /* Artifacts appear with roughness below this threshold */
-
-		/* energy preservation */
-		// float SphereAngle = clamp( l_radius / l_distance, 0.0, 1.0);
-		// energy_conservation = 2*a / (2*a + SphereAngle); //( x / (x + 0.5 * y))^2;
-		// energy_conservation *= energy_conservation;
-
-		float radius = sin(l_radius); //Disk radius
-		float distance = cos(l_radius); // Distance to disk
-
-		/* disk light */
-		float LR = dot(L, R);
-		vec3 S = normalize(R - LR * L);
-		L = LR < distance ? normalize(distance * L + S * radius) : R;
-	}
-
-	L = normalize(L);
 	bsdf = bsdf_ggx_refract(N, L, V, eta, roughness);
 	bsdf *= energy_conservation;
 }
@@ -263,7 +283,7 @@ void env_sampling_refract_ggx(
 	vector_prepass(viewpos, N, invviewmat, viewmat);
 	make_orthonormals(N, T, B); /* Generate tangent space */
 	setup_noise(gl_FragCoord.xy); /* Noise to dither the samples */
-	float a, a2; prepare_ggx(roughness, a, a2);
+	float a, a2; prepare_glossy(roughness, a, a2);
 	ior = max(ior, 1e-5);
 
 	/* Precomputation */

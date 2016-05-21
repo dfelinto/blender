@@ -2346,6 +2346,14 @@ static const char *brdf_light_function(GPUBrdfType brdftype, int lamptype)
 			default : return "bsdf_glossy_ggx_sphere_light";
 		}
 	}
+	else if (brdftype == GPU_BRDF_GLOSSY_BECKMANN) {
+		switch (lamptype) {
+			case LA_SUN :
+			case LA_HEMI : return "bsdf_glossy_beckmann_sun_light";
+			case LA_AREA : return "bsdf_glossy_beckmann_area_light";
+			default : return "bsdf_glossy_beckmann_sphere_light";
+		}
+	}
 	else if (brdftype == GPU_BRDF_GLOSSY_SHARP) {
 		switch (lamptype) {
 			case LA_SUN :
@@ -2431,21 +2439,19 @@ static const char *brdf_light_function(GPUBrdfType brdftype, int lamptype)
 static void shade_one_brdf_light(GPUBrdfInput *brdf, GPULamp *lamp)
 {
 	GPUMaterial *mat = brdf->mat;
-	GPUNodeLink *lco = NULL, *lv = NULL, *dist = NULL, *visifac = NULL, *vn = NULL, *view = NULL;
+	GPUNodeLink *lv = NULL, *dist = NULL, *visifac = NULL, *vn = NULL, *view = NULL;
 	GPUNodeLink *shadfac = NULL, *lcol, *output;
 	float one = 1.0f;
 
 	/* Early out */
 	if (!do_light(brdf, lamp)) return;
 
-	/* Lamp Position */
-	GPU_link(mat, "set_rgb", GPU_dynamic_uniform(lamp->dynco, GPU_DYNAMIC_LAMP_DYNCO, lamp->ob), &lco);
-
 	/* Lamp vector, distance and visibility factor */
 	visifac = lamp_get_visibility(mat, lamp, &lv, &dist);
 
 	/* View Position */
-	if ((brdf->type == GPU_BRDF_TRANSLUCENT || brdf->type == GPU_BRDF_DIFFUSE || brdf->type == GPU_BRDF_GLOSSY_GGX) && (lamp->type == LA_AREA))
+	if (((brdf->type == GPU_BRDF_TRANSLUCENT || brdf->type == GPU_BRDF_DIFFUSE || brdf->type == GPU_BRDF_GLOSSY_GGX) && (lamp->type == LA_AREA)) ||
+		((brdf->type == GPU_BRDF_GLOSSY_GGX || brdf->type == GPU_BRDF_REFRACT_GGX || brdf->type == GPU_BRDF_GLASS_GGX) && (lamp->type == LA_LOCAL || lamp->type == LA_SPOT)))
 		GPU_link(mat, "set_rgb", GPU_builtin(GPU_VIEW_POSITION), &view);
 	else
 		GPU_link(mat, "shade_view", GPU_builtin(GPU_VIEW_POSITION), &view);
@@ -2458,7 +2464,8 @@ static void shade_one_brdf_light(GPUBrdfInput *brdf, GPULamp *lamp)
 
 	/* BRDF evaluation */
 	GPU_link(mat, brdf_light_function(brdf->type, lamp->type),
-		vn, brdf->aniso_tangent, lv, view, lco, dist,
+		vn, brdf->aniso_tangent, lv, view,
+		GPU_dynamic_uniform(lamp->dynco, GPU_DYNAMIC_LAMP_DYNCO, lamp->ob), dist,
 		GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob),
 		GPU_dynamic_uniform(&lamp->area_size_y, GPU_DYNAMIC_LAMP_SIZEY, lamp->ob),
 		GPU_dynamic_uniform((float *)lamp->areavec, GPU_DYNAMIC_LAMP_AREASCALE, lamp->ob),
@@ -2494,6 +2501,8 @@ static const char *brdf_env_sampling_function(GPUBrdfType brdftype)
 		return "env_sampling_aniso_ggx";
 	else if (brdftype == GPU_BRDF_GLOSSY_GGX)
 		return "env_sampling_glossy_ggx";
+	else if (brdftype == GPU_BRDF_GLOSSY_BECKMANN)
+		return "env_sampling_glossy_beckmann";
 	else if (brdftype == GPU_BRDF_GLOSSY_SHARP)
 		return "env_sampling_glossy_sharp";
 	else if (brdftype == GPU_BRDF_REFRACT_GGX)

@@ -157,7 +157,7 @@ void env_sampling_glass_ggx(
 	vector_prepass(viewpos, N, invviewmat, viewmat);
 	make_orthonormals(N, T, B); /* Generate tangent space */
 	setup_noise(gl_FragCoord.xy); /* Noise to dither the samples */
-	float a, a2; prepare_ggx(roughness, a, a2);
+	float a, a2; prepare_glossy(roughness, a, a2);
 	ior = max(ior, 1e-5);
 
 	/* Precomputation */
