@@ -39,9 +39,37 @@ static bNodeSocketTemplate sh_node_ambient_occlusion_out[] = {
 	{	-1, 0, ""	}
 };
 
+#define IN_COLOR 0
+
+/* XXX this is also done as a local static function in gpu_codegen.c,
+ * but we need this to hack around the crappy material node.
+ */
+static GPUNodeLink *gpu_get_input_link(GPUNodeStack *in)
+{
+	if (in->link)
+		return in->link;
+	else
+		return GPU_uniform(in->vec);
+}
+
 static int node_shader_gpu_ambient_occlusion(GPUMaterial *mat, bNode *UNUSED(node), bNodeExecData *UNUSED(execdata), GPUNodeStack *in, GPUNodeStack *out)
 {
-	return GPU_stack_link(mat, "node_ambient_occlusion", in, out);
+	if (GPU_material_get_type(mat) == GPU_MATERIAL_TYPE_MESH_REAL_SH) {
+		GPUBrdfInput brdf;
+
+		GPU_brdf_input_initialize(&brdf);
+
+		brdf.mat   = mat;
+		brdf.color = gpu_get_input_link(&in[IN_COLOR]);
+		brdf.type  = GPU_BRDF_AMBIENT_OCCLUSION;
+
+		GPU_shade_BRDF(&brdf);
+
+		out[0].link = brdf.output;
+		return 1;
+	}
+	else
+		return GPU_stack_link(mat, "node_ambient_occlusion", in, out);
 }
 
 /* node type definition */

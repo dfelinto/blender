@@ -239,11 +239,10 @@ typedef struct View3D {
 	float stereo3d_volume_alpha;
 	float stereo3d_convergence_alpha;
 
-	/* Pbr options */
+	/* Pbr */
 	struct Object *probe_source; /* runtime : the probe that is being updated when V3D_PROBE_CAPTURE */
 	struct GPUPBRSettings pbr_settings;
-	struct GPUSSR *ssr_buffer;
-	struct GPUPBR *pbr; /* hold the luts */
+	struct GPUPBR *pbr; /* holds all pbr specific textures */
 } View3D;
 
 
@@ -322,7 +321,7 @@ typedef struct View3D {
 #define V3D_SHOW_WORLD_DIFFUSE	(1 << 1)
 /*#define V3D_REALISTIC_MAT		(1 << 2)*/  /* UNUSED */
 #define V3D_PROBE_CAPTURE		(1 << 3)	/* runtime flag */
-#define V3D_REFLECTION_PASS		(1 << 4)	/* invert culling during reflection pass */
+#define V3D_FLIP_NORMALS		(1 << 4)	/* invert culling during reflection pass */
 
 /* View3D->around */
 enum {

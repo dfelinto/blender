@@ -2,7 +2,7 @@
 
 vec3 sample_hemisphere(float nsample, vec3 N, vec3 T, vec3 B)
 {
-	vec3 Xi = hammersley_2d(nsample);
+	vec3 Xi = hammersley_3d(nsample);
 
 	float z = Xi.x; /* cos theta */
 	float r = sqrt( 1.0f - z*z ); /* sin theta */
@@ -199,7 +199,7 @@ void env_sampling_oren_nayar(
 	float pbr, vec3 viewpos, mat4 invviewmat, mat4 viewmat,
 	vec3 N, vec3 T, float roughness, float ior, float sigma,
 	float toon_size, float toon_smooth, float anisotropy, float aniso_rotation,
-	out vec3 result)
+	float ao_factor, out vec3 result)
 {
 	/* Setup */
 	vector_prepass(viewpos, N, invviewmat, viewmat);
@@ -211,7 +211,7 @@ void env_sampling_oren_nayar(
 
 	/* Integrating Envmap */
 	vec4 out_radiance = vec4(0.0);
-	for (float i = 0; i < BSDF_SAMPLES && i < unfbsdfsamples.x; i++) {
+	for (float i = 0; i < unfbsdfsamples.x; i++) {
 		vec3 L = sample_hemisphere(i, N, T, B);
 		vec3 H = normalize(L - I);
 
@@ -237,14 +237,14 @@ void env_sampling_diffuse(
 	float pbr, vec3 viewpos, mat4 invviewmat, mat4 viewmat,
 	vec3 N, vec3 T, float roughness, float ior, float sigma,
 	float toon_size, float toon_smooth, float anisotropy, float aniso_rotation,
-	out vec3 result)
+	float ao_factor, out vec3 result)
 {
 	/* Lambert */
 	vec3 lambert_diff = spherical_harmonics_L2(N);
 
 	/* early out */
 	if (roughness < 1e-5) {
-		result = lambert_diff;
+		result = lambert_diff * ao_factor;
 		return;
 	}
 
@@ -254,7 +254,10 @@ void env_sampling_diffuse(
 		pbr, viewpos, invviewmat, viewmat,
 		N, T, roughness, ior, sigma,
 		toon_size, toon_smooth, anisotropy, aniso_rotation,
-		oren_nayar_diff);
+		ao_factor, oren_nayar_diff);
 
 	result = mix(lambert_diff, oren_nayar_diff, roughness);
+
+	/* Apply ambient occlusion */
+	result *= ao_factor;
 }

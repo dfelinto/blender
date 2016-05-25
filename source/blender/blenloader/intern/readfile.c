@@ -6932,7 +6932,6 @@ static bool direct_link_screen(FileData *fd, bScreen *sc)
 				BLI_listbase_clear(&v3d->afterdraw_xraytransp);
 				v3d->properties_storage = NULL;
 				v3d->defmaterial = NULL;
-				v3d->ssr_buffer = NULL;
 				v3d->pbr = NULL;
 				
 				/* render can be quite heavy, set to solid on load */
@@ -6946,6 +6945,8 @@ static bool direct_link_screen(FileData *fd, bScreen *sc)
 
 				if (v3d->pbr_settings.ssr)
 					v3d->pbr_settings.ssr = newdataadr(fd, v3d->pbr_settings.ssr);
+				if (v3d->pbr_settings.ssao)
+					v3d->pbr_settings.ssao = newdataadr(fd, v3d->pbr_settings.ssao);
 				if (v3d->pbr_settings.brdf)
 					v3d->pbr_settings.brdf = newdataadr(fd, v3d->pbr_settings.brdf);
 				

@@ -131,7 +131,7 @@ void env_sampling_glass_sharp(
 	float pbr, vec3 viewpos, mat4 invviewmat, mat4 viewmat,
 	vec3 N, vec3 T, float roughness, float ior, float sigma,
 	float toon_size, float toon_smooth, float anisotropy, float aniso_rotation,
-	out vec3 result)
+	float ao_factor, out vec3 result)
 {
 	vector_prepass(viewpos, N, invviewmat, viewmat);
 
@@ -151,7 +151,7 @@ void env_sampling_glass_ggx(
 	float pbr, vec3 viewpos, mat4 invviewmat, mat4 viewmat,
 	vec3 N, vec3 T, float roughness, float ior, float sigma,
 	float toon_size, float toon_smooth, float anisotropy, float aniso_rotation,
-	out vec3 result)
+	float ao_factor, out vec3 result)
 {
 	/* Setup */
 	vector_prepass(viewpos, N, invviewmat, viewmat);
@@ -166,7 +166,7 @@ void env_sampling_glass_ggx(
 
 	/* Integrating Envmap */
 	vec4 out_radiance = vec4(0.0);
-	for (float i = 0; i < BSDF_SAMPLES && i < unfbsdfsamples.x; i++) {
+	for (float i = 0; i < unfbsdfsamples.x; i++) {
 		vec3 H = sample_ggx(i, a2, N, T, B); /* Microfacet normal */
 
 		/* TODO : For ior < 1.0 && roughness > 0.0 fresnel becomes not accurate.*/

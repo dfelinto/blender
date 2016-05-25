@@ -23,7 +23,8 @@ uniform sampler2D unfreflect;
 uniform sampler2D unfrefract;
 uniform sampler2D unfltcmat;
 uniform sampler2D unfltcmag;
-uniform sampler2D unfssr;
+uniform sampler2D unfscenebuf;
+uniform sampler2D unfbackfacebuf;
 uniform sampler2D unfjitter;
 uniform sampler1D unflutsamples;
 uniform float unflodfactor;
@@ -41,6 +42,8 @@ uniform vec3 unfprobepos;
 uniform vec3 unfplanarvec;
 uniform vec4 unfssrparam;
 uniform vec2 unfssrparam2;
+uniform vec3 unfssaoparam;
+uniform vec2 unfclip;
 uniform mat4 unfprobecorrectionmat;
 uniform mat4 unfplanarreflectmat;
 uniform mat4 unfpixelprojmat;
@@ -51,7 +54,7 @@ vec3 worldpos, refpos;
 vec3 viewnor, viewi;
 vec3 planarfac, planarvec;
 vec3 I, B, Ht;
-vec2 jitternoise;
+vec2 jitternoise = vec2(0.0);
 
 /* ------- Convenience functions --------- */
 
@@ -68,6 +71,19 @@ float hypot(float x, float y) { return sqrt(x*x + y*y); }
 float inverse_distance(vec3 V) { return max( 1 / length(V), 1e-8); }
 
 /* --------- Geometric Utils Functions --------- */
+
+float linear_depth(float z)
+{
+	if (gl_ProjectionMatrix[3][3] == 0.0) {
+		float zn = unfclip.x; // camera z near
+		float zf = unfclip.y; // camera z far
+		return (zn  * zf) / (z * (zn - zf) + zf);
+	}
+	else {
+		float zf = unfclip.y; // camera z far
+		return z * 2.0 * zf - zf;
+	}
+}
 
 vec3 axis_angle_rotation(vec3 point, vec3 axis, float angle)
 {
@@ -660,20 +676,25 @@ vec4 sample_refract(vec3 L)
 void setup_noise(vec2 fragcoord)
 {
 	ivec2 texel = ivec2(mod(fragcoord.x, 64), mod(fragcoord.y, 64));
-	jitternoise = texelFetch(unfjitter, texel, 0).rg * 0.5 + 1.0; /* Global variable */
+	jitternoise = texelFetch(unfjitter, texel, 0).rg; /* Global variable */
 }
 
-vec3 hammersley_2d(float i)
+vec3 hammersley_3d(float i, float invsamplenbr)
 {
 	vec3 Xi; /* Theta, cos(Phi), sin(Phi) */
 
-	Xi.x = i * unfbsdfsamples.y; /* i/samples */
+	Xi.x = i * invsamplenbr; /* i/samples */
 	Xi.x = fract(Xi.x + jitternoise.x);
 
 	int u = int(mod(i + jitternoise.y * BSDF_SAMPLES, BSDF_SAMPLES));
 	Xi.yz = texelFetch(unflutsamples, u, 0).rg;
 
 	return Xi;
+}
+
+vec3 hammersley_3d(float i)
+{
+	return hammersley_3d(i, unfbsdfsamples.y);
 }
 
 /* ------- Screen Space Raycasting ---------*/
@@ -800,7 +821,7 @@ bool raycast(vec3 ray_origin, vec3 ray_dir, float jitter, out float hitstep, out
 		prev_zmax = zmax;
 		swapIfBigger(zmin, zmax);
 
-		scene_zmax = texelFetch(unfssr, ivec2(hitpixel), 0).a;
+		scene_zmax = texelFetch(unfscenebuf, ivec2(hitpixel), 0).a;
 
 		/* background case */
 		if (scene_zmax == 1.0) scene_zmax = -1e16;
@@ -814,11 +835,11 @@ bool raycast(vec3 ray_origin, vec3 ray_dir, float jitter, out float hitstep, out
 
 #else /* 3D raymarch */
 
-float getDeltaDepth(sampler2D unfssr, vec3 hitco)
+float getDeltaDepth(vec3 hitco)
 {
 	vec4 co = unfpixelprojmat * vec4(hitco, 1.0);
 	co.xy /= co.w;
-	float depth = texelFetch(unfssr, ivec2(co.xy), 0).a;
+	float depth = texelFetch(unfscenebuf, ivec2(co.xy), 0).a;
 
 	/* background case */
 	if (depth == 1.0) depth = -1e16;
@@ -826,12 +847,12 @@ float getDeltaDepth(sampler2D unfssr, vec3 hitco)
 	return depth - hitco.z;
 }
 
-void binary_search(vec3 ray_dir, sampler2D unfssr, inout vec3 hitco)
+void binary_search(vec3 ray_dir, inout vec3 hitco)
 {
     for (int i = 0; i < MAX_SSR_REFINE_STEPS; i++) {
 		ray_dir *= 0.5;
         hitco -= ray_dir;
-        float delta = getDeltaDepth(unfssr, hitco);
+        float delta = getDeltaDepth(hitco);
         if (delta < 0.0) hitco += ray_dir;
     }
 }
@@ -854,10 +875,10 @@ bool raycast(vec3 ray_origin, vec3 ray_dir, float jitter, out float hitstep, out
 	
 	for (hitstep = 0.0; hitstep < MAX_SSR_STEPS && hitstep < maxstep; hitstep++) {
 		hitco += ray_dir;
-		float delta = getDeltaDepth(unfssr, hitco);
+		float delta = getDeltaDepth(hitco);
 		if (delta > 0.0 && delta < thickness) {
 			/* Refine hit */
-			binary_search(ray_dir, unfssr, hitco);
+			binary_search(ray_dir, hitco);
 			/* Find texel coord */
 			vec4 pix = unfpixelprojmat * vec4(hitco, 1.0);
 			hitpixel = pix.xy / pix.w;

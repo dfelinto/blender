@@ -25,7 +25,7 @@
  * ***** END GPL LICENSE BLOCK *****
  */
 
-/** \file GPU_luts.h
+/** \file GPU_pbr.h
  *  \ingroup gpu
  */
 
@@ -37,19 +37,44 @@ extern "C" {
 #endif
 
 struct GPUTexture;
+struct GPUFrameBuffer;
+
+typedef struct GPUScreenBuffer {
+	int type;
+	int w, h;
+	float clipsta, clipend;
+	float pixelprojmat[4][4];
+	struct GPUTexture *tex;
+	struct GPUTexture *depth;
+	struct GPUFrameBuffer *fb;
+} GPUScreenBuffer;
 
 typedef struct GPUPBR {
 	struct GPUTexture *hammersley;
 	struct GPUTexture *jitter;
 	struct GPUTexture *ltc_mat_ggx;
 	struct GPUTexture *ltc_mag_ggx;
+
+	GPUScreenBuffer *scene;
+	GPUScreenBuffer *backface;
 } GPUPBR;
 
-struct GPUTexture *create_jitter_texture(void);
-struct GPUTexture *create_spiral_sample_texture(int numsamples);
+typedef enum GPUScreenBufferType {
+	GPU_COLOR_BUFFER	= 0,
+	GPU_BACKFACE_BUFFER	= 1,
+} GPUScreenBufferType;
 
 GPUPBR *GPU_pbr_create(void);
+void GPU_pbr_update(GPUPBR *pbr, GPUPBRSettings *pbr_settings, struct Scene *scene, struct View3D *v3d, struct ARegion *ar);
 void GPU_pbr_free(GPUPBR *pbr);
+
+void GPU_scenebuf_free(GPUScreenBuffer *buf);
+GPUScreenBuffer *GPU_pbr_scene_buffer(GPUPBR *pbr, int width, int height);
+GPUScreenBuffer *GPU_pbr_backface_buffer(GPUPBR *pbr, int width, int height);
+void GPU_scenebuf_bind(GPUScreenBuffer* buf, float winmat[4][4], int winsize[2], float clipsta, float clipend);
+void GPU_scenebuf_unbind(GPUScreenBuffer* buf);
+
+void GPU_pbr_settings_validate(struct GPUPBRSettings *pbr_settings);
 
 #ifdef __cplusplus
 }

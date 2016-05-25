@@ -56,7 +56,6 @@ struct GPUMaterial;
 struct GPUTexture;
 struct GPULamp;
 struct GPUProbe;
-struct GPUSSR;
 struct PreviewImage;
 struct World;
 
@@ -237,7 +236,7 @@ GPUBlendMode GPU_material_alpha_blend(GPUMaterial *material, float obcol[4]);
 GPUMaterial *GPU_material_world(struct Scene *scene, struct World *wo);
 
 GPUMaterial *GPU_material_from_blender(struct Scene *scene, struct Material *ma, bool use_opensubdiv,
-		bool use_realistic_preview, bool use_planar_probe, bool use_alpha_as_depth, bool use_ssr, int parallax_correc);
+		bool use_realistic_preview, bool use_planar_probe, bool use_alpha_as_depth, bool use_backface_depth, bool use_ssr, bool use_ssao, int parallax_correc);
 GPUMaterial *GPU_material_matcap(struct Scene *scene, struct Material *ma, bool use_opensubdiv);
 void GPU_material_free(struct ListBase *gpumaterial);
 
@@ -250,7 +249,7 @@ void GPU_material_bind(
 void GPU_material_bind_uniforms(
         GPUMaterial *material, float obmat[4][4], float viewmat[4][4], float obcol[4],
         float autobumpscale, GPUParticleInfo *pi);
-void GPU_material_bind_uniforms_pbr(GPUMaterial *material, struct GPUPBR *pbr, struct GPUProbe *probe, struct GPUSSR *ssr, struct GPUSSRSettings *ssr_settings, struct GPUBRDFSettings *brdf_settings);
+void GPU_material_bind_uniforms_pbr(GPUMaterial *material, struct GPUProbe *probe, struct GPUPBR *pbr, struct GPUPBRSettings *pbr_settings);
 void GPU_material_unbind(GPUMaterial *material);
 bool GPU_material_bound(GPUMaterial *material);
 struct Scene *GPU_material_scene(GPUMaterial *material);
@@ -292,6 +291,8 @@ typedef enum GPUBrdfType {
 
 	GPU_BRDF_TOON_DIFFUSE             = 18,
 	GPU_BRDF_TOON_GLOSSY              = 19,
+
+	GPU_BRDF_AMBIENT_OCCLUSION        = 20,
 } GPUBrdfType;
 
 typedef struct GPUBrdfInput {
@@ -419,8 +420,6 @@ struct DerivedMesh;
 void GPU_material_update_fvar_offset(GPUMaterial *gpu_material,
                                      struct DerivedMesh *dm);
 #endif
-
-void GPU_pbr_settings_validate(struct GPUPBRSettings *pbr_settings);
 
 #ifdef __cplusplus
 }

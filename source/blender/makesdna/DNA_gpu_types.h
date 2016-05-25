@@ -32,39 +32,6 @@
 #ifndef __DNA_GPU_TYPES_H__
 #define __DNA_GPU_TYPES_H__
 
-/* ********** GPU PBR *********** */
-
-/* Screen space reflection settings */
-typedef struct GPUSSRSettings {
-	float stride;
-	float distance_max;
-	float attenuation;
-	float thickness;
-	int steps;
-	int downsampling;
-} GPUSSRSettings;
-
-/* Material surfaces and sampling settings */
-typedef struct GPUBRDFSettings {
-	float lodbias;
-	float pad;
-	int samples;
-	int pad2;
-} GPUBRDFSettings;
-
-typedef struct GPUPBRSettings {
-	GPUBRDFSettings *brdf;
-	GPUSSRSettings *ssr;
-	char pbr_flag;  /* eGPUPBRFlags */
-	char pad[7];
-} GPUPBRSettings;
-
-/* pbrshader enables */
-typedef enum eGPUPBRFlags {
-	GPU_PBR_FLAG_ENABLE           = (1 << 0),
-	GPU_PBR_FLAG_SSR              = (1 << 1),
-} eGPUPBRFlags;
-
 /* ********** GPU POST FX *********** */
 
 /* properties for dof effect */
@@ -101,5 +68,48 @@ typedef enum eGPUFXFlags {
 	GPU_FX_FLAG_SSAO             = (1 << 1),
 	GPU_FX_FLAG_COLORMANAGEMENT  = (1 << 2),
 } eGPUFXFlags;
+
+/* ********** GPU PBR *********** */
+
+/* Screen space reflection settings */
+typedef struct GPUSSRSettings {
+	float stride;
+	float distance_max;
+	float attenuation;
+	float thickness;
+	int steps;
+	int pad;
+} GPUSSRSettings;
+
+/* Material surfaces and sampling settings */
+typedef struct GPUBRDFSettings {
+	float lodbias;
+	float pad;
+	int samples;
+	int pad2;
+} GPUBRDFSettings;
+
+typedef struct GPUAOSettings {
+	float distance_max;
+	float pad;
+	int samples; /* ray samples, we use presets here for easy control instead of */
+	int steps; /* raymarching steps */
+} GPUAOSettings;
+
+typedef struct GPUPBRSettings {
+	GPUBRDFSettings *brdf;
+	GPUSSRSettings *ssr;
+	GPUAOSettings *ssao;
+	char pbr_flag;  /* eGPUPBRFlags */
+	char pad[7];
+} GPUPBRSettings;
+
+/* pbrshader enables */
+typedef enum eGPUPBRFlags {
+	GPU_PBR_FLAG_ENABLE           = (1 << 0),
+	GPU_PBR_FLAG_SSR              = (1 << 1),
+	GPU_PBR_FLAG_SSAO             = (1 << 2),
+	GPU_PBR_FLAG_BACKFACE         = (1 << 3),
+} eGPUPBRFlags;
 
 #endif  /* __DNA_GPU_TYPES_H__ */

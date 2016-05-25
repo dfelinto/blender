@@ -181,7 +181,9 @@ GPUPass *GPU_generate_pass(ListBase *nodes, struct GPUNodeLink *outlink,
                            const bool use_box_correction,
                            const bool use_ellipsoid_correction,
                            const bool use_alpha_as_depth,
-                           const bool use_ssr);
+                           const bool use_backface_depth,
+                           const bool use_ssr,
+                           const bool use_ssao);
 
 struct GPUShader *GPU_pass_shader(GPUPass *pass);
 

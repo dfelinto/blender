@@ -55,7 +55,6 @@
 #include "GPU_glew.h"
 #include "GPU_shader.h"
 #include "GPU_texture.h"
-#include "GPU_luts.h"
 
 #include "MEM_guardedalloc.h"
 
@@ -444,7 +443,7 @@ bool GPU_fx_compositor_initialize_passes(
 
 	/* try creating the jitter texture */
 	if (!fx->jitter_buffer)
-		fx->jitter_buffer = create_jitter_texture();
+		fx->jitter_buffer = GPU_create_jitter_texture();
 
 	/* check if color buffers need recreation */
 	if (!fx->color_buffer || !fx->depth_buffer || w != fx->gbuffer_dim[0] || h != fx->gbuffer_dim[1]) {
@@ -474,7 +473,7 @@ bool GPU_fx_compositor_initialize_passes(
 				GPU_texture_free(fx->ssao_spiral_samples_tex);
 			}
 
-			fx->ssao_spiral_samples_tex = create_spiral_sample_texture(fx_settings->ssao->samples);
+			fx->ssao_spiral_samples_tex = GPU_create_spiral_sample_texture(fx_settings->ssao->samples);
 		}
 	}
 	else {

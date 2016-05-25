@@ -55,12 +55,11 @@ set(SRC
 	intern/gpu_extensions.c
 	intern/gpu_framebuffer.c
 	intern/gpu_init_exit.c
-	intern/gpu_luts.c
+	intern/gpu_pbr.c
 	intern/gpu_material.c
 	intern/gpu_probe.c
 	intern/gpu_select.c
 	intern/gpu_shader.c
-	intern/gpu_ssfx.c
 	intern/gpu_texture.c
 
 	shaders/gpu_shader_fx_lib.glsl
@@ -81,6 +80,7 @@ set(SRC
 	shaders/gpu_shader_material_bsdf_glossy.glsl
 	shaders/gpu_shader_material_bsdf_refraction.glsl
 	shaders/gpu_shader_material_bsdf_toon.glsl
+	shaders/gpu_shader_material_bsdf_ambient_occlusion.glsl
 	shaders/gpu_shader_material_new_shading.glsl
 	shaders/gpu_shader_material_utils.glsl
 	shaders/gpu_shader_sep_gaussian_blur_frag.glsl
@@ -109,12 +109,11 @@ set(SRC
 	GPU_framebuffer.h
 	GPU_glew.h
 	GPU_init_exit.h
-	GPU_luts.h
+	GPU_pbr.h
 	GPU_material.h
 	GPU_probe.h
 	GPU_select.h
 	GPU_shader.h
-	GPU_ssfx.h
 	GPU_texture.h
 	intern/gpu_codegen.h
 	intern/gpu_private.h
@@ -133,6 +132,7 @@ data_to_c_simple(shaders/gpu_shader_material_bsdf_transparent.glsl SRC)
 data_to_c_simple(shaders/gpu_shader_material_bsdf_glossy.glsl SRC)
 data_to_c_simple(shaders/gpu_shader_material_bsdf_refraction.glsl SRC)
 data_to_c_simple(shaders/gpu_shader_material_bsdf_toon.glsl SRC)
+data_to_c_simple(shaders/gpu_shader_material_bsdf_ambient_occlusion.glsl SRC)
 data_to_c_simple(shaders/gpu_shader_material_new_shading.glsl SRC)
 data_to_c_simple(shaders/gpu_shader_material_utils.glsl SRC)
 data_to_c_simple(shaders/gpu_shader_sep_gaussian_blur_frag.glsl SRC)

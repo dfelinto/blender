@@ -68,9 +68,8 @@
 #include "GPU_shader.h"
 #include "GPU_texture.h"
 #include "GPU_draw.h"
-#include "GPU_ssfx.h"
+#include "GPU_pbr.h"
 #include "GPU_probe.h"
-#include "GPU_luts.h"
 
 #include "gpu_codegen.h"
 
@@ -136,8 +135,6 @@ struct GPUMaterial {
 	int correcmatloc, planarreflloc, planarobjloc;
 	int probecoloc, planarvecloc;
 	int shloc[9];
-	int ssrloc, ssrparamsloc, ssrparams2loc;
-	int pixelprojmatloc;
 	GPUTexture *bindedcubeprobe;
 	GPUTexture *bindedreflprobe;
 	GPUTexture *bindedrefrprobe;
@@ -145,7 +142,16 @@ struct GPUMaterial {
 	GPUTexture *bindedjitter;
 	GPUTexture *bindedltcmat;
 	GPUTexture *bindedltcmag;
-	GPUTexture *bindedssr;
+
+	/* Screen space effects (SSR, SSAO...) */
+	int scenebufloc;
+	int backfacebufloc;
+	int ssaoparamsloc;
+	int clipinfoloc;
+	int ssrparamsloc, ssrparams2loc;
+	int pixelprojmatloc;
+	GPUTexture *bindedscenebuffer;
+	GPUTexture *bindedbackfacebuffer;
 
 	ListBase lamps;
 	bool bound;
@@ -159,9 +165,14 @@ struct GPUMaterial {
 	int parallax_correc;
 	bool is_planar_probe;
 	bool is_alpha_as_depth;
+	bool use_backface_depth;
 	bool use_ssr;
-	
+	bool use_ssao;
 	bool is_opensubdiv;
+
+	/* Keep certain links during the material creation
+	 * to do these calculations only once for the whole material */
+	GPUNodeLink *ln_ssao;
 };
 
 struct GPULamp {
@@ -210,8 +221,8 @@ struct GPULamp {
 	GPUTexture *depthtex;
 	GPUTexture *blurtex;
 
-	/* Keep certain links during the material creation 
-	 * to do these calculations only once for each bsdf */
+	/* Keep certain links during the material creation
+	 * to do these calculations only once for the whole material */
 	GPUNodeLink *nl_lv;
 	GPUNodeLink *nl_dist;
 	GPUNodeLink *nl_visifac;
@@ -233,6 +244,9 @@ static GPUMaterial *GPU_material_construct_begin(Material *ma)
     GPUMaterial *material = MEM_callocN(sizeof(GPUMaterial), "GPUMaterial");
 
     material->ma = ma;
+
+    /* Optimisation variables */
+    material->ln_ssao = NULL;
 
     return material;
 }
@@ -285,7 +299,9 @@ static int GPU_material_construct_end(GPUMaterial *material, const char *passnam
 			material->parallax_correc & OB_PROBE_PARRALAX_BOX,
 			material->parallax_correc & OB_PROBE_PARRALAX_ELLIPSOID,
 			material->is_alpha_as_depth,
-			material->use_ssr);
+			material->use_backface_depth,
+			material->use_ssr,
+			material->use_ssao);
 
 		if (!material->pass)
 			return 0;
@@ -344,10 +360,13 @@ static int GPU_material_construct_end(GPUMaterial *material, const char *passnam
 			material->planarreflloc 	= GPU_shader_get_uniform(shader, "unfplanarreflectmat");
 			material->probecoloc 		= GPU_shader_get_uniform(shader, "unfprobepos");
 			material->planarvecloc 		= GPU_shader_get_uniform(shader, "unfplanarvec");
-			material->ssrloc 			= GPU_shader_get_uniform(shader, "unfssr");
+			material->scenebufloc 		= GPU_shader_get_uniform(shader, "unfscenebuf");
+			material->backfacebufloc 	= GPU_shader_get_uniform(shader, "unfbackfacebuf");
 			material->ssrparamsloc 		= GPU_shader_get_uniform(shader, "unfssrparam");
 			material->ssrparams2loc 	= GPU_shader_get_uniform(shader, "unfssrparam2");
 			material->pixelprojmatloc 	= GPU_shader_get_uniform(shader, "unfpixelprojmat");
+			material->ssaoparamsloc 	= GPU_shader_get_uniform(shader, "unfssaoparam");
+			material->clipinfoloc = GPU_shader_get_uniform(shader, "unfclip");
 		}
 
 		return 1;
@@ -483,7 +502,8 @@ void GPU_material_bind(
 		material->bindedreflprobe = NULL;
 		material->bindedrefrprobe = NULL;
 		material->bindedhammersley = NULL;
-		material->bindedssr = NULL;
+		material->bindedscenebuffer = NULL;
+		material->bindedbackfacebuffer = NULL;
 		material->bindedjitter = NULL;
 		material->bindedltcmat = NULL;
 		material->bindedltcmag = NULL;
@@ -544,56 +564,26 @@ void GPU_material_bind_uniforms(
 	}
 }
 
-void GPU_material_bind_uniforms_pbr(GPUMaterial *material, GPUPBR *pbr, GPUProbe *probe, GPUSSR *ssr, GPUSSRSettings *ssr_settings, GPUBRDFSettings *brdf_settings)
+void GPU_material_bind_uniforms_pbr(GPUMaterial *material, GPUProbe *probe, GPUPBR *pbr, GPUPBRSettings *pbr_settings)
 {
 	if (material->pass && material->builtins & GPU_PBR) {
 		GPUShader *shader = GPU_pass_shader(material->pass);
 
-		if (ssr) {
-			/* SSR Buffer */
-			material->bindedssr = ssr->tex;
-			GPU_texture_bind(material->bindedssr, 3);
-			GPU_shader_uniform_texture(shader, material->ssrloc, material->bindedssr);
-
-			/* Pixel proj matrix */
-			GPU_shader_uniform_vector(shader, material->pixelprojmatloc, 16, 1, (float *)ssr->pixelprojmat);
-
-			/* SSR Parameters 1 */
-			/* x : thickness : Camera space thickness to ascribe to each pixel in the depth buffer
-			 * y : nearz : Near plane distance (Negative number)
-			 * z : stride : Step in horizontal or vertical pixels between samples.
-			 * w : maxstep : Maximum number of iteration when raymarching */
-			float ssrparams[4];
-			ssrparams[0] = ssr_settings->thickness;
-			ssrparams[1] = -ssr->clipsta; /* Negative */
-			ssrparams[2] = ssr_settings->stride;
-			ssrparams[3] = (float)ssr_settings->steps;
-			GPU_shader_uniform_vector(shader, material->ssrparamsloc, 4, 1, ssrparams);
-
-			/* SSR Parameters 2 */
-			/* x : maxdistance : Maximum number of iteration when raymarching
-			 * y : attenuation : Attenuation factor for screen edges and ray step fading */
-			float ssrparams2[2];
-			ssrparams2[0] = ssr_settings->distance_max;
-			ssrparams2[1] = ssr_settings->attenuation;
-			GPU_shader_uniform_vector(shader, material->ssrparams2loc, 2, 1, ssrparams2);
-		}
-
 		if (pbr) {
 			material->bindedhammersley = pbr->hammersley;
-			GPU_texture_bind(material->bindedhammersley, 4);
+			GPU_texture_bind(material->bindedhammersley, 0);
 			GPU_shader_uniform_texture(shader, material->lutsamplesloc, material->bindedhammersley);
 
 			material->bindedjitter = pbr->jitter;
-			GPU_texture_bind(material->bindedjitter, 5);
+			GPU_texture_bind(material->bindedjitter, 1);
 			GPU_shader_uniform_texture(shader, material->jitterloc, material->bindedjitter);
 
 			material->bindedltcmat = pbr->ltc_mat_ggx;
-			GPU_texture_bind(material->bindedltcmat, 6);
+			GPU_texture_bind(material->bindedltcmat, 2);
 			GPU_shader_uniform_texture(shader, material->ltcmatloc, material->bindedltcmat);
 
 			material->bindedltcmag = pbr->ltc_mag_ggx;
-			GPU_texture_bind(material->bindedltcmag, 7);
+			GPU_texture_bind(material->bindedltcmag, 3);
 			GPU_shader_uniform_texture(shader, material->ltcmagloc, material->bindedltcmag);
 		}
 
@@ -605,13 +595,13 @@ void GPU_material_bind_uniforms_pbr(GPUMaterial *material, GPUPBR *pbr, GPUProbe
 
 			/* BSDF Samples */
 			float samples[2];
-			samples[0] = brdf_settings->samples * 16.0f;
+			samples[0] = pbr_settings->brdf->samples;
 			samples[1] = 1.0f / samples[0];
 			GPU_shader_uniform_vector(shader, material->brdfsamplesloc, 2, 1, samples);
 
 			/* Lod factor for importance sampling */
 			float lodfactor = 0.5f * log( ( (float)(probe->size * probe->size) * samples[1] ) ) / log(2);
-			lodfactor -= brdf_settings->lodbias;
+			lodfactor -= pbr_settings->brdf->lodbias;
 			GPU_shader_uniform_vector(shader, material->lodfactorloc, 1, 1, &lodfactor);
 
 			/* Probe Cube */
@@ -631,7 +621,7 @@ void GPU_material_bind_uniforms_pbr(GPUMaterial *material, GPUPBR *pbr, GPUProbe
 				material->bindedcubeprobe = probe->tex;
 			}
 			if (material->bindedcubeprobe) {
-				GPU_texture_bind(material->bindedcubeprobe, 0);
+				GPU_texture_bind(material->bindedcubeprobe, 4);
 				GPU_shader_uniform_texture(shader, material->probeloc, material->bindedcubeprobe);
 			}
 
@@ -640,9 +630,9 @@ void GPU_material_bind_uniforms_pbr(GPUMaterial *material, GPUPBR *pbr, GPUProbe
 				/* XXX : save the reflection for unbinding */
 				material->bindedreflprobe = probe->texreflect;
 				material->bindedrefrprobe = probe->texrefract;
-				GPU_texture_bind(material->bindedreflprobe, 1);
+				GPU_texture_bind(material->bindedreflprobe, 5);
 				GPU_shader_uniform_texture(shader, material->reflectloc, material->bindedreflprobe);
-				GPU_texture_bind(material->bindedrefrprobe, 2);
+				GPU_texture_bind(material->bindedrefrprobe, 6);
 				GPU_shader_uniform_texture(shader, material->refractloc, material->bindedrefrprobe);
 			}
 
@@ -665,6 +655,64 @@ void GPU_material_bind_uniforms_pbr(GPUMaterial *material, GPUPBR *pbr, GPUProbe
 				GPU_shader_uniform_vector(shader, material->shloc[i], 3, 1, black);
 			}
 		}
+
+		if (pbr_settings->pbr_flag & (GPU_PBR_FLAG_SSR | GPU_PBR_FLAG_SSAO)) {
+			/* Scene Buffer */
+			material->bindedscenebuffer = pbr->scene->tex;
+			GPU_texture_bind(material->bindedscenebuffer, 7);
+			GPU_shader_uniform_texture(shader, material->scenebufloc, material->bindedscenebuffer);
+
+			/* Pixel proj matrix */
+			GPU_shader_uniform_vector(shader, material->pixelprojmatloc, 16, 1, (float *)pbr->scene->pixelprojmat);
+
+			if (pbr_settings->pbr_flag & (GPU_PBR_FLAG_SSR | GPU_PBR_FLAG_BACKFACE)) {
+				float clipinfo[2];
+				clipinfo[0] = pbr->backface->clipsta; /* Negative */
+				clipinfo[1] = pbr->backface->clipend; /* Negative */
+				GPU_shader_uniform_vector(shader, material->clipinfoloc, 2, 1, clipinfo);
+			}
+
+			if (pbr_settings->pbr_flag & GPU_PBR_FLAG_BACKFACE) {
+				/* Backface Buffer */
+				material->bindedbackfacebuffer = pbr->backface->tex;
+				GPU_texture_bind(material->bindedbackfacebuffer, 8);
+				GPU_shader_uniform_texture(shader, material->backfacebufloc, material->bindedbackfacebuffer);
+			}
+		}
+
+		if (pbr_settings->pbr_flag & GPU_PBR_FLAG_SSR) {
+			/* SSR Parameters 1 */
+			/* x : thickness : Camera space thickness to ascribe to each pixel in the depth buffer
+			 * y : nearz : Near plane distance (Negative number)
+			 * z : stride : Step in horizontal or vertical pixels between samples.
+			 * w : maxstep : Maximum number of iteration when raymarching */
+			float ssrparams[4];
+			ssrparams[0] = pbr_settings->ssr->thickness;
+			ssrparams[1] = -pbr->scene->clipsta; /* Negative */
+			ssrparams[2] = pbr_settings->ssr->stride;
+			ssrparams[3] = (float)pbr_settings->ssr->steps;
+			GPU_shader_uniform_vector(shader, material->ssrparamsloc, 4, 1, ssrparams);
+
+			/* SSR Parameters 2 */
+			/* x : maxdistance : Maximum number of iteration when raymarching
+			 * y : attenuation : Attenuation factor for screen edges and ray step fading */
+			float ssrparams2[2];
+			ssrparams2[0] = pbr_settings->ssr->distance_max;
+			ssrparams2[1] = pbr_settings->ssr->attenuation;
+			GPU_shader_uniform_vector(shader, material->ssrparams2loc, 2, 1, ssrparams2);
+		}
+
+		if (pbr_settings->pbr_flag & GPU_PBR_FLAG_SSAO) {
+			/* SSAO Parameters */
+			/* x : sample : Number of samples
+			 * y : steps : Steps for the raymarching
+			 * z : distance : Max distance */
+			float ssaoparams[4];
+			ssaoparams[0] = pbr_settings->ssao->samples;
+			ssaoparams[1] = pbr_settings->ssao->steps;
+			ssaoparams[2] = pbr_settings->ssao->distance_max;
+			GPU_shader_uniform_vector(shader, material->ssaoparamsloc, 3, 1, ssaoparams);
+		}
 	}
 }
 
@@ -678,8 +726,10 @@ void GPU_material_unbind(GPUMaterial *material)
 			GPU_texture_unbind(material->bindedreflprobe);
 		if (material->bindedrefrprobe)
 			GPU_texture_unbind(material->bindedrefrprobe);
-		if (material->bindedssr)
-			GPU_texture_unbind(material->bindedssr);
+		if (material->bindedscenebuffer)
+			GPU_texture_unbind(material->bindedscenebuffer);
+		if (material->bindedbackfacebuffer)
+			GPU_texture_unbind(material->bindedbackfacebuffer);
 		if (material->bindedhammersley)
 			GPU_texture_unbind(material->bindedhammersley);
 		if (material->bindedjitter)
@@ -2522,7 +2572,9 @@ static const char *brdf_env_sampling_function(GPUBrdfType brdftype)
 	else if (brdftype == GPU_BRDF_TOON_DIFFUSE)
 		return "env_sampling_toon_diffuse";
 	else if (brdftype == GPU_BRDF_TOON_GLOSSY)
-		return "env_sampling_toon_glossy";
+		return "env_sampling_toon_diffuse";
+	else if (brdftype == GPU_BRDF_AMBIENT_OCCLUSION)
+		return "env_sampling_ambient_occlusion";
 	else /* (brdftype == GPU_BRDF_DIFFUSE) */
 		return "env_sampling_diffuse";
 }
@@ -2531,18 +2583,30 @@ static GPUNodeLink *brdf_sample_env(GPUBrdfInput *brdf)
 {
 	GPUMaterial *mat = brdf->mat;
 	GPUMatType type = GPU_material_get_type(mat);
-	GPUNodeLink *envlight;
+	GPUNodeLink *envlight, *ambient_occlusion;
 
 	GPU_link(mat, "direction_transform_m4v3", brdf->normal, GPU_builtin(GPU_INVERSE_VIEW_MATRIX), &brdf->normal);
 	GPU_link(mat, "vect_normalize", brdf->normal, &brdf->normal);
 	GPU_link(mat, "direction_transform_m4v3", brdf->aniso_tangent, GPU_builtin(GPU_INVERSE_VIEW_MATRIX), &brdf->aniso_tangent);
 	GPU_link(mat, "vect_normalize", brdf->aniso_tangent, &brdf->aniso_tangent);
 
+	/* Ambient Occlusion */
+	if (brdf->type == GPU_BRDF_AMBIENT_OCCLUSION || brdf->type == GPU_BRDF_DIFFUSE) {
+		if (!mat->ln_ssao)
+			GPU_link(mat, "ssao", GPU_builtin(GPU_VIEW_POSITION), GPU_builtin(GPU_VIEW_NORMAL), &mat->ln_ssao);
+		GPU_link(mat, "set_value", mat->ln_ssao, &ambient_occlusion);
+	}
+	else {
+		float one = 1.0f;
+		GPU_link(mat, "set_value", GPU_uniform(&one), &ambient_occlusion);
+	}
+
+	/* Environment Sampling */
 	GPU_link(mat, brdf_env_sampling_function(brdf->type),
 		GPU_builtin(GPU_PBR), GPU_builtin(GPU_VIEW_POSITION), GPU_builtin(GPU_INVERSE_VIEW_MATRIX), GPU_builtin(GPU_VIEW_MATRIX),
 		brdf->normal, brdf->aniso_tangent, brdf->roughness, brdf->ior, brdf->sigma,
 		brdf->toon_size, brdf->toon_smooth, brdf->anisotropy, brdf->aniso_rotation,
-		&envlight);
+		ambient_occlusion, &envlight);
 
 	/* prevent undefined result (eg dividing by 0) giving infinity inside HDR images */
 	GPU_link(mat, "shade_clamp_positive", envlight, &envlight);
@@ -2954,7 +3018,7 @@ GPUMaterial *GPU_material_world(struct Scene *scene, struct World *wo)
 }
 
 GPUMaterial *GPU_material_from_blender(Scene *scene, Material *ma, bool use_opensubdiv, bool use_realistic_preview, bool use_planar_probe,
-                                       bool use_alpha_as_depth, bool use_ssr, int parallax_correc)
+                                       bool use_alpha_as_depth, bool use_backface_depth, bool use_ssr, bool use_ssao, int parallax_correc)
 {
 	GPUMaterial *mat;
 	GPUNodeLink *outlink;
@@ -2969,7 +3033,9 @@ GPUMaterial *GPU_material_from_blender(Scene *scene, Material *ma, bool use_open
 		    current_material->type == type &&
 		    current_material->is_alpha_as_depth == use_alpha_as_depth &&
 		    current_material->is_planar_probe == use_planar_probe &&
+		    current_material->use_backface_depth == use_backface_depth &&
 		    current_material->use_ssr == use_ssr &&
+		    current_material->use_ssao == use_ssao &&
 		    current_material->parallax_correc == parallax_correc)
 		{
 			return current_material;
@@ -2984,7 +3050,9 @@ GPUMaterial *GPU_material_from_blender(Scene *scene, Material *ma, bool use_open
 	mat->parallax_correc = parallax_correc;
 	mat->is_planar_probe = use_planar_probe;
 	mat->is_alpha_as_depth = use_alpha_as_depth;
+	mat->use_backface_depth = use_backface_depth;
 	mat->use_ssr = use_ssr;
+	mat->use_ssao = use_ssao;
 
 	/* render pipeline option */
 	if (!new_shading_nodes && (ma->mode & MA_TRANSP))
@@ -3567,7 +3635,7 @@ GPUShaderExport *GPU_shader_export(struct Scene *scene, struct Material *ma)
 	int liblen, fraglen;
 
 	/* TODO(sergey): How to determine whether we need OSD or not here? */
-	GPUMaterial *mat = GPU_material_from_blender(scene, ma, false, false, false, false, false, 0);
+	GPUMaterial *mat = GPU_material_from_blender(scene, ma, false, false, false, false, false, false, false, 0);
 	GPUPass *pass = (mat) ? mat->pass : NULL;
 
 	if (pass && pass->fragmentcode && pass->vertexcode) {
@@ -3788,27 +3856,3 @@ void GPU_material_update_fvar_offset(GPUMaterial *gpu_material,
 	GPU_shader_unbind();
 }
 #endif
-
-static void GPU_pbr_init_brdf_settings(GPUBRDFSettings *brdf_settings)
-{
-	brdf_settings->lodbias = -0.5f;
-	brdf_settings->samples = 2;
-}
-
-void GPU_pbr_settings_validate(GPUPBRSettings *pbr_settings)
-{
-	/* Setting all at once */
-	if ((pbr_settings->brdf == NULL) &&
-	    (pbr_settings->pbr_flag & GPU_PBR_FLAG_ENABLE))
-	{
-		GPUBRDFSettings *brdf_settings;
-		GPUSSRSettings *ssr_settings;
-
-		brdf_settings = pbr_settings->brdf = MEM_callocN(sizeof(GPUBRDFSettings), __func__);
-		ssr_settings = pbr_settings->ssr = MEM_callocN(sizeof(GPUSSRSettings), __func__);
-
-		GPU_pbr_init_brdf_settings(brdf_settings);
-		GPU_pbr_init_ssr_settings(ssr_settings);
-	}
-
-}

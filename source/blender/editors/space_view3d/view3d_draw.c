@@ -100,9 +100,8 @@
 #include "GPU_material.h"
 #include "GPU_compositing.h"
 #include "GPU_extensions.h"
-#include "GPU_ssfx.h"
 #include "GPU_probe.h"
-#include "GPU_luts.h"
+#include "GPU_pbr.h"
 
 #include "view3d_intern.h"  /* own include */
 
@@ -2760,6 +2759,7 @@ static void gpu_update_probes(Scene *scene, View3D *v3d, ARegion *basear)
 		v3d->flag3 &= ~V3D_SHOW_WORLD_DIFFUSE;
 		v3d->flag3 |= V3D_PROBE_CAPTURE;
 		v3d->pbr_settings.pbr_flag &= ~GPU_PBR_FLAG_SSR;
+		v3d->pbr_settings.pbr_flag &= ~GPU_PBR_FLAG_SSAO;
 
 		if (ob) {
 			restrictflag = ob->restrictflag;
@@ -2810,7 +2810,7 @@ static void gpu_update_probes(Scene *scene, View3D *v3d, ARegion *basear)
 			mul_m4_m4m4(rv3d.persmat, baserv3d->winmat, rv3d.viewmat);
 			invert_m4_m4(rv3d.persinv, rv3d.viewinv);
 
-			v3d->flag3 |= V3D_REFLECTION_PASS;
+			v3d->flag3 |= V3D_FLIP_NORMALS;
 
 			ED_view3d_draw_offscreen(
 	            scene, v3d, &ar, winsize, winsize, viewmat, baserv3d->winmat,
@@ -2825,7 +2825,7 @@ static void gpu_update_probes(Scene *scene, View3D *v3d, ARegion *basear)
 			mul_m4_m4m4(rv3d.persmat, baserv3d->winmat, rv3d.viewmat);
 			invert_m4_m4(rv3d.persinv, rv3d.viewinv);
 
-			v3d->flag3 &= ~V3D_REFLECTION_PASS;
+			v3d->flag3 &= ~V3D_FLIP_NORMALS;
 
 			ED_view3d_draw_offscreen(
 	            scene, v3d, &ar, winsize, winsize, viewmat, baserv3d->winmat,
@@ -2856,35 +2856,20 @@ static void gpu_update_probes(Scene *scene, View3D *v3d, ARegion *basear)
 	BLI_freelistN(&probelist);
 }
 
-/* ***************** Screen Space Reflection buffer *************** */
+/* ***************** Scene buffer update *************** */
 
-static void gpu_update_reflection_buffer(Scene *scene, View3D *v3d, ARegion *basear)
+static void gpu_update_scene_buffer(Scene *scene, View3D *v3d, ARegion *basear)
 {
 	int drawtype = v3d->drawtype, winsize[2], flag2 = v3d->flag2, flag3 = v3d->flag3;
 	float clipsta, clipend;
 	ARegion ar = {NULL};
 	RegionView3D *baserv3d = basear->regiondata;
 	RegionView3D rv3d = {{{0}}};
+	GPUScreenBuffer *scene_buffer;
 	int res[2] = {basear->winx, basear->winy};
 	int pbr_flag = v3d->pbr_settings.pbr_flag;
 
-	for (int i = 0; i < v3d->pbr_settings.ssr->downsampling; ++i)
-	{
-		res[0] /= 2;
-		res[1] /= 2;
-	}
-
-	CLAMP(res[0], 4, INT_MAX);
-	CLAMP(res[1], 4, INT_MAX);
-
-	if (v3d->ssr_buffer && !GPU_ssr_is_valid(v3d->ssr_buffer, res[0], res[1])) {
-		GPU_ssr_free(v3d->ssr_buffer);
-		v3d->ssr_buffer = NULL;
-	}
-
-	if (!v3d->ssr_buffer) {
-		v3d->ssr_buffer = GPU_ssr_create(res[0], res[1]);
-	}
+	scene_buffer = GPU_pbr_scene_buffer(v3d->pbr, res[0], res[1]);
 
 	v3d->drawtype = OB_MATERIAL;
 	v3d->flag2 &= ~(V3D_SOLID_TEX | V3D_SHOW_SOLID_MATCAP);
@@ -2893,6 +2878,7 @@ static void gpu_update_reflection_buffer(Scene *scene, View3D *v3d, ARegion *bas
 	v3d->flag3 &= ~V3D_SHOW_WORLD_DIFFUSE;
 	v3d->flag3 |= V3D_PROBE_CAPTURE;
 	v3d->pbr_settings.pbr_flag &= ~GPU_PBR_FLAG_SSR;
+	v3d->pbr_settings.pbr_flag &= ~GPU_PBR_FLAG_SSAO;
 
 	ar.regiondata = &rv3d;
 	ar.regiontype = RGN_TYPE_WINDOW;
@@ -2903,7 +2889,7 @@ static void gpu_update_reflection_buffer(Scene *scene, View3D *v3d, ARegion *bas
 	view3d_winmatrix_set(basear, v3d, NULL);
 	view3d_viewmatrix_set(scene, v3d, baserv3d);  /* note: calls BKE_object_where_is_calc for camera... */
 
-	GPU_ssr_buffer_bind(v3d->ssr_buffer, baserv3d->winmat, winsize, clipsta, clipend);
+	GPU_scenebuf_bind(scene_buffer, baserv3d->winmat, winsize, clipsta, clipend);
 
 	copy_m4_m4(rv3d.viewmat, baserv3d->viewmat);
 	invert_m4_m4(rv3d.viewinv, rv3d.viewmat);
@@ -2915,12 +2901,81 @@ static void gpu_update_reflection_buffer(Scene *scene, View3D *v3d, ARegion *bas
         false, (bool)scene->world, true, true,
         NULL, NULL, NULL, NULL);
 
-	GPU_ssr_buffer_unbind(v3d->ssr_buffer);
+	GPU_scenebuf_unbind(scene_buffer);
 
 	v3d->drawtype = drawtype;
 	v3d->flag2 = flag2;
 	v3d->flag3 = flag3;
 	v3d->pbr_settings.pbr_flag = pbr_flag;
+}
+
+static void gpu_update_backface_buffer(Scene *scene, View3D *v3d, ARegion *basear)
+{
+	int drawtype = v3d->drawtype, winsize[2], flag2 = v3d->flag2, flag3 = v3d->flag3;
+	float clipsta, clipend;
+	ARegion ar = {NULL};
+	RegionView3D *baserv3d = basear->regiondata;
+	RegionView3D rv3d = {{{0}}};
+	GPUScreenBuffer *backface_buffer;
+	int res[2] = {basear->winx, basear->winy};
+	int pbr_flag = v3d->pbr_settings.pbr_flag;
+
+	backface_buffer = GPU_pbr_backface_buffer(v3d->pbr, res[0], res[1]);
+
+	v3d->drawtype = OB_SOLID;
+	v3d->flag2 &= ~(V3D_SOLID_TEX | V3D_SHOW_SOLID_MATCAP);
+	v3d->flag2 |= V3D_BACKFACE_CULLING | V3D_RENDER_OVERRIDE | V3D_RENDER_SHADOW;
+	v3d->flag3 |= V3D_FLIP_NORMALS;
+
+	ar.regiondata = &rv3d;
+	ar.regiontype = RGN_TYPE_WINDOW;
+	rv3d.persp = RV3D_CAMOB;
+
+	/* Getting camera coords */
+	ED_view3d_viewplane_get(v3d, baserv3d, basear->winx, basear->winy, NULL, &clipsta, &clipend, NULL);
+	view3d_winmatrix_set(basear, v3d, NULL);
+	view3d_viewmatrix_set(scene, v3d, baserv3d);  /* note: calls BKE_object_where_is_calc for camera... */
+
+	GPU_scenebuf_bind(backface_buffer, baserv3d->winmat, winsize, clipsta, clipend);
+
+	copy_m4_m4(rv3d.viewmat, baserv3d->viewmat);
+	invert_m4_m4(rv3d.viewinv, rv3d.viewmat);
+	mul_m4_m4m4(rv3d.persmat, baserv3d->winmat, rv3d.viewmat);
+	invert_m4_m4(rv3d.persinv, rv3d.viewinv);
+
+	ED_view3d_draw_offscreen(
+        scene, v3d, &ar, winsize[0], winsize[1], baserv3d->viewmat, baserv3d->winmat,
+        false, (bool)scene->world, true, true,
+        NULL, NULL, NULL, NULL);
+
+	GPU_scenebuf_unbind(backface_buffer);
+
+	v3d->drawtype = drawtype;
+	v3d->flag2 = flag2;
+	v3d->flag3 = flag3;
+	v3d->pbr_settings.pbr_flag = pbr_flag;
+}
+
+
+static void gpu_pbr_update(Scene *scene, View3D *v3d, ARegion *ar)
+{
+	GPUPBR *pbr = v3d->pbr;
+
+	gpu_update_probes(scene, v3d, ar);
+
+	if (v3d->pbr_settings.pbr_flag & (GPU_PBR_FLAG_SSR | GPU_PBR_FLAG_SSAO))
+		gpu_update_scene_buffer(scene, v3d, ar);
+	else if (pbr->scene) {
+		GPU_scenebuf_free(pbr->scene);
+		pbr->scene = NULL;
+	}
+
+	if ((v3d->pbr_settings.pbr_flag & GPU_PBR_FLAG_BACKFACE) && (v3d->pbr_settings.pbr_flag & (GPU_PBR_FLAG_SSR | GPU_PBR_FLAG_SSAO)))
+		gpu_update_backface_buffer(scene, v3d, ar);
+	else if (pbr->backface) {
+		GPU_scenebuf_free(pbr->backface);
+		pbr->backface = NULL;
+	}
 }
 
 /* *********************** customdata **************** */
@@ -3299,9 +3354,7 @@ void ED_view3d_draw_offscreen_init(Scene *scene, View3D *v3d, ARegion *ar)
 			if (!v3d->pbr)
 				v3d->pbr = GPU_pbr_create();
 
-			gpu_update_probes(scene, v3d, ar);
-			if (v3d->pbr_settings.pbr_flag & GPU_PBR_FLAG_SSR)
-				gpu_update_reflection_buffer(scene, v3d, ar);
+			gpu_pbr_update(scene, v3d, ar);
 		}
 	}
 }
@@ -4232,10 +4285,7 @@ static void view3d_main_region_draw_objects(const bContext *C, Scene *scene, Vie
 			if (!v3d->pbr)
 				v3d->pbr = GPU_pbr_create();
 
-			gpu_update_probes(scene, v3d, ar);
-
-			if (v3d->pbr_settings.pbr_flag & GPU_PBR_FLAG_SSR)
-				gpu_update_reflection_buffer(scene, v3d, ar);
+			gpu_pbr_update(scene, v3d, ar);
 		}
 	}
 

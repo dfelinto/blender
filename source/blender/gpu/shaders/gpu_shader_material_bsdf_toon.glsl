@@ -2,7 +2,7 @@
 
 vec3 sample_uniform_cone(float nsample, float angle, vec3 N, vec3 T, vec3 B)
 {
-	vec3 Xi = hammersley_2d(nsample);
+	vec3 Xi = hammersley_3d(nsample);
 
 	float z = cos(angle * Xi.x);
 	float r = sqrt(1.0 - z*z);
@@ -198,7 +198,7 @@ void env_sampling_toon_diffuse(
 	float pbr, vec3 viewpos, mat4 invviewmat, mat4 viewmat,
 	vec3 N, vec3 T, float roughness, float ior, float sigma,
 	float toon_size, float toon_smooth, float anisotropy, float aniso_rotation,
-	out vec3 result)
+	float ao_factor, out vec3 result)
 {
 	/* Setup */
 	vector_prepass(viewpos, N, invviewmat, viewmat);
@@ -211,7 +211,7 @@ void env_sampling_toon_diffuse(
 
 	/* Integrating Envmap */
 	vec4 out_radiance = vec4(0.0);
-	for (float i = 0; i < BSDF_SAMPLES && i < unfbsdfsamples.x; i++) {
+	for (float i = 0; i < unfbsdfsamples.x; i++) {
 		vec3 L = sample_uniform_cone(i, sample_angle, N, T, B);
 		float NL = max(0.0, dot(N, L));
 
@@ -234,7 +234,7 @@ void env_sampling_toon_glossy(
 	float pbr, vec3 viewpos, mat4 invviewmat, mat4 viewmat,
 	vec3 N, vec3 T, float roughness, float ior, float sigma,
 	float toon_size, float toon_smooth, float anisotropy, float aniso_rotation,
-	out vec3 result)
+	float ao_factor, out vec3 result)
 {
 	/* Setup */
 	vector_prepass(viewpos, N, invviewmat, viewmat);
@@ -250,7 +250,7 @@ void env_sampling_toon_glossy(
 
 	/* Integrating Envmap */
 	vec4 out_radiance = vec4(0.0);
-	for (float i = 0; i < BSDF_SAMPLES && i < unfbsdfsamples.x; i++) {
+	for (float i = 0; i < unfbsdfsamples.x; i++) {
 		vec3 L = sample_uniform_cone(i, sample_angle, R, T, B);
 
 		float NL = max(0.0, dot(N, L));

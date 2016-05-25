@@ -3255,14 +3255,22 @@ class VIEW3D_PT_view3d_shading(Panel):
         if scene.render.use_shading_nodes and view.viewport_shade == 'MATERIAL' :
             pbr_settings = view.pbr_settings
 
-            col.prop(pbr_settings, "use_realistic_mat")
+            col.prop(pbr_settings, "use_realistic_mat", text="Material Preview")
             if pbr_settings.use_realistic_mat:
                 brdf_settings = pbr_settings.brdf;
                 subcol = col.column(align=True)
                 subcol.prop(brdf_settings, "samples")
                 subcol.prop(brdf_settings, "lodbias")
 
-                col.prop(pbr_settings, "use_ssr")
+                col.prop(pbr_settings, "use_ssao", text="Material Ambient Occlusion")
+                if pbr_settings.use_ssao:
+                    ssao_settings = pbr_settings.ssao;
+                    subcol = col.column(align=True)
+                    subcol.prop(ssao_settings, "distance_max")
+                    subcol.prop(ssao_settings, "samples")
+                    subcol.prop(ssao_settings, "steps")
+
+                col.prop(pbr_settings, "use_ssr", text="Material Reflections")
                 if pbr_settings.use_ssr:
                     ssr_settings = pbr_settings.ssr;
                     subcol = col.column(align=True)
@@ -3271,7 +3279,9 @@ class VIEW3D_PT_view3d_shading(Panel):
                     subcol.prop(ssr_settings, "distance_max")
                     subcol.prop(ssr_settings, "attenuation")
                     subcol.prop(ssr_settings, "steps")
-                    subcol.prop(ssr_settings, "downsampling")
+
+                if pbr_settings.use_ssao or pbr_settings.use_ssr:
+                    col.prop(pbr_settings, "use_backface", text="Backface Buffer")
 
         col.prop(view, "show_backface_culling")
 
@@ -3283,7 +3293,7 @@ class VIEW3D_PT_view3d_shading(Panel):
 
 
         if view.viewport_shade not in {'BOUNDBOX', 'WIREFRAME'}:
-            col.prop(fx_settings, "use_colormanagement", text="Apply Color Management")
+            col.prop(fx_settings, "use_colormanagement", text="Color Management")
             sub = col.column()
             sub.active = view.region_3d.view_perspective == 'CAMERA'
             sub.prop(fx_settings, "use_dof")

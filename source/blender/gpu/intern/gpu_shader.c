@@ -203,7 +203,9 @@ static void gpu_shader_standard_defines(char defines[MAX_DEFINE_LENGTH],
                                         bool use_ellipsoid_correction,
                                         bool use_planar_probe,
                                         bool use_alpha_as_depth,
-                                        bool use_ssr)
+                                        bool use_backface_depth,
+                                        bool use_ssr,
+                                        bool use_ssao)
 {
 	/* some useful defines to detect GPU type */
 	if (GPU_type_matches(GPU_DEVICE_ATI, GPU_OS_ANY, GPU_DRIVER_ANY)) {
@@ -257,6 +259,12 @@ static void gpu_shader_standard_defines(char defines[MAX_DEFINE_LENGTH],
 
 	if (use_ssr && !use_planar_probe)
 		strcat(defines, "#define USE_SSR\n");
+
+	if (use_ssao)
+		strcat(defines, "#define USE_SSAO\n");
+
+	if (use_backface_depth)
+		strcat(defines, "#define USE_BACKFACE\n");
 
 	if (use_alpha_as_depth)
 		strcat(defines, "#define ALPHA_AS_DEPTH\n");
@@ -347,7 +355,9 @@ GPUShader *GPU_shader_create_ex(const char *vertexcode,
 	                            (flags & GPU_SHADER_FLAGS_PROBE_ELIPS_CORREC) != 0,
 	                            (flags & GPU_SHADER_FLAGS_PROBE_PLANAR) != 0,
 	                            (flags & GPU_SHADER_FLAGS_ALPHA_DEPTH) != 0,
-	                            (flags & GPU_SHADER_FLAGS_SSR) != 0);
+	                            (flags & GPU_SHADER_FLAGS_BACKFACE_DEPTH) != 0,
+	                            (flags & GPU_SHADER_FLAGS_SSR) != 0,
+	                            (flags & GPU_SHADER_FLAGS_SSAO) != 0);
 	gpu_shader_standard_extensions(standard_extensions, geocode != NULL);
 
 	if (vertexcode) {

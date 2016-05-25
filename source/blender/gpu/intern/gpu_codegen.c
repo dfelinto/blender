@@ -66,6 +66,7 @@ extern char datatoc_gpu_shader_material_bsdf_glass_glsl[];
 extern char datatoc_gpu_shader_material_bsdf_translucent_glsl[];
 extern char datatoc_gpu_shader_material_bsdf_transparent_glsl[];
 extern char datatoc_gpu_shader_material_bsdf_toon_glsl[];
+extern char datatoc_gpu_shader_material_bsdf_ambient_occlusion_glsl[];
 extern char datatoc_gpu_shader_material_utils_glsl[];
 extern char datatoc_gpu_shader_vertex_glsl[];
 extern char datatoc_gpu_shader_vertex_world_glsl[];
@@ -441,14 +442,15 @@ static void codegen_set_texid(GHash *bindhash, GPUInput *input, int *texid, void
 	}
 }
 
-static void codegen_set_unique_ids(ListBase *nodes)
+static void codegen_set_unique_ids(ListBase *nodes, bool reserve_texid)
 {
 	GHash *bindhash, *definehash;
 	GPUNode *node;
 	GPUInput *input;
 	GPUOutput *output;
-	/* tex slot (texid) 0-7 are pbr textures */
-	int id = 1, texid = 8;
+	/* XXX tex slot (texid) 0-9 are pbr textures */
+	/* TODO : these should reserved on demand not in bulk */
+	int id = 1, texid = (reserve_texid) ? 9 : 0;
 
 	bindhash = BLI_ghash_ptr_new("codegen_set_unique_ids1 gh");
 	definehash = BLI_ghash_ptr_new("codegen_set_unique_ids2 gh");
@@ -696,7 +698,7 @@ static char *code_generate_fragment(ListBase *nodes, const GPUMatType type, GPUO
 	BLI_dynstr_append(ds, FUNCTION_PROTOTYPES);
 #endif
 
-	codegen_set_unique_ids(nodes);
+	codegen_set_unique_ids(nodes, (type == GPU_MATERIAL_TYPE_MESH_REAL_SH));
 	builtins = codegen_print_uniforms_functions(ds, nodes);
 
 #if 0
@@ -947,6 +949,7 @@ void GPU_code_generate_glsl_lib(void)
 	BLI_dynstr_append(ds, datatoc_gpu_shader_material_bsdf_glass_glsl);
 	BLI_dynstr_append(ds, datatoc_gpu_shader_material_bsdf_translucent_glsl);
 	BLI_dynstr_append(ds, datatoc_gpu_shader_material_bsdf_toon_glsl);
+	BLI_dynstr_append(ds, datatoc_gpu_shader_material_bsdf_ambient_occlusion_glsl);
 	BLI_dynstr_append(ds, datatoc_gpu_shader_material_new_shading_glsl);
 
 	glsl_material_library = BLI_dynstr_get_cstring(ds);
@@ -1693,7 +1696,9 @@ GPUPass *GPU_generate_pass(
         const bool use_box_correction,
 		const bool use_ellipsoid_correction,
 		const bool use_alpha_as_depth,
-		const bool use_ssr)
+		const bool use_backface_depth,
+		const bool use_ssr,
+		const bool use_ssao)
 {
 	GPUShader *shader;
 	GPUPass *pass;
@@ -1736,8 +1741,14 @@ GPUPass *GPU_generate_pass(
 	if (use_alpha_as_depth) {
 		flags |= GPU_SHADER_FLAGS_ALPHA_DEPTH;
 	}
+	if (use_backface_depth) {
+		flags |= GPU_SHADER_FLAGS_BACKFACE_DEPTH;
+	}
 	if (use_ssr) {
 		flags |= GPU_SHADER_FLAGS_SSR;
+	}
+	if (use_ssao) {
+		flags |= GPU_SHADER_FLAGS_SSAO;
 	}
 
 	shader = GPU_shader_create_ex(vertexcode,

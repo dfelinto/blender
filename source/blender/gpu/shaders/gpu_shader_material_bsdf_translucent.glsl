@@ -45,11 +45,11 @@ void env_sampling_translucent(
 	float pbr, vec3 viewpos, mat4 invviewmat, mat4 viewmat,
 	vec3 N, vec3 T, float roughness, float ior, float sigma,
 	float toon_size, float toon_smooth, float anisotropy, float aniso_rotation,
-	out vec3 result)
+	float ao_factor, out vec3 result)
 {
 	env_sampling_diffuse(
 		pbr, viewpos, invviewmat, viewmat,
 		-N, T, 0.0, ior, sigma,
 		toon_size, toon_smooth, anisotropy, aniso_rotation,
-		result);
+		ao_factor, result);
 }

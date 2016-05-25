@@ -3,7 +3,7 @@
 /* XXX : This is improvised but it looks great */
 vec3 sample_ggx_aniso(float nsample, float ax, float ay, vec3 N, vec3 T, vec3 B)
 {
-	vec3 Xi = hammersley_2d(nsample);
+	vec3 Xi = hammersley_3d(nsample);
 
 	float min_a = min(ax,ay);
 	float max_a = max(ax,ay);
@@ -259,7 +259,7 @@ void env_sampling_aniso_ggx(
 	float pbr, vec3 viewpos, mat4 invviewmat, mat4 viewmat,
 	vec3 N, vec3 T, float roughness, float ior, float sigma,
 	float toon_size, float toon_smooth, float anisotropy, float aniso_rotation,
-	out vec3 result)
+	float ao_factor, out vec3 result)
 {
 	/* Setup */
 	vector_prepass(viewpos, N, invviewmat, viewmat);
@@ -282,7 +282,7 @@ void env_sampling_aniso_ggx(
 
 	/* Integrating Envmap */
 	vec4 out_radiance = vec4(0.0);
-	for (float i = 0; i < BSDF_SAMPLES && i < unfbsdfsamples.x; i++) {
+	for (float i = 0; i < unfbsdfsamples.x; i++) {
 		vec3 H = sample_ggx_aniso(i, ax, ay, N, T, B); /* Microfacet normal */
 		vec3 L = reflect(I, H);
 

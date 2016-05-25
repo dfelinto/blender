@@ -262,7 +262,7 @@ void env_sampling_refract_sharp(
 	float pbr, vec3 viewpos, mat4 invviewmat, mat4 viewmat,
 	vec3 N, vec3 T, float roughness, float ior, float sigma,
 	float toon_size, float toon_smooth, float anisotropy, float aniso_rotation,
-	out vec3 result)
+	float ao_factor, out vec3 result)
 {
 	/* Setup */
 	vector_prepass(viewpos, N, invviewmat, viewmat);
@@ -277,7 +277,7 @@ void env_sampling_refract_ggx(
 	float pbr, vec3 viewpos, mat4 invviewmat, mat4 viewmat,
 	vec3 N, vec3 T, float roughness, float ior, float sigma,
 	float toon_size, float toon_smooth, float anisotropy, float aniso_rotation,
-	out vec3 result)
+	float ao_factor, out vec3 result)
 {
 	/* Setup */
 	vector_prepass(viewpos, N, invviewmat, viewmat);
@@ -298,7 +298,7 @@ void env_sampling_refract_ggx(
 
 	/* Integrating Envmap */
 	vec4 out_radiance = vec4(0.0);
-	for (float i = 0; i < BSDF_SAMPLES && i < unfbsdfsamples.x; i++) {
+	for (float i = 0; i < unfbsdfsamples.x; i++) {
 		vec3 H = sample_ggx(i, a2, N, T, B); /* Microfacet normal */
 		float eta = 1.0/ior;
 		float fresnel = fresnel_dielectric(I, H, ior);

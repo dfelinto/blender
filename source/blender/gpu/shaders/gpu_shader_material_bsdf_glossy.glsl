@@ -2,7 +2,7 @@
 
 vec3 sample_ggx(float nsample, float a2, vec3 N, vec3 T, vec3 B)
 {
-	vec3 Xi = hammersley_2d(nsample);
+	vec3 Xi = hammersley_3d(nsample);
 
 	float z = sqrt( (1.0 - Xi.x) / ( 1.0 + a2 * Xi.x - Xi.x ) ); /* cos theta */
 	float r = sqrt( 1.0 - z * z ); /* sin theta */
@@ -17,7 +17,7 @@ vec3 sample_ggx(float nsample, float a2, vec3 N, vec3 T, vec3 B)
 
 vec3 sample_beckmann(float nsample, float a2, vec3 N, vec3 T, vec3 B)
 {
-	vec3 Xi = hammersley_2d(nsample);
+	vec3 Xi = hammersley_3d(nsample);
 
 	float z = sqrt( 1.0 / ( 1.0 - a2 * log(1.0 - Xi.x) ) ); /* cos theta */
 	float r = sqrt( 1.0 - z * z ); /* sin theta */
@@ -410,7 +410,7 @@ void env_sampling_glossy_sharp(
 	float pbr, vec3 viewpos, mat4 invviewmat, mat4 viewmat,
 	vec3 N, vec3 T, float roughness, float ior, float sigma,
 	float toon_size, float toon_smooth, float anisotropy, float aniso_rotation,
-	out vec3 result)
+	float ao_factor, out vec3 result)
 {
 	/* Setup */
 	vector_prepass(viewpos, N, invviewmat, viewmat);
@@ -432,7 +432,7 @@ void env_sampling_glossy_sharp(
 	bool hit = raycast(viewpos, vL, jitter, hitstep, hitpixel, hitco);
 	float contrib = ssr_contribution(viewpos, hitstep, hit, hitco);
 
-	vec4 sample_ssr = texture2DLod(unfssr, hitco.xy, 0);
+	vec4 sample_ssr = texture2DLod(unfscenebuf, hitco.xy, 0);
 	srgb_to_linearrgb(sample_ssr, sample_ssr);
 
 	result = mix(sample_probe.rgb, sample_ssr.rgb, contrib);
@@ -445,7 +445,7 @@ void env_sampling_glossy_ggx(
 	float pbr, vec3 viewpos, mat4 invviewmat, mat4 viewmat,
 	vec3 N, vec3 T, float roughness, float ior, float sigma,
 	float toon_size, float toon_smooth, float anisotropy, float aniso_rotation,
-	out vec3 result)
+	float ao_factor, out vec3 result)
 {
 	/* Setup */
 	vector_prepass(viewpos, N, invviewmat, viewmat);
@@ -459,7 +459,7 @@ void env_sampling_glossy_ggx(
 
 	/* Integrating Envmap */
 	vec4 out_radiance = vec4(0.0);
-	for (float i = 0, iu = 0u; i < BSDF_SAMPLES && i < unfbsdfsamples.x; i++, iu++) {
+	for (float i = 0; i < unfbsdfsamples.x; i++) {
 		vec3 H = sample_ggx(i, a2, N, T, B); /* Microfacet normal */
 		vec3 L = reflect(I, H);
 		float NL = max(0.0, dot(N, L));
@@ -487,7 +487,7 @@ void env_sampling_glossy_beckmann(
 	float pbr, vec3 viewpos, mat4 invviewmat, mat4 viewmat,
 	vec3 N, vec3 T, float roughness, float ior, float sigma,
 	float toon_size, float toon_smooth, float anisotropy, float aniso_rotation,
-	out vec3 result)
+	float ao_factor, out vec3 result)
 {
 	/* Setup */
 	vector_prepass(viewpos, N, invviewmat, viewmat);
@@ -501,7 +501,7 @@ void env_sampling_glossy_beckmann(
 
 	/* Integrating Envmap */
 	vec4 out_radiance = vec4(0.0);
-	for (float i = 0, iu = 0u; i < BSDF_SAMPLES && i < unfbsdfsamples.x; i++, iu++) {
+	for (float i = 0; i < unfbsdfsamples.x; i++) {
 		vec3 H = sample_beckmann(i, a2, N, T, B); /* Microfacet normal */
 		vec3 L = reflect(I, H);
 		float NL = max(0.0, dot(N, L));

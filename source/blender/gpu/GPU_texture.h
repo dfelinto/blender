@@ -77,6 +77,14 @@ GPUTexture *GPU_texture_create_depth_multisample(int w, int h, int samples, char
 GPUTexture *GPU_texture_from_blender(
 		struct Image *ima, struct ImageUser *iuser, int textarget, bool is_data, short do_clip, double time, int mipmap);
 GPUTexture *GPU_texture_from_preview(struct PreviewImage *prv, int mipmap);
+
+GPUTexture *GPU_create_ltc_mat_ggx_lut_texture(void);
+GPUTexture *GPU_create_ltc_mag_ggx_lut_texture(void);
+GPUTexture *GPU_create_hammersley_sample_texture(int samples);
+GPUTexture *GPU_create_jitter_texture(void);
+GPUTexture *GPU_create_random_texture(void);
+GPUTexture *GPU_create_spiral_sample_texture(int numsamples);
+
 void GPU_invalid_tex_init(void);
 void GPU_invalid_tex_bind(int mode);
 void GPU_invalid_tex_free(void);
@@ -94,6 +102,7 @@ void GPU_texture_filter_mode(GPUTexture *tex, bool compare, bool use_filter);
 struct GPUFrameBuffer *GPU_texture_framebuffer(GPUTexture *tex);
 int GPU_texture_framebuffer_attachment(GPUTexture *tex);
 void GPU_texture_framebuffer_set(GPUTexture *tex, struct GPUFrameBuffer *fb, int attachment);
+
 
 int GPU_texture_target(const GPUTexture *tex);
 int GPU_texture_width(const GPUTexture *tex);
