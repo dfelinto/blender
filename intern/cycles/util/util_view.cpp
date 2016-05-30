@@ -16,10 +16,11 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 
 #include "util_opengl.h"
+#include "util_string.h"
 #include "util_time.h"
+#include "util_version.h"
 #include "util_view.h"
 
 #ifdef __APPLE__
@@ -97,7 +98,9 @@ void view_display_help()
 
 	glColor3f(0.8f, 0.8f, 0.8f);
 
-	view_display_text(x1+20, y2-20, "Cycles Renderer");
+	string info = string("Cycles Renderer ") + CYCLES_VERSION_STRING;
+
+	view_display_text(x1+20, y2-20, info.c_str());
 	view_display_text(x1+20, y2-40, "(C) 2011-2016 Blender Foundation");
 	view_display_text(x1+20, y2-80, "Controls:");
 	view_display_text(x1+20, y2-100, "h:  Info/Help");
@@ -219,7 +222,7 @@ static void view_idle(void)
 		glutPostRedisplay();
 	}
 
-	time_sleep(0.1f);
+	time_sleep(0.1);
 }
 
 void view_main_loop(const char *title, int width, int height,

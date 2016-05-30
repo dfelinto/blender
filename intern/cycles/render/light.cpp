@@ -100,38 +100,53 @@ static void shade_background_pixels(Device *device, DeviceScene *dscene, int res
 
 /* Light */
 
-Light::Light()
+NODE_DEFINE(Light)
 {
-	type = LIGHT_POINT;
+	NodeType* type = NodeType::add("light", create);
 
-	co = make_float3(0.0f, 0.0f, 0.0f);
+	static NodeEnum type_enum;
+	type_enum.insert("point", LIGHT_POINT);
+	type_enum.insert("background", LIGHT_BACKGROUND);
+	type_enum.insert("area", LIGHT_AREA);
+	type_enum.insert("spot", LIGHT_SPOT);
+	SOCKET_ENUM(type, "Type", type_enum, LIGHT_POINT);
 
-	dir = make_float3(0.0f, 0.0f, 0.0f);
-	size = 0.0f;
+	SOCKET_POINT(co, "Co", make_float3(0.0f, 0.0f, 0.0f));
 
-	axisu = make_float3(0.0f, 0.0f, 0.0f);
-	sizeu = 1.0f;
-	axisv = make_float3(0.0f, 0.0f, 0.0f);
-	sizev = 1.0f;
+	SOCKET_VECTOR(dir, "Dir", make_float3(0.0f, 0.0f, 0.0f));
+	SOCKET_FLOAT(size, "Size", 0.0f);
 
-	map_resolution = 512;
+	SOCKET_VECTOR(axisu, "Axis U", make_float3(0.0f, 0.0f, 0.0f));
+	SOCKET_FLOAT(sizeu, "Size U", 1.0f);
+	SOCKET_VECTOR(axisv, "Axis V", make_float3(0.0f, 0.0f, 0.0f));
+	SOCKET_FLOAT(sizev, "Size V", 1.0f);
 
-	spot_angle = M_PI_4_F;
-	spot_smooth = 0.0f;
+	SOCKET_INT(map_resolution, "Map Resolution", 512);
 
-	cast_shadow = true;
-	use_mis = false;
-	use_diffuse = true;
-	use_glossy = true;
-	use_transmission = true;
-	use_scatter = true;
+	SOCKET_FLOAT(spot_angle, "Spot Angle", M_PI_4_F);
+	SOCKET_FLOAT(spot_smooth, "Spot Smooth", 0.0f);
 
-	shader = 0;
-	samples = 1;
-	max_bounces = 1024;
+	SOCKET_BOOLEAN(cast_shadow, "Cast Shadow", true);
+	SOCKET_BOOLEAN(use_mis, "Use Mis", false);
+	SOCKET_BOOLEAN(use_diffuse, "Use Diffuse", true);
+	SOCKET_BOOLEAN(use_glossy, "Use Glossy", true);
+	SOCKET_BOOLEAN(use_transmission, "Use Transmission", true);
+	SOCKET_BOOLEAN(use_scatter, "Use Scatter", true);
 
-	is_portal = false;
-	is_enabled = true;
+	SOCKET_INT(samples, "Samples", 1);
+	SOCKET_INT(max_bounces, "Max Bounces", 1024);
+
+	SOCKET_BOOLEAN(is_portal, "Is Portal", false);
+	SOCKET_BOOLEAN(is_enabled, "Is Enabled", true);
+
+	SOCKET_NODE(shader, "Shader", &Shader::node_type);
+
+	return type;
+}
+
+Light::Light()
+: Node(node_type)
+{
 }
 
 void Light::tag_update(Scene *scene)
@@ -147,7 +162,7 @@ bool Light::has_contribution(Scene *scene)
 	if(type == LIGHT_BACKGROUND) {
 		return true;
 	}
-	return scene->shaders[shader]->has_surface_emission;
+	return (shader) ? shader->has_surface_emission : scene->default_light->has_surface_emission;
 }
 
 /* Light Manager */
@@ -180,7 +195,7 @@ void LightManager::disable_ineffective_light(Device *device, Scene *scene)
 		 * - If unsupported on a device
 		 * - If we don't need it (no HDRs etc.)
 		 */
-		Shader *shader = scene->shaders[scene->background->shader];
+		Shader *shader = (scene->background->shader) ? scene->background->shader : scene->default_background;
 		bool disable_mis = !(has_portal || shader->has_surface_spatial_varying) ||
 		                   !(device->info.advanced_shading);
 		if(disable_mis) {
@@ -223,9 +238,7 @@ void LightManager::device_update_distribution(Device *device, DeviceScene *dscen
 			continue;
 
 		/* skip if we have no emission shaders */
-		foreach(uint sindex, mesh->used_shaders) {
-			Shader *shader = scene->shaders[sindex];
-
+		foreach(Shader *shader, mesh->used_shaders) {
 			if(shader->use_mis && shader->has_surface_emission) {
 				have_emission = true;
 				break;
@@ -234,8 +247,11 @@ void LightManager::device_update_distribution(Device *device, DeviceScene *dscen
 
 		/* count triangles */
 		if(have_emission) {
-			for(size_t i = 0; i < mesh->triangles.size(); i++) {
-				Shader *shader = scene->shaders[mesh->shader[i]];
+			size_t mesh_num_triangles = mesh->num_triangles();
+			for(size_t i = 0; i < mesh_num_triangles; i++) {
+				int shader_index = mesh->shader[i];
+				Shader *shader = (shader_index < mesh->used_shaders.size()) ?
+					mesh->used_shaders[shader_index] : scene->default_surface;
 
 				if(shader->use_mis && shader->has_surface_emission)
 					num_triangles++;
@@ -270,9 +286,7 @@ void LightManager::device_update_distribution(Device *device, DeviceScene *dscen
 		}
 
 		/* skip if we have no emission shaders */
-		foreach(uint sindex, mesh->used_shaders) {
-			Shader *shader = scene->shaders[sindex];
-
+		foreach(Shader *shader, mesh->used_shaders) {
 			if(shader->use_mis && shader->has_surface_emission) {
 				have_emission = true;
 				break;
@@ -306,8 +320,11 @@ void LightManager::device_update_distribution(Device *device, DeviceScene *dscen
 				use_light_visibility = true;
 			}
 
-			for(size_t i = 0; i < mesh->triangles.size(); i++) {
-				Shader *shader = scene->shaders[mesh->shader[i]];
+			size_t mesh_num_triangles = mesh->num_triangles();
+			for(size_t i = 0; i < mesh_num_triangles; i++) {
+				int shader_index = mesh->shader[i];
+				Shader *shader = (shader_index < mesh->used_shaders.size()) ?
+					mesh->used_shaders[shader_index] : scene->default_surface;
 
 				if(shader->use_mis && shader->has_surface_emission) {
 					distribution[offset].x = totarea;
@@ -316,7 +333,7 @@ void LightManager::device_update_distribution(Device *device, DeviceScene *dscen
 					distribution[offset].w = __int_as_float(object_id);
 					offset++;
 
-					Mesh::Triangle t = mesh->triangles[i];
+					Mesh::Triangle t = mesh->get_triangle(i);
 					float3 p1 = mesh->verts[t.v[0]];
 					float3 p2 = mesh->verts[t.v[1]];
 					float3 p3 = mesh->verts[t.v[2]];
@@ -604,7 +621,8 @@ void LightManager::device_update_points(Device *device,
 		}
 
 		float3 co = light->co;
-		int shader_id = scene->shader_manager->get_shader_id(light->shader);
+		Shader *shader = (light->shader) ? light->shader : scene->default_light;
+		int shader_id = scene->shader_manager->get_shader_id(shader);
 		float samples = __int_as_float(light->samples);
 		float max_bounces = __int_as_float(light->max_bounces);
 
@@ -771,10 +789,10 @@ void LightManager::device_update_points(Device *device,
 
 void LightManager::device_update(Device *device, DeviceScene *dscene, Scene *scene, Progress& progress)
 {
-	VLOG(1) << "Total " << scene->lights.size() << " lights.";
-
 	if(!need_update)
 		return;
+
+	VLOG(1) << "Total " << scene->lights.size() << " lights.";
 
 	device_free(device, dscene);
 

@@ -36,6 +36,7 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "BLI_array_utils.h"
 #include "BLI_blenlib.h"
 #include "BLI_math.h"
 #include "BLI_ghash.h"
@@ -63,12 +64,15 @@
 #include "ED_object.h"
 #include "ED_screen.h"
 #include "ED_transform.h"
+#include "ED_transform_snap_object_context.h"
 #include "ED_types.h"
 #include "ED_util.h"
 #include "ED_view3d.h"
 #include "ED_curve.h"
 
 #include "curve_intern.h"
+
+#include "curve_fit_nd.h"
 
 #include "UI_interface.h"
 #include "UI_resources.h"
@@ -1390,7 +1394,9 @@ void CURVE_OT_split(wmOperatorType *ot)
 
 /* ******************* FLAGS ********************* */
 
-static short isNurbselUV(Nurb *nu, int *u, int *v, int flag)
+static bool isNurbselUV(
+        const Nurb *nu, int flag,
+        int *r_u, int *r_v)
 {
 	/* return (u != -1): 1 row in u-direction selected. U has value between 0-pntsv
 	 * return (v != -1): 1 column in v-direction selected. V has value between 0-pntsu
@@ -1398,7 +1404,7 @@ static short isNurbselUV(Nurb *nu, int *u, int *v, int flag)
 	BPoint *bp;
 	int a, b, sel;
 
-	*u = *v = -1;
+	*r_u = *r_v = -1;
 
 	bp = nu->bp;
 	for (b = 0; b < nu->pntsv; b++) {
@@ -1407,7 +1413,7 @@ static short isNurbselUV(Nurb *nu, int *u, int *v, int flag)
 			if (bp->f1 & flag) sel++;
 		}
 		if (sel == nu->pntsu) {
-			if (*u == -1) *u = b;
+			if (*r_u == -1) *r_u = b;
 			else return 0;
 		}
 		else if (sel > 1) {
@@ -1422,7 +1428,7 @@ static short isNurbselUV(Nurb *nu, int *u, int *v, int flag)
 			if (bp->f1 & flag) sel++;
 		}
 		if (sel == nu->pntsv) {
-			if (*v == -1) *v = a;
+			if (*r_v == -1) *r_v = a;
 			else return 0;
 		}
 		else if (sel > 1) {
@@ -1430,8 +1436,8 @@ static short isNurbselUV(Nurb *nu, int *u, int *v, int flag)
 		}
 	}
 
-	if (*u == -1 && *v > -1) return 1;
-	if (*v == -1 && *u > -1) return 1;
+	if (*r_u == -1 && *r_v > -1) return 1;
+	if (*r_v == -1 && *r_u > -1) return 1;
 	return 0;
 }
 
@@ -1851,7 +1857,7 @@ bool ed_editnurb_extrude_flag(EditNurb *editnurb, const short flag)
 		else {
 			/* which row or column is selected */
 
-			if (isNurbselUV(nu, &u, &v, flag)) {
+			if (isNurbselUV(nu, flag, &u, &v)) {
 
 				/* deselect all */
 				bp = nu->bp;
@@ -4991,11 +4997,22 @@ static int add_vertex_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 
 		if (use_proj) {
 			const float mval[2] = {UNPACK2(event->mval)};
-			float no_dummy[3];
-			float dist_px_dummy;
-			snapObjectsContext(
-			        C, mval, SNAP_NOT_OBEDIT,
-			        location, no_dummy, &dist_px_dummy);
+
+			struct SnapObjectContext *snap_context = ED_transform_snap_object_context_create_view3d(
+			        CTX_data_main(C), vc.scene, 0,
+			        vc.ar, vc.v3d);
+
+			ED_transform_snap_object_project_view3d_mixed(
+			        snap_context,
+			        &(const struct SnapObjectParams){
+			            .snap_select = SNAP_NOT_OBEDIT,
+			            .snap_to_flag = SCE_SELECT_FACE,
+			        },
+			        mval, NULL, true,
+			        location, NULL);
+
+
+			ED_transform_snap_object_context_destroy(snap_context);
 		}
 
 		if ((cu->flag & CU_3D) == 0) {
@@ -5761,6 +5778,115 @@ void CURVE_OT_delete(wmOperatorType *ot)
 	RNA_def_enum_funcs(prop, rna_curve_delete_type_itemf);
 
 	ot->prop = prop;
+}
+
+static bool test_bezt_is_sel_any(const void *bezt_v, void *user_data)
+{
+	Curve *cu = user_data;
+	const BezTriple *bezt = bezt_v;
+	return BEZT_ISSEL_ANY_HIDDENHANDLES(cu, bezt);
+}
+
+static int curve_dissolve_exec(bContext *C, wmOperator *UNUSED(op))
+{
+	Object *obedit = CTX_data_edit_object(C);
+	Curve *cu = (Curve *)obedit->data;
+
+	{
+		ListBase *editnurb = object_editcurve_get(obedit);
+		Nurb *nu;
+
+		for (nu = editnurb->first; nu; nu = nu->next) {
+			if ((nu->type == CU_BEZIER) && (nu->pntsu > 2)) {
+				unsigned int span_step[2] = {nu->pntsu, nu->pntsu};
+				unsigned int span_len;
+
+				while (BLI_array_iter_span(
+				           nu->bezt, nu->pntsu,
+				           (nu->flagu & CU_NURB_CYCLIC) != 0, false,
+				           test_bezt_is_sel_any, cu,
+				           span_step, &span_len))
+				{
+					BezTriple *bezt_prev = &nu->bezt[mod_i(span_step[0] - 1, nu->pntsu)];
+					BezTriple *bezt_next = &nu->bezt[mod_i(span_step[1] + 1, nu->pntsu)];
+
+					int i_span_edge_len = span_len + 1;
+					const unsigned int dims = 3;
+
+					const unsigned int points_len = ((cu->resolu - 1) * i_span_edge_len) + 1;
+					float *points = MEM_mallocN(points_len * dims * sizeof(float), __func__);
+					float *points_stride = points;
+					const int points_stride_len = (cu->resolu - 1);
+
+					for (int segment = 0; segment < i_span_edge_len; segment++) {
+						BezTriple *bezt_a = &nu->bezt[mod_i((span_step[0] + segment) - 1, nu->pntsu)];
+						BezTriple *bezt_b = &nu->bezt[mod_i((span_step[0] + segment),     nu->pntsu)];
+
+						for (int axis = 0; axis < dims; axis++) {
+							BKE_curve_forward_diff_bezier(
+							        bezt_a->vec[1][axis], bezt_a->vec[2][axis],
+							        bezt_b->vec[0][axis], bezt_b->vec[1][axis],
+							        points_stride + axis, points_stride_len, dims * sizeof(float));
+						}
+
+						points_stride += dims * points_stride_len;
+					}
+
+					BLI_assert(points_stride + dims == points + (points_len * dims));
+
+					float tan_l[3], tan_r[3], error_sq_dummy;
+
+					sub_v3_v3v3(tan_l, bezt_prev->vec[1], bezt_prev->vec[2]);
+					normalize_v3(tan_l);
+					sub_v3_v3v3(tan_r, bezt_next->vec[0], bezt_next->vec[1]);
+					normalize_v3(tan_r);
+
+					curve_fit_cubic_to_points_single_fl(
+					        points, points_len, dims, FLT_EPSILON,
+					        tan_l, tan_r,
+					        bezt_prev->vec[2], bezt_next->vec[0],
+					        &error_sq_dummy);
+
+					if (!ELEM(bezt_prev->h2, HD_FREE, HD_ALIGN)) {
+						bezt_prev->h2 = (bezt_prev->h2 == HD_VECT) ? HD_FREE : HD_ALIGN;
+					}
+					if (!ELEM(bezt_next->h1, HD_FREE, HD_ALIGN)) {
+						bezt_next->h1 = (bezt_next->h1 == HD_VECT) ? HD_FREE : HD_ALIGN;
+					}
+
+					MEM_freeN(points);
+				}
+			}
+		}
+	}
+
+	ed_curve_delete_selected(obedit);
+
+	{
+		cu->actnu = cu->actvert = CU_ACT_NONE;
+
+		if (ED_curve_updateAnimPaths(obedit->data)) WM_event_add_notifier(C, NC_OBJECT | ND_KEYS, obedit);
+
+		WM_event_add_notifier(C, NC_GEOM | ND_DATA, obedit->data);
+		DAG_id_tag_update(obedit->data, 0);
+	}
+
+	return OPERATOR_FINISHED;
+}
+
+void CURVE_OT_dissolve_verts(wmOperatorType *ot)
+{
+	/* identifiers */
+	ot->name = "Dissolve Vertices";
+	ot->description = "Delete selected control points, correcting surrounding handles";
+	ot->idname = "CURVE_OT_dissolve_verts";
+
+	/* api callbacks */
+	ot->exec = curve_dissolve_exec;
+	ot->poll = ED_operator_editcurve;
+
+	/* flags */
+	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
 /********************** shade smooth/flat operator *********************/

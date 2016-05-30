@@ -39,7 +39,6 @@
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
-#include "BKE_blender.h"
 #include "BKE_context.h"
 #include "BKE_deform.h"
 #include "BKE_object_deform.h"
@@ -351,6 +350,9 @@ static void dynamicPaint_bakeImageSequence(DynamicPaintBakeJob *job)
 		return;
 	}
 
+	/* Show progress bar. */
+	*(job->do_update) = true;
+
 	/* Set frame to start point (also inits modifier data) */
 	frame = surface->start_frame;
 	orig_frame = scene->r.cfra;
@@ -358,14 +360,15 @@ static void dynamicPaint_bakeImageSequence(DynamicPaintBakeJob *job)
 	ED_update_for_newframe(job->bmain, scene, 1);
 
 	/* Init surface	*/
-	if (!dynamicPaint_createUVSurface(scene, surface)) {
+	if (!dynamicPaint_createUVSurface(scene, surface, job->progress, job->do_update)) {
 		job->success = 0;
 		return;
 	}
 
 	/* Loop through selected frames */
 	for (frame = surface->start_frame; frame <= surface->end_frame; frame++) {
-		float progress = (frame - surface->start_frame) / (float)frames;
+		/* The first 10% are for createUVSurface... */
+		const float progress = 0.1f + 0.9f * (frame - surface->start_frame) / (float)frames;
 		surface->current_frame = frame;
 
 		/* If user requested stop, quit baking */
@@ -426,7 +429,7 @@ static void dpaint_bake_startjob(void *customdata, short *stop, short *do_update
 	job->start = PIL_check_seconds_timer();
 	job->success = 1;
 
-    G.is_break = false; /* reset blender_test_break*/
+    G.is_break = false; /* reset BKE_blender_test_break*/
 
 	/* XXX annoying hack: needed to prevent data corruption when changing
 	 * scene frame in separate threads

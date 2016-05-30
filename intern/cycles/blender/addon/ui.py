@@ -209,8 +209,8 @@ class CyclesRender_PT_sampling(CyclesButtonsPanel, Panel):
         draw_samples_info(layout, context)
 
 
-class CyclesRender_PT_volume_sampling(CyclesButtonsPanel, Panel):
-    bl_label = "Volume Sampling"
+class CyclesRender_PT_geometery(CyclesButtonsPanel, Panel):
+    bl_label = "Geometry"
     bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
@@ -219,11 +219,30 @@ class CyclesRender_PT_volume_sampling(CyclesButtonsPanel, Panel):
         scene = context.scene
         cscene = scene.cycles
 
-        row = layout.row()
-        row.label("Heterogeneous:")
-        row = layout.row()
-        row.prop(cscene, "volume_step_size")
-        row.prop(cscene, "volume_max_steps")
+        if cscene.feature_set == 'EXPERIMENTAL':
+            split = layout.split()
+
+            col = split.column()
+
+            sub = col.column(align=True)
+            sub.label("Volume Sampling:")
+            sub.prop(cscene, "volume_step_size")
+            sub.prop(cscene, "volume_max_steps")
+
+            col = split.column()
+
+            sub = col.column(align=True)
+            sub.label("Subdivision Rate:")
+            sub.prop(cscene, "dicing_rate", text="Render")
+            sub.prop(cscene, "preview_dicing_rate", text="Preview")
+            sub.separator()
+            sub.prop(cscene, "max_subdivisions")
+        else:
+            row = layout.row()
+            row.label("Volume Sampling:")
+            row = layout.row()
+            row.prop(cscene, "volume_step_size")
+            row.prop(cscene, "volume_max_steps")
 
 
 class CyclesRender_PT_light_paths(CyclesButtonsPanel, Panel):
@@ -681,10 +700,20 @@ class Cycles_PT_mesh_displacement(CyclesButtonsPanel, Panel):
         elif mball:
             cdata = mball.cycles
 
-        layout.prop(cdata, "displacement_method", text="Method")
-        layout.prop(cdata, "use_subdivision")
-        layout.prop(cdata, "dicing_rate")
+        split = layout.split()
 
+        col = split.column()
+        sub = col.column(align=True)
+        sub.label(text="Displacment:")
+        sub.prop(cdata, "displacement_method", text="")
+
+        col = split.column()
+        sub = col.column(align=True)
+        sub.label(text="Subdivision:")
+        sub.prop(cdata, "subdivision_type", text="")
+
+        if cdata.subdivision_type != 'NONE':
+            sub.prop(cdata, "dicing_rate")
 
 class CyclesObject_PT_motion_blur(CyclesButtonsPanel, Panel):
     bl_label = "Motion Blur"
@@ -1523,6 +1552,10 @@ class CyclesRender_PT_debug(CyclesButtonsPanel, Panel):
         row.prop(cscene, "debug_use_cpu_avx", toggle=True)
         row.prop(cscene, "debug_use_cpu_avx2", toggle=True)
         col.prop(cscene, "debug_use_qbvh")
+
+        col = layout.column()
+        col.label('CUDA Flags:')
+        col.prop(cscene, "debug_use_cuda_adaptive_compile")
 
         col = layout.column()
         col.label('OpenCL Flags:')

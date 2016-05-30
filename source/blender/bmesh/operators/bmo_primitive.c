@@ -376,8 +376,8 @@ void bmo_create_uvsphere_exec(BMesh *bm, BMOperator *op)
 	phid /= 2;
 	for (a = 0; a <= tot; a++) {
 		/* Going in this direction, then edge extruding, makes normals face outward */
-		vec[0] = -dia * sinf(phi);
-		vec[1] = 0.0;
+		vec[0] = 0.0;
+		vec[1] = dia * sinf(phi);
 		vec[2] = dia * cosf(phi);
 		eve = BM_vert_create(bm, vec, NULL, BM_CREATE_NOP);
 		BMO_elem_flag_enable(bm, eve, VERT_MARK);
@@ -1042,13 +1042,14 @@ void bmo_create_cube_exec(BMesh *bm, BMOperator *op)
 	float off = BMO_slot_float_get(op->slots_in, "size") / 2.0f;
 	const bool calc_uvs = BMO_slot_bool_get(op->slots_in, "calc_uvs");
 	int i, x, y, z;
+	/* rotation order set to match 'BM_mesh_calc_uvs_cube' */
 	const char faces[6][4] = {
-		{1, 3, 2, 0},
-		{3, 7, 6, 2},
-		{7, 5, 4, 6},
-		{5, 1, 0, 4},
-		{0, 2, 6, 4},
-		{5, 7, 3, 1},
+		{0, 1, 3, 2},
+		{2, 3, 7, 6},
+		{6, 7, 5, 4},
+		{4, 5, 1, 0},
+		{2, 6, 4, 0},
+		{7, 3, 1, 5},
 	};
 
 	BMO_slot_mat4_get(op->slots_in, "matrix", mat);
@@ -1093,7 +1094,8 @@ void bmo_create_cube_exec(BMesh *bm, BMOperator *op)
 /**
  * Fills first available UVmap with cube-like UVs for all faces OpFlag-ged by given flag.
  *
- * \note Expects tagged faces to be six quads...
+ * \note Expects tagged faces to be six quads.
+ * \note Caller must order faces for correct alignment.
  *
  * \param bm The BMesh to operate on.
  * \param oflag The flag to check faces with.

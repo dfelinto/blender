@@ -70,6 +70,8 @@ bool debug_flags_sync_from_scene(BL::Scene b_scene)
 	flags.cpu.sse3 = get_boolean(cscene, "debug_use_cpu_sse3");
 	flags.cpu.sse2 = get_boolean(cscene, "debug_use_cpu_sse2");
 	flags.cpu.qbvh = get_boolean(cscene, "debug_use_qbvh");
+	/* Synchronize CUDA flags. */
+	flags.cuda.adaptive_compile = get_boolean(cscene, "debug_use_cuda_adaptive_compile");
 	/* Synchronize OpenCL kernel type. */
 	switch(get_enum(cscene, "debug_opencl_kernel_type")) {
 		case 0:
@@ -644,7 +646,20 @@ static PyObject *set_resumable_chunks_func(PyObject * /*self*/, PyObject *args)
 	if(!PyArg_ParseTuple(args, "ii",
 	                     &num_resumable_chunks,
 	                     &current_resumable_chunk)) {
-		return NULL;
+		Py_RETURN_NONE;
+	}
+
+	if(num_resumable_chunks <= 0) {
+		fprintf(stderr, "Cycles: Bad value for number of resumable chunks.\n");
+		abort();
+		Py_RETURN_NONE;
+	}
+	if(current_resumable_chunk < 1 ||
+	   current_resumable_chunk > num_resumable_chunks)
+	{
+		fprintf(stderr, "Cycles: Bad value for current resumable chunk number.\n");
+		abort();
+		Py_RETURN_NONE;
 	}
 
 	VLOG(1) << "Initialized resumable render: "
@@ -652,6 +667,10 @@ static PyObject *set_resumable_chunks_func(PyObject * /*self*/, PyObject *args)
 	        << "current_resumable_chunk=" << current_resumable_chunk;
 	BlenderSession::num_resumable_chunks = num_resumable_chunks;
 	BlenderSession::current_resumable_chunk = current_resumable_chunk;
+
+	printf("Cycles: Will render chunk %d of %d\n",
+	       current_resumable_chunk,
+	       num_resumable_chunks);
 
 	Py_RETURN_NONE;
 }

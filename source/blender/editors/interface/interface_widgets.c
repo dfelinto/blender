@@ -859,10 +859,17 @@ static void widget_draw_icon(
 		else if (but->flag & UI_ACTIVE) {}
 		else alpha = 0.5f;
 	}
-	
-	/* extra feature allows more alpha blending */
-	if ((but->type == UI_BTYPE_LABEL) && but->a1 == 1.0f)
-		alpha *= but->a2;
+	else if ((but->type == UI_BTYPE_LABEL)) {
+		/* extra feature allows more alpha blending */
+		if (but->a1 == 1.0f) {
+			alpha *= but->a2;
+		}
+	}
+	else if (ELEM(but->type, UI_BTYPE_BUT)) {
+		if (but->flag & UI_BUT_DISABLED) {
+			alpha *= 0.5f;
+		}
+	}
 	
 	glEnable(GL_BLEND);
 	
@@ -3042,6 +3049,15 @@ static void widget_swatch(uiBut *but, uiWidgetColors *wcol, rcti *rect, int stat
 
 	wcol->shaded = 0;
 	wcol->alpha_check = (wcol->inner[3] < 255);
+	
+	if (state & (UI_BUT_DISABLED | UI_BUT_INACTIVE)) {
+		/* Now we reduce alpha of the inner color (i.e. the color shown)
+		 * so that this setting can look greyed out, while retaining
+		 * the checkboard (for transparent values). This is needed
+		 * here as the effects of ui_widget_color_disabled() are overwritten.
+		 */
+		wcol->inner[3] /= 2;
+	}
 
 	widgetbase_draw(&wtb, wcol);
 	

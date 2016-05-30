@@ -350,27 +350,41 @@ void BKE_image_free(Image *ima)
 }
 
 /* only image block itself */
+static void image_init(Image *ima, short source, short type)
+{
+	BLI_assert(MEMCMP_STRUCT_OFS_IS_ZERO(ima, id));
+
+	ima->ok = IMA_OK;
+
+	ima->xrep = ima->yrep = 1;
+	ima->aspx = ima->aspy = 1.0;
+	ima->gen_x = 1024; ima->gen_y = 1024;
+	ima->gen_type = IMA_GENTYPE_GRID;
+
+	ima->source = source;
+	ima->type = type;
+
+	if (source == IMA_SRC_VIEWER)
+		ima->flag |= IMA_VIEW_AS_RENDER;
+
+	BKE_color_managed_colorspace_settings_init(&ima->colorspace_settings);
+	ima->stereo3d_format = MEM_callocN(sizeof(Stereo3dFormat), "Image Stereo Format");
+}
+
+void BKE_image_init(struct Image *image)
+{
+	if (image) {
+		image_init(image, IMA_SRC_GENERATED, IMA_TYPE_UV_TEST);
+	}
+}
+
 static Image *image_alloc(Main *bmain, const char *name, short source, short type)
 {
 	Image *ima;
 
 	ima = BKE_libblock_alloc(bmain, ID_IM, name);
 	if (ima) {
-		ima->ok = IMA_OK;
-
-		ima->xrep = ima->yrep = 1;
-		ima->aspx = ima->aspy = 1.0;
-		ima->gen_x = 1024; ima->gen_y = 1024;
-		ima->gen_type = 1;   /* no defines yet? */
-
-		ima->source = source;
-		ima->type = type;
-
-		if (source == IMA_SRC_VIEWER)
-			ima->flag |= IMA_VIEW_AS_RENDER;
-
-		BKE_color_managed_colorspace_settings_init(&ima->colorspace_settings);
-		ima->stereo3d_format = MEM_callocN(sizeof(Stereo3dFormat), "Image Stereo Format");
+		image_init(ima, source, type);
 	}
 
 	return ima;
@@ -826,13 +840,6 @@ static ImBuf *add_ibuf_size(unsigned int width, unsigned int height, const char 
 		default:
 			BKE_image_buf_fill_color(rect, rect_float, width, height, color);
 			break;
-	}
-
-	if (rect_float) {
-		/* both byte and float buffers are filling in sRGB space, need to linearize float buffer after BKE_image_buf_fill* functions */
-
-		IMB_buffer_float_from_float(rect_float, rect_float, ibuf->channels, IB_PROFILE_LINEAR_RGB, IB_PROFILE_SRGB,
-		                            true, ibuf->x, ibuf->y, ibuf->x, ibuf->x);
 	}
 
 	return ibuf;
@@ -1741,6 +1748,7 @@ typedef struct StampData {
 	char scene[STAMP_NAME_SIZE];
 	char strip[STAMP_NAME_SIZE];
 	char rendertime[STAMP_NAME_SIZE];
+	char memory[STAMP_NAME_SIZE];
 } StampData;
 #undef STAMP_NAME_SIZE
 
@@ -1862,6 +1870,13 @@ static void stampdata(Scene *scene, Object *camera, StampData *stamp_data, int d
 		else {
 			stamp_data->rendertime[0] = '\0';
 		}
+
+		if (stats && (scene->r.stamp & R_STAMP_MEMORY)) {
+			BLI_snprintf(stamp_data->memory, sizeof(stamp_data->memory), do_prefix ? "Peak Memory %.2fM" : "%.2fM", stats->mem_peak);
+		}
+		else {
+			stamp_data->memory[0] = '\0';
+		}
 	}
 }
 
@@ -1936,6 +1951,12 @@ static void stampdata_from_template(StampData *stamp_data,
 	else {
 		stamp_data->rendertime[0] = '\0';
 	}
+	if (scene->r.stamp & R_STAMP_MEMORY) {
+		BLI_snprintf(stamp_data->memory, sizeof(stamp_data->memory), "Peak Memory %s", stamp_data_template->memory);
+	}
+	else {
+		stamp_data->memory[0] = '\0';
+	}
 }
 
 void BKE_image_stamp_buf(
@@ -1992,7 +2013,7 @@ void BKE_image_stamp_buf(
 	BLF_wordwrap(mono, width - (BUFF_MARGIN_X * 2));
 
 	BLF_buffer(mono, rectf, rect, width, height, channels, display);
-	BLF_buffer_col(mono, UNPACK4(scene->r.fg_stamp));
+	BLF_buffer_col(mono, scene->r.fg_stamp);
 	pad = BLF_width_max(mono);
 
 	/* use 'h_fixed' rather than 'h', aligns better */
@@ -2049,6 +2070,21 @@ void BKE_image_stamp_buf(
 	}
 
 	/* Top left corner, below File, Date, Rendertime */
+	if (TEXT_SIZE_CHECK(stamp_data.memory, w, h)) {
+		y -= h;
+
+		/* and space for background. */
+		buf_rectfill_area(rect, rectf, width, height, scene->r.bg_stamp, display,
+		                  0, y - BUFF_MARGIN_Y, w + BUFF_MARGIN_X, y + h + BUFF_MARGIN_Y);
+
+		BLF_position(mono, x, y + y_ofs, 0.0);
+		BLF_draw_buffer(mono, stamp_data.memory, BLF_DRAW_STR_DUMMY_MAX);
+
+		/* the extra pixel for background. */
+		y -= BUFF_MARGIN_Y * 2;
+	}
+
+	/* Top left corner, below File, Date, Memory, Rendertime */
 	BLF_enable(mono, BLF_WORD_WRAP);
 	if (TEXT_SIZE_CHECK_WORD_WRAP(stamp_data.note, w, h)) {
 		y -= h;
@@ -2212,6 +2248,7 @@ void BKE_stamp_info_callback(void *data, struct StampData *stamp_data, StampCall
 	CALL(scene, "Scene");
 	CALL(strip, "Strip");
 	CALL(rendertime, "RenderTime");
+	CALL(memory, "Memory");
 
 #undef CALL
 }
@@ -4494,13 +4531,17 @@ void BKE_image_get_size(Image *image, ImageUser *iuser, int *width, int *height)
 	ImBuf *ibuf = NULL;
 	void *lock;
 
-	ibuf = BKE_image_acquire_ibuf(image, iuser, &lock);
+	if (image != NULL) {
+		ibuf = BKE_image_acquire_ibuf(image, iuser, &lock);
+	}
 
 	if (ibuf && ibuf->x > 0 && ibuf->y > 0) {
 		*width = ibuf->x;
 		*height = ibuf->y;
 	}
-	else if (image->type == IMA_TYPE_R_RESULT && iuser != NULL && iuser->scene != NULL) {
+	else if (image != NULL && image->type == IMA_TYPE_R_RESULT &&
+	         iuser != NULL && iuser->scene != NULL)
+	{
 		Scene *scene = iuser->scene;
 		*width = (scene->r.xsch * scene->r.size) / 100;
 		*height = (scene->r.ysch * scene->r.size) / 100;
@@ -4514,7 +4555,9 @@ void BKE_image_get_size(Image *image, ImageUser *iuser, int *width, int *height)
 		*height = IMG_SIZE_FALLBACK;
 	}
 
-	BKE_image_release_ibuf(image, ibuf, lock);
+	if (image != NULL) {
+		BKE_image_release_ibuf(image, ibuf, lock);
+	}
 }
 
 void BKE_image_get_size_fl(Image *image, ImageUser *iuser, float size[2])

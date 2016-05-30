@@ -37,7 +37,7 @@ struct BlenderCamera {
 	float lens;
 	float shuttertime;
 	Camera::MotionPosition motion_position;
-	float shutter_curve[RAMP_TABLE_SIZE];
+	array<float> shutter_curve;
 
 	Camera::RollingShutterType rolling_shutter_type;
 	float rolling_shutter_duration;
@@ -65,6 +65,9 @@ struct BlenderCamera {
 	bool use_spherical_stereo;
 	float interocular_distance;
 	float convergence_distance;
+	bool use_pole_merge;
+	float pole_merge_angle_from;
+	float pole_merge_angle_to;
 
 	enum { AUTO, HORIZONTAL, VERTICAL } sensor_fit;
 	float sensor_width;
@@ -105,10 +108,6 @@ static void blender_camera_init(BlenderCamera *bcam,
 	/* render resolution */
 	bcam->full_width = render_resolution_x(b_render);
 	bcam->full_height = render_resolution_y(b_render);
-
-	/* pixel aspect */
-	bcam->pixelaspect.x = b_render.pixel_aspect_x();
-	bcam->pixelaspect.y = b_render.pixel_aspect_y();
 }
 
 static float blender_camera_focal_distance(BL::RenderEngine& b_engine,
@@ -182,6 +181,10 @@ static void blender_camera_from_object(BlenderCamera *bcam,
 			bcam->convergence_distance = b_camera.stereo().convergence_distance();
 		}
 		bcam->use_spherical_stereo = b_engine.use_spherical_stereo(b_ob);
+
+		bcam->use_pole_merge = b_camera.stereo().use_pole_merge();
+		bcam->pole_merge_angle_from = b_camera.stereo().pole_merge_angle_from();
+		bcam->pole_merge_angle_to = b_camera.stereo().pole_merge_angle_to();
 
 		bcam->ortho_scale = b_camera.ortho_scale();
 
@@ -360,6 +363,12 @@ static void blender_camera_sync(Camera *cam, BlenderCamera *bcam, int width, int
 	blender_camera_viewplane(bcam, width, height,
 		&cam->viewplane, &aspectratio, &sensor_size);
 
+	cam->width = bcam->full_width;
+	cam->height = bcam->full_height;
+
+	cam->full_width = width;
+	cam->full_height = height;
+
 	/* panorama sensor */
 	if(bcam->type == CAMERA_PANORAMA && bcam->panorama_type == PANORAMA_FISHEYE_EQUISOLID) {
 		float fit_xratio = (float)bcam->full_width*bcam->pixelaspect.x;
@@ -421,6 +430,10 @@ static void blender_camera_sync(Camera *cam, BlenderCamera *bcam, int width, int
 			cam->stereo_eye = Camera::STEREO_NONE;
 	}
 
+	cam->use_pole_merge = bcam->use_pole_merge;
+	cam->pole_merge_angle_from = bcam->pole_merge_angle_from;
+	cam->pole_merge_angle_to = bcam->pole_merge_angle_to;
+
 	/* anamorphic lens bokeh */
 	cam->aperture_ratio = bcam->aperture_ratio;
 
@@ -447,7 +460,7 @@ static void blender_camera_sync(Camera *cam, BlenderCamera *bcam, int width, int
 	cam->rolling_shutter_type = bcam->rolling_shutter_type;
 	cam->rolling_shutter_duration = bcam->rolling_shutter_duration;
 
-	memcpy(cam->shutter_curve, bcam->shutter_curve, sizeof(cam->shutter_curve));
+	cam->shutter_curve = bcam->shutter_curve;
 
 	/* border */
 	cam->border = bcam->border;
@@ -545,6 +558,10 @@ void BlenderSync::sync_camera_motion(BL::RenderSettings& b_render,
 		BlenderCamera bcam;
 		float aspectratio, sensor_size;
 		blender_camera_init(&bcam, b_render);
+
+		/* TODO(sergey): Consider making it a part of blender_camera_init(). */
+		bcam.pixelaspect.x = b_render.pixel_aspect_x();
+		bcam.pixelaspect.y = b_render.pixel_aspect_y();
 
 		blender_camera_from_object(&bcam, b_engine, b_ob);
 		blender_camera_viewplane(&bcam,

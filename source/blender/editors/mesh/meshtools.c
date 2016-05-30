@@ -572,7 +572,7 @@ int join_mesh_exec(bContext *C, wmOperator *op)
 	ED_object_editmode_exit(C, EM_FREEDATA | EM_WAITCURSOR | EM_DO_UNDO);
 #else
 	/* toggle editmode using lower level functions so this can be called from python */
-	EDBM_mesh_make(scene->toolsettings, ob);
+	EDBM_mesh_make(scene->toolsettings, ob, false);
 	EDBM_mesh_load(ob);
 	EDBM_mesh_free(me->edit_btmesh);
 	MEM_freeN(me->edit_btmesh);
@@ -811,9 +811,9 @@ static BMVert *editbmesh_get_x_mirror_vert_spatial(Object *ob, BMEditMesh *em, c
 	int i;
 	
 	/* ignore nan verts */
-	if ((finite(co[0]) == false) ||
-	    (finite(co[1]) == false) ||
-	    (finite(co[2]) == false))
+	if ((isfinite(co[0]) == false) ||
+	    (isfinite(co[1]) == false) ||
+	    (isfinite(co[2]) == false))
 	{
 		return NULL;
 	}
@@ -902,8 +902,8 @@ static float *editmesh_get_mirror_uv(BMEditMesh *em, int axis, float *uv, float 
 	float cent[2];
 
 	/* ignore nan verts */
-	if (isnan(uv[0]) || !finite(uv[0]) ||
-	    isnan(uv[1]) || !finite(uv[1])
+	if (isnan(uv[0]) || !isfinite(uv[0]) ||
+	    isnan(uv[1]) || !isfinite(uv[1])
 	    )
 	{
 		return NULL;

@@ -63,8 +63,13 @@ BlenderSync::BlenderSync(BL::RenderEngine& b_engine,
   preview(preview),
   experimental(false),
   is_cpu(is_cpu),
+  dicing_rate(1.0f),
+  max_subdivisions(12),
   progress(progress)
 {
+	PointerRNA cscene = RNA_pointer_get(&b_scene.ptr, "cycles");
+	dicing_rate = preview ? RNA_float_get(&cscene, "preview_dicing_rate") : RNA_float_get(&cscene, "dicing_rate");
+	max_subdivisions = RNA_int_get(&cscene, "max_subdivisions");
 }
 
 BlenderSync::~BlenderSync()
@@ -124,11 +129,41 @@ bool BlenderSync::sync_recalc()
 		}
 	}
 
+	bool dicing_prop_changed = false;
+
+	if(experimental) {
+		PointerRNA cscene = RNA_pointer_get(&b_scene.ptr, "cycles");
+
+		float updated_dicing_rate = preview ? RNA_float_get(&cscene, "preview_dicing_rate")
+		                                    : RNA_float_get(&cscene, "dicing_rate");
+
+		if(dicing_rate != updated_dicing_rate) {
+			dicing_rate = updated_dicing_rate;
+			dicing_prop_changed = true;
+		}
+
+		int updated_max_subdivisions = RNA_int_get(&cscene, "max_subdivisions");
+
+		if(max_subdivisions != updated_max_subdivisions) {
+			max_subdivisions = updated_max_subdivisions;
+			dicing_prop_changed = true;
+		}
+	}
+
 	BL::BlendData::meshes_iterator b_mesh;
 
-	for(b_data.meshes.begin(b_mesh); b_mesh != b_data.meshes.end(); ++b_mesh)
-		if(b_mesh->is_updated())
+	for(b_data.meshes.begin(b_mesh); b_mesh != b_data.meshes.end(); ++b_mesh) {
+		if(b_mesh->is_updated()) {
 			mesh_map.set_recalc(*b_mesh);
+		}
+		else if(dicing_prop_changed) {
+			PointerRNA cmesh = RNA_pointer_get(&b_mesh->ptr, "cycles");
+
+			if(RNA_enum_get(&cmesh, "subdivision_type"))
+				mesh_map.set_recalc(*b_mesh);
+		}
+	}
+
 
 	BL::BlendData::worlds_iterator b_world;
 
@@ -140,8 +175,8 @@ bool BlenderSync::sync_recalc()
 				world_recalc = true;
 			}
 			else if(b_world->node_tree() && b_world->use_nodes()) {
-				Shader *shader = scene->shaders[scene->default_background];
-				if(has_updated_objects && shader != NULL && shader->has_object_dependency) {
+				Shader *shader = scene->default_background;
+				if(has_updated_objects && shader->has_object_dependency) {
 					world_recalc = true;
 				}
 			}
@@ -234,8 +269,6 @@ void BlenderSync::sync_integrator()
 	        SAMPLING_NUM_PATTERNS,
 	        SAMPLING_PATTERN_SOBOL);
 
-	integrator->layer_flag = render_layer.layer;
-
 	integrator->sample_clamp_direct = get_float(cscene, "sample_clamp_direct");
 	integrator->sample_clamp_indirect = get_float(cscene, "sample_clamp_indirect");
 #ifdef __CAMERA_MOTION__
@@ -297,10 +330,6 @@ void BlenderSync::sync_film()
 	Film *film = scene->film;
 	Film prevfilm = *film;
 	
-	/* Clamping */
-	Integrator *integrator = scene->integrator;
-	film->use_sample_clamp = (integrator->sample_clamp_direct != 0.0f || integrator->sample_clamp_indirect != 0.0f);
-
 	film->exposure = get_float(cscene, "film_exposure");
 	film->filter_type = (FilterType)get_enum(cscene,
 	                                         "pixel_filter_type",
@@ -346,8 +375,7 @@ void BlenderSync::sync_render_layers(BL::SpaceView3D& b_v3d, const char *layer)
 			layer = layername.c_str();
 		}
 		else {
-			render_layer.use_localview = (b_v3d.local_view() ? true : false);
-			render_layer.scene_layer = get_layer(b_v3d.layers(), b_v3d.layers_local_view(), render_layer.use_localview);
+			render_layer.scene_layer = get_layer(b_v3d.layers(), b_v3d.layers_local_view());
 			render_layer.layer = render_layer.scene_layer;
 			render_layer.exclude_layer = 0;
 			render_layer.holdout_layer = 0;
@@ -390,7 +418,6 @@ void BlenderSync::sync_render_layers(BL::SpaceView3D& b_v3d, const char *layer)
 			render_layer.use_surfaces = b_rlay->use_solid();
 			render_layer.use_hair = b_rlay->use_strand();
 			render_layer.use_viewport_visibility = false;
-			render_layer.use_localview = false;
 
 			render_layer.bound_samples = (use_layer_samples == 1);
 			if(use_layer_samples != 2) {
@@ -600,9 +627,9 @@ SessionParams BlenderSync::get_session_params(BL::RenderEngine& b_engine,
 	else
 		params.threads = 0;
 
-	params.cancel_timeout = get_float(cscene, "debug_cancel_timeout");
-	params.reset_timeout = get_float(cscene, "debug_reset_timeout");
-	params.text_timeout = get_float(cscene, "debug_text_timeout");
+	params.cancel_timeout = (double)get_float(cscene, "debug_cancel_timeout");
+	params.reset_timeout = (double)get_float(cscene, "debug_reset_timeout");
+	params.text_timeout = (double)get_float(cscene, "debug_text_timeout");
 
 	params.progressive_refine = get_boolean(cscene, "use_progressive_refine");
 

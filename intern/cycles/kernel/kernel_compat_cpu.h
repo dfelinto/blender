@@ -40,6 +40,7 @@
 #include "util_simd.h"
 #include "util_half.h"
 #include "util_types.h"
+#include "util_texture.h"
 
 #define ccl_addr_space
 
@@ -108,6 +109,19 @@ template<typename T> struct texture_image  {
 		return make_float4(r.x*f, r.y*f, r.z*f, r.w*f);
 	}
 
+	ccl_always_inline float4 read(uchar r)
+	{
+		float f = r*(1.0f/255.0f);
+		return make_float4(f, f, f, 1.0);
+	}
+
+	ccl_always_inline float4 read(float r)
+	{
+		/* TODO(dingto): Optimize this, so interpolation
+		 * happens on float instead of float4 */
+		return make_float4(r, r, r, 1.0f);
+	}
+
 	ccl_always_inline int wrap_periodic(int x, int width)
 	{
 		x %= width;
@@ -154,6 +168,7 @@ template<typename T> struct texture_image  {
 					break;
 				default:
 					kernel_assert(0);
+					return make_float4(0.0f, 0.0f, 0.0f, 0.0f);
 			}
 			return read(data[ix + iy*width]);
 		}
@@ -183,6 +198,7 @@ template<typename T> struct texture_image  {
 					break;
 				default:
 					kernel_assert(0);
+					return make_float4(0.0f, 0.0f, 0.0f, 0.0f);
 			}
 
 			float4 r = (1.0f - ty)*(1.0f - tx)*read(data[ix + iy*width]);
@@ -231,6 +247,7 @@ template<typename T> struct texture_image  {
 					break;
 				default:
 					kernel_assert(0);
+					return make_float4(0.0f, 0.0f, 0.0f, 0.0f);
 			}
 
 			const int xc[4] = {pix, ix, nix, nnix};
@@ -298,6 +315,7 @@ template<typename T> struct texture_image  {
 					break;
 				default:
 					kernel_assert(0);
+					return make_float4(0.0f, 0.0f, 0.0f, 0.0f);
 			}
 
 			return read(data[ix + iy*width + iz*width*height]);
@@ -335,6 +353,7 @@ template<typename T> struct texture_image  {
 					break;
 				default:
 					kernel_assert(0);
+					return make_float4(0.0f, 0.0f, 0.0f, 0.0f);
 			}
 
 			float4 r;
@@ -402,6 +421,7 @@ template<typename T> struct texture_image  {
 					break;
 				default:
 					kernel_assert(0);
+					return make_float4(0.0f, 0.0f, 0.0f, 0.0f);
 			}
 
 			const int xc[4] = {pix, ix, nix, nnix};
@@ -464,6 +484,8 @@ typedef texture<uint> texture_uint;
 typedef texture<int> texture_int;
 typedef texture<uint4> texture_uint4;
 typedef texture<uchar4> texture_uchar4;
+typedef texture_image<float> texture_image_float;
+typedef texture_image<uchar> texture_image_uchar;
 typedef texture_image<float4> texture_image_float4;
 typedef texture_image<uchar4> texture_image_uchar4;
 
@@ -473,9 +495,10 @@ typedef texture_image<uchar4> texture_image_uchar4;
 #define kernel_tex_fetch_ssef(tex, index) (kg->tex.fetch_ssef(index))
 #define kernel_tex_fetch_ssei(tex, index) (kg->tex.fetch_ssei(index))
 #define kernel_tex_lookup(tex, t, offset, size) (kg->tex.lookup(t, offset, size))
-#define kernel_tex_image_interp(tex, x, y) ((tex < MAX_FLOAT_IMAGES) ? kg->texture_float_images[tex].interp(x, y) : kg->texture_byte_images[tex - MAX_FLOAT_IMAGES].interp(x, y))
-#define kernel_tex_image_interp_3d(tex, x, y, z) ((tex < MAX_FLOAT_IMAGES) ? kg->texture_float_images[tex].interp_3d(x, y, z) : kg->texture_byte_images[tex - MAX_FLOAT_IMAGES].interp_3d(x, y, z))
-#define kernel_tex_image_interp_3d_ex(tex, x, y, z, interpolation) ((tex < MAX_FLOAT_IMAGES) ? kg->texture_float_images[tex].interp_3d_ex(x, y, z, interpolation) : kg->texture_byte_images[tex - MAX_FLOAT_IMAGES].interp_3d_ex(x, y, z, interpolation))
+
+#define kernel_tex_image_interp(tex,x,y) kernel_tex_image_interp_impl(kg,tex,x,y)
+#define kernel_tex_image_interp_3d(tex, x, y, z) kernel_tex_image_interp_3d_impl(kg,tex,x,y,z)
+#define kernel_tex_image_interp_3d_ex(tex, x, y, z, interpolation) kernel_tex_image_interp_3d_ex_impl(kg,tex, x, y, z, interpolation)
 
 #define kernel_data (kg->__data)
 

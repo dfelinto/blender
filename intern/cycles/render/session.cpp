@@ -610,16 +610,16 @@ DeviceRequestedFeatures Session::get_requested_device_features()
 	/* TODO(sergey): Consider moving this to the Scene level. */
 	DeviceRequestedFeatures requested_features;
 	requested_features.experimental = params.experimental;
+
+	requested_features.max_closure = get_max_closure_count();
+	scene->shader_manager->get_requested_features(
+	        scene,
+	        &requested_features);
 	if(!params.background) {
+		/* Avoid too much re-compilations for viewport render. */
 		requested_features.max_closure = 64;
 		requested_features.max_nodes_group = NODE_GROUP_LEVEL_MAX;
 		requested_features.nodes_features = NODE_FEATURE_ALL;
-	}
-	else {
-		requested_features.max_closure = get_max_closure_count();
-		scene->shader_manager->get_requested_features(
-		        scene,
-		        &requested_features);
 	}
 
 	/* This features are not being tweaked as often as shaders,
@@ -630,7 +630,7 @@ DeviceRequestedFeatures Session::get_requested_device_features()
 	requested_features.use_camera_motion = scene->camera->use_motion;
 	foreach(Object *object, scene->objects) {
 		Mesh *mesh = object->mesh;
-		if(mesh->curves.size() > 0) {
+		if(mesh->num_curves()) {
 			requested_features.use_hair = true;
 		}
 		requested_features.use_object_motion |= object->use_motion | mesh->use_motion_blur;
@@ -816,7 +816,7 @@ void Session::update_scene()
 	/* update scene */
 	if(scene->need_update()) {
 		progress.set_status("Updating Scene");
-		scene->device_update(device, progress);
+		MEM_GUARDED_CALL(&progress, scene->device_update, device, progress);
 	}
 }
 
@@ -831,7 +831,8 @@ void Session::update_status_time(bool show_pause, bool show_done)
 	string status, substatus;
 
 	if(!params.progressive) {
-		const int progress_sample = progress.get_sample(), num_samples = tile_manager.num_samples;
+		const int progress_sample = progress.get_sample(),
+		          num_samples = tile_manager.get_num_effective_samples();
 		const bool is_gpu = params.device.type == DEVICE_CUDA || params.device.type == DEVICE_OPENCL;
 		const bool is_multidevice = params.device.multi_devices.size() > 1;
 		const bool is_cpu = params.device.type == DEVICE_CPU;
@@ -873,7 +874,9 @@ void Session::update_status_time(bool show_pause, bool show_done)
 	else if(tile_manager.num_samples == INT_MAX)
 		substatus = string_printf("Path Tracing Sample %d", sample+1);
 	else
-		substatus = string_printf("Path Tracing Sample %d/%d", sample+1, tile_manager.num_samples);
+		substatus = string_printf("Path Tracing Sample %d/%d",
+		                          sample+1,
+		                          tile_manager.get_num_effective_samples());
 	
 	if(show_pause) {
 		status = "Paused";

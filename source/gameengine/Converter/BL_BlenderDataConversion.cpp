@@ -281,7 +281,8 @@ static std::map<int, SCA_IInputDevice::KX_EnumInputs> create_translate_table()
 	m[QUOTEKEY			] = SCA_IInputDevice::KX_QUOTEKEY;                  
 	m[ACCENTGRAVEKEY	] = SCA_IInputDevice::KX_ACCENTGRAVEKEY;                  
 	m[MINUSKEY			] = SCA_IInputDevice::KX_MINUSKEY;                  
-	m[SLASHKEY			] = SCA_IInputDevice::KX_SLASHKEY;                  
+	m[PLUSKEY			] = SCA_IInputDevice::KX_PLUSKEY;
+	m[SLASHKEY			] = SCA_IInputDevice::KX_SLASHKEY;
 	m[BACKSLASHKEY		] = SCA_IInputDevice::KX_BACKSLASHKEY;                  
 	m[EQUALKEY			] = SCA_IInputDevice::KX_EQUALKEY;                  
 	m[LEFTBRACKETKEY	] = SCA_IInputDevice::KX_LEFTBRACKETKEY;                  
@@ -962,7 +963,7 @@ RAS_MeshObject* BL_ConvertMesh(Mesh* mesh, Object* blenderobj, KX_Scene* scene, 
 		if (CustomData_get_layer_index(&dm->faceData, CD_TANGENT) == -1) {
 			bool generate_data = false;
 			if (CustomData_get_layer_index(&dm->loopData, CD_TANGENT) == -1) {
-				DM_calc_loop_tangents(dm);
+				DM_calc_loop_tangents(dm, true, NULL, 0);
 				generate_data = true;
 			}
 			DM_generate_tangent_tessface_data(dm, generate_data);

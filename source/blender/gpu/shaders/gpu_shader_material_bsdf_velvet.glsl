@@ -152,5 +152,5 @@ void env_sampling_velvet(
 		}
 	}
 
-	result = out_radiance.rgb * unfbsdfsamples.y * specular_occlusion(NV, ao_factor, a2);
+	result = out_radiance.rgb * unfbsdfsamples.y * ao_factor;
 }

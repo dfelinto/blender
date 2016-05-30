@@ -243,6 +243,13 @@ typedef struct View3D {
 	struct Object *probe_source; /* runtime : the probe that is being updated when V3D_PROBE_CAPTURE */
 	struct GPUPBRSettings pbr_settings;
 	struct GPUPBR *pbr; /* holds all pbr specific textures */
+
+	/* Previous viewport draw type.
+	 * Runtime-only, set in the rendered viewport otggle operator.
+	 */
+	short prev_drawtype;
+	short pad1;
+	float pad2;
 } View3D;
 
 

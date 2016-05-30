@@ -149,6 +149,34 @@ static void sima_zoom_set_factor(SpaceImage *sima, ARegion *ar, float zoomfac, c
 	sima_zoom_set(sima, ar, sima->zoom * zoomfac, location);
 }
 
+/**
+ * Fits the view to the bounds exactly, caller should add margin if needed.
+ */
+static void sima_zoom_set_from_bounds(SpaceImage *sima, ARegion *ar, const rctf *bounds)
+{
+	int image_size[2];
+	float aspx, aspy;
+
+	ED_space_image_get_size(sima, &image_size[0], &image_size[1]);
+	ED_space_image_get_aspect(sima, &aspx, &aspy);
+
+	image_size[0] = image_size[0] * aspx;
+	image_size[1] = image_size[1] * aspy;
+
+	/* adjust offset and zoom */
+	sima->xof = roundf((BLI_rctf_cent_x(bounds) - 0.5f) * image_size[0]);
+	sima->yof = roundf((BLI_rctf_cent_y(bounds) - 0.5f) * image_size[1]);
+
+	float size_xy[2], size;
+	size_xy[0] = BLI_rcti_size_x(&ar->winrct) / (BLI_rctf_size_x(bounds) * image_size[0]);
+	size_xy[1] = BLI_rcti_size_y(&ar->winrct) / (BLI_rctf_size_y(bounds) * image_size[1]);
+
+	size = min_ff(size_xy[0], size_xy[1]);
+	CLAMP_MAX(size, 100.0f);
+
+	sima_zoom_set(sima, ar, size, NULL);
+}
+
 #if 0 // currently unused
 static int image_poll(bContext *C)
 {
@@ -763,8 +791,6 @@ static int image_view_selected_exec(bContext *C, wmOperator *UNUSED(op))
 	Scene *scene;
 	Object *obedit;
 	Image *ima;
-	float size, min[2], max[2], d[2], aspx, aspy;
-	int width, height;
 
 	/* retrieve state */
 	sima = CTX_wm_space_image(C);
@@ -773,33 +799,28 @@ static int image_view_selected_exec(bContext *C, wmOperator *UNUSED(op))
 	obedit = CTX_data_edit_object(C);
 
 	ima = ED_space_image(sima);
-	ED_space_image_get_size(sima, &width, &height);
-	ED_space_image_get_aspect(sima, &aspx, &aspy);
-
-	width = width * aspx;
-	height = height * aspy;
 
 	/* get bounds */
+	float min[2], max[2];
 	if (ED_space_image_show_uvedit(sima, obedit)) {
-		if (!ED_uvedit_minmax(scene, ima, obedit, min, max))
+		if (!ED_uvedit_minmax(scene, ima, obedit, min, max)) {
 			return OPERATOR_CANCELLED;
+		}
 	}
 	else if (ED_space_image_check_show_maskedit(scene, sima)) {
 		if (!ED_mask_selected_minmax(C, min, max)) {
 			return OPERATOR_CANCELLED;
 		}
 	}
+	rctf bounds = {
+	    .xmin = min[0], .ymin = min[1],
+	    .xmax = max[0], .ymax = max[1],
+	};
 
-	/* adjust offset and zoom */
-	sima->xof = (int)(((min[0] + max[0]) * 0.5f - 0.5f) * width);
-	sima->yof = (int)(((min[1] + max[1]) * 0.5f - 0.5f) * height);
+	/* add some margin */
+	BLI_rctf_scale(&bounds, 1.4f);
 
-	d[0] = max[0] - min[0];
-	d[1] = max[1] - min[1];
-	size = 0.5f * MAX2(d[0], d[1]) * MAX2(width, height) / 256.0f;
-	
-	if (size <= 0.01f) size = 0.01f;
-	sima_zoom_set(sima, ar, 0.7f / size, NULL);
+	sima_zoom_set_from_bounds(sima, ar, &bounds);
 
 	ED_region_tag_redraw(ar);
 	
@@ -967,6 +988,62 @@ void IMAGE_OT_view_zoom_ratio(wmOperatorType *ot)
 	/* properties */
 	RNA_def_float(ot->srna, "ratio", 0.0f, -FLT_MAX, FLT_MAX,
 	              "Ratio", "Zoom ratio, 1.0 is 1:1, higher is zoomed in, lower is zoomed out", -FLT_MAX, FLT_MAX);
+}
+
+/********************** view border-zoom operator *********************/
+
+static int image_view_zoom_border_exec(bContext *C, wmOperator *op)
+{
+	SpaceImage *sima = CTX_wm_space_image(C);
+	ARegion *ar = CTX_wm_region(C);
+	rctf bounds;
+	const int gesture_mode = RNA_int_get(op->ptr, "gesture_mode");
+
+	WM_operator_properties_border_to_rctf(op, &bounds);
+
+	UI_view2d_region_to_view_rctf(&ar->v2d, &bounds, &bounds);
+
+	const struct {
+		float xof;
+		float yof;
+		float zoom;
+	} sima_view_prev = {
+		.xof = sima->xof,
+		.yof = sima->yof,
+		.zoom = sima->zoom,
+	};
+
+	sima_zoom_set_from_bounds(sima, ar, &bounds);
+
+	/* zoom out */
+	if (gesture_mode == GESTURE_MODAL_OUT) {
+		sima->xof = sima_view_prev.xof + (sima->xof - sima_view_prev.xof);
+		sima->yof = sima_view_prev.yof + (sima->yof - sima_view_prev.yof);
+		sima->zoom = sima_view_prev.zoom * (sima_view_prev.zoom / sima->zoom);
+	}
+
+	ED_region_tag_redraw(ar);
+
+	return OPERATOR_FINISHED;
+}
+
+void IMAGE_OT_view_zoom_border(wmOperatorType *ot)
+{
+	/* identifiers */
+	ot->name = "Zoom to Border";
+	ot->description = "Zoom in the view to the nearest item contained in the border";
+	ot->idname = "IMAGE_OT_view_zoom_border";
+
+	/* api callbacks */
+	ot->invoke = WM_border_select_invoke;
+	ot->exec = image_view_zoom_border_exec;
+	ot->modal = WM_border_select_modal;
+	ot->cancel = WM_border_select_cancel;
+
+	ot->poll = space_image_main_region_poll;
+
+	/* rna */
+	WM_operator_properties_gesture_border(ot, false);
 }
 
 /**************** load/replace/save callbacks ******************/
@@ -2749,8 +2826,8 @@ typedef struct ImageSampleInfo {
 	int *zp;
 	float *zfp;
 
-	int draw;
-	int color_manage;
+	bool draw;
+	bool color_manage;
 	int use_default_view;
 } ImageSampleInfo;
 
@@ -2824,7 +2901,7 @@ static void image_sample_apply(bContext *C, wmOperator *op, const wmEvent *event
 
 	if (ibuf == NULL) {
 		ED_space_image_release_buffer(sima, ibuf, lock);
-		info->draw = 0;
+		info->draw = false;
 		return;
 	}
 
@@ -2841,7 +2918,7 @@ static void image_sample_apply(bContext *C, wmOperator *op, const wmEvent *event
 
 		info->x = x;
 		info->y = y;
-		info->draw = 1;
+		info->draw = true;
 		info->channels = ibuf->channels;
 
 		info->colp = NULL;
@@ -2874,10 +2951,24 @@ static void image_sample_apply(bContext *C, wmOperator *op, const wmEvent *event
 		if (ibuf->rect_float) {
 			fp = (ibuf->rect_float + (ibuf->channels) * (y * ibuf->x + x));
 
-			info->colf[0] = fp[0];
-			info->colf[1] = fp[1];
-			info->colf[2] = fp[2];
-			info->colf[3] = fp[3];
+			if (ibuf->channels == 4) {
+				info->colf[0] = fp[0];
+				info->colf[1] = fp[1];
+				info->colf[2] = fp[2];
+				info->colf[3] = fp[3];
+			}
+			else if (ibuf->channels == 3) {
+				info->colf[0] = fp[0];
+				info->colf[1] = fp[1];
+				info->colf[2] = fp[2];
+				info->colf[3] = 1.0f;
+			}
+			else {
+				info->colf[0] = fp[0];
+				info->colf[1] = fp[0];
+				info->colf[2] = fp[0];
+				info->colf[3] = 1.0f;
+			}
 			info->colfp = info->colf;
 
 			copy_v4_v4(info->linearcol, info->colf);
@@ -2888,10 +2979,16 @@ static void image_sample_apply(bContext *C, wmOperator *op, const wmEvent *event
 		if (ibuf->zbuf) {
 			info->z = ibuf->zbuf[y * ibuf->x + x];
 			info->zp = &info->z;
+			if (ibuf->zbuf == (int*)ibuf->rect) {
+				info->colp = NULL;
+			}
 		}
 		if (ibuf->zbuf_float) {
 			info->zf = ibuf->zbuf_float[y * ibuf->x + x];
 			info->zfp = &info->zf;
+			if (ibuf->zbuf_float == ibuf->rect_float) {
+				info->colfp = NULL;
+			}
 		}
 
 		if (curve_mapping && ibuf->channels == 4) {
@@ -3140,7 +3237,7 @@ static int image_record_composite_apply(bContext *C, wmOperator *op)
 	
 	WM_cursor_time(CTX_wm_window(C), scene->r.cfra);
 
-	// XXX scene->nodetree->test_break = blender_test_break;
+	// XXX scene->nodetree->test_break = BKE_blender_test_break;
 	// XXX scene->nodetree->test_break = NULL;
 	
 	BKE_image_all_free_anim_ibufs(scene->r.cfra);
@@ -3554,7 +3651,7 @@ static int clear_render_border_exec(bContext *C, wmOperator *UNUSED(op))
 void IMAGE_OT_clear_render_border(wmOperatorType *ot)
 {
 	/* identifiers */
-	ot->name = "Render Border";
+	ot->name = "Clear Render Border";
 	ot->description = "Clear the boundaries of the border render and disable border render";
 	ot->idname = "IMAGE_OT_clear_render_border";
 

@@ -435,9 +435,6 @@ function(setup_liblinks
 	if(WITH_MEM_JEMALLOC)
 		target_link_libraries(${target} ${JEMALLOC_LIBRARIES})
 	endif()
-	if(WITH_INPUT_NDOF)
-		target_link_libraries(${target} ${NDOF_LIBRARIES})
-	endif()
 	if(WITH_MOD_CLOTH_ELTOPO)
 		target_link_libraries(${target} ${LAPACK_LIBRARIES})
 	endif()
@@ -450,6 +447,9 @@ function(setup_liblinks
 	if(UNIX AND NOT APPLE)
 		if(WITH_OPENMP_STATIC)
 			target_link_libraries(${target} ${OpenMP_LIBRARIES})
+		endif()
+		if(WITH_INPUT_NDOF)
+			target_link_libraries(${target} ${NDOF_LIBRARIES})
 		endif()
 	endif()
 
@@ -487,6 +487,7 @@ function(SETUP_BLENDER_SORTED_LIBS)
 	if(WITH_CYCLES)
 		list(APPEND BLENDER_LINK_LIBS
 			cycles_render
+			cycles_graph
 			cycles_bvh
 			cycles_device
 			cycles_kernel
@@ -578,6 +579,7 @@ function(SETUP_BLENDER_SORTED_LIBS)
 		ge_phys_bullet
 		bf_intern_smoke
 		extern_lzma
+		extern_curve_fit_nd
 		ge_logic_ketsji
 		extern_recastnavigation
 		ge_logic
@@ -599,6 +601,7 @@ function(SETUP_BLENDER_SORTED_LIBS)
 		bf_intern_dualcon
 		bf_intern_cycles
 		cycles_render
+		cycles_graph
 		cycles_bvh
 		cycles_device
 		cycles_kernel
@@ -658,10 +661,6 @@ function(SETUP_BLENDER_SORTED_LIBS)
 		list(APPEND BLENDER_SORTED_LIBS bf_quicktime)
 	endif()
 
-	if(WITH_INPUT_NDOF)
-		list(APPEND BLENDER_SORTED_LIBS bf_intern_ghostndof3dconnexion)
-	endif()
-	
 	if(WITH_MOD_BOOLEAN)
 		list(APPEND BLENDER_SORTED_LIBS extern_carve)
 	endif()
@@ -802,7 +801,15 @@ macro(TEST_UNORDERED_MAP_SUPPORT)
 	#  UNORDERED_MAP_NAMESPACE, namespace for unordered_map, if found
 
 	include(CheckIncludeFileCXX)
-	CHECK_INCLUDE_FILE_CXX("unordered_map" HAVE_STD_UNORDERED_MAP_HEADER)
+
+	# Workaround for newer GCC (6.x+) where C++11 was enabled by default, which lead us
+	# to a situation when there is <unordered_map> include but which can't be used uless
+	# C++11 is enabled.
+	if(CMAKE_COMPILER_IS_GNUCC AND (NOT "${CMAKE_C_COMPILER_VERSION}" VERSION_LESS "6.0") AND (NOT WITH_CXX11))
+		set(HAVE_STD_UNORDERED_MAP_HEADER False)
+	else()
+		CHECK_INCLUDE_FILE_CXX("unordered_map" HAVE_STD_UNORDERED_MAP_HEADER)
+	endif()
 	if(HAVE_STD_UNORDERED_MAP_HEADER)
 		# Even so we've found unordered_map header file it doesn't
 		# mean unordered_map and unordered_set will be declared in
@@ -872,8 +879,16 @@ macro(TEST_SHARED_PTR_SUPPORT)
 	# otherwise it's assumed to be defined in std namespace.
 
 	include(CheckIncludeFileCXX)
+	include(CheckCXXSourceCompiles)
 	set(SHARED_PTR_FOUND FALSE)
-	CHECK_INCLUDE_FILE_CXX(memory HAVE_STD_MEMORY_HEADER)
+	# Workaround for newer GCC (6.x+) where C++11 was enabled by default, which lead us
+	# to a situation when there is <unordered_map> include but which can't be used uless
+	# C++11 is enabled.
+	if(CMAKE_COMPILER_IS_GNUCC AND (NOT "${CMAKE_C_COMPILER_VERSION}" VERSION_LESS "6.0") AND (NOT WITH_CXX11))
+		set(HAVE_STD_MEMORY_HEADER False)
+	else()
+		CHECK_INCLUDE_FILE_CXX(memory HAVE_STD_MEMORY_HEADER)
+	endif()
 	if(HAVE_STD_MEMORY_HEADER)
 		# Finding the memory header doesn't mean that shared_ptr is in std
 		# namespace.
@@ -881,7 +896,6 @@ macro(TEST_SHARED_PTR_SUPPORT)
 		# In particular, MSVC 2008 has shared_ptr declared in std::tr1.  In
 		# order to support this, we do an extra check to see which namespace
 		# should be used.
-		include(CheckCXXSourceCompiles)
 		CHECK_CXX_SOURCE_COMPILES("#include <memory>
 		                           int main() {
 		                             std::shared_ptr<int> int_ptr;
@@ -967,6 +981,7 @@ macro(remove_strict_flags)
 		remove_cc_flag(
 			"-Wstrict-prototypes"
 			"-Wmissing-prototypes"
+			"-Wmissing-declarations"
 			"-Wmissing-format-attribute"
 			"-Wunused-local-typedefs"
 			"-Wunused-macros"
@@ -1048,6 +1063,19 @@ macro(remove_strict_flags_file
 
 endmacro()
 
+# External libs may need 'signed char' to be default.
+macro(remove_cc_flag_unsigned_char)
+	if(CMAKE_C_COMPILER_ID MATCHES "^(GNU|Clang|Intel)$")
+		remove_cc_flag("-funsigned-char")
+	elseif(MSVC)
+		remove_cc_flag("/J")
+	else()
+		message(WARNING
+			"Compiler '${CMAKE_C_COMPILER_ID}' failed to disable 'unsigned char' flag."
+			"Build files need updating."
+		)
+	endif()
+endmacro()
 
 function(ADD_CHECK_C_COMPILER_FLAG
 	_CFLAGS
@@ -1094,10 +1122,10 @@ function(get_blender_version)
 	# - BLENDER_VERSION_CYCLE (alpha, beta, rc, release)
 
 	# So cmake depends on BKE_blender.h, beware of inf-loops!
-	CONFIGURE_FILE(${CMAKE_SOURCE_DIR}/source/blender/blenkernel/BKE_blender.h
-	               ${CMAKE_BINARY_DIR}/source/blender/blenkernel/BKE_blender.h.done)
+	CONFIGURE_FILE(${CMAKE_SOURCE_DIR}/source/blender/blenkernel/BKE_blender_version.h
+	               ${CMAKE_BINARY_DIR}/source/blender/blenkernel/BKE_blender_version.h.done)
 
-	file(STRINGS ${CMAKE_SOURCE_DIR}/source/blender/blenkernel/BKE_blender.h _contents REGEX "^#define[ \t]+BLENDER_.*$")
+	file(STRINGS ${CMAKE_SOURCE_DIR}/source/blender/blenkernel/BKE_blender_version.h _contents REGEX "^#define[ \t]+BLENDER_.*$")
 
 	string(REGEX REPLACE ".*#define[ \t]+BLENDER_VERSION[ \t]+([0-9]+).*" "\\1" _out_version "${_contents}")
 	string(REGEX REPLACE ".*#define[ \t]+BLENDER_SUBVERSION[ \t]+([0-9]+).*" "\\1" _out_subversion "${_contents}")

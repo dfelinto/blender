@@ -458,6 +458,10 @@ void graphedit_operatortypes(void)
 	WM_operatortype_append(GRAPH_OT_fmodifier_add);
 	WM_operatortype_append(GRAPH_OT_fmodifier_copy);
 	WM_operatortype_append(GRAPH_OT_fmodifier_paste);
+	
+	/* Drivers */
+	WM_operatortype_append(GRAPH_OT_driver_variables_copy);
+	WM_operatortype_append(GRAPH_OT_driver_variables_paste);
 }
 
 void ED_operatormacros_graph(void)
@@ -606,7 +610,11 @@ static void graphedit_keymap_keyframes(wmKeyConfig *keyconf, wmKeyMap *keymap)
 	
 	/* insertkey */
 	WM_keymap_add_item(keymap, "GRAPH_OT_keyframe_insert", IKEY, KM_PRESS, 0, 0);
-	WM_keymap_add_item(keymap, "GRAPH_OT_click_insert", ACTIONMOUSE, KM_CLICK, KM_CTRL, 0);
+	
+	kmi = WM_keymap_add_item(keymap, "GRAPH_OT_click_insert", ACTIONMOUSE, KM_CLICK, KM_CTRL, 0);
+	RNA_boolean_set(kmi->ptr, "extend", false);
+	kmi = WM_keymap_add_item(keymap, "GRAPH_OT_click_insert", ACTIONMOUSE, KM_CLICK, KM_CTRL | KM_SHIFT, 0);
+	RNA_boolean_set(kmi->ptr, "extend", true);
 	
 	/* copy/paste */
 	WM_keymap_add_item(keymap, "GRAPH_OT_copy", CKEY, KM_PRESS, KM_CTRL, 0);

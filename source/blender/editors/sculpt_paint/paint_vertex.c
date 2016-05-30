@@ -2836,7 +2836,8 @@ static void vpaint_stroke_done(const bContext *C, struct PaintStroke *stroke)
 	struct VPaintData *vpd = paint_stroke_mode_data(stroke);
 	ViewContext *vc = &vpd->vc;
 	Object *ob = vc->obact;
-	
+	Mesh *me = ob->data;
+
 	ED_vpaint_proj_handle_free(vpd->vp_handle);
 	MEM_freeN(vpd->indexar);
 	
@@ -2847,6 +2848,7 @@ static void vpaint_stroke_done(const bContext *C, struct PaintStroke *stroke)
 		MEM_freeN(vpd->mlooptag);
 
 	WM_event_add_notifier(C, NC_OBJECT | ND_DRAW, ob);
+	DAG_id_tag_update(&me->id, 0);
 
 	MEM_freeN(vpd);
 }
@@ -2979,7 +2981,7 @@ typedef struct DMGradient_userData {
 	const float *sco_end;       /* [2] */
 	float        sco_line_div;  /* store (1.0f / len_v2v2(sco_start, sco_end)) */
 	int def_nr;
-	short is_init;
+	bool is_init;
 	DMGradient_vertStore *vert_cache;
 	/* only for init */
 	BLI_bitmap *vert_visit;

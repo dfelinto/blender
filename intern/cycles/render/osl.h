@@ -22,6 +22,7 @@
 #include "util_thread.h"
 
 #include "graph.h"
+#include "nodes.h"
 #include "shader.h"
 
 #ifdef WITH_OSL
@@ -54,6 +55,7 @@ struct OSLShaderInfo {
 	  has_surface_bssrdf(false)
 	{}
 
+	OSL::OSLQuery query;
 	bool has_surface_emission;
 	bool has_surface_transparent;
 	bool has_surface_bssrdf;
@@ -82,6 +84,11 @@ public:
 	const char *shader_load_bytecode(const string& hash, const string& bytecode);
 	const char *shader_load_filepath(string filepath);
 	OSLShaderInfo *shader_loaded_info(const string& hash);
+
+	/* create OSL node using OSLQuery */
+	OSLNode *osl_node(const std::string& filepath,
+	                  const std::string& bytecode_hash = "",
+	                  const std::string& bytecode = "");
 
 protected:
 	void texture_system_init();
@@ -129,13 +136,7 @@ public:
 	void parameter(const char *name, const Transform& tfm);
 
 	void parameter_array(const char *name, const float f[], int arraylen);
-	void parameter_color_array(const char *name, const float f[][3], int arraylen);
-	void parameter_vector_array(const char *name, const float f[][3], int arraylen);
-	void parameter_normal_array(const char *name, const float f[][3], int arraylen);
-	void parameter_point_array(const char *name, const float f[][3], int arraylen);
-	void parameter_array(const char *name, const int f[], int arraylen);
-	void parameter_array(const char *name, const char * const s[], int arraylen);
-	void parameter_array(const char *name, const Transform tfm[], int arraylen);
+	void parameter_color_array(const char *name, const array<float3>& f);
 
 	ShaderType output_type() { return current_type; }
 

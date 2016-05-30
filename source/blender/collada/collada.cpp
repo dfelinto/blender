@@ -81,8 +81,9 @@ int collada_export(Scene *sce,
 				   int use_texture_copies,
 
                    int triangulate,
-                   int use_object_instantiation,
-                   int sort_by_name,
+				   int use_object_instantiation,
+				   int use_blender_profile,
+				   int sort_by_name,
 				   BC_export_transformation_type export_transformation_type,
                    int open_sim)
 {
@@ -105,6 +106,7 @@ int collada_export(Scene *sce,
 
 	export_settings.triangulate                = triangulate != 0;
 	export_settings.use_object_instantiation   = use_object_instantiation != 0;
+	export_settings.use_blender_profile        = use_blender_profile != 0;
 	export_settings.sort_by_name               = sort_by_name != 0;
 	export_settings.export_transformation_type = export_transformation_type;
 	export_settings.open_sim                   = open_sim != 0;
@@ -118,12 +120,11 @@ int collada_export(Scene *sce,
 	export_settings.export_set = BKE_object_relational_superset(sce, objectSet, (eObRelationTypes)includeFilter);
 	int export_count = BLI_linklist_count(export_settings.export_set);
 
-	if (export_count==0)
-	{
+	if (export_count == 0) {
 		if (export_settings.selected) {
 			fprintf(stderr, "Collada: Found no objects to export.\nPlease ensure that all objects which shall be exported are also visible in the 3D Viewport.\n");
 		}
-		else{
+		else {
 			fprintf(stderr, "Collada: Your scene seems to be empty. No Objects will be exported.\n");
 		}
 	}

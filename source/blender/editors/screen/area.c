@@ -635,8 +635,8 @@ void ED_area_headerprint(ScrArea *sa, const char *str)
 		if (ar->regiontype == RGN_TYPE_HEADER) {
 			if (str) {
 				if (ar->headerstr == NULL)
-					ar->headerstr = MEM_mallocN(256, "headerprint");
-				BLI_strncpy(ar->headerstr, str, 256);
+					ar->headerstr = MEM_mallocN(UI_MAX_DRAW_STR, "headerprint");
+				BLI_strncpy(ar->headerstr, str, UI_MAX_DRAW_STR);
 			}
 			else if (ar->headerstr) {
 				MEM_freeN(ar->headerstr);
@@ -1505,6 +1505,16 @@ void ED_region_init(bContext *C, ARegion *ar)
 	region_subwindow(CTX_wm_window(C), ar, false);
 
 	region_update_rect(ar);
+}
+
+void ED_region_cursor_set(wmWindow *win, ScrArea *sa, ARegion *ar)
+{
+	if (ar && sa && ar->type && ar->type->cursor) {
+		ar->type->cursor(win, sa, ar);
+	}
+	else {
+		WM_cursor_set(win, CURSOR_STD);
+	}
 }
 
 /* for quick toggle, can skip fades */

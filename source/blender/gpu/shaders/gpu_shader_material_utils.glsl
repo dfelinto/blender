@@ -68,6 +68,96 @@ float hypot(float x, float y) { return sqrt(x*x + y*y); }
 
 float inverse_distance(vec3 V) { return max( 1 / length(V), 1e-8); }
 
+/* --------- Noise Utils Functions --------- */
+
+void generated_from_orco(vec3 orco, out vec3 generated)
+{
+	generated = orco * 0.5 + vec3(0.5);
+}
+
+int floor_to_int(float x)
+{
+	return int(floor(x));
+}
+
+int quick_floor(float x)
+{
+	return int(x) - ((x < 0) ? 1 : 0);
+}
+
+#ifdef BIT_OPERATIONS
+float integer_noise(int n)
+{
+	int nn;
+	n = (n + 1013) & 0x7fffffff;
+	n = (n >> 13) ^ n;
+	nn = (n * (n * n * 60493 + 19990303) + 1376312589) & 0x7fffffff;
+	return 0.5 * (float(nn) / 1073741824.0);
+}
+
+uint hash(uint kx, uint ky, uint kz)
+{
+#define rot(x, k) (((x) << (k)) | ((x) >> (32 - (k))))
+#define final(a, b, c) \
+{ \
+	c ^= b; c -= rot(b, 14); \
+	a ^= c; a -= rot(c, 11); \
+	b ^= a; b -= rot(a, 25); \
+	c ^= b; c -= rot(b, 16); \
+	a ^= c; a -= rot(c, 4);  \
+	b ^= a; b -= rot(a, 14); \
+	c ^= b; c -= rot(b, 24); \
+}
+	// now hash the data!
+	uint a, b, c, len = 3u;
+	a = b = c = 0xdeadbeefu + (len << 2u) + 13u;
+
+	c += kz;
+	b += ky;
+	a += kx;
+	final (a, b, c);
+
+	return c;
+#undef rot
+#undef final
+}
+
+uint hash(int kx, int ky, int kz)
+{
+	return hash(uint(kx), uint(ky), uint(kz));
+}
+
+float bits_to_01(uint bits)
+{
+	float x = float(bits) * (1.0 / float(0xffffffffu));
+	return x;
+}
+
+float cellnoise(vec3 p)
+{
+	int ix = quick_floor(p.x);
+	int iy = quick_floor(p.y);
+	int iz = quick_floor(p.z);
+
+	return bits_to_01(hash(uint(ix), uint(iy), uint(iz)));
+}
+
+vec3 cellnoise_color(vec3 p)
+{
+	float r = cellnoise(p);
+	float g = cellnoise(vec3(p.y, p.x, p.z));
+	float b = cellnoise(vec3(p.y, p.z, p.x));
+
+	return vec3(r, g, b);
+}
+#endif  // BIT_OPERATIONS
+
+float floorfrac(float x, out int i)
+{
+	i = floor_to_int(x);
+	return x - i;
+}
+
 /* --------- Geometric Utils Functions --------- */
 
 float linear_depth(float z)

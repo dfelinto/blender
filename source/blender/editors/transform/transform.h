@@ -59,6 +59,7 @@ struct wmTimer;
 struct ARegion;
 struct ReportList;
 struct EditBone;
+struct SnapObjectContext;
 
 /* transinfo->redraw */
 typedef enum {
@@ -101,6 +102,11 @@ typedef struct TransSnap {
 	 * where the smallest absolute value defines whats closest.
 	 */
 	float  (*distance)(struct TransInfo *, const float p1[3], const float p2[3]);
+
+	/**
+	 * Re-usable snap context data.
+	 */
+	struct SnapObjectContext *object_context;
 } TransSnap;
 
 typedef struct TransCon {
@@ -677,6 +683,7 @@ bool activeSnap(TransInfo *t);
 bool validSnap(TransInfo *t);
 
 void initSnapping(struct TransInfo *t, struct wmOperator *op);
+void freeSnapping(struct TransInfo *t);
 void applyProject(TransInfo *t);
 void applyGridAbsolute(TransInfo *t);
 void applySnapping(TransInfo *t, float *vec);
@@ -785,5 +792,9 @@ void projectVertSlideData(TransInfo *t, bool is_final);
 
 /* TODO. transform_queries.c */
 bool checkUseAxisMatrix(TransInfo *t);
+
+#define TRANSFORM_DIST_MAX_PX 1000.0f
+#define TRANSFORM_SNAP_MAX_PX 100.0f
+#define TRANSFORM_DIST_INVALID -FLT_MAX
 
 #endif

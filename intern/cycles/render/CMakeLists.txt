@@ -2,10 +2,12 @@
 set(INC
 	.
 	../device
+	../graph
 	../kernel
 	../kernel/svm
 	../kernel/osl
 	../bvh
+	../subd
 	../util
 	../../glew-mx
 )

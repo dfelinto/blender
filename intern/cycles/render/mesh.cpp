@@ -35,6 +35,9 @@
 #include "util_progress.h"
 #include "util_set.h"
 
+#include "subd_split.h"
+#include "subd_patch.h"
+
 CCL_NAMESPACE_BEGIN
 
 /* Triangle */
@@ -48,14 +51,14 @@ void Mesh::Triangle::bounds_grow(const float3 *verts, BoundBox& bounds) const
 
 /* Curve */
 
-void Mesh::Curve::bounds_grow(const int k, const float4 *curve_keys, BoundBox& bounds) const
+void Mesh::Curve::bounds_grow(const int k, const float3 *curve_keys, const float *curve_radius, BoundBox& bounds) const
 {
 	float3 P[4];
 
-	P[0] = float4_to_float3(curve_keys[max(first_key + k - 1,first_key)]);
-	P[1] = float4_to_float3(curve_keys[first_key + k]);
-	P[2] = float4_to_float3(curve_keys[first_key + k + 1]);
-	P[3] = float4_to_float3(curve_keys[min(first_key + k + 2, first_key + num_keys - 1)]);
+	P[0] = curve_keys[max(first_key + k - 1,first_key)];
+	P[1] = curve_keys[first_key + k];
+	P[2] = curve_keys[first_key + k + 1];
+	P[3] = curve_keys[min(first_key + k + 2, first_key + num_keys - 1)];
 
 	float3 lower;
 	float3 upper;
@@ -64,7 +67,7 @@ void Mesh::Curve::bounds_grow(const int k, const float4 *curve_keys, BoundBox& b
 	curvebounds(&lower.y, &upper.y, P, 1);
 	curvebounds(&lower.z, &upper.z, P, 2);
 
-	float mr = max(curve_keys[first_key + k].w, curve_keys[first_key + k + 1].w);
+	float mr = max(curve_radius[first_key + k], curve_radius[first_key + k + 1]);
 
 	bounds.grow(lower, mr);
 	bounds.grow(upper, mr);
@@ -72,18 +75,41 @@ void Mesh::Curve::bounds_grow(const int k, const float4 *curve_keys, BoundBox& b
 
 /* Mesh */
 
+NODE_DEFINE(Mesh)
+{
+	NodeType* type = NodeType::add("mesh", create);
+
+	static NodeEnum displacement_method_enum;
+	displacement_method_enum.insert("bump", DISPLACE_BUMP);
+	displacement_method_enum.insert("true", DISPLACE_TRUE);
+	displacement_method_enum.insert("both", DISPLACE_BOTH);
+	SOCKET_ENUM(displacement_method, "Displacement Method", displacement_method_enum, DISPLACE_BUMP);
+
+	SOCKET_INT(motion_steps, "Motion Steps", 3);
+	SOCKET_BOOLEAN(use_motion_blur, "Use Motion Blur", false);
+
+	SOCKET_INT_ARRAY(triangles, "Triangles", array<int>());
+	SOCKET_POINT_ARRAY(verts, "Vertices", array<float3>());
+	SOCKET_INT_ARRAY(shader, "Shader", array<int>());
+	SOCKET_BOOLEAN_ARRAY(smooth, "Smooth", array<bool>());
+
+	SOCKET_POINT_ARRAY(curve_keys, "Curve Keys", array<float3>());
+	SOCKET_FLOAT_ARRAY(curve_radius, "Curve Radius", array<float>());
+	SOCKET_INT_ARRAY(curve_first_key, "Curve First Key", array<int>());
+	SOCKET_INT_ARRAY(curve_shader, "Curve Shader", array<int>());
+
+	return type;
+}
+
 Mesh::Mesh()
+: Node(node_type)
 {
 	need_update = true;
 	need_update_rebuild = false;
 	transform_applied = false;
 	transform_negative_scaled = false;
 	transform_normal = transform_identity();
-	displacement_method = DISPLACE_BUMP;
 	bounds = BoundBox::empty;
-
-	motion_steps = 3;
-	use_motion_blur = false;
 
 	bvh = NULL;
 
@@ -96,6 +122,8 @@ Mesh::Mesh()
 	attributes.triangle_mesh = this;
 	curve_attributes.curve_mesh = this;
 
+	geometry_flags = GEOMETRY_NONE;
+
 	has_volume = false;
 	has_surface_bssrdf = false;
 }
@@ -105,18 +133,49 @@ Mesh::~Mesh()
 	delete bvh;
 }
 
-void Mesh::reserve(int numverts, int numtris, int numcurves, int numcurvekeys)
+void Mesh::resize_mesh(int numverts, int numtris)
 {
-	/* reserve space to add verts and triangles later */
 	verts.resize(numverts);
-	triangles.resize(numtris);
+	triangles.resize(numtris * 3);
 	shader.resize(numtris);
 	smooth.resize(numtris);
-	curve_keys.resize(numcurvekeys);
-	curves.resize(numcurves);
 
-	attributes.reserve();
-	curve_attributes.reserve();
+	forms_quad.resize(numtris);
+
+	attributes.resize();
+}
+
+void Mesh::reserve_mesh(int numverts, int numtris)
+{
+	/* reserve space to add verts and triangles later */
+	verts.reserve(numverts);
+	triangles.reserve(numtris * 3);
+	shader.reserve(numtris);
+	smooth.reserve(numtris);
+
+	forms_quad.reserve(numtris);
+
+	attributes.resize(true);
+}
+
+void Mesh::resize_curves(int numcurves, int numkeys)
+{
+	curve_keys.resize(numkeys);
+	curve_radius.resize(numkeys);
+	curve_first_key.resize(numcurves);
+	curve_shader.resize(numcurves);
+
+	curve_attributes.resize();
+}
+
+void Mesh::reserve_curves(int numcurves, int numkeys)
+{
+	curve_keys.reserve(numkeys);
+	curve_radius.reserve(numkeys);
+	curve_first_key.reserve(numcurves);
+	curve_shader.reserve(numcurves);
+
+	curve_attributes.resize(true);
 }
 
 void Mesh::clear()
@@ -127,8 +186,12 @@ void Mesh::clear()
 	shader.clear();
 	smooth.clear();
 
+	forms_quad.clear();
+
 	curve_keys.clear();
-	curves.clear();
+	curve_radius.clear();
+	curve_first_key.clear();
+	curve_shader.clear();
 
 	attributes.clear();
 	curve_attributes.clear();
@@ -143,7 +206,7 @@ void Mesh::clear()
 int Mesh::split_vertex(int vertex)
 {
 	/* copy vertex location and vertex attributes */
-	verts.push_back(verts[vertex]);
+	add_vertex(verts[vertex]);
 
 	foreach(Attribute& attr, attributes.attributes) {
 		if(attr.element == ATTR_ELEMENT_VERTEX) {
@@ -156,46 +219,31 @@ int Mesh::split_vertex(int vertex)
 	return verts.size() - 1;
 }
 
-void Mesh::set_triangle(int i, int v0, int v1, int v2, int shader_, bool smooth_)
+void Mesh::add_vertex(float3 P)
 {
-	Triangle tri;
-	tri.v[0] = v0;
-	tri.v[1] = v1;
-	tri.v[2] = v2;
-
-	triangles[i] = tri;
-	shader[i] = shader_;
-	smooth[i] = smooth_;
+	verts.push_back_reserved(P);
 }
 
-void Mesh::add_triangle(int v0, int v1, int v2, int shader_, bool smooth_)
+void Mesh::add_triangle(int v0, int v1, int v2, int shader_, bool smooth_, bool forms_quad_)
 {
-	Triangle tri;
-	tri.v[0] = v0;
-	tri.v[1] = v1;
-	tri.v[2] = v2;
-
-	triangles.push_back(tri);
-	shader.push_back(shader_);
-	smooth.push_back(smooth_);
+	triangles.push_back_reserved(v0);
+	triangles.push_back_reserved(v1);
+	triangles.push_back_reserved(v2);
+	shader.push_back_reserved(shader_);
+	smooth.push_back_reserved(smooth_);
+	forms_quad.push_back_reserved(forms_quad_);
 }
 
 void Mesh::add_curve_key(float3 co, float radius)
 {
-	float4 key = float3_to_float4(co);
-	key.w = radius;
-
-	curve_keys.push_back(key);
+	curve_keys.push_back_reserved(co);
+	curve_radius.push_back_reserved(radius);
 }
 
 void Mesh::add_curve(int first_key, int num_keys, int shader)
 {
-	Curve curve;
-	curve.first_key = first_key;
-	curve.num_keys = num_keys;
-	curve.shader = shader;
-
-	curves.push_back(curve);
+	curve_first_key.push_back_reserved(first_key);
+	curve_shader.push_back_reserved(shader);
 }
 
 void Mesh::compute_bounds()
@@ -209,7 +257,7 @@ void Mesh::compute_bounds()
 			bnds.grow(verts[i]);
 
 		for(size_t i = 0; i < curve_keys_size; i++)
-			bnds.grow(float4_to_float3(curve_keys[i]), curve_keys[i].w);
+			bnds.grow(curve_keys[i], curve_radius[i]);
 
 		Attribute *attr = attributes.find(ATTR_STD_MOTION_VERTEX_POSITION);
 		if(use_motion_blur && attr) {
@@ -237,7 +285,7 @@ void Mesh::compute_bounds()
 				bnds.grow_safe(verts[i]);
 
 			for(size_t i = 0; i < curve_keys_size; i++)
-				bnds.grow_safe(float4_to_float3(curve_keys[i]), curve_keys[i].w);
+				bnds.grow_safe(curve_keys[i], curve_radius[i]);
 			
 			if(use_motion_blur && attr) {
 				size_t steps_size = verts.size() * (motion_steps - 1);
@@ -275,7 +323,7 @@ static float3 compute_face_normal(const Mesh::Triangle& t, float3 *verts)
 	float normlen = len(norm);
 
 	if(normlen == 0.0f)
-		return make_float3(0.0f, 0.0f, 0.0f);
+		return make_float3(1.0f, 0.0f, 0.0f);
 
 	return norm / normlen;
 }
@@ -291,15 +339,14 @@ void Mesh::add_face_normals()
 	float3 *fN = attr_fN->data_float3();
 
 	/* compute face normals */
-	size_t triangles_size = triangles.size();
+	size_t triangles_size = num_triangles();
 	bool flip = transform_negative_scaled;
 
 	if(triangles_size) {
 		float3 *verts_ptr = &verts[0];
-		Triangle *triangles_ptr = &triangles[0];
 
 		for(size_t i = 0; i < triangles_size; i++) {
-			fN[i] = compute_face_normal(triangles_ptr[i], verts_ptr);
+			fN[i] = compute_face_normal(get_triangle(i), verts_ptr);
 
 			if(flip)
 				fN[i] = -fN[i];
@@ -319,7 +366,7 @@ void Mesh::add_vertex_normals()
 {
 	bool flip = transform_negative_scaled;
 	size_t verts_size = verts.size();
-	size_t triangles_size = triangles.size();
+	size_t triangles_size = num_triangles();
 
 	/* static vertex normals */
 	if(!attributes.find(ATTR_STD_VERTEX_NORMAL)) {
@@ -334,11 +381,10 @@ void Mesh::add_vertex_normals()
 		memset(vN, 0, verts.size()*sizeof(float3));
 
 		if(triangles_size) {
-			Triangle *triangles_ptr = &triangles[0];
 
 			for(size_t i = 0; i < triangles_size; i++)
 				for(size_t j = 0; j < 3; j++)
-					vN[triangles_ptr[i].v[j]] += fN[i];
+					vN[get_triangle(i).v[j]] += fN[i];
 		}
 
 		for(size_t i = 0; i < verts_size; i++) {
@@ -364,12 +410,10 @@ void Mesh::add_vertex_normals()
 			memset(mN, 0, verts.size()*sizeof(float3));
 
 			if(triangles_size) {
-				Triangle *triangles_ptr = &triangles[0];
-
 				for(size_t i = 0; i < triangles_size; i++) {
 					for(size_t j = 0; j < 3; j++) {
-						float3 fN = compute_face_normal(triangles_ptr[i], mP);
-						mN[triangles_ptr[i].v[j]] += fN;
+						float3 fN = compute_face_normal(get_triangle(i), mP);
+						mN[get_triangle(i).v[j]] += fN;
 					}
 				}
 			}
@@ -392,8 +436,8 @@ void Mesh::pack_normals(Scene *scene, uint *tri_shader, float4 *vnormal)
 	uint last_shader = -1;
 	bool last_smooth = false;
 
-	size_t triangles_size = triangles.size();
-	uint *shader_ptr = (shader.size())? &shader[0]: NULL;
+	size_t triangles_size = num_triangles();
+	int *shader_ptr = (shader.size())? &shader[0]: NULL;
 
 	bool do_transform = transform_applied;
 	Transform ntfm = transform_normal;
@@ -403,7 +447,9 @@ void Mesh::pack_normals(Scene *scene, uint *tri_shader, float4 *vnormal)
 		if(shader_ptr[i] != last_shader || last_smooth != smooth[i]) {
 			last_shader = shader_ptr[i];
 			last_smooth = smooth[i];
-			shader_id = scene->shader_manager->get_shader_id(last_shader, this, last_smooth);
+			Shader *shader = (last_shader < used_shaders.size()) ?
+				used_shaders[last_shader] : scene->default_surface;
+			shader_id = scene->shader_manager->get_shader_id(shader, this, last_smooth);
 		}
 
 		tri_shader[i] = shader_id;
@@ -434,13 +480,11 @@ void Mesh::pack_verts(float4 *tri_verts, float4 *tri_vindex, size_t vert_offset)
 		}
 	}
 
-	size_t triangles_size = triangles.size();
+	size_t triangles_size = num_triangles();
 
 	if(triangles_size) {
-		Triangle *triangles_ptr = &triangles[0];
-
 		for(size_t i = 0; i < triangles_size; i++) {
-			Triangle t = triangles_ptr[i];
+			Triangle t = get_triangle(i);
 
 			tri_vindex[i] = make_float4(
 				__int_as_float(t.v[0] + vert_offset),
@@ -454,26 +498,26 @@ void Mesh::pack_verts(float4 *tri_verts, float4 *tri_vindex, size_t vert_offset)
 void Mesh::pack_curves(Scene *scene, float4 *curve_key_co, float4 *curve_data, size_t curvekey_offset)
 {
 	size_t curve_keys_size = curve_keys.size();
-	float4 *keys_ptr = NULL;
 
 	/* pack curve keys */
 	if(curve_keys_size) {
-		keys_ptr = &curve_keys[0];
+		float3 *keys_ptr = &curve_keys[0];
+		float *radius_ptr = &curve_radius[0];
 
 		for(size_t i = 0; i < curve_keys_size; i++)
-			curve_key_co[i] = keys_ptr[i];
+			curve_key_co[i] = make_float4(keys_ptr[i].x, keys_ptr[i].y, keys_ptr[i].z, radius_ptr[i]);
 	}
 
 	/* pack curve segments */
-	size_t curve_num = curves.size();
+	size_t curve_num = num_curves();
 
 	if(curve_num) {
-		Curve *curve_ptr = &curves[0];
-		int shader_id = 0;
-		
 		for(size_t i = 0; i < curve_num; i++) {
-			Curve curve = curve_ptr[i];
-			shader_id = scene->shader_manager->get_shader_id(curve.shader, this, false);
+			Curve curve = get_curve(i);
+			int shader_id = curve_shader[i];
+			Shader *shader = (shader_id < used_shaders.size()) ?
+				used_shaders[shader_id] : scene->default_surface;
+			shader_id = scene->shader_manager->get_shader_id(shader, this, false);
 
 			curve_data[i] = make_float4(
 				__int_as_float(curve.first_key + curvekey_offset),
@@ -518,7 +562,7 @@ void Mesh::compute_bvh(SceneParams *params, Progress *progress, int n, int total
 
 			delete bvh;
 			bvh = BVH::create(bparams, objects);
-			bvh->build(*progress);
+			MEM_GUARDED_CALL(progress, bvh->build, *progress);
 		}
 	}
 
@@ -535,8 +579,8 @@ void Mesh::tag_update(Scene *scene, bool rebuild)
 		scene->light_manager->need_update = true;
 	}
 	else {
-		foreach(uint sindex, used_shaders)
-			if(scene->shaders[sindex]->has_surface_emission)
+		foreach(Shader *shader, used_shaders)
+			if(shader->has_surface_emission)
 				scene->light_manager->need_update = true;
 	}
 
@@ -718,7 +762,7 @@ void MeshManager::update_svm_attributes(Device *device, DeviceScene *dscene, Sce
 			else
 				id = scene->shader_manager->get_attribute_id(req.std);
 
-			if(mesh->triangles.size()) {
+			if(mesh->num_triangles()) {
 				attr_map[index].x = id;
 				attr_map[index].y = req.triangle_element;
 				attr_map[index].z = as_uint(req.triangle_offset);
@@ -733,7 +777,7 @@ void MeshManager::update_svm_attributes(Device *device, DeviceScene *dscene, Sce
 
 			index++;
 
-			if(mesh->curves.size()) {
+			if(mesh->num_curves()) {
 				attr_map[index].x = id;
 				attr_map[index].y = req.curve_element;
 				attr_map[index].z = as_uint(req.curve_offset);
@@ -779,9 +823,9 @@ static void update_attribute_element_size(Mesh *mesh,
 	if(mattr) {
 		size_t size = mattr->element_size(
 			mesh->verts.size(),
-			mesh->triangles.size(),
+			mesh->num_triangles(),
 			mesh->motion_steps,
-			mesh->curves.size(),
+			mesh->num_curves(),
 			mesh->curve_keys.size());
 
 		if(mattr->element == ATTR_ELEMENT_VOXEL) {
@@ -822,9 +866,9 @@ static void update_attribute_element_offset(Mesh *mesh,
 		/* store attribute data in arrays */
 		size_t size = mattr->element_size(
 			mesh->verts.size(),
-			mesh->triangles.size(),
+			mesh->num_triangles(),
 			mesh->motion_steps,
-			mesh->curves.size(),
+			mesh->num_curves(),
 			mesh->curve_keys.size());
 
 		if(mattr->element == ATTR_ELEMENT_VOXEL) {
@@ -911,8 +955,7 @@ void MeshManager::device_update_attributes(Device *device, DeviceScene *dscene, 
 
 		scene->need_global_attributes(mesh_attributes[i]);
 
-		foreach(uint sindex, mesh->used_shaders) {
-			Shader *shader = scene->shaders[sindex];
+		foreach(Shader *shader, mesh->used_shaders) {
 			mesh_attributes[i].add(shader->attributes);
 		}
 	}
@@ -1039,10 +1082,10 @@ void MeshManager::device_update_mesh(Device *device, DeviceScene *dscene, Scene 
 		mesh->curve_offset = curve_size;
 
 		vert_size += mesh->verts.size();
-		tri_size += mesh->triangles.size();
+		tri_size += mesh->num_triangles();
 
 		curve_key_size += mesh->curve_keys.size();
-		curve_size += mesh->curves.size();
+		curve_size += mesh->num_curves();
 	}
 
 	if(tri_size != 0) {
@@ -1158,8 +1201,7 @@ void MeshManager::device_update_flags(Device * /*device*/,
 	/* update flags */
 	foreach(Mesh *mesh, scene->meshes) {
 		mesh->has_volume = false;
-		foreach(uint shader_index, mesh->used_shaders) {
-			const Shader *shader = scene->shaders[shader_index];
+		foreach(const Shader *shader, mesh->used_shaders) {
 			if(shader->has_volume) {
 				mesh->has_volume = true;
 			}
@@ -1182,8 +1224,7 @@ void MeshManager::device_update_displacement_images(Device *device,
 	set<int> bump_images;
 	foreach(Mesh *mesh, scene->meshes) {
 		if(mesh->need_update) {
-			foreach(uint shader_index, mesh->used_shaders) {
-				Shader *shader = scene->shaders[shader_index];
+			foreach(Shader *shader, mesh->used_shaders) {
 				if(shader->graph_bump == NULL) {
 					continue;
 				}
@@ -1200,7 +1241,7 @@ void MeshManager::device_update_displacement_images(Device *device,
 						                             progress);
 						return;
 					}
-					ImageSlotNode *image_node = static_cast<ImageSlotNode*>(node);
+					ImageSlotTextureNode *image_node = static_cast<ImageSlotTextureNode*>(node);
 					int slot = image_node->slot;
 					if(slot != -1) {
 						bump_images.insert(slot);
@@ -1222,15 +1263,15 @@ void MeshManager::device_update_displacement_images(Device *device,
 
 void MeshManager::device_update(Device *device, DeviceScene *dscene, Scene *scene, Progress& progress)
 {
-	VLOG(1) << "Total " << scene->meshes.size() << " meshes.";
-
 	if(!need_update)
 		return;
 
+	VLOG(1) << "Total " << scene->meshes.size() << " meshes.";
+
 	/* update normals */
 	foreach(Mesh *mesh, scene->meshes) {
-		foreach(uint shader, mesh->used_shaders) {
-			if(scene->shaders[shader]->need_update_attributes)
+		foreach(Shader *shader, mesh->used_shaders) {
+			if(shader->need_update_attributes)
 				mesh->need_update = true;
 		}
 
@@ -1418,23 +1459,95 @@ bool Mesh::need_attribute(Scene *scene, AttributeStandard std)
 	if(scene->need_global_attribute(std))
 		return true;
 
-	foreach(uint shader, used_shaders)
-		if(scene->shaders[shader]->attributes.find(std))
+	foreach(Shader *shader, used_shaders)
+		if(shader->attributes.find(std))
 			return true;
 	
 	return false;
 }
 
-bool Mesh::need_attribute(Scene *scene, ustring name)
+bool Mesh::need_attribute(Scene * /*scene*/, ustring name)
 {
 	if(name == ustring())
 		return false;
 
-	foreach(uint shader, used_shaders)
-		if(scene->shaders[shader]->attributes.find(name))
+	foreach(Shader *shader, used_shaders)
+		if(shader->attributes.find(name))
 			return true;
 	
 	return false;
+}
+
+void Mesh::tessellate(DiagSplit *split)
+{
+	int num_faces = triangles.size();
+
+	add_face_normals();
+	add_vertex_normals();
+
+	Attribute *attr_fN = attributes.find(ATTR_STD_FACE_NORMAL);
+	float3 *fN = attr_fN->data_float3();
+
+	Attribute *attr_vN = attributes.find(ATTR_STD_VERTEX_NORMAL);
+	float3 *vN = attr_vN->data_float3();
+
+	for(int f = 0; f < num_faces; f++) {
+		if(!forms_quad[f]) {
+			/* triangle */
+			LinearTrianglePatch patch;
+			Triangle triangle = get_triangle(f);
+			float3 *hull = patch.hull;
+			float3 *normals = patch.normals;
+
+			for(int i = 0; i < 3; i++) {
+				hull[i] = verts[triangle.v[i]];
+			}
+
+			if(smooth[f]) {
+				for(int i = 0; i < 3; i++) {
+					normals[i] = vN[triangle.v[i]];
+				}
+			}
+			else {
+				for(int i = 0; i < 3; i++) {
+					normals[i] = fN[f];
+				}
+			}
+
+			split->split_triangle(&patch);
+		}
+		else {
+			/* quad */
+			LinearQuadPatch patch;
+			Triangle triangle0 = get_triangle(f);
+			Triangle triangle1 = get_triangle(f+1);
+			float3 *hull = patch.hull;
+			float3 *normals = patch.normals;
+
+			hull[0] = verts[triangle0.v[0]];
+			hull[1] = verts[triangle0.v[1]];
+			hull[3] = verts[triangle0.v[2]];
+			hull[2] = verts[triangle1.v[2]];
+
+			if(smooth[f]) {
+				normals[0] = vN[triangle0.v[0]];
+				normals[1] = vN[triangle0.v[1]];
+				normals[3] = vN[triangle0.v[2]];
+				normals[2] = vN[triangle1.v[2]];
+			}
+			else {
+				for(int i = 0; i < 4; i++) {
+					normals[i] = fN[f];
+				}
+			}
+
+			split->split_quad(&patch);
+
+			// consume second triangle in quad
+			f++;
+		}
+
+	}
 }
 
 CCL_NAMESPACE_END

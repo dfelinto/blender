@@ -92,7 +92,7 @@ public:
 	{
 	}
 
-	directory_iterator(const string& path)
+	explicit directory_iterator(const string& path)
 	: path_(path),
 	  path_info_(path, find_data_)
 	{
@@ -176,7 +176,7 @@ class directory_iterator {
 public:
 	class path_info {
 	public:
-		path_info(const string& path)
+		explicit path_info(const string& path)
 		: path_(path),
 		  entry_(NULL)
 		{
@@ -203,7 +203,7 @@ public:
 	{
 	}
 
-	directory_iterator(const string& path)
+	explicit directory_iterator(const string& path)
 	: path_(path),
 	  path_info_(path_),
 	  cur_entry_(0)
@@ -485,9 +485,9 @@ static string path_unc_to_short(const string& path)
 		if((len > 5) && (path[5] ==  ':')) {
 			return path.substr(4, len - 4);
 		}
-		else if ((len > 7) &&
-		         (path.substr(4, 3) == "UNC") &&
-		         ((path[7] ==  DIR_SEP) || (path[7] ==  DIR_SEP_ALT)))
+		else if((len > 7) &&
+		        (path.substr(4, 3) == "UNC") &&
+		        ((path[7] ==  DIR_SEP) || (path[7] ==  DIR_SEP_ALT)))
 		{
 			return "\\\\" + path.substr(8, len - 8);
 		}

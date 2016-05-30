@@ -107,6 +107,8 @@
 
 #include "paint_intern.h"
 
+static void partial_redraw_array_init(ImagePaintPartialRedraw *pr);
+
 /* Defines and Structs */
 /* FTOCHAR as inline function */
 BLI_INLINE unsigned char f_to_char(const float val)
@@ -1100,6 +1102,10 @@ static void uv_image_outset(
         float (*orig_uv)[2], float (*outset_uv)[2], const float scaler,
         const int ibuf_x, const int ibuf_y, const bool cw)
 {
+	/* disallow shell-thickness to outset extreme values,
+	 * otherwise near zero area UV's may extend thousands of pixels. */
+	const float scale_clamp = 5.0f;
+
 	float a1, a2, a3;
 	float puv[3][2]; /* pixelspace uv's */
 	float no1[2], no2[2], no3[2]; /* normals */
@@ -1149,6 +1155,10 @@ static void uv_image_outset(
 	a1 = shell_v2v2_normal_dir_to_dist(no1, dir3);
 	a2 = shell_v2v2_normal_dir_to_dist(no2, dir1);
 	a3 = shell_v2v2_normal_dir_to_dist(no3, dir2);
+
+	CLAMP_MAX(a1, scale_clamp);
+	CLAMP_MAX(a2, scale_clamp);
+	CLAMP_MAX(a3, scale_clamp);
 
 	mul_v2_fl(no1, a1 * scaler);
 	mul_v2_fl(no2, a2 * scaler);
@@ -3639,7 +3649,7 @@ static void project_paint_build_proj_ima(
 		projIma->ibuf = BKE_image_acquire_ibuf(projIma->ima, NULL, NULL);
 		size = sizeof(void **) * IMAPAINT_TILE_NUMBER(projIma->ibuf->x) * IMAPAINT_TILE_NUMBER(projIma->ibuf->y);
 		projIma->partRedrawRect =  BLI_memarena_alloc(arena, sizeof(ImagePaintPartialRedraw) * PROJ_BOUNDBOX_SQUARED);
-		memset(projIma->partRedrawRect, 0, sizeof(ImagePaintPartialRedraw) * PROJ_BOUNDBOX_SQUARED);
+		partial_redraw_array_init(projIma->partRedrawRect);
 		projIma->undoRect = (volatile void **) BLI_memarena_alloc(arena, size);
 		memset((void *)projIma->undoRect, 0, size);
 		projIma->maskRect = BLI_memarena_alloc(arena, size);
@@ -3990,8 +4000,8 @@ static void project_paint_end(ProjPaintState *ps)
 /* 1 = an undo, -1 is a redo. */
 static void partial_redraw_single_init(ImagePaintPartialRedraw *pr)
 {
-	pr->x1 = 10000000;
-	pr->y1 = 10000000;
+	pr->x1 = INT_MAX;
+	pr->y1 = INT_MAX;
 
 	pr->x2 = -1;
 	pr->y2 = -1;
@@ -5352,9 +5362,6 @@ static int texture_paint_camera_project_exec(bContext *C, wmOperator *op)
 		float lastpos[2] = {0.0, 0.0};
 		int a;
 
-		for (a = 0; a < ps.image_tot; a++)
-			partial_redraw_array_init(ps.projImages[a].partRedrawRect);
-
 		project_paint_op(&ps, lastpos, pos);
 
 		project_image_refresh_tagged(&ps);
@@ -5858,15 +5865,17 @@ static int add_simple_uvs_exec(bContext *C, wmOperator *UNUSED(op))
 
 	ED_mesh_uv_texture_ensure(me, NULL);
 
-	BM_mesh_bm_from_me(bm, me, true, false, 0);
-
+	BM_mesh_bm_from_me(
+	        bm, me, (&(struct BMeshFromMeshParams){
+	            .calc_face_normal = true,
+	        }));
 	/* select all uv loops first - pack parameters needs this to make sure charts are registered */
 	ED_uvedit_select_all(bm);
 	ED_uvedit_unwrap_cube_project(ob, bm, 1.0, false);
 	/* set the margin really quickly before the packing operation*/
 	scene->toolsettings->uvcalc_margin = 0.001f;
 	ED_uvedit_pack_islands(scene, ob, bm, false, false, true);
-	BM_mesh_bm_to_me(bm, me, false);
+	BM_mesh_bm_to_me(bm, me, (&(struct BMeshToMeshParams){0}));
 	BM_mesh_free(bm);
 
 	if (synch_selection)

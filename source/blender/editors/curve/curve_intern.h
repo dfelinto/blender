@@ -102,6 +102,7 @@ void CURVE_OT_separate(struct wmOperatorType *ot);
 void CURVE_OT_split(struct wmOperatorType *ot);
 void CURVE_OT_duplicate(struct wmOperatorType *ot);
 void CURVE_OT_delete(struct wmOperatorType *ot);
+void CURVE_OT_dissolve_verts(struct wmOperatorType *ot);
 
 void CURVE_OT_spline_type_set(struct wmOperatorType *ot);
 void CURVE_OT_radius_set(struct wmOperatorType *ot);
@@ -165,5 +166,8 @@ void SURFACE_OT_primitive_nurbs_surface_surface_add(struct wmOperatorType *ot);
 void SURFACE_OT_primitive_nurbs_surface_cylinder_add(struct wmOperatorType *ot);
 void SURFACE_OT_primitive_nurbs_surface_sphere_add(struct wmOperatorType *ot);
 void SURFACE_OT_primitive_nurbs_surface_torus_add(struct wmOperatorType *ot);
+
+/* editcurve_paint.c */
+void CURVE_OT_draw(struct wmOperatorType *ot);
 
 #endif /* __CURVE_INTERN_H__ */
