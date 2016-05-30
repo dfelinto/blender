@@ -67,7 +67,7 @@ static GPUNodeLink *gpu_get_input_link(GPUNodeStack *in)
 		return GPU_uniform(in->vec);
 }
 
-static int node_shader_gpu_bsdf_anisotropic(GPUMaterial *mat, bNode *UNUSED(node), bNodeExecData *UNUSED(execdata), GPUNodeStack *in, GPUNodeStack *out)
+static int node_shader_gpu_bsdf_anisotropic(GPUMaterial *mat, bNode *node, bNodeExecData *UNUSED(execdata), GPUNodeStack *in, GPUNodeStack *out)
 {
 	if (!in[IN_NORMAL].link)
 		in[IN_NORMAL].link = GPU_builtin(GPU_VIEW_NORMAL);
@@ -95,6 +95,13 @@ static int node_shader_gpu_bsdf_anisotropic(GPUMaterial *mat, bNode *UNUSED(node
 		brdf.aniso_rotation = gpu_get_input_link(&in[IN_ROTATION]);
 		brdf.normal         = gpu_get_input_link(&in[IN_NORMAL]);
 		brdf.aniso_tangent  = gpu_get_input_link(&in[IN_TANGENT]);
+
+		if (node->custom1 == SHD_GLOSSY_BECKMANN)
+			brdf.type = GPU_BRDF_ANISO_BECKMANN;
+		else if (node->custom1 == SHD_GLOSSY_ASHIKHMIN_SHIRLEY)
+			brdf.type = GPU_BRDF_ANISO_ASHIKHMIN_SHIRLEY;
+		else
+			brdf.type = GPU_BRDF_ANISO_GGX;
 
 		GPU_shade_BRDF(&brdf);
 

@@ -6949,7 +6949,7 @@ static bool direct_link_screen(FileData *fd, bScreen *sc)
 					v3d->pbr_settings.ssao = newdataadr(fd, v3d->pbr_settings.ssao);
 				if (v3d->pbr_settings.brdf)
 					v3d->pbr_settings.brdf = newdataadr(fd, v3d->pbr_settings.brdf);
-				
+
 				blo_do_versions_view3d_split_250(v3d, &sl->regionbase);
 			}
 			else if (sl->spacetype == SPACE_IPO) {

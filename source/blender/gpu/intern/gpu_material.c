@@ -148,7 +148,7 @@ struct GPUMaterial {
 	int backfacebufloc;
 	int ssaoparamsloc;
 	int clipinfoloc;
-	int ssrparamsloc, ssrparams2loc;
+	int ssrparamsloc;
 	int pixelprojmatloc;
 	GPUTexture *bindedscenebuffer;
 	GPUTexture *bindedbackfacebuffer;
@@ -363,10 +363,9 @@ static int GPU_material_construct_end(GPUMaterial *material, const char *passnam
 			material->scenebufloc 		= GPU_shader_get_uniform(shader, "unfscenebuf");
 			material->backfacebufloc 	= GPU_shader_get_uniform(shader, "unfbackfacebuf");
 			material->ssrparamsloc 		= GPU_shader_get_uniform(shader, "unfssrparam");
-			material->ssrparams2loc 	= GPU_shader_get_uniform(shader, "unfssrparam2");
 			material->pixelprojmatloc 	= GPU_shader_get_uniform(shader, "unfpixelprojmat");
 			material->ssaoparamsloc 	= GPU_shader_get_uniform(shader, "unfssaoparam");
-			material->clipinfoloc = GPU_shader_get_uniform(shader, "unfclip");
+			material->clipinfoloc 		= GPU_shader_get_uniform(shader, "unfclip");
 		}
 
 		return 1;
@@ -665,12 +664,12 @@ void GPU_material_bind_uniforms_pbr(GPUMaterial *material, GPUProbe *probe, GPUP
 			/* Pixel proj matrix */
 			GPU_shader_uniform_vector(shader, material->pixelprojmatloc, 16, 1, (float *)pbr->scene->pixelprojmat);
 
-			if (pbr_settings->pbr_flag & (GPU_PBR_FLAG_SSR | GPU_PBR_FLAG_BACKFACE)) {
-				float clipinfo[2];
-				clipinfo[0] = pbr->backface->clipsta; /* Negative */
-				clipinfo[1] = pbr->backface->clipend; /* Negative */
-				GPU_shader_uniform_vector(shader, material->clipinfoloc, 2, 1, clipinfo);
-			}
+			float clipinfo[4];
+			clipinfo[0] = pbr->scene->clipsta;
+			clipinfo[1] = pbr->scene->clipend;
+			clipinfo[2] = (float)pbr->scene->w;
+			clipinfo[3] = (float)pbr->scene->h;
+			GPU_shader_uniform_vector(shader, material->clipinfoloc, 4, 1, clipinfo);
 
 			if (pbr_settings->pbr_flag & GPU_PBR_FLAG_BACKFACE) {
 				/* Backface Buffer */
@@ -681,25 +680,15 @@ void GPU_material_bind_uniforms_pbr(GPUMaterial *material, GPUProbe *probe, GPUP
 		}
 
 		if (pbr_settings->pbr_flag & GPU_PBR_FLAG_SSR) {
-			/* SSR Parameters 1 */
-			/* x : thickness : Camera space thickness to ascribe to each pixel in the depth buffer
-			 * y : nearz : Near plane distance (Negative number)
-			 * z : stride : Step in horizontal or vertical pixels between samples.
-			 * w : maxstep : Maximum number of iteration when raymarching */
-			float ssrparams[4];
-			ssrparams[0] = pbr_settings->ssr->thickness;
-			ssrparams[1] = -pbr->scene->clipsta; /* Negative */
-			ssrparams[2] = pbr_settings->ssr->stride;
-			ssrparams[3] = (float)pbr_settings->ssr->steps;
-			GPU_shader_uniform_vector(shader, material->ssrparamsloc, 4, 1, ssrparams);
-
-			/* SSR Parameters 2 */
-			/* x : maxdistance : Maximum number of iteration when raymarching
-			 * y : attenuation : Attenuation factor for screen edges and ray step fading */
-			float ssrparams2[2];
-			ssrparams2[0] = pbr_settings->ssr->distance_max;
-			ssrparams2[1] = pbr_settings->ssr->attenuation;
-			GPU_shader_uniform_vector(shader, material->ssrparams2loc, 2, 1, ssrparams2);
+			/* SSR Parameters */
+			/* x : steps : Maximum number of iteration when raymarching 
+			 * y : offset : Step between samples.
+			 * z : attenuation : fallof exponent */
+			float ssrparams[3];
+			ssrparams[0] = (float)pbr_settings->ssr->steps;
+			ssrparams[1] = pbr_settings->ssr->distance_max / (float)pbr_settings->ssr->steps;
+			ssrparams[2] = pbr_settings->ssr->attenuation;
+			GPU_shader_uniform_vector(shader, material->ssrparamsloc, 3, 1, ssrparams);
 		}
 
 		if (pbr_settings->pbr_flag & GPU_PBR_FLAG_SSAO) {
@@ -2388,6 +2377,22 @@ static const char *brdf_light_function(GPUBrdfType brdftype, int lamptype)
 			default : return "bsdf_anisotropic_ggx_sphere_light";
 		}
 	}
+	else if (brdftype == GPU_BRDF_ANISO_BECKMANN) {
+		switch (lamptype) {
+			case LA_SUN :
+			case LA_HEMI : return "bsdf_anisotropic_ggx_sun_light";
+			case LA_AREA : return "bsdf_anisotropic_ggx_area_light";
+			default : return "bsdf_anisotropic_ggx_sphere_light";
+		}
+	}
+	else if (brdftype == GPU_BRDF_ANISO_ASHIKHMIN_SHIRLEY) {
+		switch (lamptype) {
+			case LA_SUN :
+			case LA_HEMI : return "bsdf_anisotropic_ashikhmin_shirley_sun_light";
+			case LA_AREA : return "bsdf_anisotropic_ashikhmin_shirley_area_light";
+			default : return "bsdf_anisotropic_ashikhmin_shirley_sphere_light";
+		}
+	}
 	else if (brdftype == GPU_BRDF_GLOSSY_GGX) {
 		switch (lamptype) {
 			case LA_SUN :
@@ -2402,6 +2407,14 @@ static const char *brdf_light_function(GPUBrdfType brdftype, int lamptype)
 			case LA_HEMI : return "bsdf_glossy_beckmann_sun_light";
 			case LA_AREA : return "bsdf_glossy_beckmann_area_light";
 			default : return "bsdf_glossy_beckmann_sphere_light";
+		}
+	}
+	else if (brdftype == GPU_BRDF_GLOSSY_ASHIKHMIN_SHIRLEY) {
+		switch (lamptype) {
+			case LA_SUN :
+			case LA_HEMI : return "bsdf_glossy_ashikhmin_shirley_sun_light";
+			case LA_AREA : return "bsdf_glossy_ashikhmin_shirley_area_light";
+			default : return "bsdf_glossy_ashikhmin_shirley_sphere_light";
 		}
 	}
 	else if (brdftype == GPU_BRDF_GLOSSY_SHARP) {
@@ -2420,6 +2433,14 @@ static const char *brdf_light_function(GPUBrdfType brdftype, int lamptype)
 			default : return "bsdf_refract_ggx_sphere_light";
 		}
 	}
+	else if (brdftype == GPU_BRDF_REFRACT_BECKMANN) {
+		switch (lamptype) {
+			case LA_SUN :
+			case LA_HEMI : return "bsdf_refract_beckmann_sun_light";
+			case LA_AREA : return "bsdf_refract_beckmann_area_light";
+			default : return "bsdf_refract_beckmann_sphere_light";
+		}
+	}
 	else if (brdftype == GPU_BRDF_REFRACT_SHARP) {
 		switch (lamptype) {
 			case LA_SUN :
@@ -2434,6 +2455,14 @@ static const char *brdf_light_function(GPUBrdfType brdftype, int lamptype)
 			case LA_HEMI : return "bsdf_glass_ggx_sun_light";
 			case LA_AREA : return "bsdf_glass_ggx_area_light";
 			default : return "bsdf_glass_ggx_sphere_light";
+		}
+	}
+	else if (brdftype == GPU_BRDF_GLASS_BECKMANN) {
+		switch (lamptype) {
+			case LA_SUN :
+			case LA_HEMI : return "bsdf_glass_beckmann_sun_light";
+			case LA_AREA : return "bsdf_glass_beckmann_area_light";
+			default : return "bsdf_glass_beckmann_sphere_light";
 		}
 	}
 	else if (brdftype == GPU_BRDF_GLASS_SHARP) {
@@ -2500,7 +2529,7 @@ static void shade_one_brdf_light(GPUBrdfInput *brdf, GPULamp *lamp)
 	visifac = lamp_get_visibility(mat, lamp, &lv, &dist);
 
 	/* View Position */
-	if (((brdf->type == GPU_BRDF_TRANSLUCENT || brdf->type == GPU_BRDF_DIFFUSE || brdf->type == GPU_BRDF_GLOSSY_GGX) && (lamp->type == LA_AREA)) ||
+	if (((brdf->type == GPU_BRDF_TRANSLUCENT || brdf->type == GPU_BRDF_DIFFUSE || brdf->type == GPU_BRDF_GLOSSY_GGX || brdf->type == GPU_BRDF_GLOSSY_BECKMANN) && (lamp->type == LA_AREA)) ||
 		((brdf->type == GPU_BRDF_GLOSSY_GGX || brdf->type == GPU_BRDF_REFRACT_GGX || brdf->type == GPU_BRDF_GLASS_GGX) && (lamp->type == LA_LOCAL || lamp->type == LA_SPOT)))
 		GPU_link(mat, "set_rgb", GPU_builtin(GPU_VIEW_POSITION), &view);
 	else
@@ -2549,18 +2578,28 @@ static const char *brdf_env_sampling_function(GPUBrdfType brdftype)
 {
 	if (brdftype == GPU_BRDF_ANISO_GGX)
 		return "env_sampling_aniso_ggx";
+	else if (brdftype == GPU_BRDF_ANISO_BECKMANN)
+		return "env_sampling_aniso_beckmann";
+	else if (brdftype == GPU_BRDF_ANISO_ASHIKHMIN_SHIRLEY)
+		return "env_sampling_aniso_ashikhmin_shirley";
 	else if (brdftype == GPU_BRDF_GLOSSY_GGX)
 		return "env_sampling_glossy_ggx";
 	else if (brdftype == GPU_BRDF_GLOSSY_BECKMANN)
 		return "env_sampling_glossy_beckmann";
+	else if (brdftype == GPU_BRDF_GLOSSY_ASHIKHMIN_SHIRLEY)
+		return "env_sampling_glossy_ashikhmin_shirley";
 	else if (brdftype == GPU_BRDF_GLOSSY_SHARP)
 		return "env_sampling_glossy_sharp";
 	else if (brdftype == GPU_BRDF_REFRACT_GGX)
 		return "env_sampling_refract_ggx";
+	else if (brdftype == GPU_BRDF_REFRACT_BECKMANN)
+		return "env_sampling_refract_beckmann";
 	else if (brdftype == GPU_BRDF_REFRACT_SHARP)
 		return "env_sampling_refract_sharp";
 	else if (brdftype == GPU_BRDF_GLASS_GGX)
 		return "env_sampling_glass_ggx";
+	else if (brdftype == GPU_BRDF_GLASS_BECKMANN)
+		return "env_sampling_glass_beckmann";
 	else if (brdftype == GPU_BRDF_GLASS_SHARP)
 		return "env_sampling_glass_sharp";
 	else if (brdftype == GPU_BRDF_VELVET)
@@ -2591,15 +2630,9 @@ static GPUNodeLink *brdf_sample_env(GPUBrdfInput *brdf)
 	GPU_link(mat, "vect_normalize", brdf->aniso_tangent, &brdf->aniso_tangent);
 
 	/* Ambient Occlusion */
-	if (brdf->type == GPU_BRDF_AMBIENT_OCCLUSION || brdf->type == GPU_BRDF_DIFFUSE) {
-		if (!mat->ln_ssao)
-			GPU_link(mat, "ssao", GPU_builtin(GPU_VIEW_POSITION), GPU_builtin(GPU_VIEW_NORMAL), &mat->ln_ssao);
-		GPU_link(mat, "set_value", mat->ln_ssao, &ambient_occlusion);
-	}
-	else {
-		float one = 1.0f;
-		GPU_link(mat, "set_value", GPU_uniform(&one), &ambient_occlusion);
-	}
+	if (!mat->ln_ssao)
+		GPU_link(mat, "ssao", GPU_builtin(GPU_VIEW_POSITION), GPU_builtin(GPU_VIEW_NORMAL), &mat->ln_ssao);
+	GPU_link(mat, "set_value", mat->ln_ssao, &ambient_occlusion);
 
 	/* Environment Sampling */
 	GPU_link(mat, brdf_env_sampling_function(brdf->type),
@@ -2638,7 +2671,7 @@ void GPU_shade_BRDF(GPUBrdfInput *brdf)
 		return;
 
 	/* Lamps */
-	if (brdf->type != GPU_BRDF_TRANSPARENT) {
+	if ((brdf->type != GPU_BRDF_TRANSPARENT) && (brdf->type != GPU_BRDF_AMBIENT_OCCLUSION)) {
 		for (SETLOOPER(mat->scene, sce_iter, base)) {
 			ob = base->object;
 

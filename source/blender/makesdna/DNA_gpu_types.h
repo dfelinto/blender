@@ -51,7 +51,7 @@ typedef struct GPUSSAOSettings {
 	float distance_max;
 	float attenuation;
 	int samples; /* ray samples, we use presets here for easy control instead of */
-	int pad;
+	int steps;
 } GPUSSAOSettings;
 
 typedef struct GPUFXSettings {
@@ -73,10 +73,8 @@ typedef enum eGPUFXFlags {
 
 /* Screen space reflection settings */
 typedef struct GPUSSRSettings {
-	float stride;
 	float distance_max;
 	float attenuation;
-	float thickness;
 	int steps;
 	int pad;
 } GPUSSRSettings;
@@ -89,17 +87,10 @@ typedef struct GPUBRDFSettings {
 	int pad2;
 } GPUBRDFSettings;
 
-typedef struct GPUAOSettings {
-	float distance_max;
-	float pad;
-	int samples; /* ray samples, we use presets here for easy control instead of */
-	int steps; /* raymarching steps */
-} GPUAOSettings;
-
 typedef struct GPUPBRSettings {
 	GPUBRDFSettings *brdf;
 	GPUSSRSettings *ssr;
-	GPUAOSettings *ssao;
+	GPUSSAOSettings *ssao;
 	char pbr_flag;  /* eGPUPBRFlags */
 	char pad[7];
 } GPUPBRSettings;
@@ -110,6 +101,7 @@ typedef enum eGPUPBRFlags {
 	GPU_PBR_FLAG_SSR              = (1 << 1),
 	GPU_PBR_FLAG_SSAO             = (1 << 2),
 	GPU_PBR_FLAG_BACKFACE         = (1 << 3),
+	GPU_PBR_FLAG_LAYER_OVERRIDE   = (1 << 4),
 } eGPUPBRFlags;
 
 #endif  /* __DNA_GPU_TYPES_H__ */

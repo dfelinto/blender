@@ -243,15 +243,15 @@ void GPU_pbr_free(GPUPBR *pbr)
 
 static void gpu_pbr_init_ssr_settings(GPUSSRSettings *ssr_settings)
 {
-	ssr_settings->stride = 0.01f;
-	ssr_settings->distance_max = 100.0f;
+	ssr_settings->distance_max = 10.0f;
 	ssr_settings->attenuation = 6.0f;
-	ssr_settings->thickness = 0.1f;
 	ssr_settings->steps = 32;
 }
 
-static void gpu_pbr_init_ssao_settings(GPUAOSettings *ssao_settings)
+static void gpu_pbr_init_ssao_settings(GPUSSAOSettings *ssao_settings)
 {
+	ssao_settings->factor = 1.0f;
+	ssao_settings->attenuation = 1.0f;
 	ssao_settings->distance_max = 0.2f;
 	ssao_settings->samples = 16;
 	ssao_settings->steps = 2;
@@ -273,8 +273,8 @@ void GPU_pbr_settings_validate(GPUPBRSettings *pbr_settings)
 		}
 
 		if ((pbr_settings->pbr_flag & GPU_PBR_FLAG_SSAO) && (pbr_settings->ssao == NULL)) {
-			GPUAOSettings *ssao_settings;
-			ssao_settings = pbr_settings->ssao = MEM_callocN(sizeof(GPUAOSettings), __func__);
+			GPUSSAOSettings *ssao_settings;
+			ssao_settings = pbr_settings->ssao = MEM_callocN(sizeof(GPUSSAOSettings), __func__);
 			gpu_pbr_init_ssao_settings(ssao_settings);
 		}
 

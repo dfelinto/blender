@@ -1399,6 +1399,7 @@ void GPU_fx_compositor_init_ssao_settings(GPUSSAOSettings *fx_ssao)
 	fx_ssao->distance_max = 0.2f;
 	fx_ssao->attenuation = 1.0f;
 	fx_ssao->samples = 20;
+	fx_ssao->steps = 2;
 }
 
 void GPU_fx_shader_init_interface(struct GPUShader *shader, GPUFXShaderEffect effect)

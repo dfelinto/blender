@@ -77,6 +77,53 @@ void bsdf_glass_ggx_sun_light(vec3 N, vec3 T, vec3 L, vec3 V, vec3 l_coords,
 	bsdf = fresnel_blend(transmit_bsdf, reflect_bsdf, V, N, ior);
 }
 
+/* GLASS BECKMANN */
+
+void bsdf_glass_beckmann_sphere_light(vec3 N, vec3 T, vec3 L, vec3 V, vec3 l_coords,
+	                             float l_distance, float l_areasizex, float l_areasizey, vec2 l_areascale, mat4 l_mat,
+	                             float roughness, float ior, float sigma, float toon_size, float toon_smooth, float anisotropy, float aniso_rotation,
+	                             out float bsdf)
+{
+	float transmit_bsdf, reflect_bsdf;
+
+	bsdf_refract_beckmann_sphere_light(N, T, L, V, l_coords, l_distance, l_areasizex, l_areasizey, l_areascale, l_mat, roughness, ior,
+	                              sigma, toon_size, toon_smooth, anisotropy, aniso_rotation, transmit_bsdf);
+	bsdf_glossy_beckmann_sphere_light(N, T, L, V, l_coords, l_distance, l_areasizex, l_areasizey, l_areascale, l_mat, roughness, ior,
+	                             sigma, toon_size, toon_smooth, anisotropy, aniso_rotation, reflect_bsdf);
+
+	bsdf = fresnel_blend(transmit_bsdf, reflect_bsdf, V, N, ior);
+}
+
+void bsdf_glass_beckmann_area_light(vec3 N, vec3 T, vec3 L, vec3 V, vec3 l_coords,
+	                           float l_distance, float l_areasizex, float l_areasizey, vec2 l_areascale, mat4 l_mat,
+	                           float roughness, float ior, float sigma, float toon_size, float toon_smooth, float anisotropy, float aniso_rotation,
+	                           out float bsdf)
+{
+	float transmit_bsdf, reflect_bsdf;
+
+	bsdf_refract_beckmann_area_light(N, T, L, V, l_coords, l_distance, l_areasizex, l_areasizey, l_areascale, l_mat, roughness, ior,
+	                            sigma, toon_size, toon_smooth, anisotropy, aniso_rotation, transmit_bsdf);
+	bsdf_glossy_beckmann_area_light(N, T, L, V, l_coords, l_distance, l_areasizex, l_areasizey, l_areascale, l_mat, roughness, ior,
+	                           sigma, toon_size, toon_smooth, anisotropy, aniso_rotation, reflect_bsdf);
+
+	bsdf = fresnel_blend(transmit_bsdf, reflect_bsdf, V, N, ior);
+}
+
+void bsdf_glass_beckmann_sun_light(vec3 N, vec3 T, vec3 L, vec3 V, vec3 l_coords,
+	                          float l_distance, float l_areasizex, float l_areasizey, vec2 l_areascale, mat4 l_mat,
+	                          float roughness, float ior, float sigma, float toon_size, float toon_smooth, float anisotropy, float aniso_rotation,
+	                          out float bsdf)
+{
+	float transmit_bsdf, reflect_bsdf;
+
+	bsdf_refract_beckmann_sun_light(N, T, L, V, l_coords, l_distance, l_areasizex, l_areasizey, l_areascale, l_mat, roughness, ior,
+	                           sigma, toon_size, toon_smooth, anisotropy, aniso_rotation, transmit_bsdf);
+	bsdf_glossy_beckmann_sun_light(N, T, L, V, l_coords, l_distance, l_areasizex, l_areasizey, l_areascale, l_mat, roughness, ior,
+	                          sigma, toon_size, toon_smooth, anisotropy, aniso_rotation, reflect_bsdf);
+
+	bsdf = fresnel_blend(transmit_bsdf, reflect_bsdf, V, N, ior);
+}
+
 /* GLASS SHARP */
 
 void bsdf_glass_sharp_sphere_light(vec3 N, vec3 T, vec3 L, vec3 V, vec3 l_coords,
@@ -144,7 +191,7 @@ void env_sampling_glass_sharp(
 	vec3 Tr = refract(I, N, eta);
 	vec4 transmit_bsdf = sample_refract(Tr);
 
-	result = fresnel_blend(transmit_bsdf.rgb, reflect_bsdf.rgb, I, N, ior);
+	result = fresnel_blend(transmit_bsdf.rgb, reflect_bsdf.rgb, I, N, ior) * specular_occlusion(dot(N,-I), ao_factor, 0.0);
 }
 
 void env_sampling_glass_ggx(
@@ -162,7 +209,7 @@ void env_sampling_glass_ggx(
 
 	/* Precomputation */
 	float NV = max(1e-8, abs(dot(I, N)));
-	float G1_V = G1_Smith(NV, a2);
+	float G1_V = G1_Smith_GGX(NV, a2);
 
 	/* Integrating Envmap */
 	vec4 out_radiance = vec4(0.0);
@@ -174,7 +221,7 @@ void env_sampling_glass_ggx(
 
 		/* reflection */
 		vec3 R = reflect(I, H);
-		float NL = max(0.0, dot(N, R));
+		float NL = dot(N, R);
 		if (NL > 0.0) {
 			/* Step 1 : Sampling Environment */
 			float NH = max(1e-8, dot(N, H)); /* cosTheta */
@@ -198,7 +245,7 @@ void env_sampling_glass_ggx(
 			eta = ior;
 		}
 
-		vec3 Tr = refract(I, N, eta);
+		vec3 Tr = refract(I, H, eta);
 		NL = -dot(N, Tr);
 		if (NL > 0.0 && fresnel != 1.0) {
 			/* Step 1 : Sampling Environment */
@@ -215,9 +262,84 @@ void env_sampling_glass_ggx(
 			/* Step 2 : Integrating BRDF */
 			float brdf_pdf = bsdf_ggx_refract_pdf(a2, LH, NL, VH);
 
-			out_radiance += NL * sample * brdf_pdf * (1 - fresnel);
+			out_radiance += sample * brdf_pdf * (1 - fresnel);
 		}
 	}
 
-	result = out_radiance.rgb * unfbsdfsamples.y;
+	result = out_radiance.rgb * unfbsdfsamples.y * specular_occlusion(NV, ao_factor, a2);
+}
+
+void env_sampling_glass_beckmann(
+	float pbr, vec3 viewpos, mat4 invviewmat, mat4 viewmat,
+	vec3 N, vec3 T, float roughness, float ior, float sigma,
+	float toon_size, float toon_smooth, float anisotropy, float aniso_rotation,
+	float ao_factor, out vec3 result)
+{
+	/* Setup */
+	vector_prepass(viewpos, N, invviewmat, viewmat);
+	make_orthonormals(N, T, B); /* Generate tangent space */
+	setup_noise(gl_FragCoord.xy); /* Noise to dither the samples */
+	float a, a2; prepare_glossy(roughness, a, a2);
+	ior = max(ior, 1e-5);
+
+	/* Precomputation */
+	float NV = max(1e-8, abs(dot(I, N)));
+	float G1_V = G1_Smith_GGX(NV, a2);
+
+	/* Integrating Envmap */
+	vec4 out_radiance = vec4(0.0);
+	for (float i = 0; i < unfbsdfsamples.x; i++) {
+		vec3 H = sample_beckmann(i, a2, N, T, B); /* Microfacet normal */
+
+		/* TODO : For ior < 1.0 && roughness > 0.0 fresnel becomes not accurate.*/
+		float fresnel = fresnel_dielectric(I, H, (dot(H, -I) < 0.0) ? 1.0/ior : ior );
+
+		/* reflection */
+		vec3 R = reflect(I, H);
+		float NL = dot(N, R);
+		if (NL > 0.0) {
+			/* Step 1 : Sampling Environment */
+			float NH = max(1e-8, dot(N, H)); /* cosTheta */
+			float VH = max(1e-8, -dot(I, H));
+
+			float pdf = pdf_beckmann_reflect(NH, a2);
+
+			vec4 sample = sample_reflect_pdf(R, roughness, pdf);
+
+			/* Step 2 : Integrating BRDF */
+			float brdf_pdf = bsdf_beckmann_pdf(a2, NH, NV, NL, VH, G1_V);
+
+			/* See reflect glossy */
+			out_radiance += NL * sample * brdf_pdf * fresnel;
+		}
+
+		/* transmission */
+		float eta = 1.0/ior;
+		if (dot(H, -I) < 0.0) {
+			H = -H;
+			eta = ior;
+		}
+
+		vec3 Tr = refract(I, H, eta);
+		NL = -dot(N, Tr);
+		if (NL > 0.0 && fresnel != 1.0) {
+			/* Step 1 : Sampling Environment */
+			float NH = dot(N, H); /* cosTheta */
+			float VH = dot(-I, H);
+			float LH = dot(Tr, H);
+			float tmp = ior * VH + LH;
+			float Ht2 = tmp * tmp;
+
+			float pdf = pdf_beckmann_refract(Ht2, NH, NV, VH, LH, G1_V, a2, eta);
+
+			vec4 sample = sample_refract_pdf(Tr, roughness, pdf);
+
+			/* Step 2 : Integrating BRDF */
+			float brdf_pdf = bsdf_beckmann_refract_pdf(a2, LH, NL, VH);
+
+			out_radiance += sample * brdf_pdf * (1 - fresnel);
+		}
+	}
+
+	result = out_radiance.rgb * unfbsdfsamples.y * specular_occlusion(NV, ao_factor, a2);
 }

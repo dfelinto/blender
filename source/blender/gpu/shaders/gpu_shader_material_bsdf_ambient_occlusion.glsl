@@ -40,16 +40,6 @@ vec2 uv_from_position(vec3 position)
 	return (projvec.xy / projvec.w) * 0.5 + 0.5;
 }
 
-float backface_depth(ivec2 texelpos)
-{
-	float depth = linear_depth(texelFetch(unfbackfacebuf, texelpos, 0).r);
-
-	if (depth == 1.0)
-		return 1e16;
-	else
-		return depth;
-}
-
 #ifdef USE_SSAO
 
 #if 0 /* Cheap */
@@ -109,15 +99,6 @@ void ssao(vec3 viewpos, vec3 viewnor, out float result)
 	make_orthonormals(viewnor, T, B); /* Generate tangent space */
 
 	float homcoord = (gl_ProjectionMatrix[3][3] == 0.0) ? gl_ProjectionMatrix[2][3] * viewpos.z : dist;
-/* 
-	vec2 corner = vec2(1.0);
-	corner.x = gl_ProjectionMatrixInverse[0][0] * gl_ProjectionMatrix[3][3];
-	corner.y = gl_ProjectionMatrixInverse[1][1] * gl_ProjectionMatrix[3][3];
-
-	TODO USE THE DOT THING
-
-	vec4 cornerhom = unfpixelprojmat * vec4(corner, 0.0, 1.0);
-	corner = cornerhom.xy / cornerhom.w; */
 
 	float factor = 0.0;
 	float weight = 0.0;
@@ -141,15 +122,14 @@ void ssao(vec3 viewpos, vec3 viewnor, out float result)
 
 			ray += (j == 1) ? endoffset : offset;
 
-			/* Discard ray leaving screen */
-			vec2 uvsample = uv_from_position(ray + viewpos);
-			if (uvsample.x > 1.0 || uvsample.x < 0.0 || uvsample.y > 1.0 || uvsample.y < 0.0)
-				break;
-
-			/* Sampling with linear interpolation gives artifacts */
 			vec4 co = unfpixelprojmat * vec4(ray + viewpos, 1.0);
 			co.xy /= co.w;
-			float sampledepth = texelFetch(unfscenebuf, ivec2(co.xy), 0).a;
+
+			/* Discard ray leaving screen */
+			if (co.x > unfclip.z || co.x < 0.0 || co.y > unfclip.w || co.y < 0.0)
+				break;
+
+			float sampledepth = frontface_depth(ivec2(co.xy));
 
 			/* Background Case */
 			if (sampledepth == 1.0)
@@ -158,7 +138,7 @@ void ssao(vec3 viewpos, vec3 viewnor, out float result)
 			/* We have a hit */
 			if (sampledepth > ray.z + viewpos.z + homcoord * 0.002
 #ifdef USE_BACKFACE
-			 && -backface_depth(ivec2(co.xy)) < ray.z + viewpos.z
+			 && backface_depth(ivec2(co.xy)) < ray.z + viewpos.z
 #endif
 			 )
 			{

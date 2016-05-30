@@ -2345,11 +2345,6 @@ static void rna_def_gpu_pbr_ssr(BlenderRNA *brna)
 	RNA_def_struct_ui_text(srna, "GPU SSR", "Settings for GPU based screen space reflections");
 	RNA_def_struct_ui_icon(srna, ICON_MATERIAL);
 
-	prop = RNA_def_property(srna, "stride", PROP_FLOAT, PROP_NONE);
-	RNA_def_property_ui_text(prop, "Offset", "Offset for each raymarching step");
-	RNA_def_property_range(prop, 0.00001f, 250.0f);
-	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
-
 	prop = RNA_def_property(srna, "distance_max", PROP_FLOAT, PROP_NONE);
 	RNA_def_property_ui_text(prop, "Distance", "Max distance traveled by the reflected ray");
 	RNA_def_property_range(prop, 0.00001f, 100000.0f);
@@ -2360,40 +2355,9 @@ static void rna_def_gpu_pbr_ssr(BlenderRNA *brna)
 	RNA_def_property_range(prop, 1.0f, 20.0f);
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
 
-	prop = RNA_def_property(srna, "thickness", PROP_FLOAT, PROP_NONE);
-	RNA_def_property_ui_text(prop, "Thickness", "Minimum Pixel thickness when testing intersection");
-	RNA_def_property_range(prop, 0.000001f, 100000.0f);
-	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
-
 	prop = RNA_def_property(srna, "steps", PROP_INT, PROP_NONE);
 	RNA_def_property_ui_text(prop, "Steps", "Number of samples");
 	RNA_def_property_range(prop, 1, 128);
-	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
-}
-
-static void rna_def_gpu_pbr_ssao(BlenderRNA *brna)
-{
-	StructRNA *srna;
-	PropertyRNA *prop;
-
-	srna = RNA_def_struct(brna, "GPUAOSettings", NULL);
-	RNA_def_struct_ui_text(srna, "GPU SSAO", "Settings for GPU based screen space ambient occlusion");
-	RNA_def_struct_ui_icon(srna, ICON_RENDERLAYERS);
-
-	prop = RNA_def_property(srna, "distance_max", PROP_FLOAT, PROP_NONE);
-	RNA_def_property_ui_text(prop, "Distance", "Distance of object that contribute to the SSAO effect");
-	RNA_def_property_range(prop, 0.0f, 100000.0f);
-	RNA_def_property_ui_range(prop, 0.0f, 100.0f, 1, 3);
-	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
-
-	prop = RNA_def_property(srna, "samples", PROP_INT, PROP_NONE);
-	RNA_def_property_ui_text(prop, "Samples", "Number of samples");
-	RNA_def_property_range(prop, 1, 500);
-	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
-
-	prop = RNA_def_property(srna, "steps", PROP_INT, PROP_NONE);
-	RNA_def_property_ui_text(prop, "Steps", "Number of steps per samples");
-	RNA_def_property_range(prop, 1, 16);
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
 }
 
@@ -2404,7 +2368,6 @@ static void rna_def_gpu_pbr(BlenderRNA *brna)
 
 	rna_def_gpu_pbr_brdf(brna);
 	rna_def_gpu_pbr_ssr(brna);
-	rna_def_gpu_pbr_ssao(brna);
 
 	srna = RNA_def_struct(brna, "GPUPBRSettings", NULL);
 	RNA_def_struct_ui_text(srna, "GPU PBR Settings", "Settings for GLSL PBR materials");
@@ -2435,7 +2398,7 @@ static void rna_def_gpu_pbr(BlenderRNA *brna)
 	/* SSAO */
 	prop = RNA_def_property(srna, "ssao", PROP_POINTER, PROP_NONE);
 	RNA_def_property_flag(prop, PROP_NEVER_NULL);
-	RNA_def_property_struct_type(prop, "GPUAOSettings");
+	RNA_def_property_struct_type(prop, "GPUSSAOSettings");
 	RNA_def_property_ui_text(prop, "Screen Space Ambient Occlusion settings", "");
 
 	prop = RNA_def_property(srna, "use_ssao", PROP_BOOLEAN, PROP_NONE);
@@ -2447,6 +2410,12 @@ static void rna_def_gpu_pbr(BlenderRNA *brna)
 	prop = RNA_def_property(srna, "use_backface", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "pbr_flag", GPU_PBR_FLAG_BACKFACE);
 	RNA_def_property_ui_text(prop, "Use Backface Buffer", "Enable the calculation of pixel thickness");
+	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, "rna_GPUPBRSettings_update");
+
+	/* Material Override */
+	prop = RNA_def_property(srna, "use_layer_override", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "pbr_flag", GPU_PBR_FLAG_LAYER_OVERRIDE);
+	RNA_def_property_ui_text(prop, "Render Layer Override", "Use render layer override");
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, "rna_GPUPBRSettings_update");
 }
 

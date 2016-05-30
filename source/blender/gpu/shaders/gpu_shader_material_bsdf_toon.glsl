@@ -213,9 +213,9 @@ void env_sampling_toon_diffuse(
 	vec4 out_radiance = vec4(0.0);
 	for (float i = 0; i < unfbsdfsamples.x; i++) {
 		vec3 L = sample_uniform_cone(i, sample_angle, N, T, B);
-		float NL = max(0.0, dot(N, L));
+		float NL = dot(N, L);
 
-		if (NL != 0.0) {
+		if (NL > 0.0) {
 			/* Step 1 : Sampling Environment */
 			float pdf = pdf_uniform_cone(sample_angle);
 			vec4 irradiance = sample_probe_pdf(L, pdf);
@@ -227,7 +227,7 @@ void env_sampling_toon_diffuse(
 		}
 	}
 
-	result = out_radiance.rgb * unfbsdfsamples.y;
+	result = out_radiance.rgb * unfbsdfsamples.y * ao_factor;
 }
 
 void env_sampling_toon_glossy(
@@ -253,9 +253,9 @@ void env_sampling_toon_glossy(
 	for (float i = 0; i < unfbsdfsamples.x; i++) {
 		vec3 L = sample_uniform_cone(i, sample_angle, R, T, B);
 
-		float NL = max(0.0, dot(N, L));
+		float NL = dot(N, L);
 
-		if (NL != 0.0) {
+		if (NL > 0.0) {
 			float RL = max(0.0, dot(R, L));
 
 			/* Step 1 : Sampling Environment */
@@ -269,5 +269,5 @@ void env_sampling_toon_glossy(
 		}
 	}
 
-	result = out_radiance.rgb * unfbsdfsamples.y;
+	result = out_radiance.rgb * unfbsdfsamples.y * specular_occlusion(NV, ao_factor, a2);
 }

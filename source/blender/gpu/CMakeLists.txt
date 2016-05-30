@@ -110,6 +110,7 @@ set(SRC
 	GPU_glew.h
 	GPU_init_exit.h
 	GPU_pbr.h
+	GPU_ltc.h
 	GPU_material.h
 	GPU_probe.h
 	GPU_select.h

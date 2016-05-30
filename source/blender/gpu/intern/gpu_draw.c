@@ -1796,8 +1796,6 @@ void GPU_begin_object_materials(
 		GMS.alphablend[0] = GPU_BLEND_SOLID;
 	}
 	else {
-
-
 		if (glsl && new_shading_nodes && GMS.is_realistic_mat && !(v3d->flag2 & V3D_RENDER_SHADOW)) {
 			GMS.use_ssr = (v3d->pbr_settings.pbr_flag & GPU_PBR_FLAG_SSR);
 			GMS.use_ssao = (v3d->pbr_settings.pbr_flag & GPU_PBR_FLAG_SSAO);
@@ -1805,7 +1803,12 @@ void GPU_begin_object_materials(
 			GMS.gpbrsettings = &v3d->pbr_settings;
 			GMS.gpbr = v3d->pbr;
 
-			/* Screen space reflections */
+			/* Layer override */
+			if (v3d->pbr_settings.pbr_flag & GPU_PBR_FLAG_LAYER_OVERRIDE) {
+				SceneRenderLayer *srl = BLI_findlink(&GMS.gscene->r.layers, GMS.gscene->r.actlay);
+				if (srl->mat_override) ma = srl->mat_override;
+			}
+
 			if (v3d->flag3 & V3D_PROBE_CAPTURE)	{
 				GMS.use_ssr = false;
 				GMS.use_ssao = false;
@@ -1860,14 +1863,15 @@ void GPU_begin_object_materials(
 
 		/* no materials assigned? */
 		if (ob->totcol == 0) {
-			gpu_material_to_fixed(&GMS.matbuf[0], &defmaterial, 0, ob, new_shading_nodes, true);
+			if (ma == NULL) ma = &defmaterial;
+			gpu_material_to_fixed(&GMS.matbuf[0], ma, 0, ob, new_shading_nodes, true);
 
 			/* do material 1 too, for displists! */
 			memcpy(&GMS.matbuf[1], &GMS.matbuf[0], sizeof(GPUMaterialFixed));
 
 			if (glsl) {
-				GMS.gmatbuf[0] = &defmaterial;
-				GPU_material_from_blender(GMS.gscene, &defmaterial, GMS.is_opensubdiv,
+				GMS.gmatbuf[0] = ma;
+				GPU_material_from_blender(GMS.gscene, ma, GMS.is_opensubdiv,
 				                          GMS.is_realistic_mat, GMS.is_planar_probe,
 				                          GMS.is_alpha_as_depth, GMS.use_backface_depth, GMS.use_ssr, GMS.use_ssao,
 				                          GMS.parallax_correc);
@@ -1882,6 +1886,11 @@ void GPU_begin_object_materials(
 			ma = give_current_material(ob, a);
 			if (!glsl && !new_shading_nodes) ma = gpu_active_node_material(ma);
 			if (ma == NULL) ma = &defmaterial;
+
+			if (v3d->pbr_settings.pbr_flag & GPU_PBR_FLAG_LAYER_OVERRIDE) {
+				SceneRenderLayer *srl = BLI_findlink(&GMS.gscene->r.layers, GMS.gscene->r.actlay);
+				if (srl->mat_override) ma = srl->mat_override;
+			}
 
 			/* create glsl material if requested */
 			gpumat = glsl ? GPU_material_from_blender(GMS.gscene, ma, GMS.is_opensubdiv,

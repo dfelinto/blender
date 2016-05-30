@@ -4,8 +4,7 @@
 #define NUM_LIGHTS 3
 
 /* SSR Maximum iterations */
-#define MAX_SSR_STEPS 128
-#define MAX_SSR_REFINE_STEPS 16
+#define MAX_SSR_REFINE_STEPS 8
 
 /* Importance sampling Max iterations */
 #define BSDF_SAMPLES 1024
@@ -40,10 +39,9 @@ uniform vec3 unfsh7;
 uniform vec3 unfsh8;
 uniform vec3 unfprobepos;
 uniform vec3 unfplanarvec;
-uniform vec4 unfssrparam;
-uniform vec2 unfssrparam2;
+uniform vec3 unfssrparam;
 uniform vec3 unfssaoparam;
-uniform vec2 unfclip;
+uniform vec4 unfclip;
 uniform mat4 unfprobecorrectionmat;
 uniform mat4 unfplanarreflectmat;
 uniform mat4 unfpixelprojmat;
@@ -83,6 +81,27 @@ float linear_depth(float z)
 		float zf = unfclip.y; // camera z far
 		return z * 2.0 * zf - zf;
 	}
+}
+
+float backface_depth(ivec2 texelpos)
+{
+	float depth = linear_depth(texelFetch(unfbackfacebuf, texelpos, 0).r);
+
+	if (depth == 1.0)
+		return -1e16;
+	else
+		return -depth;
+}
+
+float frontface_depth(ivec2 texelpos)
+{
+	float depth = texelFetch(unfscenebuf, texelpos, 0).a;
+
+	/* background case */
+	if (depth == 1.0)
+		return -1e16;
+	else
+		return depth;
 }
 
 vec3 axis_angle_rotation(vec3 point, vec3 axis, float angle)
@@ -505,6 +524,19 @@ float rectangle_energy(float width, float height)
 		* 80.0;  /* XXX : Empirical, Fit cycles power */
 }
 
+/* ------- Ambient Occlusion ------- */
+/* from Sebastien Lagarde
+ * course_notes_moving_frostbite_to_pbr.pdf */
+
+float specular_occlusion(float NV, float AO, float roughness)
+{
+#ifdef USE_SSAO
+	return saturate(pow(NV + AO, roughness) - 1.0 + AO);
+#else
+	return 1.0;
+#endif
+}
+
 /* ----------- Parallax Correction -------------- */
 
 void parallax_correct_ray(inout vec3 L)
@@ -720,14 +752,10 @@ void swapIfBigger(inout float a, inout float b)
 bool raycast(vec3 ray_origin, vec3 ray_dir, float jitter, out float hitstep, out vec2 hitpixel, out vec3 hitco)
 {
 	/* ssr_parameters */
-	float thickness = 	unfssrparam.x; /* Camera space thickness to ascribe to each pixel in the depth buffer */
-	float nearz = 		unfssrparam.y; /* Near plane distance (Negative number) */
-	float ray_step = 	unfssrparam.z; /* 2D : Step in horizontal or vertical pixels between samples. 3D : View space step between samples */
-	float maxstep = 	unfssrparam.w; /* Maximum number of iteration when raymarching */
-	float maxdistance = unfssrparam2.x; /* Maximum distance from ray origin */
-	float attenuation = unfssrparam2.y; /* Attenuation factor for screen edges and ray step fading */
+	float nearz = 		-unfclip.x; /* Near plane distance (Negative number) */
 
 	/* Clip ray to a near plane in 3D */
+	float ray_length = 1e15;
 	if ((ray_origin.z + ray_dir.z * ray_length) > nearz)
 		ray_length = (nearz - ray_origin.z) / ray_dir.z;
 
@@ -781,15 +809,18 @@ bool raycast(vec3 ray_origin, vec3 ray_dir, float jitter, out float hitstep, out
     vec3 dQ = (Q1 - Q0) * invdx;
     float dk = (k1 - k0) * invdx;
 
+    /* Stride */
+    float stride = 1.0;
+
 	/* Calculate pixel stride based on distance of ray origin from camera. */
-	// float stride_scale = 1.0 - min( 1.0, -ray_origin.z);
-	// stride = 1.0 + stride_scale * stride;
+	//float stride_scale = 1.0 - min( 1.0, -ray_origin.z);
+	//stride = 1.0 + stride_scale * stride;
 
     /* Scale derivatives by the desired pixel stride */
 	dP *= stride; dQ *= stride; dk *= stride;
 
     /* Offset the starting values by the jitter fraction */
-	P0 += dP * jitter; Q0 += dQ * jitter; k0 += dk * jitter;
+	//P0 += dP * jitter; Q0 += dQ * jitter; k0 += dk * jitter;
 
 	/* Slide each value from the start of the ray to the end */
     vec3 Q = Q0; vec2 P = P0; float k = k0;
@@ -808,10 +839,10 @@ bool raycast(vec3 ray_origin, vec3 ray_dir, float jitter, out float hitstep, out
 
     bool hit = false;
 
-	for (hitstep = 0.0; hitstep < MAX_SSR_STEPS && !hit; hitstep++)
+	for (hitstep = 0.0; hitstep < unfssrparam.x && !hit; hitstep++)
 	{
 		 /* Ray finished & no hit*/
-		if ((hitstep > maxstep) || ((P.x * step_sign) > end)) break;
+		//if ((P.x * step_sign) > end) break;
 
 		P += dP; Q.z += dQ.z; k += dk;
 
@@ -826,7 +857,12 @@ bool raycast(vec3 ray_origin, vec3 ray_dir, float jitter, out float hitstep, out
 		/* background case */
 		if (scene_zmax == 1.0) scene_zmax = -1e16;
 
-		hit = ((zmax >= scene_zmax - thickness) && (zmin <= scene_zmax));
+#ifdef USE_BACKFACE
+		float backface = backface_depth(ivec2(hitpixel));
+#else
+		const float backface = -1e16;
+#endif
+		hit = ((zmax > backface) && (zmin < scene_zmax));
 	}
 
 	hitco = (Q0 + dQ * hitstep) / k;
@@ -835,25 +871,14 @@ bool raycast(vec3 ray_origin, vec3 ray_dir, float jitter, out float hitstep, out
 
 #else /* 3D raymarch */
 
-float getDeltaDepth(vec3 hitco)
-{
-	vec4 co = unfpixelprojmat * vec4(hitco, 1.0);
-	co.xy /= co.w;
-	float depth = texelFetch(unfscenebuf, ivec2(co.xy), 0).a;
-
-	/* background case */
-	if (depth == 1.0) depth = -1e16;
-
-	return depth - hitco.z;
-}
-
 void binary_search(vec3 ray_dir, inout vec3 hitco)
 {
     for (int i = 0; i < MAX_SSR_REFINE_STEPS; i++) {
 		ray_dir *= 0.5;
         hitco -= ray_dir;
-        float delta = getDeltaDepth(hitco);
-        if (delta < 0.0) hitco += ray_dir;
+		vec4 co = unfpixelprojmat * vec4(hitco, 1.0);
+        float frontface = frontface_depth(ivec2(co.xy / co.w)) - hitco.z;
+        if (frontface - hitco.z < 0.0) hitco += ray_dir;
     }
 }
 
@@ -861,24 +886,32 @@ void binary_search(vec3 ray_dir, inout vec3 hitco)
 bool raycast(vec3 ray_origin, vec3 ray_dir, float jitter, out float hitstep, out vec2 hitpixel, out vec3 hitco)
 {
 	/* ssr_parameters */
-	float thickness = 	unfssrparam.x; /* Camera space thickness to ascribe to each pixel in the depth buffer */
-	float ray_step = 	unfssrparam.z; /* 2D : Step in horizontal or vertical pixels between samples. 3D : View space step between samples */
-	float maxstep = 	unfssrparam.w; /* Maximum number of iteration when raymarching */
+	float slope = 1.0 - ray_dir.z;
+	ray_dir *= unfssrparam.y; /* step between samples */
 
-	ray_dir *= ray_step;
-
-	//thickness = 2 * ray_step;
+	float homcoord = gl_ProjectionMatrix[2][3] * ray_origin.z + gl_ProjectionMatrix[3][3];
 
 	hitco = ray_origin;
-	hitco += ray_dir * jitter;
+	hitco += ray_dir * (jitter + homcoord * 0.005);
+
 	hitpixel = vec2(0.0);
-	
-	for (hitstep = 0.0; hitstep < MAX_SSR_STEPS && hitstep < maxstep; hitstep++) {
+	for (hitstep = 0.0; hitstep < unfssrparam.x; hitstep++) {
 		hitco += ray_dir;
-		float delta = getDeltaDepth(hitco);
-		if (delta > 0.0 && delta < thickness) {
+		vec4 co = unfpixelprojmat * vec4(hitco, 1.0);
+		co.xy /= co.w;
+
+		/* Find a way to resolve inter penetration better */
+		if (floor(co.xy) == gl_FragCoord.xy) continue;
+
+		float frontface = frontface_depth(ivec2(co.xy));
+#ifdef USE_BACKFACE
+		float backface = backface_depth(ivec2(co.xy));
+#else
+		float backface = frontface - unfssrparam.y * 2.0;
+#endif
+		if (frontface - hitco.z > 0.001 && backface - hitco.z < 0.0) {
 			/* Refine hit */
-			binary_search(ray_dir, hitco);
+			//binary_search(ray_dir, hitco);
 			/* Find texel coord */
 			vec4 pix = unfpixelprojmat * vec4(hitco, 1.0);
 			hitpixel = pix.xy / pix.w;
@@ -890,20 +923,38 @@ bool raycast(vec3 ray_origin, vec3 ray_dir, float jitter, out float hitstep, out
 	/* No hit */
 	return false;
 }
-#endif
 
+#endif
+#if 0
+/* 3D raycast */
+bool hierarchical_raycast(vec3 ray_origin, vec3 ray_dir, float jitter, out float hitstep, out vec2 hitpixel, out vec3 hitco)
+{
+	/* ssr_parameters */
+	ray_dir *= unfssrparam.y; /* step between samples */
+
+	hitco = ray_origin;
+	hitco += ray_dir * jitter;
+	
+	hitpixel = vec2(0.0);
+	float mip = 0.0;
+	for (hitstep = 0.0; hitstep < unfssrparam.x; hitstep++) {
+		/* step through current cell */
+		if (above) mip++;
+		if (below) mip--;
+	}
+
+	/* No hit */
+	return false;
+}
+#endif
 float ssr_contribution(vec3 ray_origin, float hitstep, bool hit, inout vec3 hitco)
 {
 	/* ssr_parameters */
-	float maxstep = 	unfssrparam.w; /* Maximum number of iteration when raymarching */
-	float maxdistance = unfssrparam2.x; /* Maximum distance from ray origin */
-	float attenuation = unfssrparam2.y; /* Attenuation factor for screen edges and ray step fading */
+	float maxstep = 	unfssrparam.x; /* Maximum number of iteration when raymarching */
+	float attenuation = unfssrparam.z; /* Attenuation factor for screen edges and ray step fading */
 
 	/* ray step fade */
 	float stepfade = saturate((1.0 - hitstep / maxstep) * attenuation);
-
-	/* ray length fade */
-	float rayfade = saturate((1.0 - length(ray_origin - hitco) / maxdistance) * attenuation);
 
 	/* screen edges fade */
 	vec4 co = gl_ProjectionMatrix * vec4(hitco, 1.0);
@@ -912,5 +963,5 @@ float ssr_contribution(vec3 ray_origin, float hitstep, bool hit, inout vec3 hitc
 	float maxdimension = saturate(max(abs(co.x), abs(co.y)));
 	float screenfade = saturate((0.999999 - maxdimension) * attenuation);
 
-	return sqrt(rayfade * screenfade) * float(hit);
+	return sqrt(stepfade * screenfade) * float(hit);
 }

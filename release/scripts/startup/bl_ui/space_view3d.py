@@ -3274,14 +3274,14 @@ class VIEW3D_PT_view3d_shading(Panel):
                 if pbr_settings.use_ssr:
                     ssr_settings = pbr_settings.ssr;
                     subcol = col.column(align=True)
-                    subcol.prop(ssr_settings, "thickness")
-                    subcol.prop(ssr_settings, "stride")
                     subcol.prop(ssr_settings, "distance_max")
                     subcol.prop(ssr_settings, "attenuation")
                     subcol.prop(ssr_settings, "steps")
 
                 if pbr_settings.use_ssao or pbr_settings.use_ssr:
                     col.prop(pbr_settings, "use_backface", text="Backface Buffer")
+
+                col.prop(pbr_settings, "use_layer_override")
 
         col.prop(view, "show_backface_culling")
 

@@ -136,10 +136,10 @@ void env_sampling_velvet(
 		vec3 L = sample_hemisphere(i, N, T, B);
 		vec3 H = normalize(L - I);
 
-		float NL = max(0.0, dot(N, L));
+		float NL = dot(N, L);
 		float NH = dot(N, H); /* cosTheta */
 
-		if (NL != 0.0 && abs(NH) < 1.0-1e-5) {
+		if (NL > 0.0 && abs(NH) < 1.0-1e-5) {
 			/* Step 1 : Sampling Environment */
 			float pdf = pdf_hemisphere();
 			vec4 irradiance = sample_probe_pdf(L, pdf);
@@ -152,5 +152,5 @@ void env_sampling_velvet(
 		}
 	}
 
-	result = out_radiance.rgb * unfbsdfsamples.y;
+	result = out_radiance.rgb * unfbsdfsamples.y * specular_occlusion(NV, ao_factor, a2);
 }

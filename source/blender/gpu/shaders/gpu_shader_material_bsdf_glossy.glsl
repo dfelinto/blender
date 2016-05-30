@@ -30,6 +30,21 @@ vec3 sample_beckmann(float nsample, float a2, vec3 N, vec3 T, vec3 B)
 	return from_tangent_to_world(Ht, N, T, B);
 }
 
+vec3 sample_ashikhmin_shirley(float nsample, float n_x, vec3 N, vec3 T, vec3 B)
+{
+	vec3 Xi = hammersley_3d(nsample);
+
+	float z = pow( Xi.x, 1.0 / (n_x + 1.0) ); /* cos theta */
+	float r = sqrt( 1.0 - z * z ); /* sin theta */
+	float x = r * Xi.y;
+	float y = r * Xi.z;
+
+	/* Global variable */
+	Ht = vec3(x, y, z);
+
+	return from_tangent_to_world(Ht, N, T, B);
+}
+
 float D_ggx_opti(float NH, float a2)
 {
 	float tmp = (NH * a2 - NH) * NH + 1.0;
@@ -52,6 +67,14 @@ float pdf_beckmann_reflect(float NH, float a2)
 	return NH * D_beckman(NH, a2);
 }
 
+float pdf_ashikhmin_shirley_reflect(float NH, float VH, float n_x)
+{
+	float lobe = pow(NH, n_x);
+	float norm = (n_x + 1.0) * 0.125 * M_1_PI;
+
+	return norm * lobe / VH;
+}
+
 void prepare_glossy(float roughness, out float a, out float a2)
 {
 	/* Artifacts appear with roughness below this threshold */
@@ -60,7 +83,7 @@ void prepare_glossy(float roughness, out float a, out float a2)
 	a2 = max(1e-8, a*a);
 }
 
-float G1_Smith(float NX, float a2)
+float G1_Smith_GGX(float NX, float a2)
 {
 	/* Using Brian Karis approach and refactoring by NX/NX
 	 * this way the (2*NL)*(2*NV) in G = G1(V) * G1(L) gets canceled by the brdf denominator 4*NL*NV
@@ -70,9 +93,9 @@ float G1_Smith(float NX, float a2)
 	/* return 2 / (1 + sqrt(1 + a2 * (1 - NX*NX) / (NX*NX) ) ); /* Reference function */
 }
 
-float G1_Smith_beckmann(float NX, float a)
+float G1_Smith_beckmann(float NX, float a2)
 {
-	float tmp = 1 / (a * sqrt((1 - NX * NX) / (NX * NX)));
+	float tmp = 1 / (sqrt(a2 * (1 - NX * NX) / (NX * NX)));
 	return (tmp < 1.6) ? (3.535 * tmp + 2.181 * tmp * tmp) / (1 + 2.276 * tmp + 2.577 * tmp * tmp) : 1.0;
 }
 
@@ -83,11 +106,11 @@ float bsdf_ggx(vec3 N, vec3 L, vec3 V, float roughness)
 	float a, a2; prepare_glossy(roughness, a, a2);
 
 	vec3 H = normalize(L + V);
-	float NH = clamp(dot(N, H), 1e-8, 1);
-	float NL = clamp(dot(N, L), 1e-8, 1);
-	float NV = clamp(dot(N, V), 1e-8, 1);
+	float NH = max(dot(N, H), 1e-8);
+	float NL = max(dot(N, L), 1e-8);
+	float NV = max(dot(N, V), 1e-8);
 
-	float G = G1_Smith(NV, a2) * G1_Smith(NL, a2); /* Doing RCP at the end */
+	float G = G1_Smith_GGX(NV, a2) * G1_Smith_GGX(NL, a2); /* Doing RCP at the end */
 	float D = D_ggx_opti(NH, a2);
 
 	/* Denominator is canceled by G1_Smith */
@@ -98,7 +121,7 @@ float bsdf_ggx(vec3 N, vec3 L, vec3 V, float roughness)
 /* This one returns the brdf already divided by the pdf */
 float bsdf_ggx_pdf(float a2, float NH, float NL, float VH, float G1_V)
 {
-	float G = G1_V * G1_Smith(NL, a2); /* Doing RCP at the end */
+	float G = G1_V * G1_Smith_GGX(NL, a2); /* Doing RCP at the end */
 
 	/* Denominator is canceled by G1_Smith
 	 * brdf = D * G / (4.0 * NL * NV) [denominator canceled by G]
@@ -111,11 +134,11 @@ float bsdf_beckmann(vec3 N, vec3 L, vec3 V, float roughness)
 	float a, a2; prepare_glossy(roughness, a, a2);
 
 	vec3 H = normalize(L + V);
-	float NH = clamp(dot(N, H), 1e-8, 1);
-	float NL = clamp(dot(N, L), 1e-8, 1);
-	float NV = clamp(dot(N, V), 1e-8, 1);
+	float NH = max(dot(N, H), 1e-8);
+	float NL = max(dot(N, L), 1e-8);
+	float NV = max(dot(N, V), 1e-8);
 
-	float G = G1_Smith_beckmann(NV, a) * G1_Smith_beckmann(NL, a);
+	float G = G1_Smith_beckmann(NV, a2) * G1_Smith_beckmann(NL, a2);
 	float D = D_beckman(NH, a2);
 
 	return NL * D * G * 0.25 / (NL * NV);
@@ -124,12 +147,37 @@ float bsdf_beckmann(vec3 N, vec3 L, vec3 V, float roughness)
 /* This one returns the brdf already divided by the pdf */
 float bsdf_beckmann_pdf(float a2, float NH, float NV, float NL, float VH, float G1_V)
 {
-	float G = G1_V * G1_Smith_beckmann(NL, a2); /* Doing RCP at the end */
+	float G = G1_V * G1_Smith_beckmann(NL, a2);
 
-	/* Denominator is canceled by G1_Smith
-	 * brdf = D * G / (4.0 * NL * NV)
+	/* brdf = D * G / (4.0 * NL * NV)
 	 * pdf = D * NH / (4 * VH) [D canceled later by D in brdf] */
 	return G * VH / (NH * NV * NL); /* brdf / pdf */
+}
+
+float bsdf_ashikhmin_shirley(vec3 N, vec3 L, vec3 V, float roughness)
+{
+	float a, a2; prepare_glossy(roughness, a, a2);
+
+	vec3 H = normalize(L + V);
+	float NL = max(dot(N, L), 1e-6);
+	float NV = max(dot(N, V), 1e-6);
+	float NH = max(dot(N, H), 1e-6);
+	float VH = max(abs(dot(V, H)), 1e-6);
+
+	float pump = 1.0 / max(1e-6, VH * max(NL, NV));
+	float n_x = 2.0 / a2 - 2.0;
+	float lobe = pow(NH, n_x);
+	float norm = (n_x + 1.0f) * 0.125 * M_1_PI;
+
+	return NL * norm * lobe * pump;
+}
+
+/* This one returns the brdf already divided by the pdf */
+float bsdf_ashikhmin_shirley_pdf(float NV, float NL, float VH)
+{
+	float pump = 1.0 / max(1e-6, VH * max(NL, NV));
+
+	return VH * pump;
 }
 
 /* -------- Preview Lights --------- */
@@ -156,7 +204,6 @@ void node_bsdf_glossy_lights(vec4 color, float roughness, vec3 N, vec3 V, vec4 a
 
 	result = vec4(accumulator * color.rgb, 1.0);
 }
-
 
 /* -------- Physical Lights --------- */
 
@@ -377,7 +424,7 @@ void bsdf_glossy_beckmann_sphere_light(
 	shade_view(V, V);
 	vec3 R = reflect(V, N);
 
-	float energy_conservation = 1.0;
+	float energy_conservation = 1.0; /* XXX TODO : Energy conservation is done for GGX */
 	most_representative_point(l_radius, 0.0, vec3(0.0), l_distance, R, L, roughness, energy_conservation);
 	bsdf = bsdf_beckmann(N, L, V, roughness);
 
@@ -392,7 +439,9 @@ void bsdf_glossy_beckmann_area_light(
 	float roughness, float ior, float sigma, float toon_size, float toon_smooth, float anisotropy, float aniso_rotation,
 	out float bsdf)
 {
-	bsdf = 0.0;
+	/* TODO Make the other ltc luts */
+	bsdf_glossy_ggx_area_light( N, T, L, V, l_coords, l_distance, l_areasizex, l_areasizey, l_areascale, 
+		l_mat, roughness, ior, sigma, toon_size, toon_smooth, anisotropy, aniso_rotation, bsdf);
 }
 
 void bsdf_glossy_beckmann_sun_light(
@@ -401,7 +450,93 @@ void bsdf_glossy_beckmann_sun_light(
 	float roughness, float ior, float sigma, float toon_size, float toon_smooth, float anisotropy, float aniso_rotation,
 	out float bsdf)
 {
-	bsdf = 0.0;
+	/* Correct ligth shape but uniform intensity
+	 * Does not take into account the division by costheta^3 */
+	if (roughness < 1e-4 && l_areasizex == 0) {
+		bsdf = 0.0;
+		return;
+	}
+
+	vec3 R = reflect(V, N);
+
+	float l_radius = l_areasizex;
+	float angle = atan(l_radius);
+
+	float costheta = dot(-L, R);
+	float cosangle = cos(angle);
+
+	float energy_conservation = 1.0;
+	most_representative_point_disk(l_radius, 1.0, R, L, roughness, energy_conservation);
+
+	bsdf = bsdf_beckmann(N, L, V, roughness);
+	bsdf *= energy_conservation;
+}
+
+/* GLOSSY ASHIKhMIN SHIRLEY */
+
+void bsdf_glossy_ashikhmin_shirley_sphere_light(
+	vec3 N, vec3 T, vec3 L, vec3 V,
+	vec3 l_coords, float l_distance, float l_areasizex, float l_areasizey, vec2 l_areascale, mat4 l_mat,
+	float roughness, float ior, float sigma, float toon_size, float toon_smooth, float anisotropy, float aniso_rotation,
+	out float bsdf)
+{
+	if (roughness < 1e-4 && l_areasizex == 0) {
+		bsdf = 0.0;
+		return;
+	}
+
+	/* MRP is twice as fast as LTC, does not exhibit crucial artifacts and is better looking */
+	float l_radius = l_areasizex;
+
+	shade_view(V, V);
+	vec3 R = reflect(V, N);
+
+	float energy_conservation = 1.0; /* XXX TODO : Energy conservation is done for GGX */
+	most_representative_point(l_radius, 0.0, vec3(0.0), l_distance, R, L, roughness, energy_conservation);
+	bsdf = bsdf_ashikhmin_shirley(N, L, V, roughness);
+
+	bsdf *= energy_conservation / (l_distance * l_distance);
+	bsdf *= sphere_energy(l_radius) * max(l_radius * l_radius, 1e-16); /* l_radius is already inside energy_conservation */
+	bsdf *= M_PI;
+}
+
+void bsdf_glossy_ashikhmin_shirley_area_light(
+	vec3 N, vec3 T, vec3 L, vec3 V,
+	vec3 l_coords, float l_distance, float l_areasizex, float l_areasizey, vec2 l_areascale, mat4 l_mat,
+	float roughness, float ior, float sigma, float toon_size, float toon_smooth, float anisotropy, float aniso_rotation,
+	out float bsdf)
+{
+	/* TODO Make the other ltc luts */
+	bsdf_glossy_ggx_area_light( N, T, L, V, l_coords, l_distance, l_areasizex, l_areasizey, l_areascale, 
+		l_mat, roughness, ior, sigma, toon_size, toon_smooth, anisotropy, aniso_rotation, bsdf);
+}
+
+void bsdf_glossy_ashikhmin_shirley_sun_light(
+	vec3 N, vec3 T, vec3 L, vec3 V,
+	vec3 l_coords, float l_distance, float l_areasizex, float l_areasizey, vec2 l_areascale, mat4 l_mat,
+	float roughness, float ior, float sigma, float toon_size, float toon_smooth, float anisotropy, float aniso_rotation,
+	out float bsdf)
+{
+	/* Correct ligth shape but uniform intensity
+	 * Does not take into account the division by costheta^3 */
+	if (roughness < 1e-4 && l_areasizex == 0) {
+		bsdf = 0.0;
+		return;
+	}
+
+	vec3 R = reflect(V, N);
+
+	float l_radius = l_areasizex;
+	float angle = atan(l_radius);
+
+	float costheta = dot(-L, R);
+	float cosangle = cos(angle);
+
+	float energy_conservation = 1.0;
+	most_representative_point_disk(l_radius, 1.0, R, L, roughness, energy_conservation);
+
+	bsdf = bsdf_ashikhmin_shirley(N, L, V, roughness);
+	bsdf *= energy_conservation;
 }
 
 /* -------- Image Based Lighting --------- */
@@ -420,22 +555,27 @@ void env_sampling_glossy_sharp(
 	vec3 vL = (viewmat * vec4(L, 0.0)).xyz;
 
 	/* Probe */
-	vec4 sample_probe = sample_reflect(L);
+	vec4 sample_probe = sample_reflect(L) * specular_occlusion(dot(N, -I), ao_factor, 0.0);
 
 #ifdef USE_SSR
 	/* SSR */
-	ivec2 c = ivec2(gl_FragCoord.xy);
-	float jitter = float((c.x+c.y)&1) * 0.5; // Number between 0 and 1 for how far to bump the ray in stride units to conceal banding artifacts
+	//ivec2 c = ivec2(gl_FragCoord.xy);
+	//float jitter = float((c.x+c.y)&1) * 0.5; // Number between 0 and 1 for how far to bump the ray in stride units to conceal banding artifacts
+	//setup_noise(gl_FragCoord.xy); /* Noise to dither the samples */
+	//float jitter = jitternoise.y * 1.0;
+	float jitter = 0.0;
 
 	vec2 hitpixel; vec3 hitco; float hitstep;
 
 	bool hit = raycast(viewpos, vL, jitter, hitstep, hitpixel, hitco);
 	float contrib = ssr_contribution(viewpos, hitstep, hit, hitco);
 
-	vec4 sample_ssr = texture2DLod(unfscenebuf, hitco.xy, 0);
+	//vec4 sample_ssr = texture2DLod(unfscenebuf, hitco.xy, 0);
+	vec4 sample_ssr = texelFetch(unfscenebuf, ivec2(hitpixel.xy), 0);
 	srgb_to_linearrgb(sample_ssr, sample_ssr);
 
 	result = mix(sample_probe.rgb, sample_ssr.rgb, contrib);
+	result = -texelFetch(unfscenebuf, ivec2(gl_FragCoord.xy), 0).aaa / 100;
 #else
 	result = sample_probe.rgb;
 #endif
@@ -455,14 +595,14 @@ void env_sampling_glossy_ggx(
 
 	/* Precomputation */
 	float NV = max(1e-8, abs(dot(I, N)));
-	float G1_V = G1_Smith(NV, a2);
+	float G1_V = G1_Smith_GGX(NV, a2);
 
 	/* Integrating Envmap */
 	vec4 out_radiance = vec4(0.0);
 	for (float i = 0; i < unfbsdfsamples.x; i++) {
 		vec3 H = sample_ggx(i, a2, N, T, B); /* Microfacet normal */
 		vec3 L = reflect(I, H);
-		float NL = max(0.0, dot(N, L));
+		float NL = dot(N, L);
 
 		if (NL > 0.0) {
 			/* Step 1 : Sampling Environment */
@@ -480,7 +620,7 @@ void env_sampling_glossy_ggx(
 		}
 	}
 
-	result = out_radiance.rgb * unfbsdfsamples.y;
+	result = out_radiance.rgb * unfbsdfsamples.y * specular_occlusion(NV, ao_factor, a2);
 }
 
 void env_sampling_glossy_beckmann(
@@ -504,7 +644,7 @@ void env_sampling_glossy_beckmann(
 	for (float i = 0; i < unfbsdfsamples.x; i++) {
 		vec3 H = sample_beckmann(i, a2, N, T, B); /* Microfacet normal */
 		vec3 L = reflect(I, H);
-		float NL = max(0.0, dot(N, L));
+		float NL = dot(N, L);
 
 		if (NL > 0.0) {
 			/* Step 1 : Sampling Environment */
@@ -522,5 +662,52 @@ void env_sampling_glossy_beckmann(
 		}
 	}
 
-	result = out_radiance.rgb * unfbsdfsamples.y;
+	result = out_radiance.rgb * unfbsdfsamples.y * specular_occlusion(NV, ao_factor, a2);
 }
+
+void env_sampling_glossy_ashikhmin_shirley(
+	float pbr, vec3 viewpos, mat4 invviewmat, mat4 viewmat,
+	vec3 N, vec3 T, float roughness, float ior, float sigma,
+	float toon_size, float toon_smooth, float anisotropy, float aniso_rotation,
+	float ao_factor, out vec3 result)
+{
+	/* Setup */
+	vector_prepass(viewpos, N, invviewmat, viewmat);
+	make_orthonormals(N, T, B); /* Generate tangent space */
+	setup_noise(gl_FragCoord.xy); /* Noise to dither the samples */
+	float a, a2; prepare_glossy(roughness, a, a2);
+
+	/* Precomputation */
+	float NV = max(1e-8, abs(dot(I, N)));
+	float n_x = 2.0 / a2 - 2.0;
+
+	/* Integrating Envmap */
+	vec4 out_radiance = vec4(0.0);
+	for (float i = 0; i < unfbsdfsamples.x; i++) {
+		vec3 H = sample_ashikhmin_shirley(i, n_x, N, T, B); /* Microfacet normal */
+		float VH = dot(H, -I);
+		if (VH < 0.0) H = -H;
+		/* reflect I on H to get omega_in */
+		vec3 L = I + (2.0 * VH) * H;
+		float NL = dot(N, L);
+
+		if (NL > 0.0) {
+			/* Step 1 : Sampling Environment */
+			float NH = max(1e-8, dot(N, H)); /* cosTheta */
+			VH = max(1e-8, abs(VH));
+			NL = max(1e-8, NL);
+
+			float pdf = pdf_ashikhmin_shirley_reflect(NH, VH, n_x);
+
+			vec4 sample = sample_reflect_pdf(L, roughness, pdf);
+
+			/* Step 2 : Integrating BRDF */
+			float brdf_pdf = bsdf_ashikhmin_shirley_pdf(NV, NL, VH);
+
+			out_radiance += NL * sample * brdf_pdf;
+		}
+	}
+
+	result = out_radiance.rgb * unfbsdfsamples.y * specular_occlusion(NV, ao_factor, a2);
+}
+

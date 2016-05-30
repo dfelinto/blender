@@ -82,11 +82,17 @@ static int node_shader_gpu_bsdf_refraction(GPUMaterial *mat, bNode *node, bNodeE
 		GPU_brdf_input_initialize(&brdf);
 
 		brdf.mat       = mat;
-		brdf.type      = (node->custom1 == SHD_GLOSSY_SHARP) ? GPU_BRDF_REFRACT_SHARP : GPU_BRDF_REFRACT_GGX;
 		brdf.color     = gpu_get_input_link(&in[IN_COLOR]);
 		brdf.roughness = gpu_get_input_link(&in[IN_ROUGHNESS]);
 		brdf.ior       = gpu_get_input_link(&in[IN_IOR]);
 		brdf.normal    = gpu_get_input_link(&in[IN_NORMAL]);
+
+		if (node->custom1 == SHD_GLOSSY_BECKMANN)
+			brdf.type = GPU_BRDF_REFRACT_BECKMANN;
+		else if (node->custom1 == SHD_GLOSSY_GGX)
+			brdf.type = GPU_BRDF_REFRACT_GGX;
+		else
+			brdf.type = GPU_BRDF_REFRACT_SHARP;
 
 		GPU_shade_BRDF(&brdf);
 
