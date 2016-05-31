@@ -20,10 +20,10 @@ vec3 sample_transparent()
 /* -------- Image Based Lighting --------- */
 
 void env_sampling_transparent(
-      float pbr, vec3 viewpos, mat4 invviewmat, mat4 viewmat,
-      vec3 N, vec3 T, float roughness, float ior, float sigma,
-      float toon_size, float toon_smooth, float anisotropy, float aniso_rotation,
-      out vec3 result)
+	float pbr, vec3 viewpos, mat4 invviewmat, mat4 viewmat,
+	vec3 N, vec3 T, float roughness, float ior, float sigma,
+	float toon_size, float toon_smooth, float anisotropy, float aniso_rotation,
+	float ao_factor, out vec3 result)
 {
 	vector_prepass(viewpos, N, invviewmat, viewmat);
 	result = sample_transparent();

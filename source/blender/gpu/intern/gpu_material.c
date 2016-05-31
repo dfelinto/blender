@@ -145,12 +145,14 @@ struct GPUMaterial {
 
 	/* Screen space effects (SSR, SSAO...) */
 	int scenebufloc;
+	int depthbufloc;
 	int backfacebufloc;
 	int ssaoparamsloc;
 	int clipinfoloc;
 	int ssrparamsloc;
 	int pixelprojmatloc;
 	GPUTexture *bindedscenebuffer;
+	GPUTexture *bindeddepthbuffer;
 	GPUTexture *bindedbackfacebuffer;
 
 	ListBase lamps;
@@ -361,6 +363,7 @@ static int GPU_material_construct_end(GPUMaterial *material, const char *passnam
 			material->probecoloc 		= GPU_shader_get_uniform(shader, "unfprobepos");
 			material->planarvecloc 		= GPU_shader_get_uniform(shader, "unfplanarvec");
 			material->scenebufloc 		= GPU_shader_get_uniform(shader, "unfscenebuf");
+			material->depthbufloc 		= GPU_shader_get_uniform(shader, "unfdepthbuf");
 			material->backfacebufloc 	= GPU_shader_get_uniform(shader, "unfbackfacebuf");
 			material->ssrparamsloc 		= GPU_shader_get_uniform(shader, "unfssrparam");
 			material->pixelprojmatloc 	= GPU_shader_get_uniform(shader, "unfpixelprojmat");
@@ -502,6 +505,7 @@ void GPU_material_bind(
 		material->bindedrefrprobe = NULL;
 		material->bindedhammersley = NULL;
 		material->bindedscenebuffer = NULL;
+		material->bindeddepthbuffer = NULL;
 		material->bindedbackfacebuffer = NULL;
 		material->bindedjitter = NULL;
 		material->bindedltcmat = NULL;
@@ -661,6 +665,11 @@ void GPU_material_bind_uniforms_pbr(GPUMaterial *material, GPUProbe *probe, GPUP
 			GPU_texture_bind(material->bindedscenebuffer, 7);
 			GPU_shader_uniform_texture(shader, material->scenebufloc, material->bindedscenebuffer);
 
+			/* Depth Buffer */
+			material->bindeddepthbuffer = pbr->scene->depth;
+			GPU_texture_bind(material->bindeddepthbuffer, 8);
+			GPU_shader_uniform_texture(shader, material->depthbufloc, material->bindeddepthbuffer);
+
 			/* Pixel proj matrix */
 			GPU_shader_uniform_vector(shader, material->pixelprojmatloc, 16, 1, (float *)pbr->scene->pixelprojmat);
 
@@ -674,7 +683,7 @@ void GPU_material_bind_uniforms_pbr(GPUMaterial *material, GPUProbe *probe, GPUP
 			if (pbr_settings->pbr_flag & GPU_PBR_FLAG_BACKFACE) {
 				/* Backface Buffer */
 				material->bindedbackfacebuffer = pbr->backface->tex;
-				GPU_texture_bind(material->bindedbackfacebuffer, 8);
+				GPU_texture_bind(material->bindedbackfacebuffer, 9);
 				GPU_shader_uniform_texture(shader, material->backfacebufloc, material->bindedbackfacebuffer);
 			}
 		}
@@ -717,6 +726,8 @@ void GPU_material_unbind(GPUMaterial *material)
 			GPU_texture_unbind(material->bindedrefrprobe);
 		if (material->bindedscenebuffer)
 			GPU_texture_unbind(material->bindedscenebuffer);
+		if (material->bindeddepthbuffer)
+			GPU_texture_unbind(material->bindeddepthbuffer);
 		if (material->bindedbackfacebuffer)
 			GPU_texture_unbind(material->bindedbackfacebuffer);
 		if (material->bindedhammersley)
@@ -2611,7 +2622,7 @@ static const char *brdf_env_sampling_function(GPUBrdfType brdftype)
 	else if (brdftype == GPU_BRDF_TOON_DIFFUSE)
 		return "env_sampling_toon_diffuse";
 	else if (brdftype == GPU_BRDF_TOON_GLOSSY)
-		return "env_sampling_toon_diffuse";
+		return "env_sampling_toon_glossy";
 	else if (brdftype == GPU_BRDF_AMBIENT_OCCLUSION)
 		return "env_sampling_ambient_occlusion";
 	else /* (brdftype == GPU_BRDF_DIFFUSE) */

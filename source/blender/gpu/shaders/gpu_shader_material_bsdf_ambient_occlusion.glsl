@@ -23,23 +23,6 @@ vec3 sample_hemisphere(float nsample, float invsamplenbr, vec3 N, vec3 T, vec3 B
 	return from_tangent_to_world(Ht, N, T, B);
 }
 
-
-vec3 position_from_depth(vec2 uv, float depth)
-{
-	vec3 pos;
-	float homcoord = gl_ProjectionMatrix[2][3] * depth + gl_ProjectionMatrix[3][3];
-	pos.x = gl_ProjectionMatrixInverse[0][0] * (uv.x * 2.0 - 1.0) * homcoord;
-	pos.y = gl_ProjectionMatrixInverse[1][1] * (uv.y * 2.0 - 1.0) * homcoord;
-	pos.z = depth;
-	return pos;
-}
-
-vec2 uv_from_position(vec3 position)
-{
-	vec4 projvec = gl_ProjectionMatrix * vec4(position, 1.0);
-	return (projvec.xy / projvec.w) * 0.5 + 0.5;
-}
-
 #ifdef USE_SSAO
 
 #if 0 /* Cheap */
@@ -68,7 +51,7 @@ float ssao(vec3 viewpos, vec3 viewnor, out float result)
 		if (uvsample.x > 1.0 || uvsample.x < 0.0 || uvsample.y > 1.0 || uvsample.y < 0.0)
 			continue;
 
-		float sampledepth = texture2D(unfscenebuf, uvsample).a;
+		float sampledepth = frontface_depth(ivec2(uvsample * unfclip.zw));
 
 		/* Background Case */
 		if (sampledepth == 1.0)

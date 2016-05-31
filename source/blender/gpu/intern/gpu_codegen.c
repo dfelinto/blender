@@ -448,9 +448,9 @@ static void codegen_set_unique_ids(ListBase *nodes, bool reserve_texid)
 	GPUNode *node;
 	GPUInput *input;
 	GPUOutput *output;
-	/* XXX tex slot (texid) 0-9 are pbr textures */
+	/* XXX tex slot (texid) 0-10 are pbr textures */
 	/* TODO : these should reserved on demand not in bulk */
-	int id = 1, texid = (reserve_texid) ? 9 : 0;
+	int id = 1, texid = (reserve_texid) ? 10 : 0;
 
 	bindhash = BLI_ghash_ptr_new("codegen_set_unique_ids1 gh");
 	definehash = BLI_ghash_ptr_new("codegen_set_unique_ids2 gh");

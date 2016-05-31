@@ -23,6 +23,7 @@ uniform sampler2D unfrefract;
 uniform sampler2D unfltcmat;
 uniform sampler2D unfltcmag;
 uniform sampler2D unfscenebuf;
+uniform sampler2D unfdepthbuf;
 uniform sampler2D unfbackfacebuf;
 uniform sampler2D unfjitter;
 uniform sampler1D unflutsamples;
@@ -177,6 +178,7 @@ float backface_depth(ivec2 texelpos)
 {
 	float depth = linear_depth(texelFetch(unfbackfacebuf, texelpos, 0).r);
 
+	/* background case */
 	if (depth == 1.0)
 		return -1e16;
 	else
@@ -185,13 +187,29 @@ float backface_depth(ivec2 texelpos)
 
 float frontface_depth(ivec2 texelpos)
 {
-	float depth = texelFetch(unfscenebuf, texelpos, 0).a;
+	float depth = linear_depth(texelFetch(unfdepthbuf, texelpos, 0).r);
 
 	/* background case */
 	if (depth == 1.0)
 		return -1e16;
 	else
-		return depth;
+		return -depth;
+}
+
+vec3 position_from_depth(vec2 uv, float depth)
+{
+	vec3 pos;
+	float homcoord = gl_ProjectionMatrix[2][3] * depth + gl_ProjectionMatrix[3][3];
+	pos.x = gl_ProjectionMatrixInverse[0][0] * (uv.x * 2.0 - 1.0) * homcoord;
+	pos.y = gl_ProjectionMatrixInverse[1][1] * (uv.y * 2.0 - 1.0) * homcoord;
+	pos.z = depth;
+	return pos;
+}
+
+vec2 uv_from_position(vec3 position)
+{
+	vec4 projvec = gl_ProjectionMatrix * vec4(position, 1.0);
+	return (projvec.xy / projvec.w) * 0.5 + 0.5;
 }
 
 vec3 axis_angle_rotation(vec3 point, vec3 axis, float angle)
@@ -821,14 +839,10 @@ vec3 hammersley_3d(float i)
 
 /* ------- Screen Space Raycasting ---------*/
 
-#if 0 /* 2D raymarch (More efficient) */
-
 /* By Morgan McGuire and Michael Mara at Williams College 2014
  * Released as open source under the BSD 2-Clause License
  * http://opensource.org/licenses/BSD-2-Clause
  * http://casual-effects.blogspot.fr/2014/08/screen-space-ray-tracing.html */
-
-
 void swapIfBigger(inout float a, inout float b)
 {
 	if (a > b) {
@@ -842,10 +856,11 @@ void swapIfBigger(inout float a, inout float b)
 bool raycast(vec3 ray_origin, vec3 ray_dir, float jitter, out float hitstep, out vec2 hitpixel, out vec3 hitco)
 {
 	/* ssr_parameters */
-	float nearz = 		-unfclip.x; /* Near plane distance (Negative number) */
+	float nearz = -unfclip.x; /* Near plane distance (Negative number) */
+	float farz = -unfclip.y; /* Far plane distance (Negative number) */
 
 	/* Clip ray to a near plane in 3D */
-	float ray_length = 1e15;
+	float ray_length = 1e16;
 	if ((ray_origin.z + ray_dir.z * ray_length) > nearz)
 		ray_length = (nearz - ray_origin.z) / ray_dir.z;
 
@@ -920,19 +935,17 @@ bool raycast(vec3 ray_origin, vec3 ray_dir, float jitter, out float hitstep, out
 	 * +1/2 for the previous iteration, we actually only have to compute one value
 	 * per iteration. */
 	float prev_zmax = ray_origin.z;
-    float zmax = prev_zmax, zmin = prev_zmax;
-    float scene_zmax = zmax + 1e4;
+    float zmax, zmin;
 
     /* P1.x is never modified after this point, so pre-scale it by
      * the step direction for a signed comparison */
     float end = P1.x * step_sign;
 
     bool hit = false;
-
 	for (hitstep = 0.0; hitstep < unfssrparam.x && !hit; hitstep++)
 	{
-		 /* Ray finished & no hit*/
-		//if ((P.x * step_sign) > end) break;
+		/* Ray finished & no hit*/
+		if ((P.x * step_sign) > end) break;
 
 		P += dP; Q.z += dQ.z; k += dk;
 
@@ -942,79 +955,22 @@ bool raycast(vec3 ray_origin, vec3 ray_dir, float jitter, out float hitstep, out
 		prev_zmax = zmax;
 		swapIfBigger(zmin, zmax);
 
-		scene_zmax = texelFetch(unfscenebuf, ivec2(hitpixel), 0).a;
+		float frontface = frontface_depth(ivec2(hitpixel));
 
-		/* background case */
-		if (scene_zmax == 1.0) scene_zmax = -1e16;
-
+		if (zmax < frontface) {
 #ifdef USE_BACKFACE
-		float backface = backface_depth(ivec2(hitpixel));
+			float backface = backface_depth(ivec2(hitpixel));
 #else
-		const float backface = -1e16;
+			float backface = frontface - 1.0; /* Todo find a good thickness */
 #endif
-		hit = ((zmax > backface) && (zmin < scene_zmax));
+			hit = (zmin > backface);
+		}
 	}
 
 	hitco = (Q0 + dQ * hitstep) / k;
 	return hit;
 }
 
-#else /* 3D raymarch */
-
-void binary_search(vec3 ray_dir, inout vec3 hitco)
-{
-    for (int i = 0; i < MAX_SSR_REFINE_STEPS; i++) {
-		ray_dir *= 0.5;
-        hitco -= ray_dir;
-		vec4 co = unfpixelprojmat * vec4(hitco, 1.0);
-        float frontface = frontface_depth(ivec2(co.xy / co.w)) - hitco.z;
-        if (frontface - hitco.z < 0.0) hitco += ray_dir;
-    }
-}
-
-/* 3D raycast */
-bool raycast(vec3 ray_origin, vec3 ray_dir, float jitter, out float hitstep, out vec2 hitpixel, out vec3 hitco)
-{
-	/* ssr_parameters */
-	float slope = 1.0 - ray_dir.z;
-	ray_dir *= unfssrparam.y; /* step between samples */
-
-	float homcoord = gl_ProjectionMatrix[2][3] * ray_origin.z + gl_ProjectionMatrix[3][3];
-
-	hitco = ray_origin;
-	hitco += ray_dir * (jitter + homcoord * 0.005);
-
-	hitpixel = vec2(0.0);
-	for (hitstep = 0.0; hitstep < unfssrparam.x; hitstep++) {
-		hitco += ray_dir;
-		vec4 co = unfpixelprojmat * vec4(hitco, 1.0);
-		co.xy /= co.w;
-
-		/* Find a way to resolve inter penetration better */
-		if (floor(co.xy) == gl_FragCoord.xy) continue;
-
-		float frontface = frontface_depth(ivec2(co.xy));
-#ifdef USE_BACKFACE
-		float backface = backface_depth(ivec2(co.xy));
-#else
-		float backface = frontface - unfssrparam.y * 2.0;
-#endif
-		if (frontface - hitco.z > 0.001 && backface - hitco.z < 0.0) {
-			/* Refine hit */
-			//binary_search(ray_dir, hitco);
-			/* Find texel coord */
-			vec4 pix = unfpixelprojmat * vec4(hitco, 1.0);
-			hitpixel = pix.xy / pix.w;
-
-			return true;
-		}
-	}
-
-	/* No hit */
-	return false;
-}
-
-#endif
 #if 0
 /* 3D raycast */
 bool hierarchical_raycast(vec3 ray_origin, vec3 ray_dir, float jitter, out float hitstep, out vec2 hitpixel, out vec3 hitco)
@@ -1037,6 +993,7 @@ bool hierarchical_raycast(vec3 ray_origin, vec3 ray_dir, float jitter, out float
 	return false;
 }
 #endif
+
 float ssr_contribution(vec3 ray_origin, float hitstep, bool hit, inout vec3 hitco)
 {
 	/* ssr_parameters */
