@@ -85,15 +85,14 @@ float D_ggx_aniso_opti(float NH, float XH2, float YH2, float a2, float ax2, floa
 	return M_PI * a2 * tmp*tmp; /* Doing RCP at the end */
 }
 
-float D_beckmann_aniso(float NH, float XH2, float YH2, float a2, float ax, float ay)
+float D_beckmann_aniso(float NH, float XH, float YH, float a2, float ax, float ay)
 {
-	/* Ht is tangent space microfacet normal (global variable) */
-	float sx = -Ht.x / (Ht.z * ax);
-	float sy = -Ht.y / (Ht.z * ay);
+	float sx = -XH / (NH * ax);
+	float sy = -YH / (NH * ay);
 
-	float costheta4 = Ht.z * Ht.z * Ht.z * Ht.z;
+	float NH2 = NH * NH;
 
-	return exp(-sx*sx - sy*sy) / (M_PI * a2 * costheta4);
+	return exp(-sx*sx - sy*sy) / (M_PI * a2 * NH2 * NH2);
 }
 
 float pdf_ggx_aniso(float NH, float XH2, float YH2, float a2, float ax2, float ay2)
@@ -102,9 +101,9 @@ float pdf_ggx_aniso(float NH, float XH2, float YH2, float a2, float ax2, float a
 	return NH / D;
 }
 
-float pdf_beckmann_aniso(float NH, float XH2, float YH2, float a2, float ax2, float ay2)
+float pdf_beckmann_aniso(float NH, float XH, float YH, float a2, float ax, float ay)
 {
-	float D = D_beckmann_aniso(NH, XH2, YH2, a2, ax2, ay2);
+	float D = D_beckmann_aniso(NH, XH, YH, a2, ax, ay);
 	return NH / D;
 }
 
@@ -208,14 +207,14 @@ float bsdf_beckmann_aniso(vec3 N, vec3 T, vec3 L, vec3 V, float roughness_x, flo
 	float VY2 = pow(dot(V, Y), 2); /* sinPhiO² */
 	float LX2 = pow(dot(L, X), 2); /* cosPhiI² */
 	float LY2 = pow(dot(L, Y), 2); /* sinPhiI² */
-	float XH2 = pow(dot(X, H), 2);
-	float YH2 = pow(dot(Y, H), 2);
+	float XH = dot(X, H);
+	float YH = dot(Y, H);
 
 	float alphaV2 = (VX2 * ax2 + VY2 * ay2) / (VX2 + VY2);
 	float alphaL2 = (LX2 * ax2 + LY2 * ay2) / (LX2 + LY2);
 	float G = G1_Smith_beckmann(NV, alphaV2) * G1_Smith_beckmann(NL, alphaL2);
 
-	float D = D_beckmann_aniso(NH, XH2, YH2, a2, ax2, ay2);
+	float D = D_beckmann_aniso(NH, XH, YH, a2, ax, ay);
 
 	return NL * D * G * 0.25 / (NL * NV);
 }
@@ -698,10 +697,10 @@ void env_sampling_aniso_beckmann(
 		if (NL > 0.0) {
 			/* Step 1 : Sampling Environment */
 			float NH = Ht.z;
-			float XH2 = Ht.x * Ht.x;
-			float YH2 = Ht.y * Ht.y;
+			float XH = Ht.x;
+			float YH = Ht.y;
 
-			float pdf = pdf_beckmann_aniso(NH, XH2, YH2, a2, ax, ay);
+			float pdf = pdf_beckmann_aniso(NH, XH, YH, a2, ax, ay);
 
 			vec4 sample = sample_reflect_pdf(L, roughness, pdf);
 

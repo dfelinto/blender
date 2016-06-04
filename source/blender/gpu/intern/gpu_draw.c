@@ -1851,47 +1851,45 @@ void GPU_begin_object_materials(
 			}
 
 			if (v3d->flag3 & V3D_PROBE_CAPTURE)	{
+				Object *pro = (ob->probetype == OB_PROBE_OBJECT && ob->probe)
+				               ? ob->probe /* probe attached */
+				               : ob; /* object itself */
+
 				GMS.use_ssr = false;
 				GMS.use_ssao = false;
 				GMS.use_backface_depth = false;
-			}
 
-			/* Picking the right probe */
-			/* XXX need to be done clearer */
-			if (ob->probetype == OB_PROBE_CUBEMAP || ob->probetype == OB_PROBE_PLANAR) {
-
-				GMS.is_planar_probe = (ob->probetype == OB_PROBE_PLANAR);
-
-				if (GMS.is_planar_probe && (v3d->flag3 & V3D_PROBE_CAPTURE)) {
-					/* Disable planar reflection in probe capture */
-					GMS.is_planar_probe = false;
-
-					if (ob->probe && ob->probe->probetype == OB_PROBE_CUBEMAP) {
-						GMS.gprobe = GPU_probe_object(scene, ob->probe);
-						GMS.parallax_correc = ob->probe->probeparallax;
-					}
-					else {
-						/* it will later get the world probe eventualy */
-					}
-				}
-				else {
-					GMS.gprobe = GPU_probe_object(scene, ob);
-
-					if (ob->probetype == OB_PROBE_CUBEMAP)
-						GMS.parallax_correc = ob->probeparallax;
-					else if (ob->probe && ob->probe->probetype == OB_PROBE_CUBEMAP)
-						GMS.parallax_correc = ob->probe->probeparallax;
-				}
-			}
-			else if (ob->probetype == OB_PROBE_OBJECT && ob->probe) {
 				/* check if we are not rendering this particular probe to avoid feedback loop */
-				if (!((v3d->flag3 & V3D_PROBE_CAPTURE) && (ob->probe == v3d->probe_source))) {
-					if (ob->probe->probetype == OB_PROBE_CUBEMAP || ob->probe->probetype == OB_PROBE_PLANAR) {
-						GMS.is_planar_probe = (ob->probe->probetype == OB_PROBE_PLANAR);
-						GMS.gprobe = GPU_probe_object(scene, ob->probe);
+				if (pro != v3d->probe_source) {
+					if (pro->probetype == OB_PROBE_CUBEMAP) {
+						GMS.gprobe = GPU_probe_object(scene, pro);
+						GMS.parallax_correc = pro->probeparallax;
+					}
+					else if (pro->probetype == OB_PROBE_PLANAR) {
+						/* fallback to attached probe or world probe */
+						if (pro->probe && pro->probe->probetype == OB_PROBE_CUBEMAP
+							&& pro->probe != v3d->probe_source) {
+							GMS.gprobe = GPU_probe_object(scene, pro->probe);
+							GMS.parallax_correc = pro->probe->probeparallax;
+						}
+					}
+				}
+			}
+			else {
+				Object *pro = (ob->probetype == OB_PROBE_OBJECT && ob->probe)
+				               ? ob->probe /* probe attached */
+				               : ob; /* object itself */
 
-						if (ob->probe->probetype == OB_PROBE_CUBEMAP)
-							GMS.parallax_correc = ob->probe->probeparallax;
+				if (pro->probetype == OB_PROBE_CUBEMAP) {
+					GMS.gprobe = GPU_probe_object(scene, pro);
+					GMS.parallax_correc = pro->probeparallax;
+				}
+				else if (pro->probetype == OB_PROBE_PLANAR) {
+					GMS.is_planar_probe = true;
+					GMS.gprobe = GPU_probe_object(scene, pro);
+					/* Pass the parallax info of the fallback cubemap*/
+					if (pro->probe && pro->probe->probetype == OB_PROBE_CUBEMAP) {
+						GMS.parallax_correc = pro->probe->probeparallax;
 					}
 				}
 			}

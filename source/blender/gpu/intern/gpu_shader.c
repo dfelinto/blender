@@ -66,6 +66,8 @@ extern char datatoc_gpu_shader_probe_sh_compute_frag_glsl[];
 extern char datatoc_gpu_shader_probe_sh_compute_vert_glsl[];
 extern char datatoc_gpu_shader_display_sh_frag_glsl[];
 extern char datatoc_gpu_shader_display_sh_vert_glsl[];
+extern char datatoc_gpu_shader_downsample_maxz_frag_glsl[];
+extern char datatoc_gpu_shader_downsample_maxz_vert_glsl[];
 
 static struct GPUShadersGlobal {
 	struct {
@@ -75,6 +77,8 @@ static struct GPUShadersGlobal {
 		GPUShader *smoke_fire;
 		GPUShader *compute_sh[MAX_SH_SAMPLES];
 		GPUShader *display_sh;
+		GPUShader *maxz_downsample;
+		GPUShader *minz_downsample;
 		/* cache for shader fx. Those can exist in combinations so store them here */
 		GPUShader *fx_shaders[MAX_FX_SHADERS * 2];
 	} shaders;
@@ -694,6 +698,18 @@ GPUShader *GPU_shader_get_builtin_shader(GPUBuiltinShader shader)
 					        NULL, NULL, NULL, 0, 0, 0);
 				retval = GG.shaders.display_sh;
 				break;
+			case GPU_SHADER_MAXZ_DOWNSAMPLE:
+				if (!GG.shaders.maxz_downsample)
+					GG.shaders.maxz_downsample = GPU_shader_create(
+					        datatoc_gpu_shader_downsample_maxz_vert_glsl, datatoc_gpu_shader_downsample_maxz_frag_glsl,
+					        NULL, NULL, NULL, 0, 0, 0);
+			case GPU_SHADER_MINZ_DOWNSAMPLE:
+				if (!GG.shaders.minz_downsample)
+					GG.shaders.minz_downsample = GPU_shader_create(
+					        datatoc_gpu_shader_downsample_maxz_vert_glsl, datatoc_gpu_shader_downsample_maxz_frag_glsl,
+					        NULL, NULL, "#define MIN;\n", 0, 0, 0);
+				retval = GG.shaders.minz_downsample;
+				break;
 		}
 	}
 
@@ -820,6 +836,16 @@ void GPU_shader_free_builtin_shaders(void)
 	if (GG.shaders.display_sh) {
 		GPU_shader_free(GG.shaders.display_sh);
 		GG.shaders.display_sh = NULL;
+	}
+
+	if (GG.shaders.maxz_downsample) {
+		GPU_shader_free(GG.shaders.maxz_downsample);
+		GG.shaders.maxz_downsample = NULL;
+	}
+
+	if (GG.shaders.minz_downsample) {
+		GPU_shader_free(GG.shaders.minz_downsample);
+		GG.shaders.minz_downsample = NULL;
 	}
 
 	for (i = 0; i < 2 * MAX_FX_SHADERS; ++i) {

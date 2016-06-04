@@ -67,6 +67,8 @@ void GPU_framebuffer_blur(
         GPUFrameBuffer *fb, struct GPUTexture *tex,
         GPUFrameBuffer *blurfb, struct GPUTexture *blurtex);
 
+void GPU_framebuffer_hiz_construction(GPUFrameBuffer *fb, struct GPUTexture *tex, const bool max);
+
 /* GPU OffScreen
  * - wrapper around framebuffer and texture for simple offscreen drawing
  * - changes size if graphics card can't support it */

@@ -112,7 +112,7 @@ void ssao(vec3 viewpos, vec3 viewnor, out float result)
 			if (co.x > unfclip.z || co.x < 0.0 || co.y > unfclip.w || co.y < 0.0)
 				break;
 
-			float sampledepth = frontface_depth(ivec2(co.xy));
+			float sampledepth = frontface_depth(ivec2(co.xy), 0);
 
 			/* Background Case */
 			if (sampledepth == 1.0)
@@ -121,7 +121,7 @@ void ssao(vec3 viewpos, vec3 viewnor, out float result)
 			/* We have a hit */
 			if (sampledepth > ray.z + viewpos.z + homcoord * 0.002
 #ifdef USE_BACKFACE
-			 && backface_depth(ivec2(co.xy)) < ray.z + viewpos.z
+			 && backface_depth(ivec2(co.xy), 0) < ray.z + viewpos.z
 #endif
 			 )
 			{

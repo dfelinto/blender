@@ -491,7 +491,7 @@ void GPU_probe_rebuild_mipmaps(GPUProbe *probe)
 		GPU_generate_mipmap(GL_TEXTURE_CUBE_MAP);
 		GPU_texture_unbind(probe->tex);
 	}
-	if (probe->type == GPU_PROBE_PLANAR) {
+	else if (probe->type == GPU_PROBE_PLANAR) {
 		GPU_texture_bind(probe->texreflect, 0);
 		GPU_generate_mipmap(GL_TEXTURE_2D);
 		GPU_texture_unbind(probe->texreflect);

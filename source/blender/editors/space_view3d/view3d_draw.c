@@ -2901,12 +2901,13 @@ static void gpu_update_scene_buffer(Scene *scene, View3D *v3d, ARegion *basear)
         false, (bool)scene->world, true, true,
         NULL, NULL, NULL, NULL);
 
-	GPU_scenebuf_unbind(scene_buffer);
-
 	v3d->drawtype = drawtype;
 	v3d->flag2 = flag2;
 	v3d->flag3 = flag3;
 	v3d->pbr_settings.pbr_flag = pbr_flag;
+
+	GPU_scenebuf_unbind(scene_buffer);
+	GPU_scenebuf_filter_texture(scene_buffer);
 }
 
 static void gpu_update_backface_buffer(Scene *scene, View3D *v3d, ARegion *basear)
@@ -2948,12 +2949,13 @@ static void gpu_update_backface_buffer(Scene *scene, View3D *v3d, ARegion *basea
         false, (bool)scene->world, true, true,
         NULL, NULL, NULL, NULL);
 
-	GPU_scenebuf_unbind(backface_buffer);
-
 	v3d->drawtype = drawtype;
 	v3d->flag2 = flag2;
 	v3d->flag3 = flag3;
 	v3d->pbr_settings.pbr_flag = pbr_flag;
+
+	GPU_scenebuf_unbind(backface_buffer);
+	GPU_scenebuf_filter_texture(backface_buffer);
 }
 
 

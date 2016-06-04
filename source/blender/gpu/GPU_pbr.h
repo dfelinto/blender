@@ -47,6 +47,7 @@ typedef struct GPUScreenBuffer {
 	struct GPUTexture *tex;
 	struct GPUTexture *depth;
 	struct GPUFrameBuffer *fb;
+	struct GPUFrameBuffer *downsamplingfb;
 } GPUScreenBuffer;
 
 typedef struct GPUPBR {
@@ -73,6 +74,7 @@ GPUScreenBuffer *GPU_pbr_scene_buffer(GPUPBR *pbr, int width, int height);
 GPUScreenBuffer *GPU_pbr_backface_buffer(GPUPBR *pbr, int width, int height);
 void GPU_scenebuf_bind(GPUScreenBuffer* buf, float winmat[4][4], int winsize[2], float clipsta, float clipend);
 void GPU_scenebuf_unbind(GPUScreenBuffer* buf);
+void GPU_scenebuf_filter_texture(GPUScreenBuffer* buf);
 
 void GPU_pbr_settings_validate(struct GPUPBRSettings *pbr_settings);
 

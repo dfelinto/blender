@@ -2391,9 +2391,9 @@ static const char *brdf_light_function(GPUBrdfType brdftype, int lamptype)
 	else if (brdftype == GPU_BRDF_ANISO_BECKMANN) {
 		switch (lamptype) {
 			case LA_SUN :
-			case LA_HEMI : return "bsdf_anisotropic_ggx_sun_light";
-			case LA_AREA : return "bsdf_anisotropic_ggx_area_light";
-			default : return "bsdf_anisotropic_ggx_sphere_light";
+			case LA_HEMI : return "bsdf_anisotropic_beckmann_sun_light";
+			case LA_AREA : return "bsdf_anisotropic_beckmann_area_light";
+			default : return "bsdf_anisotropic_beckmann_sphere_light";
 		}
 	}
 	else if (brdftype == GPU_BRDF_ANISO_ASHIKHMIN_SHIRLEY) {
@@ -2540,8 +2540,14 @@ static void shade_one_brdf_light(GPUBrdfInput *brdf, GPULamp *lamp)
 	visifac = lamp_get_visibility(mat, lamp, &lv, &dist);
 
 	/* View Position */
-	if (((brdf->type == GPU_BRDF_TRANSLUCENT || brdf->type == GPU_BRDF_DIFFUSE || brdf->type == GPU_BRDF_GLOSSY_GGX || brdf->type == GPU_BRDF_GLOSSY_BECKMANN) && (lamp->type == LA_AREA)) ||
-		((brdf->type == GPU_BRDF_GLOSSY_GGX || brdf->type == GPU_BRDF_REFRACT_GGX || brdf->type == GPU_BRDF_GLASS_GGX) && (lamp->type == LA_LOCAL || lamp->type == LA_SPOT)))
+	if (((brdf->type == GPU_BRDF_TRANSLUCENT ||
+	      brdf->type == GPU_BRDF_DIFFUSE ||
+	      brdf->type == GPU_BRDF_GLOSSY_GGX ||
+	      brdf->type == GPU_BRDF_GLOSSY_ASHIKHMIN_SHIRLEY ||
+	      brdf->type == GPU_BRDF_GLOSSY_BECKMANN) && (lamp->type == LA_AREA)) ||
+		((brdf->type == GPU_BRDF_GLOSSY_GGX ||
+		  brdf->type == GPU_BRDF_REFRACT_GGX ||
+		  brdf->type == GPU_BRDF_GLASS_GGX) && (lamp->type == LA_LOCAL || lamp->type == LA_SPOT)))
 		GPU_link(mat, "set_rgb", GPU_builtin(GPU_VIEW_POSITION), &view);
 	else
 		GPU_link(mat, "shade_view", GPU_builtin(GPU_VIEW_POSITION), &view);

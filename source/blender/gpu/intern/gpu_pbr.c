@@ -43,6 +43,7 @@
 #include "GPU_texture.h"
 #include "GPU_framebuffer.h"
 #include "GPU_pbr.h"
+#include "GPU_draw.h"
 
 #include "gpu_codegen.h"
 
@@ -54,6 +55,10 @@
 
 void GPU_scenebuf_free(GPUScreenBuffer *buf)
 {
+	if (buf->fb) {
+		GPU_framebuffer_free(buf->fb);
+		buf->fb = NULL;
+	}
 	if (buf->tex) {
 		GPU_texture_free(buf->tex);
 		buf->tex = NULL;
@@ -62,9 +67,9 @@ void GPU_scenebuf_free(GPUScreenBuffer *buf)
 		GPU_texture_free(buf->depth);
 		buf->depth = NULL;
 	}
-	if (buf->fb) {
-		GPU_framebuffer_free(buf->fb);
-		buf->fb = NULL;
+	if (buf->downsamplingfb) {
+		GPU_framebuffer_free(buf->downsamplingfb);
+		buf->downsamplingfb = NULL;
 	}
 
 	MEM_freeN(buf);
@@ -76,10 +81,17 @@ static GPUScreenBuffer *gpu_scenebuf_create(int width, int height, bool depth_on
 
 	buf->w = width;
 	buf->h = height;
-	buf->tex = NULL;
+	buf->depth = NULL;
 
 	buf->fb = GPU_framebuffer_create();
 	if (!buf->fb) {
+		GPU_scenebuf_free(buf);
+		return NULL;
+	}
+
+	/* DOWNSAMPLING FB */
+	buf->downsamplingfb = GPU_framebuffer_create();
+	if (!buf->downsamplingfb) {
 		GPU_scenebuf_free(buf);
 		return NULL;
 	}
@@ -92,6 +104,12 @@ static GPUScreenBuffer *gpu_scenebuf_create(int width, int height, bool depth_on
 		}
 
 		if (!GPU_framebuffer_texture_attach(buf->fb, buf->tex, 0, NULL)) {
+			GPU_scenebuf_free(buf);
+			return NULL;
+		}
+
+		/* check validity at the very end! */
+		if (!GPU_framebuffer_check_valid(buf->fb, NULL)) {
 			GPU_scenebuf_free(buf);
 			return NULL;
 		}
@@ -118,13 +136,14 @@ static GPUScreenBuffer *gpu_scenebuf_create(int width, int height, bool depth_on
 			GPU_scenebuf_free(buf);
 			return NULL;
 		}
+
+		/* check validity at the very end! */
+		if (!GPU_framebuffer_check_valid(buf->fb, NULL)) {
+			GPU_scenebuf_free(buf);
+			return NULL;
+		}
 	}
 	
-	/* check validity at the very end! */
-	if (!GPU_framebuffer_check_valid(buf->fb, NULL)) {
-		GPU_scenebuf_free(buf);
-		return NULL;		
-	}
 
 	GPU_framebuffer_restore();
 
@@ -193,6 +212,28 @@ void GPU_scenebuf_unbind(GPUScreenBuffer* buf)
 	GPU_framebuffer_texture_unbind(buf->fb, buf->tex);
 	GPU_framebuffer_restore();
 	glEnable(GL_SCISSOR_TEST);
+}
+
+void GPU_scenebuf_filter_texture(GPUScreenBuffer* buf)
+{
+	return;
+	/* MinZ Pyramid for depth */
+	if (buf->depth) {
+		GPU_texture_bind(buf->depth, 0);
+		GPU_generate_mipmap(GL_TEXTURE_2D);
+		GPU_texture_unbind(buf->depth);
+		GPU_framebuffer_hiz_construction(buf->downsamplingfb, buf->depth, false);
+		GPU_framebuffer_texture_attach(buf->fb, buf->depth, 0, NULL);
+	}
+	else {
+		GPU_texture_bind(buf->tex, 0);
+		GPU_generate_mipmap(GL_TEXTURE_2D);
+		GPU_texture_unbind(buf->tex);
+		GPU_framebuffer_hiz_construction(buf->downsamplingfb, buf->tex, true);
+		GPU_framebuffer_texture_attach(buf->fb, buf->tex, 0, NULL);
+	}
+
+	GPU_framebuffer_restore();
 }
 
 /* PBR core */

@@ -99,6 +99,8 @@ set(SRC
 	shaders/gpu_shader_probe_sh_compute_vert.glsl
 	shaders/gpu_shader_display_sh_frag.glsl
 	shaders/gpu_shader_display_sh_vert.glsl
+	shaders/gpu_shader_downsample_maxz_frag.glsl
+	shaders/gpu_shader_downsample_maxz_vert.glsl
 
 	GPU_basic_shader.h
 	GPU_buffers.h
@@ -159,6 +161,8 @@ data_to_c_simple(shaders/gpu_shader_probe_sh_compute_frag.glsl SRC)
 data_to_c_simple(shaders/gpu_shader_probe_sh_compute_vert.glsl SRC)
 data_to_c_simple(shaders/gpu_shader_display_sh_frag.glsl SRC)
 data_to_c_simple(shaders/gpu_shader_display_sh_vert.glsl SRC)
+data_to_c_simple(shaders/gpu_shader_downsample_maxz_frag.glsl SRC)
+data_to_c_simple(shaders/gpu_shader_downsample_maxz_vert.glsl SRC)
 
 if(WITH_GAMEENGINE)
 	add_definitions(-DWITH_GAMEENGINE)

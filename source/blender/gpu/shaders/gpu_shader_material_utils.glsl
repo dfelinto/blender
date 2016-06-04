@@ -174,9 +174,9 @@ float linear_depth(float z)
 	}
 }
 
-float backface_depth(ivec2 texelpos)
+float backface_depth(ivec2 texelpos, int lod)
 {
-	float depth = linear_depth(texelFetch(unfbackfacebuf, texelpos, 0).r);
+	float depth = linear_depth(texelFetch(unfbackfacebuf, texelpos, lod).r);
 
 	/* background case */
 	if (depth == 1.0)
@@ -185,9 +185,9 @@ float backface_depth(ivec2 texelpos)
 		return -depth;
 }
 
-float frontface_depth(ivec2 texelpos)
+float frontface_depth(ivec2 texelpos, int lod)
 {
-	float depth = linear_depth(texelFetch(unfdepthbuf, texelpos, 0).r);
+	float depth = linear_depth(texelFetch(unfdepthbuf, texelpos, lod).r);
 
 	/* background case */
 	if (depth == 1.0)
@@ -907,92 +907,125 @@ bool raycast(vec3 ray_origin, vec3 ray_dir, float jitter, out float hitstep, out
 		P0 = P0.yx;
 	}
 
-    /* Track the derivatives */
-    float step_sign = sign(delta.x);
-    float invdx = step_sign / delta.x;
-    vec2 dP = vec2(step_sign, invdx * delta.y);
-    vec3 dQ = (Q1 - Q0) * invdx;
-    float dk = (k1 - k0) * invdx;
-
-    /* Stride */
-    float stride = 1.0;
-
-	/* Calculate pixel stride based on distance of ray origin from camera. */
-	//float stride_scale = 1.0 - min( 1.0, -ray_origin.z);
-	//stride = 1.0 + stride_scale * stride;
-
-    /* Scale derivatives by the desired pixel stride */
-	dP *= stride; dQ *= stride; dk *= stride;
-
-    /* Offset the starting values by the jitter fraction */
-	//P0 += dP * jitter; Q0 += dQ * jitter; k0 += dk * jitter;
+	/* Track the derivatives */
+	float step_sign = sign(delta.x);
+	float invdx = step_sign / delta.x;
+	vec2 dP = vec2(step_sign, invdx * delta.y);
+	vec3 dQ = (Q1 - Q0) * invdx;
+	float dk = (k1 - k0) * invdx;
 
 	/* Slide each value from the start of the ray to the end */
-    vec3 Q = Q0; vec2 P = P0; float k = k0;
+	vec4 pqk = vec4(P0, Q0.z, k0);
+
+	/* Scale derivatives by the desired pixel stride */
+	vec4 dPQK = vec4(dP, dQ.z, dk) * 1.0;
+
+	bool hit = false;
+
+#if 1 /* Linear 2D raymarching */
 
 	/* We track the ray depth at +/- 1/2 pixel to treat pixels as clip-space solid
 	 * voxels. Because the depth at -1/2 for a given pixel will be the same as at
 	 * +1/2 for the previous iteration, we actually only have to compute one value
 	 * per iteration. */
 	float prev_zmax = ray_origin.z;
-    float zmax, zmin;
+	float zmax, zmin;
 
-    /* P1.x is never modified after this point, so pre-scale it by
-     * the step direction for a signed comparison */
-    float end = P1.x * step_sign;
+	/* P1.x is never modified after this point, so pre-scale it by
+	 * the step direction for a signed comparison */
+	float end = P1.x * step_sign;
 
-    bool hit = false;
 	for (hitstep = 0.0; hitstep < unfssrparam.x && !hit; hitstep++)
 	{
 		/* Ray finished & no hit*/
-		if ((P.x * step_sign) > end) break;
+		if ((pqk.x * step_sign) > end) break;
 
-		P += dP; Q.z += dQ.z; k += dk;
+		/* step through current cell */
+		pqk += dPQK;
 
-		hitpixel = permute ? P.yx : P;
+		hitpixel = permute ? pqk.yx : pqk.xy;
 		zmin = prev_zmax;
-		zmax = (dQ.z * 0.5 + Q.z) / (dk * 0.5 + k);
+		zmax = (dPQK.z * 0.5 + pqk.z) / (dPQK.w * 0.5 + pqk.w);
 		prev_zmax = zmax;
 		swapIfBigger(zmin, zmax);
 
-		float frontface = frontface_depth(ivec2(hitpixel));
+		float frontface = frontface_depth(ivec2(hitpixel), 0);
 
 		if (zmax < frontface) {
+			/* Below surface */
 #ifdef USE_BACKFACE
-			float backface = backface_depth(ivec2(hitpixel));
+			float backface = backface_depth(ivec2(hitpixel), 0);
 #else
-			float backface = frontface - 1.0; /* Todo find a good thickness */
+			float backface = frontface - 0.2; /* Todo find a good thickness */
 #endif
-			hit = (zmin > backface);
+			hit = (zmax > backface);
 		}
 	}
 
-	hitco = (Q0 + dQ * hitstep) / k;
-	return hit;
-}
+	/* Hit coordinate in 3D */
+	hitco = (Q0 + dQ * hitstep) / pqk.w;
 
-#if 0
-/* 3D raycast */
-bool hierarchical_raycast(vec3 ray_origin, vec3 ray_dir, float jitter, out float hitstep, out vec2 hitpixel, out vec3 hitco)
-{
-	/* ssr_parameters */
-	ray_dir *= unfssrparam.y; /* step between samples */
+#else /* Hierarchical raymarching */
 
-	hitco = ray_origin;
-	hitco += ray_dir * jitter;
-	
-	hitpixel = vec2(0.0);
-	float mip = 0.0;
-	for (hitstep = 0.0; hitstep < unfssrparam.x; hitstep++) {
+	float z, mip, mippow, s;
+	float level = 1.0;
+	float steps = 0.0;
+	float dir = 1.0;
+	float lastdir = 1.0;
+	for (hitstep = 0.0; hitstep < unfssrparam.x && level > 0.0; hitstep++) {
+		mip = level - 1.0;
+		mippow = pow(2, mip);
+
 		/* step through current cell */
-		if (above) mip++;
-		if (below) mip--;
+		//s = dir * max(1.0, mippow / 2);
+		s = dir * mippow;
+		//s = dir * level;
+		P += dP * s; Q.z += dQ.z * s; k += dk * s; steps += s;
+
+		hitpixel = permute ? P.yx : P;
+		z = dQ.z / k;
+
+		float frontface = frontface_depth(ivec2(hitpixel / mippow), int(mip));
+
+		if (z < frontface) {
+			/* Below surface */
+#ifdef USE_BACKFACE
+			float backface = backface_depth(ivec2(hitpixel), 0);
+#else
+			float backface = -1e16; /* Todo find a good thickness */
+#endif
+			if (z > backface) {
+				/* Hit */
+				/* This will step back the current step */
+				//s = -1.0 * level;
+				//P += dP * s; Q.z += dQ.z * s; k += dk * s; steps += s;
+				dir = -1.0;
+				level--;
+				continue;
+			}
+		}
+
+		/* Above surface */
+		if (dir != -1.0 && lastdir != -1.0) {
+			/* Only step up in mip if the last iteration was positive
+			 * This way we don't skip potential occluders */
+			level++;
+			level = min(level, 5.0);
+		}
+		lastdir = dir;
+		dir = 1.0;
 	}
 
-	/* No hit */
-	return false;
-}
+	hitstep = 1.0;
+
+	hit = (level == 0.0);
+
+	/* Hit coordinate in 3D */
+	hitco = (Q0 + dQ * steps) / k;
 #endif
+
+	return hit;
+}
 
 float ssr_contribution(vec3 ray_origin, float hitstep, bool hit, inout vec3 hitco)
 {
@@ -1010,5 +1043,5 @@ float ssr_contribution(vec3 ray_origin, float hitstep, bool hit, inout vec3 hitc
 	float maxdimension = saturate(max(abs(co.x), abs(co.y)));
 	float screenfade = saturate((0.999999 - maxdimension) * attenuation);
 
-	return sqrt(stepfade * screenfade) * float(hit);
+	return smoothstep(0.0, 1.0, stepfade * screenfade) * float(hit);
 }

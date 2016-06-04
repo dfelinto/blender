@@ -96,9 +96,11 @@ typedef enum GPUBuiltinShader {
 	GPU_SHADER_SEP_GAUSSIAN_BLUR = 1,
 	GPU_SHADER_SMOKE             = 2,
 	GPU_SHADER_SMOKE_FIRE        = 3,
-	GPU_SHADER_DISPLAY_SH        = 4,
+	GPU_SHADER_MINZ_DOWNSAMPLE   = 4,
+	GPU_SHADER_MAXZ_DOWNSAMPLE   = 5,
+	GPU_SHADER_DISPLAY_SH        = 6,
 
-	GPU_SHADER_COMPUTE_SH        = 5, /* This reserves the MAX_SH_SAMPLES following values */
+	GPU_SHADER_COMPUTE_SH        = 7, /* This reserves the MAX_SH_SAMPLES following values */
 } GPUBuiltinShader;
 
 #define MAX_SH_SAMPLES 10

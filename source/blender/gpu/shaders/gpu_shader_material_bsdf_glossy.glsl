@@ -575,7 +575,8 @@ void env_sampling_glossy_sharp(
 	srgb_to_linearrgb(sample_ssr, sample_ssr);
 
 	result = mix(sample_probe.rgb, sample_ssr.rgb, contrib);
-	result = -texelFetch(unfscenebuf, ivec2(gl_FragCoord.xy), 0).aaa / 100;
+	//result = mix(vec3(0.0), sample_ssr.rgb, contrib);
+	//result = vec3(texelFetch(unfdepthbuf, ivec2(gl_FragCoord.xy) / int(pow(2,unfssrparam.x-1)), int(unfssrparam.x-1)).r);
 #else
 	result = sample_probe.rgb;
 #endif

@@ -460,6 +460,72 @@ void GPU_framebuffer_blur(
 	GPU_shader_unbind();
 }
 
+void GPU_framebuffer_hiz_construction(GPUFrameBuffer* fb, GPUTexture *tex, const bool max)
+{
+	int current_dim[2] = {GPU_texture_width(tex), GPU_texture_height(tex)};
+	int levels, bindcode;
+	int lowermip_uniform, lowermipsize_uniform;
+	GPUShader *shader = GPU_shader_get_builtin_shader((max) ? GPU_SHADER_MAXZ_DOWNSAMPLE : GPU_SHADER_MINZ_DOWNSAMPLE);
+
+	if (!shader)
+		return;
+
+	GPU_shader_bind(shader);
+	lowermip_uniform = GPU_shader_get_uniform(shader, "lowermip");
+	lowermipsize_uniform = GPU_shader_get_uniform(shader, "lowermipsize");
+
+	GPU_framebuffer_texture_attach(fb, tex, 0, NULL);
+	GPU_texture_bind_as_framebuffer(tex);
+
+	bindcode = GPU_texture_opengl_bindcode(tex);
+
+	levels = 1 + (int)floorf(log2f(fmaxf(current_dim[0], current_dim[1])));
+
+	glEnable(GL_DEPTH_TEST);
+	glDepthFunc(GL_ALWAYS);
+
+	/* Avoid warning from GPU_texture_bind */
+	glBindTexture(GL_TEXTURE_2D, bindcode);
+	GPU_shader_uniform_texture(shader, lowermip_uniform, tex);
+
+	for (int i=1; i < levels; i++) {
+		/* Send previous mip size to the shader */
+		GPU_shader_uniform_vector_int(shader, lowermipsize_uniform, 2, 1, current_dim);
+
+		/* calculate next viewport size */
+		current_dim[0] /= 2;
+		current_dim[1] /= 2;
+
+		/* ensure that the viewport size is always at least 1x1 */
+		CLAMP_MIN(current_dim[0], 1);
+		CLAMP_MIN(current_dim[1], 1);
+		glViewport(0, 0, current_dim[0], current_dim[1]);
+
+		/* bind next level for rendering but first restrict fetches only to previous level */
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, i-1);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, i-1);
+		glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, GL_DEPTH_ATTACHMENT_EXT, GL_TEXTURE_2D, bindcode, i);
+
+		/* Drawing quad */
+		glBegin(GL_TRIANGLE_STRIP);
+		glTexCoord2d(1.0, 1.0); glVertex3f( 1.0,  1.0, 1.0);
+		glTexCoord2d(0.0, 1.0); glVertex3f(-1.0,  1.0, 1.0);
+		glTexCoord2d(1.0, 0.0); glVertex3f( 1.0, -1.0, 1.0);
+		glTexCoord2d(0.0, 0.0); glVertex3f(-1.0, -1.0, 1.0);
+		glEnd();
+	}
+
+	GPU_framebuffer_texture_detach(tex);
+	GPU_framebuffer_texture_unbind(fb, tex);
+
+	/* reset mipmap level range for the depth image */
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, levels - 1);
+
+	GPU_shader_unbind();
+	GPU_texture_unbind(tex);
+}
+
 /* GPUOffScreen */
 
 struct GPUOffScreen {
