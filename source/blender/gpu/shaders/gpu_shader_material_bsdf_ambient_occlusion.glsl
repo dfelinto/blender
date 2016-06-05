@@ -131,7 +131,7 @@ void ssao(vec3 viewpos, vec3 viewnor, out float result)
 		}
 	}
 
-	result = 1.0 - (factor / weight);
+	result = saturate(1.0 - (factor / weight) * unfssaoparam.w);
 }
 #endif
 #else

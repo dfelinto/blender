@@ -1795,7 +1795,7 @@ void GPU_begin_object_materials(
 	GMS.gviewinv = rv3d->viewinv;
 	GMS.gviewcamtexcofac = rv3d->viewcamtexcofac;
 	GMS.is_realistic_mat = (new_shading_nodes && (v3d->pbr_settings.pbr_flag & GPU_PBR_FLAG_ENABLE));
-	GMS.is_alpha_as_depth = (v3d->flag3 & (V3D_FLIP_NORMALS | V3D_PROBE_CAPTURE));
+	GMS.is_alpha_as_depth = (v3d->flag3 & V3D_PROBE_CAPTURE);
 	GMS.gprobe = NULL;
 	GMS.gpbr = NULL;
 	GMS.gpbrsettings = NULL;

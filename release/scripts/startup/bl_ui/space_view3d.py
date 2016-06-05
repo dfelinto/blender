@@ -3291,7 +3291,8 @@ class VIEW3D_PT_view3d_shading(Panel):
                 if pbr_settings.use_ssao:
                     ssao_settings = pbr_settings.ssao;
                     subcol = col.column(align=True)
-                    subcol.prop(ssao_settings, "distance_max")
+                    subcol.prop(ssao_settings, "factor")
+                    subcol.prop(scene.world.light_settings, "distance")
                     subcol.prop(ssao_settings, "samples")
                     subcol.prop(ssao_settings, "steps")
 

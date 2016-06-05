@@ -4522,7 +4522,7 @@ static void rna_def_gpu_ssao_fx(BlenderRNA *brna)
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
 
 	prop = RNA_def_property(srna, "steps", PROP_INT, PROP_NONE);
-	RNA_def_property_ui_text(prop, "Steps", "Number of steps per samples. Helps detecting thin objects with large distance setting.");
+	RNA_def_property_ui_text(prop, "Steps", "Number of steps per samples. Helps detecting thin objects when using a large occlusion distance.");
 	RNA_def_property_range(prop, 1, 16);
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
 }

@@ -2919,7 +2919,6 @@ static void gpu_update_backface_buffer(Scene *scene, View3D *v3d, ARegion *basea
 	RegionView3D rv3d = {{{0}}};
 	GPUScreenBuffer *backface_buffer;
 	int res[2] = {basear->winx, basear->winy};
-	int pbr_flag = v3d->pbr_settings.pbr_flag;
 
 	backface_buffer = GPU_pbr_backface_buffer(v3d->pbr, res[0], res[1]);
 
@@ -2952,7 +2951,6 @@ static void gpu_update_backface_buffer(Scene *scene, View3D *v3d, ARegion *basea
 	v3d->drawtype = drawtype;
 	v3d->flag2 = flag2;
 	v3d->flag3 = flag3;
-	v3d->pbr_settings.pbr_flag = pbr_flag;
 
 	GPU_scenebuf_unbind(backface_buffer);
 	GPU_scenebuf_filter_texture(backface_buffer);

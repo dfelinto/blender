@@ -701,6 +701,7 @@ void GPU_material_bind_uniforms_pbr(GPUMaterial *material, GPUProbe *probe, GPUP
 		}
 
 		if (pbr_settings->pbr_flag & GPU_PBR_FLAG_SSAO) {
+			World *wo = material->scene->world;
 			/* SSAO Parameters */
 			/* x : sample : Number of samples
 			 * y : steps : Steps for the raymarching
@@ -708,8 +709,9 @@ void GPU_material_bind_uniforms_pbr(GPUMaterial *material, GPUProbe *probe, GPUP
 			float ssaoparams[4];
 			ssaoparams[0] = pbr_settings->ssao->samples;
 			ssaoparams[1] = pbr_settings->ssao->steps;
-			ssaoparams[2] = pbr_settings->ssao->distance_max;
-			GPU_shader_uniform_vector(shader, material->ssaoparamsloc, 3, 1, ssaoparams);
+			ssaoparams[2] = (wo) ? wo->aodist : 1.0;
+			ssaoparams[3] = pbr_settings->ssao->factor;
+			GPU_shader_uniform_vector(shader, material->ssaoparamsloc, 4, 1, ssaoparams);
 		}
 	}
 }

@@ -41,7 +41,7 @@ uniform vec3 unfsh8;
 uniform vec3 unfprobepos;
 uniform vec3 unfplanarvec;
 uniform vec3 unfssrparam;
-uniform vec3 unfssaoparam;
+uniform vec4 unfssaoparam;
 uniform vec4 unfclip;
 uniform mat4 unfprobecorrectionmat;
 uniform mat4 unfplanarreflectmat;
