@@ -500,6 +500,12 @@ void node_tex_image(vec3 co, sampler2D ima, out vec4 color, out float alpha)
 	alpha = color.a;
 }
 
+void node_tex_image_closest(vec3 co, sampler2D ima, vec2 res, out vec4 color, out float alpha)
+{
+	color = texelFetch(ima, ivec2(fract(co.xy) * res), 0);
+	alpha = color.a;
+}
+
 void node_tex_image_box(vec3 texco,
                         vec3 nob,
                         sampler2D ima,
