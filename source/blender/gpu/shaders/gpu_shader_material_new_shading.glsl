@@ -163,10 +163,10 @@ void node_add_shader(vec4 shader1, vec4 shader2, out vec4 shader)
 void node_fresnel(float ior, vec3 N, vec3 I, out float result)
 {
 	/* handle perspective/orthographic */
-	vec3 I_view = (gl_ProjectionMatrix[3][3] == 0.0)? normalize(I): vec3(0.0, 0.0, -1.0);
+	vec3 I_view = (gl_ProjectionMatrix[3][3] == 0.0) ? normalize(I) : vec3(0.0, 0.0, -1.0);
 
 	float eta = max(ior, 0.00001);
-	result = fresnel_dielectric(I_view, N, (gl_FrontFacing)? eta: 1.0/eta);
+	result = fresnel_dielectric(I_view, N, (gl_FrontFacing) ? eta : 1.0/eta);
 }
 
 /* layer_weight */
@@ -175,15 +175,15 @@ void node_layer_weight(float blend, vec3 N, vec3 I, out float fresnel, out float
 {
 	/* fresnel */
 	float eta = max(1.0 - blend, 0.00001);
-	vec3 I_view = (gl_ProjectionMatrix[3][3] == 0.0)? normalize(I): vec3(0.0, 0.0, -1.0);
+	vec3 I_view = (gl_ProjectionMatrix[3][3] == 0.0) ? normalize(I) : vec3(0.0, 0.0, -1.0);
 
 	fresnel = fresnel_dielectric(I_view, N, (gl_FrontFacing)? 1.0/eta : eta );
 
 	/* facing */
 	facing = abs(dot(I_view, N));
-	if(blend != 0.5) {
+	if (blend != 0.5) {
 		blend = clamp(blend, 0.0, 0.99999);
-		blend = (blend < 0.5)? 2.0*blend: 0.5/(1.0 - blend);
+		blend = (blend < 0.5) ? 2.0 * blend : 0.5 / (1.0 - blend);
 		facing = pow(facing, blend);
 	}
 	facing = 1.0 - facing;
@@ -195,21 +195,21 @@ void node_gamma(vec4 col, float gamma, out vec4 outcol)
 {
 	outcol = col;
 
-	if(col.r > 0.0)
+	if (col.r > 0.0)
 		outcol.r = compatible_pow(col.r, gamma);
-	if(col.g > 0.0)
+	if (col.g > 0.0)
 		outcol.g = compatible_pow(col.g, gamma);
-	if(col.b > 0.0)
+	if (col.b > 0.0)
 		outcol.b = compatible_pow(col.b, gamma);
 }
 
 /* geometry */
 
-void node_attribute(vec3 attr_uv, out vec4 outcol, out vec3 outvec, out float outf)
+void node_attribute(vec3 attr, out vec4 outcol, out vec3 outvec, out float outf)
 {
-	outcol = vec4(attr_uv, 1.0);
-	outvec = attr_uv;
-	outf = (attr_uv.x + attr_uv.y + attr_uv.z)/3.0;
+	outcol = vec4(attr, 1.0);
+	outvec = attr;
+	outf = (attr.x + attr.y + attr.z) / 3.0;
 }
 
 void node_uvmap(vec3 attr_uv, out vec3 outvec)
@@ -256,18 +256,18 @@ void node_geometry(vec3 I, vec3 N, vec3 attr_orco, mat4 toworld, mat4 fromobj,
 	out vec3 true_normal, out vec3 incoming, out vec3 parametric,
 	out float backfacing, out float pointiness)
 {
-	position = (toworld*vec4(I, 1.0)).xyz;
-	normal = (toworld*vec4(N, 0.0)).xyz;
+	position = (toworld * vec4(I, 1.0)).xyz;
+	normal = (toworld * vec4(N, 0.0)).xyz;
 	attr_orco = vec3(attr_orco.y * -0.5, attr_orco.x * 0.5, 0.0);
 	node_tangent(N, attr_orco, fromobj, toworld, tangent);
 	true_normal = normal;
 
 	/* handle perspective/orthographic */
-	vec3 I_view = (gl_ProjectionMatrix[3][3] == 0.0)? normalize(I): vec3(0.0, 0.0, -1.0);
-	incoming = -(toworld*vec4(I_view, 0.0)).xyz;
+	vec3 I_view = (gl_ProjectionMatrix[3][3] == 0.0) ? normalize(I) : vec3(0.0, 0.0, -1.0);
+	incoming = -(toworld * vec4(I_view, 0.0)).xyz;
 
 	parametric = vec3(0.0);
-	backfacing = (gl_FrontFacing)? 0.0: 1.0;
+	backfacing = (gl_FrontFacing) ? 0.0 : 1.0;
 	pointiness = 0.5;
 }
 
@@ -294,17 +294,17 @@ void node_tex_coord(
         out vec3 camera, out vec3 window, out vec3 reflection)
 {
 	generated = attr_orco * 0.5 + vec3(0.5);
-	normal = normalize((obinvmat*(viewinvmat*vec4(N, 0.0))).xyz);
+	normal = normalize((obinvmat * (viewinvmat * vec4(N, 0.0))).xyz);
 	uv = attr_uv;
-	object = (obinvmat*(viewinvmat*vec4(I, 1.0))).xyz;
+	object = (obinvmat * (viewinvmat * vec4(I, 1.0))).xyz;
 	camera = vec3(I.xy, -I.z);
 	vec4 projvec = gl_ProjectionMatrix * vec4(I, 1.0);
-	window = vec3(mtex_2d_mapping(projvec.xyz/projvec.w).xy * camerafac.xy + camerafac.zw, 0.0);
+	window = vec3(mtex_2d_mapping(projvec.xyz / projvec.w).xy * camerafac.xy + camerafac.zw, 0.0);
 
 	vec3 shade_I;
 	shade_view(I, shade_I);
 	vec3 view_reflection = reflect(shade_I, normalize(N));
-	reflection = (viewinvmat*vec4(view_reflection, 0.0)).xyz;
+	reflection = (viewinvmat * vec4(view_reflection, 0.0)).xyz;
 }
 
 void node_tex_coord_background(
@@ -328,8 +328,8 @@ void node_tex_coord_background(
 
 	camera = vec3(co.xy, -co.z);
 	window = (gl_ProjectionMatrix[3][3] == 0.0) ?
-	              vec3(mtex_2d_mapping(I).xy * camerafac.xy + camerafac.zw, 0.0) :
-	              vec3(vec2(0.5) * camerafac.xy + camerafac.zw, 0.0);
+             vec3(mtex_2d_mapping(I).xy * camerafac.xy + camerafac.zw, 0.0) :
+             vec3(vec2(0.5) * camerafac.xy + camerafac.zw, 0.0);
 
 	reflection = -coords;
 }
@@ -390,11 +390,11 @@ void node_tex_checker(vec3 co, vec4 color1, vec4 color2, float scale, out vec4 c
 	p.y = (p.y + 0.000001) * 0.999999;
 	p.z = (p.z + 0.000001) * 0.999999;
 
-	int xi = abs(int(floor(p.x)));
-	int yi = abs(int(floor(p.y)));
-	int zi = abs(int(floor(p.z)));
+	int xi = int(abs(floor(p.x)));
+	int yi = int(abs(floor(p.y)));
+	int zi = int(abs(floor(p.z)));
 
-	bool check = ((xi % 2 == yi % 2) == bool(zi % 2));
+	bool check = ((mod(xi, 2) == mod(yi, 2)) == bool(mod(zi, 2)));
 
 	color = check ? color1 : color2;
 	fac = check ? 1.0 : 0.0;
@@ -479,12 +479,12 @@ void node_tex_environment_mirror_ball(vec3 co, sampler2D ima, out vec4 color)
 
 	nco.y -= 1.0;
 
-	float div = 2.0*sqrt(max(-0.5*nco.y, 0.0));
+	float div = 2.0 * sqrt(max(-0.5 * nco.y, 0.0));
 	if(div > 0.0)
 		nco /= div;
 
-	float u = 0.5*(nco.x + 1.0);
-	float v = 0.5*(nco.z + 1.0);
+	float u = 0.5 * (nco.x + 1.0);
+	float v = 0.5 * (nco.z + 1.0);
 
 	color = texture2D(ima, vec2(u, v));
 }
@@ -569,6 +569,7 @@ void node_tex_image_box(vec3 texco,
 		weight.x = 1.0;
 	}
 
+	color = vec4(0);
 	if (weight.x > 0.0) {
 		color += weight.x * texture2D(ima, texco.yz);
 	}

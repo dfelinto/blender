@@ -206,7 +206,7 @@ void Mesh::clear()
 int Mesh::split_vertex(int vertex)
 {
 	/* copy vertex location and vertex attributes */
-	add_vertex(verts[vertex]);
+	add_vertex_slow(verts[vertex]);
 
 	foreach(Attribute& attr, attributes.attributes) {
 		if(attr.element == ATTR_ELEMENT_VERTEX) {
@@ -222,6 +222,11 @@ int Mesh::split_vertex(int vertex)
 void Mesh::add_vertex(float3 P)
 {
 	verts.push_back_reserved(P);
+}
+
+void Mesh::add_vertex_slow(float3 P)
+{
+	verts.push_back_slow(P);
 }
 
 void Mesh::add_triangle(int v0, int v1, int v2, int shader_, bool smooth_, bool forms_quad_)
@@ -240,7 +245,7 @@ void Mesh::add_curve_key(float3 co, float radius)
 	curve_radius.push_back_reserved(radius);
 }
 
-void Mesh::add_curve(int first_key, int num_keys, int shader)
+void Mesh::add_curve(int first_key, int shader)
 {
 	curve_first_key.push_back_reserved(first_key);
 	curve_shader.push_back_reserved(shader);

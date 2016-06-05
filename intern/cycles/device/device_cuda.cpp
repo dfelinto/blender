@@ -493,7 +493,9 @@ public:
 	               InterpolationType interpolation,
 	               ExtensionType extension)
 	{
-		VLOG(1) << "Texture allocate: " << name << ", " << mem.memory_size() << " bytes.";
+		VLOG(1) << "Texture allocate: " << name << ", "
+		        << string_human_readable_number(mem.memory_size()) << " bytes. ("
+		        << string_human_readable_size(mem.memory_size()) << ")";
 
 		/* Check if we are on sm_30 or above.
 		 * We use arrays and bindles textures for storage there */
@@ -1366,6 +1368,7 @@ void device_cuda_info(vector<DeviceInfo>& devices)
 
 		/* if device has a kernel timeout, assume it is used for display */
 		if(cuDeviceGetAttribute(&attr, CU_DEVICE_ATTRIBUTE_KERNEL_EXEC_TIMEOUT, num) == CUDA_SUCCESS && attr == 1) {
+			info.description += " (Display)";
 			info.display_device = true;
 			display_devices.push_back(info);
 		}
