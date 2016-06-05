@@ -40,7 +40,7 @@ uniform vec3 unfsh7;
 uniform vec3 unfsh8;
 uniform vec3 unfprobepos;
 uniform vec3 unfplanarvec;
-uniform vec4 unfssrparam;
+uniform vec3 unfssrparam;
 uniform vec4 unfssaoparam;
 uniform vec4 unfclip;
 uniform mat4 unfprobecorrectionmat;
@@ -853,7 +853,7 @@ void swapIfBigger(inout float a, inout float b)
 }
 
 /* 2D raycast : still have some bug that needs to be sorted out before being usable */
-bool raycast(vec3 ray_origin, vec3 ray_dir, float jitter, out float hitstep, out vec2 hitpixel, out vec3 hitco)
+bool raycast(vec3 ray_origin, vec3 ray_dir, out float hitstep, out vec2 hitpixel, out vec3 hitco)
 {
 	/* ssr_parameters */
 	float nearz = -unfclip.x; /* Near plane distance (Negative number) */
@@ -956,7 +956,7 @@ bool raycast(vec3 ray_origin, vec3 ray_dir, float jitter, out float hitstep, out
 #ifdef USE_BACKFACE
 			float backface = backface_depth(ivec2(hitpixel), 0);
 #else
-			float backface = frontface - unfssrparam.w;
+			float backface = frontface - unfssrparam.z;
 #endif
 			hit = (zmin > backface);
 		}
@@ -1031,7 +1031,7 @@ float ssr_contribution(vec3 ray_origin, float hitstep, bool hit, inout vec3 hitc
 {
 	/* ssr_parameters */
 	float maxstep = 	unfssrparam.x; /* Maximum number of iteration when raymarching */
-	float attenuation = unfssrparam.z; /* Attenuation factor for screen edges and ray step fading */
+	float attenuation = unfssrparam.y; /* Attenuation factor for screen edges and ray step fading */
 
 	/* ray step fade */
 	float stepfade = saturate((1.0 - hitstep / maxstep) * attenuation);

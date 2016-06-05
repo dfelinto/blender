@@ -2354,11 +2354,6 @@ static void rna_def_gpu_pbr_ssr(BlenderRNA *brna)
 	RNA_def_struct_ui_text(srna, "GPU SSR", "Settings for GPU based screen space reflections");
 	RNA_def_struct_ui_icon(srna, ICON_MATERIAL);
 
-	prop = RNA_def_property(srna, "distance_max", PROP_FLOAT, PROP_NONE);
-	RNA_def_property_ui_text(prop, "Distance", "Max distance traveled by the reflected ray");
-	RNA_def_property_range(prop, 0.00001f, 100000.0f);
-	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
-
 	prop = RNA_def_property(srna, "attenuation", PROP_FLOAT, PROP_NONE);
 	RNA_def_property_ui_text(prop, "Attenuation", "Attenuation for distance and screen border fade");
 	RNA_def_property_range(prop, 1.0f, 20.0f);

@@ -699,10 +699,9 @@ void GPU_material_bind_uniforms_pbr(GPUMaterial *material, GPUProbe *probe, GPUP
 			 * w : thickness : pixel thickness */
 			float ssrparams[3];
 			ssrparams[0] = (float)pbr_settings->ssr->steps;
-			ssrparams[1] = pbr_settings->ssr->distance_max / (float)pbr_settings->ssr->steps;
-			ssrparams[2] = pbr_settings->ssr->attenuation;
-			ssrparams[3] = pbr_settings->ssr->thickness;
-			GPU_shader_uniform_vector(shader, material->ssrparamsloc, 4, 1, ssrparams);
+			ssrparams[1] = pbr_settings->ssr->attenuation;
+			ssrparams[2] = pbr_settings->ssr->thickness;
+			GPU_shader_uniform_vector(shader, material->ssrparamsloc, 3, 1, ssrparams);
 		}
 
 		if (pbr_settings->pbr_flag & GPU_PBR_FLAG_SSAO) {

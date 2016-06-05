@@ -3300,7 +3300,6 @@ class VIEW3D_PT_view3d_shading(Panel):
                 if pbr_settings.use_ssr:
                     ssr_settings = pbr_settings.ssr;
                     subcol = col.column(align=True)
-                    subcol.prop(ssr_settings, "distance_max")
                     subcol.prop(ssr_settings, "attenuation")
                     subcol.prop(ssr_settings, "steps")
                     if not pbr_settings.use_backface:

@@ -559,24 +559,15 @@ void env_sampling_glossy_sharp(
 
 #ifdef USE_SSR
 	/* SSR */
-	//ivec2 c = ivec2(gl_FragCoord.xy);
-	//float jitter = float((c.x+c.y)&1) * 0.5; // Number between 0 and 1 for how far to bump the ray in stride units to conceal banding artifacts
-	//setup_noise(gl_FragCoord.xy); /* Noise to dither the samples */
-	//float jitter = jitternoise.y * 1.0;
-	float jitter = 0.0;
-
 	vec2 hitpixel; vec3 hitco; float hitstep;
 
-	bool hit = raycast(viewpos, vL, jitter, hitstep, hitpixel, hitco);
+	bool hit = raycast(viewpos, vL, hitstep, hitpixel, hitco);
 	float contrib = ssr_contribution(viewpos, hitstep, hit, hitco);
 
-	//vec4 sample_ssr = texture2DLod(unfscenebuf, hitco.xy, 0);
 	vec4 sample_ssr = texelFetch(unfscenebuf, ivec2(hitpixel.xy), 0);
 	srgb_to_linearrgb(sample_ssr, sample_ssr);
 
 	result = mix(sample_probe.rgb, sample_ssr.rgb, contrib);
-	//result = mix(vec3(0.0), sample_ssr.rgb, contrib);
-	//result = vec3(texelFetch(unfdepthbuf, ivec2(gl_FragCoord.xy) / int(pow(2,unfssrparam.x-1)), int(unfssrparam.x-1)).r);
 #else
 	result = sample_probe.rgb;
 #endif

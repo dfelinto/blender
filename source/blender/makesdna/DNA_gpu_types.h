@@ -73,10 +73,8 @@ typedef enum eGPUFXFlags {
 
 /* Screen space reflection settings */
 typedef struct GPUSSRSettings {
-	float distance_max;
 	float attenuation;
 	float thickness;
-	float pad2;
 	int steps;
 	int pad;
 } GPUSSRSettings;

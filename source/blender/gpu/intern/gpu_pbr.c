@@ -284,7 +284,6 @@ void GPU_pbr_free(GPUPBR *pbr)
 
 static void gpu_pbr_init_ssr_settings(GPUSSRSettings *ssr_settings)
 {
-	ssr_settings->distance_max = 10.0f;
 	ssr_settings->attenuation = 6.0f;
 	ssr_settings->thickness = 0.2f;
 	ssr_settings->steps = 32;
