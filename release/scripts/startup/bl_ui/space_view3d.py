@@ -3277,7 +3277,7 @@ class VIEW3D_PT_view3d_shading(Panel):
             if scene.render.use_shading_nodes or gs.material_mode != 'GLSL':
                 col.prop(view, "show_textured_shadeless")
 
-        if scene.render.use_shading_nodes and view.viewport_shade == 'MATERIAL' :
+        if scene.render.use_shading_nodes and view.viewport_shade == 'MATERIAL':
             pbr_settings = view.pbr_settings
 
             col.prop(pbr_settings, "use_realistic_mat", text="Material Preview")
@@ -3303,6 +3303,8 @@ class VIEW3D_PT_view3d_shading(Panel):
                     subcol.prop(ssr_settings, "distance_max")
                     subcol.prop(ssr_settings, "attenuation")
                     subcol.prop(ssr_settings, "steps")
+                    if not pbr_settings.use_backface:
+                        subcol.prop(ssr_settings, "thickness")
 
                 if pbr_settings.use_ssao or pbr_settings.use_ssr:
                     col.prop(pbr_settings, "use_backface", text="Backface Buffer")

@@ -40,7 +40,7 @@ uniform vec3 unfsh7;
 uniform vec3 unfsh8;
 uniform vec3 unfprobepos;
 uniform vec3 unfplanarvec;
-uniform vec3 unfssrparam;
+uniform vec4 unfssrparam;
 uniform vec4 unfssaoparam;
 uniform vec4 unfclip;
 uniform mat4 unfprobecorrectionmat;
@@ -716,15 +716,15 @@ float distance_based_roughness(float dist_intersection_to_shaded, float dist_int
 }
 #endif
 
-vec2 get_distorded_refl_uv(sampler2D planarprobe)
+vec2 get_distorded_refl_uv(sampler2D planarprobe, vec2 Xi)
 {
 	vec2 distortion = vec2(dot(viewnor, vec3(1.0, 0.0, 0.0)) - planarfac.x,
 	                       dot(viewnor, vec3(0.0, 1.0, 0.0)) - planarfac.y);
-	distortion += Ht.xy;
+	distortion += Xi;
 
 	/* modulate intensity by distance to the viewer and by distance to the reflected object */
 	float dist_view_to_shaded = planarfac.z;
-	float dist_intersection_to_reflectioncam = texture2D(planarprobe, refpos.xy + Ht.xy / dist_view_to_shaded).a;
+	float dist_intersection_to_reflectioncam = texture2D(planarprobe, refpos.xy + Xi / dist_view_to_shaded).a;
 	float dist_intersection_to_shaded = dist_intersection_to_reflectioncam - dist_view_to_shaded; /* depth in alpha */
 
 	/* test in case of background */
@@ -760,7 +760,7 @@ vec4 sample_probe_pdf(sampler2D planarprobe, vec3 cubevec, float roughness, floa
 
 #ifdef PLANAR_PROBE
 	vec4 sample_plane = vec4(0.0);
-	vec2 co = get_distorded_refl_uv(planarprobe);
+	vec2 co = get_distorded_refl_uv(planarprobe, Ht.xy);
 	if (co.x > 0.0 && co.x < 1.0 && co.y > 0.0 && co.y < 1.0)
 		sample_plane = texture2DLod(planarprobe, co, lod);
 	else
@@ -792,7 +792,7 @@ vec4 sample_probe(sampler2D planarprobe, vec3 cubevec)
 
 #ifdef PLANAR_PROBE
 	/* Planar */
-	vec2 co = get_distorded_refl_uv(planarprobe);
+	vec2 co = get_distorded_refl_uv(planarprobe, vec2(0.0));
 	if (co.x > 0.0 && co.x < 1.0 && co.y > 0.0 && co.y < 1.0)
 		sample = texture2D(planarprobe, co);
 #endif
@@ -956,9 +956,9 @@ bool raycast(vec3 ray_origin, vec3 ray_dir, float jitter, out float hitstep, out
 #ifdef USE_BACKFACE
 			float backface = backface_depth(ivec2(hitpixel), 0);
 #else
-			float backface = frontface - 0.2; /* Todo find a good thickness */
+			float backface = frontface - unfssrparam.w;
 #endif
-			hit = (zmax > backface);
+			hit = (zmin > backface);
 		}
 	}
 

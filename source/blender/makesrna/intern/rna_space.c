@@ -2364,6 +2364,11 @@ static void rna_def_gpu_pbr_ssr(BlenderRNA *brna)
 	RNA_def_property_range(prop, 1.0f, 20.0f);
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
 
+	prop = RNA_def_property(srna, "thickness", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_ui_text(prop, "Thickness", "Pixel thickness. How thick is a pixel when searching for intersections");
+	RNA_def_property_range(prop, 0.00001f, 100000.0f);
+	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
+
 	prop = RNA_def_property(srna, "steps", PROP_INT, PROP_NONE);
 	RNA_def_property_ui_text(prop, "Steps", "Number of pixels to travel for searching intersections");
 	RNA_def_property_range(prop, 1, 256);
