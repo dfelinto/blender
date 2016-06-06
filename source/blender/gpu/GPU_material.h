@@ -56,6 +56,8 @@ struct GPUMaterial;
 struct GPUTexture;
 struct GPULamp;
 struct GPUProbe;
+struct GPUPBR;
+struct GPUPBRSettings;
 struct PreviewImage;
 struct World;
 
