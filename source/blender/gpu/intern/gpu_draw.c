@@ -1728,7 +1728,7 @@ void GPU_begin_object_materials(
         View3D *v3d, RegionView3D *rv3d, Scene *scene, Object *ob,
         bool glsl, bool *do_alpha_after)
 {
-	Material *ma;
+	Material *ma = NULL;
 	GPUMaterial *gpumat;
 	GPUBlendMode alphablend;
 	DupliObject *dob;
