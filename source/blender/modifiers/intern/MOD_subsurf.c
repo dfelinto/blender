@@ -38,6 +38,10 @@
 #include "DNA_scene_types.h"
 #include "DNA_object_types.h"
 
+#ifdef WITH_OPENSUBDIV
+#  include "DNA_userdef_types.h"
+#endif
+
 #include "BLI_utildefines.h"
 
 
@@ -104,10 +108,8 @@ static DerivedMesh *applyModifier(ModifierData *md, Object *ob,
 
 #ifdef WITH_OPENSUBDIV
 	const bool allow_gpu = (flag & MOD_APPLY_ALLOW_GPU) != 0;
-	const bool do_cddm_convert = useRenderParams || (!isFinalCalc && !smd->use_opensubdiv);
-#else
-	const bool do_cddm_convert = useRenderParams || !isFinalCalc;
 #endif
+	bool do_cddm_convert = useRenderParams || !isFinalCalc;
 
 	if (useRenderParams)
 		subsurf_flags |= SUBSURF_USE_RENDER_PARAMS;
@@ -125,8 +127,12 @@ static DerivedMesh *applyModifier(ModifierData *md, Object *ob,
 	    do_cddm_convert == false &&
 	    smd->use_opensubdiv)
 	{
-		if ((DAG_get_eval_flags_for_object(md->scene, ob) & DAG_EVAL_NEED_CPU) == 0) {
+		if (U.opensubdiv_compute_type == USER_OPENSUBDIV_COMPUTE_NONE) {
+			modifier_setError(md, "OpenSubdiv is disabled in User Preferences");
+		}
+		else if ((DAG_get_eval_flags_for_object(md->scene, ob) & DAG_EVAL_NEED_CPU) == 0) {
 			subsurf_flags |= SUBSURF_USE_GPU_BACKEND;
+			do_cddm_convert = false;
 		}
 		else {
 			modifier_setError(md, "OpenSubdiv is disabled due to dependencies");
@@ -157,11 +163,8 @@ static DerivedMesh *applyModifierEM(ModifierData *md, Object *UNUSED(ob),
 	SubsurfFlags ss_flags = (flag & MOD_APPLY_ORCO) ? 0 : (SUBSURF_FOR_EDIT_MODE | SUBSURF_IN_EDIT_MODE);
 #ifdef WITH_OPENSUBDIV
 	const bool allow_gpu = (flag & MOD_APPLY_ALLOW_GPU) != 0;
-	/* TODO(sergey): Not entirely correct, modifiers on top of subsurf
-	 * could be disabled.
-	 */
 	if (md->next == NULL && allow_gpu && smd->use_opensubdiv) {
-		ss_flags |= SUBSURF_USE_GPU_BACKEND;
+		modifier_setError(md, "OpenSubdiv is not supported in edit mode");
 	}
 #endif
 

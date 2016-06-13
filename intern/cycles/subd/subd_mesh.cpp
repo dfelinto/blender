@@ -196,17 +196,18 @@ void OpenSubdMesh::add_face(int *index, int num)
 		OsdHbrHalfEdge *opposite = destination->GetEdge(origin);
 
 		if(origin==NULL || destination==NULL)
-			assert("An edge was specified that connected a nonexistent vertex\n");
+			assert(!"An edge was specified that connected a nonexistent vertex\n");
 
 		if(origin == destination)
-			assert("An edge was specified that connected a vertex to itself\n");
+			assert(!"An edge was specified that connected a vertex to itself\n");
 
 		if(opposite && opposite->GetOpposite())
-			assert("A non-manifold edge incident to more than 2 faces was found\n");
+			assert(!"A non-manifold edge incident to more than 2 faces was found\n");
 
-		if(origin->GetEdge(destination))
-			assert("An edge connecting two vertices was specified more than once."
-				 "It's likely that an incident face was flipped\n");
+		if(origin->GetEdge(destination)) {
+			assert(!"An edge connecting two vertices was specified more than once."
+		                "It's likely that an incident face was flipped\n");
+		}
 	}
 #endif
 
@@ -290,7 +291,7 @@ public:
 	int id;
 	float3 co;
 	
-	SubdVert(int id_)
+	explicit SubdVert(int id_)
 	{
 		id = id_;
 		co = make_float3(0.0f, 0.0f, 0.0f);
@@ -306,7 +307,7 @@ public:
 	int numverts;
 	int verts[4];
 
-	SubdFace(int id_)
+	explicit SubdFace(int id_)
 	{
 		id = id_;
 		numverts = 0;

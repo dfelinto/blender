@@ -48,6 +48,7 @@
 
 #ifdef RNA_RUNTIME
 
+#include <errno.h>
 #include "BKE_image.h"
 #include "BKE_packedFile.h"
 #include "BKE_main.h"
@@ -62,6 +63,14 @@
 #include "DNA_scene_types.h"
 
 #include "MEM_guardedalloc.h"
+
+static void rna_ImagePackedFile_save(ImagePackedFile *imapf, ReportList *reports)
+{
+	if (writePackedFile(reports, imapf->filepath, imapf->packedfile, 0) != RET_OK) {
+		BKE_reportf(reports, RPT_ERROR, "Image could not save packed file to '%s'",
+		            imapf->filepath);
+	}
+}
 
 static void rna_Image_save_render(Image *image, bContext *C, ReportList *reports, const char *path, Scene *scene)
 {
@@ -93,7 +102,7 @@ static void rna_Image_save_render(Image *image, bContext *C, ReportList *reports
 			write_ibuf->dither = scene->r.dither_intensity;
 
 			if (!BKE_imbuf_write(write_ibuf, path, &scene->r.im_format)) {
-				BKE_reportf(reports, RPT_ERROR, "Could not write image '%s'", path);
+				BKE_reportf(reports, RPT_ERROR, "Could not write image: %s, '%s'", strerror(errno), path);
 			}
 
 			if (write_ibuf != ibuf)
@@ -115,17 +124,10 @@ static void rna_Image_save(Image *image, Main *bmain, bContext *C, ReportList *r
 		BLI_strncpy(filename, image->name, sizeof(filename));
 		BLI_path_abs(filename, ID_BLEND_PATH(bmain, &image->id));
 
-		if (BKE_image_has_packedfile(image)) {
-			ImagePackedFile *imapf;
+		/* note, we purposefully ignore packed files here,
+		 * developers need to explicitly write them via 'packed_files' */
 
-			for (imapf = image->packedfiles.first; imapf; imapf = imapf->next) {
-				if (writePackedFile(reports, imapf->filepath, imapf->packedfile, 0) != RET_OK) {
-					BKE_reportf(reports, RPT_ERROR, "Image '%s' could not save packed file to '%s'",
-					            image->id.name + 2, imapf->filepath);
-				}
-			}
-		}
-		else if (IMB_saveiff(ibuf, filename, ibuf->flags)) {
+		if (IMB_saveiff(ibuf, filename, ibuf->flags)) {
 			image->type = IMA_TYPE_IMAGE;
 
 			if (image->source == IMA_SRC_GENERATED)
@@ -222,7 +224,7 @@ static void rna_Image_scale(Image *image, ReportList *reports, int width, int he
 static int rna_Image_gl_load(Image *image, ReportList *reports, int frame, int filter, int mag)
 {
 	ImBuf *ibuf;
-	unsigned int *bind = &image->bindcode;
+	unsigned int *bind = &image->bindcode[TEXTARGET_TEXTURE_2D];
 	int error = GL_NO_ERROR;
 	ImageUser iuser = {NULL};
 	void *lock;
@@ -243,18 +245,17 @@ static int rna_Image_gl_load(Image *image, ReportList *reports, int frame, int f
 		return (int)GL_INVALID_OPERATION;
 	}
 
-	GPU_create_gl_tex(bind, ibuf->rect, ibuf->rect_float, ibuf->x, ibuf->y,
+	GPU_create_gl_tex(bind, ibuf->rect, ibuf->rect_float, ibuf->x, ibuf->y, GL_TEXTURE_2D,
 	                  (filter != GL_NEAREST && filter != GL_LINEAR), false, image);
 
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, (GLint)filter);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, (GLint)mag);
-	glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
 
 	error = glGetError();
 
 	if (error) {
 		glDeleteTextures(1, (GLuint *)bind);
-		image->bindcode = 0;
+		image->bindcode[TEXTARGET_TEXTURE_2D] = 0;
 	}
 
 	BKE_image_release_ibuf(image, ibuf, NULL);
@@ -264,7 +265,7 @@ static int rna_Image_gl_load(Image *image, ReportList *reports, int frame, int f
 
 static int rna_Image_gl_touch(Image *image, ReportList *reports, int frame, int filter, int mag)
 {
-	unsigned int *bind = &image->bindcode;
+	unsigned int *bind = &image->bindcode[TEXTARGET_TEXTURE_2D];
 	int error = GL_NO_ERROR;
 
 	BKE_image_tag_time(image);
@@ -295,6 +296,15 @@ static void rna_Image_buffers_free(Image *image)
 
 #else
 
+void RNA_api_image_packed_file(StructRNA *srna)
+{
+	FunctionRNA *func;
+
+	func = RNA_def_function(srna, "save", "rna_ImagePackedFile_save");
+	RNA_def_function_ui_description(func, "Save the packed file to its filepath");
+	RNA_def_function_flag(func, FUNC_USE_REPORTS);
+}
+
 void RNA_api_image(StructRNA *srna)
 {
 	FunctionRNA *func;
@@ -323,7 +333,7 @@ void RNA_api_image(StructRNA *srna)
 	func = RNA_def_function(srna, "unpack", "rna_Image_unpack");
 	RNA_def_function_ui_description(func, "Save an image packed in the .blend file to disk");
 	RNA_def_function_flag(func, FUNC_USE_REPORTS);
-	RNA_def_enum(func, "method", unpack_method_items, PF_USE_LOCAL, "method", "How to unpack");
+	RNA_def_enum(func, "method", rna_enum_unpack_method_items, PF_USE_LOCAL, "method", "How to unpack");
 
 	func = RNA_def_function(srna, "reload", "rna_Image_reload");
 	RNA_def_function_ui_description(func, "Reload the image from its source path");

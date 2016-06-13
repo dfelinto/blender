@@ -197,8 +197,9 @@ def defaults_object(obj):
     obj.show_wire = True
 
     if obj.type == 'MESH':
+        obj.show_all_edges = True
+
         mesh = obj.data
-        mesh.show_all_edges = True
 
         mesh.show_normal_vertex = True
 
@@ -815,8 +816,8 @@ def test_cube_shell(context, test):
 
 def main():
     print("Calling main!")
-    #render_gl(bpy.context, "/testme")
-    #ctx_clear_scene()
+    # render_gl(bpy.context, "/testme")
+    # ctx_clear_scene()
 
     context = bpy.context
 

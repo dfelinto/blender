@@ -19,6 +19,8 @@
 
 #include "kernel_types.h"
 
+#include "node.h"
+
 #include "util_types.h"
 #include "util_vector.h"
 
@@ -28,9 +30,12 @@ class Device;
 class DeviceScene;
 class Progress;
 class Scene;
+class Shader;
 
-class Light {
+class Light : public Node {
 public:
+	NODE_DECLARE;
+
 	Light();
 
 	LightType type;
@@ -57,8 +62,9 @@ public:
 	bool use_scatter;
 
 	bool is_portal;
+	bool is_enabled;
 
-	int shader;
+	Shader *shader;
 	int samples;
 	int max_bounces;
 
@@ -76,15 +82,32 @@ public:
 	LightManager();
 	~LightManager();
 
-	void device_update(Device *device, DeviceScene *dscene, Scene *scene, Progress& progress);
+	void device_update(Device *device,
+	                   DeviceScene *dscene,
+	                   Scene *scene,
+	                   Progress& progress);
 	void device_free(Device *device, DeviceScene *dscene);
 
 	void tag_update(Scene *scene);
 
 protected:
-	void device_update_points(Device *device, DeviceScene *dscene, Scene *scene);
-	void device_update_distribution(Device *device, DeviceScene *dscene, Scene *scene, Progress& progress);
-	void device_update_background(Device *device, DeviceScene *dscene, Scene *scene, Progress& progress);
+	/* Optimization: disable light which is either unsupported or
+	 * which doesn't contribute to the scene or which is only used for MIS
+	 * and scene doesn't need MIS.
+	 */
+	void disable_ineffective_light(Device *device, Scene *scene);
+
+	void device_update_points(Device *device,
+	                          DeviceScene *dscene,
+	                          Scene *scene);
+	void device_update_distribution(Device *device,
+	                                DeviceScene *dscene,
+	                                Scene *scene,
+	                                Progress& progress);
+	void device_update_background(Device *device,
+	                              DeviceScene *dscene,
+	                              Scene *scene,
+	                              Progress& progress);
 };
 
 CCL_NAMESPACE_END

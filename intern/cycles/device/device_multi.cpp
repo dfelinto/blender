@@ -35,7 +35,7 @@ class MultiDevice : public Device
 {
 public:
 	struct SubDevice {
-		SubDevice(Device *device_)
+		explicit SubDevice(Device *device_)
 		: device(device_) {}
 
 		Device *device;
@@ -175,7 +175,9 @@ public:
 	               interpolation,
 	               ExtensionType extension)
 	{
-		VLOG(1) << "Texture allocate: " << name << ", " << mem.memory_size() << " bytes.";
+		VLOG(1) << "Texture allocate: " << name << ", "
+		        << string_human_readable_number(mem.memory_size()) << " bytes. ("
+		        << string_human_readable_size(mem.memory_size()) << ")";
 
 		foreach(SubDevice& sub, devices) {
 			mem.device_pointer = 0;
@@ -316,6 +318,7 @@ public:
 				if(task.rgba_half) subtask.rgba_half = sub.ptr_map[task.rgba_half];
 				if(task.shader_input) subtask.shader_input = sub.ptr_map[task.shader_input];
 				if(task.shader_output) subtask.shader_output = sub.ptr_map[task.shader_output];
+				if(task.shader_output_luma) subtask.shader_output_luma = sub.ptr_map[task.shader_output_luma];
 
 				sub.device->task_add(subtask);
 			}
@@ -351,7 +354,7 @@ static bool device_multi_add(vector<DeviceInfo>& devices, DeviceType type, bool 
 
 	info.advanced_shading = with_advanced_shading;
 	info.pack_images = false;
-	info.extended_images = true;
+	info.has_bindless_textures = true;
 
 	foreach(DeviceInfo& subinfo, devices) {
 		if(subinfo.type == type) {
@@ -375,7 +378,7 @@ static bool device_multi_add(vector<DeviceInfo>& devices, DeviceType type, bool 
 			if(subinfo.display_device)
 				info.display_device = true;
 			info.pack_images = info.pack_images || subinfo.pack_images;
-			info.extended_images = info.extended_images && subinfo.extended_images;
+			info.has_bindless_textures = info.has_bindless_textures && subinfo.has_bindless_textures;
 			num_added++;
 		}
 	}

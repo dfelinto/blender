@@ -18,6 +18,7 @@
 #include "mesh.h"
 #include "object.h"
 #include "scene.h"
+#include "camera.h"
 
 #include "blender_sync.h"
 #include "blender_session.h"
@@ -35,10 +36,54 @@
 
 CCL_NAMESPACE_BEGIN
 
+/* Per-face bit flags. */
+enum {
+	/* Face has no special flags. */
+	FACE_FLAG_NONE      = (0 << 0),
+	/* Quad face was split using 1-3 diagonal. */
+	FACE_FLAG_DIVIDE_13 = (1 << 0),
+	/* Quad face was split using 2-4 diagonal. */
+	FACE_FLAG_DIVIDE_24 = (1 << 1),
+};
+
+/* Get vertex indices to create triangles from a given face.
+ *
+ * Two triangles has vertex indices in the original Blender-side face.
+ * If face is already a quad tri_b will not be initialized.
+ */
+inline void face_split_tri_indices(const int num_verts,
+                                   const int face_flag,
+                                   int tri_a[3],
+                                   int tri_b[3])
+{
+	if(face_flag & FACE_FLAG_DIVIDE_24) {
+		tri_a[0] = 0;
+		tri_a[1] = 1;
+		tri_a[2] = 3;
+		if(num_verts == 4) {
+			tri_b[0] = 2;
+			tri_b[1] = 3;
+			tri_b[2] = 1;
+		}
+	}
+	else /*if(face_flag & FACE_FLAG_DIVIDE_13)*/ {
+		tri_a[0] = 0;
+		tri_a[1] = 1;
+		tri_a[2] = 2;
+		if(num_verts == 4) {
+			tri_b[0] = 0;
+			tri_b[1] = 2;
+			tri_b[2] = 3;
+		}
+	}
+}
+
 /* Tangent Space */
 
 struct MikkUserData {
-	MikkUserData(const BL::Mesh mesh_, BL::MeshTextureFaceLayer *layer_, int num_faces_)
+	MikkUserData(const BL::Mesh& mesh_,
+	             BL::MeshTextureFaceLayer *layer_,
+	             int num_faces_)
 	: mesh(mesh_), layer(layer_), num_faces(num_faces_)
 	{
 		tangent.resize(num_faces*4);
@@ -85,7 +130,7 @@ static void mikk_get_texture_coordinate(const SMikkTSpaceContext *context, float
 		BL::MeshTextureFace tf = userdata->layer->data[face_num];
 		float3 tfuv;
 
-		switch (vert_num) {
+		switch(vert_num) {
 			case 0:
 				tfuv = get_float3(tf.uv1());
 				break;
@@ -140,7 +185,13 @@ static void mikk_set_tangent_space(const SMikkTSpaceContext *context, const floa
 	userdata->tangent[face*4 + vert] = make_float4(T[0], T[1], T[2], sign);
 }
 
-static void mikk_compute_tangents(BL::Mesh b_mesh, BL::MeshTextureFaceLayer *b_layer, Mesh *mesh, const vector<int>& nverts, bool need_sign, bool active_render)
+static void mikk_compute_tangents(BL::Mesh& b_mesh,
+                                  BL::MeshTextureFaceLayer *b_layer,
+                                  Mesh *mesh,
+                                  const vector<int>& nverts,
+                                  const vector<int>& face_flags,
+                                  bool need_sign,
+                                  bool active_render)
 {
 	/* setup userdata */
 	MikkUserData userdata(b_mesh, b_layer, nverts.size());
@@ -199,28 +250,31 @@ static void mikk_compute_tangents(BL::Mesh b_mesh, BL::MeshTextureFaceLayer *b_l
 	}
 
 	for(int i = 0; i < nverts.size(); i++) {
-		tangent[0] = float4_to_float3(userdata.tangent[i*4 + 0]);
-		tangent[1] = float4_to_float3(userdata.tangent[i*4 + 1]);
-		tangent[2] = float4_to_float3(userdata.tangent[i*4 + 2]);
+		int tri_a[3], tri_b[3];
+		face_split_tri_indices(nverts[i], face_flags[i], tri_a, tri_b);
+
+		tangent[0] = float4_to_float3(userdata.tangent[i*4 + tri_a[0]]);
+		tangent[1] = float4_to_float3(userdata.tangent[i*4 + tri_a[1]]);
+		tangent[2] = float4_to_float3(userdata.tangent[i*4 + tri_a[2]]);
 		tangent += 3;
 
 		if(tangent_sign) {
-			tangent_sign[0] = userdata.tangent[i*4 + 0].w;
-			tangent_sign[1] = userdata.tangent[i*4 + 1].w;
-			tangent_sign[2] = userdata.tangent[i*4 + 2].w;
+			tangent_sign[0] = userdata.tangent[i*4 + tri_a[0]].w;
+			tangent_sign[1] = userdata.tangent[i*4 + tri_a[1]].w;
+			tangent_sign[2] = userdata.tangent[i*4 + tri_a[2]].w;
 			tangent_sign += 3;
 		}
 
 		if(nverts[i] == 4) {
-			tangent[0] = float4_to_float3(userdata.tangent[i*4 + 0]);
-			tangent[1] = float4_to_float3(userdata.tangent[i*4 + 2]);
-			tangent[2] = float4_to_float3(userdata.tangent[i*4 + 3]);
+			tangent[0] = float4_to_float3(userdata.tangent[i*4 + tri_b[0]]);
+			tangent[1] = float4_to_float3(userdata.tangent[i*4 + tri_b[1]]);
+			tangent[2] = float4_to_float3(userdata.tangent[i*4 + tri_b[2]]);
 			tangent += 3;
 
 			if(tangent_sign) {
-				tangent_sign[0] = userdata.tangent[i*4 + 0].w;
-				tangent_sign[1] = userdata.tangent[i*4 + 2].w;
-				tangent_sign[2] = userdata.tangent[i*4 + 3].w;
+				tangent_sign[0] = userdata.tangent[i*4 + tri_b[0]].w;
+				tangent_sign[1] = userdata.tangent[i*4 + tri_b[1]].w;
+				tangent_sign[2] = userdata.tangent[i*4 + tri_b[2]].w;
 				tangent_sign += 3;
 			}
 		}
@@ -229,7 +283,11 @@ static void mikk_compute_tangents(BL::Mesh b_mesh, BL::MeshTextureFaceLayer *b_l
 
 /* Create Volume Attribute */
 
-static void create_mesh_volume_attribute(BL::Object b_ob, Mesh *mesh, ImageManager *image_manager, AttributeStandard std, float frame)
+static void create_mesh_volume_attribute(BL::Object& b_ob,
+                                         Mesh *mesh,
+                                         ImageManager *image_manager,
+                                         AttributeStandard std,
+                                         float frame)
 {
 	BL::SmokeDomainSettings b_domain = object_smoke_domain_find(b_ob);
 
@@ -250,11 +308,14 @@ static void create_mesh_volume_attribute(BL::Object b_ob, Mesh *mesh, ImageManag
 	        is_float,
 	        is_linear,
 	        INTERPOLATION_LINEAR,
-	        EXTENSION_REPEAT,
+	        EXTENSION_CLIP,
 	        true);
 }
 
-static void create_mesh_volume_attributes(Scene *scene, BL::Object b_ob, Mesh *mesh, float frame)
+static void create_mesh_volume_attributes(Scene *scene,
+                                          BL::Object& b_ob,
+                                          Mesh *mesh,
+                                          float frame)
 {
 	/* for smoke volume rendering */
 	if(mesh->need_attribute(scene, ATTR_STD_VOLUME_DENSITY))
@@ -272,8 +333,9 @@ static void create_mesh_volume_attributes(Scene *scene, BL::Object b_ob, Mesh *m
 /* Create vertex color attributes. */
 static void attr_create_vertex_color(Scene *scene,
                                      Mesh *mesh,
-                                     BL::Mesh b_mesh,
-                                     const vector<int>& nverts)
+                                     BL::Mesh& b_mesh,
+                                     const vector<int>& nverts,
+                                     const vector<int>& face_flags)
 {
 	BL::Mesh::tessface_vertex_colors_iterator l;
 	for(b_mesh.tessface_vertex_colors.begin(l); l != b_mesh.tessface_vertex_colors.end(); ++l) {
@@ -288,14 +350,25 @@ static void attr_create_vertex_color(Scene *scene,
 		size_t i = 0;
 
 		for(l->data.begin(c); c != l->data.end(); ++c, ++i) {
-			cdata[0] = color_float_to_byte(color_srgb_to_scene_linear(get_float3(c->color1())));
-			cdata[1] = color_float_to_byte(color_srgb_to_scene_linear(get_float3(c->color2())));
-			cdata[2] = color_float_to_byte(color_srgb_to_scene_linear(get_float3(c->color3())));
+			int tri_a[3], tri_b[3];
+			face_split_tri_indices(nverts[i], face_flags[i], tri_a, tri_b);
+
+			uchar4 colors[4];
+			colors[0] = color_float_to_byte(color_srgb_to_scene_linear(get_float3(c->color1())));
+			colors[1] = color_float_to_byte(color_srgb_to_scene_linear(get_float3(c->color2())));
+			colors[2] = color_float_to_byte(color_srgb_to_scene_linear(get_float3(c->color3())));
+			if(nverts[i] == 4) {
+				colors[3] = color_float_to_byte(color_srgb_to_scene_linear(get_float3(c->color4())));
+			}
+
+			cdata[0] = colors[tri_a[0]];
+			cdata[1] = colors[tri_a[1]];
+			cdata[2] = colors[tri_a[2]];
 
 			if(nverts[i] == 4) {
-				cdata[3] = cdata[0];
-				cdata[4] = cdata[2];
-				cdata[5] = color_float_to_byte(color_srgb_to_scene_linear(get_float3(c->color4())));
+				cdata[3] = colors[tri_b[0]];
+				cdata[4] = colors[tri_b[1]];
+				cdata[5] = colors[tri_b[2]];
 				cdata += 6;
 			}
 			else
@@ -307,8 +380,9 @@ static void attr_create_vertex_color(Scene *scene,
 /* Create uv map attributes. */
 static void attr_create_uv_map(Scene *scene,
                                Mesh *mesh,
-                               BL::Mesh b_mesh,
-                               const vector<int>& nverts)
+                               BL::Mesh& b_mesh,
+                               const vector<int>& nverts,
+                               const vector<int>& face_flags)
 {
 	if(b_mesh.tessface_uv_textures.length() != 0) {
 		BL::Mesh::tessface_uv_textures_iterator l;
@@ -332,15 +406,26 @@ static void attr_create_uv_map(Scene *scene,
 				size_t i = 0;
 
 				for(l->data.begin(t); t != l->data.end(); ++t, ++i) {
-					fdata[0] = get_float3(t->uv1());
-					fdata[1] = get_float3(t->uv2());
-					fdata[2] = get_float3(t->uv3());
+					int tri_a[3], tri_b[3];
+					face_split_tri_indices(nverts[i], face_flags[i], tri_a, tri_b);
+
+					float3 uvs[4];
+					uvs[0] = get_float3(t->uv1());
+					uvs[1] = get_float3(t->uv2());
+					uvs[2] = get_float3(t->uv3());
+					if(nverts[i] == 4) {
+						uvs[3] = get_float3(t->uv4());
+					}
+
+					fdata[0] = uvs[tri_a[0]];
+					fdata[1] = uvs[tri_a[1]];
+					fdata[2] = uvs[tri_a[2]];
 					fdata += 3;
 
 					if(nverts[i] == 4) {
-						fdata[0] = get_float3(t->uv1());
-						fdata[1] = get_float3(t->uv3());
-						fdata[2] = get_float3(t->uv4());
+						fdata[0] = uvs[tri_b[0]];
+						fdata[1] = uvs[tri_b[1]];
+						fdata[2] = uvs[tri_b[2]];
 						fdata += 3;
 					}
 				}
@@ -355,20 +440,32 @@ static void attr_create_uv_map(Scene *scene,
 				name = ustring((string(l->name().c_str()) + ".tangent_sign").c_str());
 				bool need_sign = (mesh->need_attribute(scene, name) || mesh->need_attribute(scene, std));
 
-				mikk_compute_tangents(b_mesh, &(*l), mesh, nverts, need_sign, active_render);
+				mikk_compute_tangents(b_mesh,
+				                      &(*l),
+				                      mesh,
+				                      nverts,
+				                      face_flags,
+				                      need_sign,
+				                      active_render);
 			}
 		}
 	}
 	else if(mesh->need_attribute(scene, ATTR_STD_UV_TANGENT)) {
 		bool need_sign = mesh->need_attribute(scene, ATTR_STD_UV_TANGENT_SIGN);
-		mikk_compute_tangents(b_mesh, NULL, mesh, nverts, need_sign, true);
+		mikk_compute_tangents(b_mesh,
+		                      NULL,
+		                      mesh,
+		                      nverts,
+		                      face_flags,
+		                      need_sign,
+		                      true);
 	}
 }
 
 /* Create vertex pointiness attributes. */
 static void attr_create_pointiness(Scene *scene,
                                    Mesh *mesh,
-                                   BL::Mesh b_mesh)
+                                   BL::Mesh& b_mesh)
 {
 	if(mesh->need_attribute(scene, ATTR_STD_POINTINESS)) {
 		const int numverts = b_mesh.vertices.length();
@@ -432,7 +529,10 @@ static void attr_create_pointiness(Scene *scene,
 
 /* Create Mesh */
 
-static void create_mesh(Scene *scene, Mesh *mesh, BL::Mesh b_mesh, const vector<uint>& used_shaders)
+static void create_mesh(Scene *scene,
+                        Mesh *mesh,
+                        BL::Mesh& b_mesh,
+                        const vector<Shader*>& used_shaders)
 {
 	/* count vertices and faces */
 	int numverts = b_mesh.vertices.length();
@@ -448,13 +548,12 @@ static void create_mesh(Scene *scene, Mesh *mesh, BL::Mesh b_mesh, const vector<
 		numtris += (vi[3] == 0)? 1: 2;
 	}
 
-	/* reserve memory */
-	mesh->reserve(numverts, numtris, 0, 0);
+	/* allocate memory */
+	mesh->reserve_mesh(numverts, numtris);
 
 	/* create vertex coordinates and normals */
-	int i = 0;
-	for(b_mesh.vertices.begin(v); v != b_mesh.vertices.end(); ++v, ++i)
-		mesh->verts[i] = get_float3(v->co());
+	for(b_mesh.vertices.begin(v); v != b_mesh.vertices.end(); ++v)
+		mesh->add_vertex(get_float3(v->co()));
 
 	Attribute *attr_N = mesh->attributes.add(ATTR_STD_VERTEX_NORMAL);
 	float3 *N = attr_N->data_float3();
@@ -482,13 +581,13 @@ static void create_mesh(Scene *scene, Mesh *mesh, BL::Mesh b_mesh, const vector<
 
 	/* create faces */
 	vector<int> nverts(numfaces);
-	int fi = 0, ti = 0;
+	vector<int> face_flags(numfaces, FACE_FLAG_NONE);
+	int fi = 0;
 
 	for(b_mesh.tessfaces.begin(f); f != b_mesh.tessfaces.end(); ++f, ++fi) {
 		int4 vi = get_int4(f->vertices_raw());
 		int n = (vi[3] == 0)? 3: 4;
-		int mi = clamp(f->material_index(), 0, used_shaders.size()-1);
-		int shader = used_shaders[mi];
+		int shader = clamp(f->material_index(), 0, used_shaders.size()-1);
 		bool smooth = f->use_smooth() || use_loop_normals;
 
 		/* split vertices if normal is different
@@ -517,16 +616,19 @@ static void create_mesh(Scene *scene, Mesh *mesh, BL::Mesh b_mesh, const vector<
 			if(is_zero(cross(mesh->verts[vi[1]] - mesh->verts[vi[0]], mesh->verts[vi[2]] - mesh->verts[vi[0]])) ||
 			   is_zero(cross(mesh->verts[vi[2]] - mesh->verts[vi[0]], mesh->verts[vi[3]] - mesh->verts[vi[0]])))
 			{
-				mesh->set_triangle(ti++, vi[0], vi[1], vi[3], shader, smooth);
-				mesh->set_triangle(ti++, vi[2], vi[3], vi[1], shader, smooth);
+				// TODO(mai): order here is probably wrong
+				mesh->add_triangle(vi[0], vi[1], vi[3], shader, smooth, true);
+				mesh->add_triangle(vi[2], vi[3], vi[1], shader, smooth, true);
+				face_flags[fi] |= FACE_FLAG_DIVIDE_24;
 			}
 			else {
-				mesh->set_triangle(ti++, vi[0], vi[1], vi[2], shader, smooth);
-				mesh->set_triangle(ti++, vi[0], vi[2], vi[3], shader, smooth);
+				mesh->add_triangle(vi[0], vi[1], vi[2], shader, smooth, true);
+				mesh->add_triangle(vi[0], vi[2], vi[3], shader, smooth, true);
+				face_flags[fi] |= FACE_FLAG_DIVIDE_13;
 			}
 		}
 		else
-			mesh->set_triangle(ti++, vi[0], vi[1], vi[2], shader, smooth);
+			mesh->add_triangle(vi[0], vi[1], vi[2], shader, smooth, false);
 
 		nverts[fi] = n;
 	}
@@ -534,8 +636,8 @@ static void create_mesh(Scene *scene, Mesh *mesh, BL::Mesh b_mesh, const vector<
 	/* Create all needed attributes.
 	 * The calculate functions will check whether they're needed or not.
 	 */
-	attr_create_vertex_color(scene, mesh, b_mesh, nverts);
-	attr_create_uv_map(scene, mesh, b_mesh, nverts);
+	attr_create_vertex_color(scene, mesh, b_mesh, nverts, face_flags);
+	attr_create_uv_map(scene, mesh, b_mesh, nverts, face_flags);
 
 	/* for volume objects, create a matrix to transform from object space to
 	 * mesh texture space. this does not work with deformations but that can
@@ -551,51 +653,36 @@ static void create_mesh(Scene *scene, Mesh *mesh, BL::Mesh b_mesh, const vector<
 	}
 }
 
-static void create_subd_mesh(Scene *scene, Mesh *mesh, BL::Mesh b_mesh, PointerRNA *cmesh, const vector<uint>& used_shaders)
+static void create_subd_mesh(Scene *scene,
+                             Mesh *mesh,
+                             BL::Object& b_ob,
+                             BL::Mesh& b_mesh,
+                             PointerRNA *cmesh,
+                             const vector<Shader*>& used_shaders,
+                             float dicing_rate,
+                             int max_subdivisions)
 {
-	/* create subd mesh */
-	SubdMesh sdmesh;
+	Mesh basemesh;
+	create_mesh(scene, &basemesh, b_mesh, used_shaders);
 
-	/* create vertices */
-	BL::Mesh::vertices_iterator v;
+	SubdParams sdparams(mesh, 0, true, false);
+	sdparams.dicing_rate = max(0.1f, RNA_float_get(cmesh, "dicing_rate") * dicing_rate);
+	sdparams.max_level = max_subdivisions;
 
-	for(b_mesh.vertices.begin(v); v != b_mesh.vertices.end(); ++v)
-		sdmesh.add_vert(get_float3(v->co()));
-
-	/* create faces */
-	BL::Mesh::tessfaces_iterator f;
-
-	for(b_mesh.tessfaces.begin(f); f != b_mesh.tessfaces.end(); ++f) {
-		int4 vi = get_int4(f->vertices_raw());
-		int n = (vi[3] == 0) ? 3: 4;
-		//int shader = used_shaders[f->material_index()];
-
-		if(n == 4)
-			sdmesh.add_face(vi[0], vi[1], vi[2], vi[3]);
-		else
-			sdmesh.add_face(vi[0], vi[1], vi[2]);
-	}
-
-	/* finalize subd mesh */
-	sdmesh.finish();
-
-	/* parameters */
-	bool need_ptex = mesh->need_attribute(scene, ATTR_STD_PTEX_FACE_ID) ||
-	                 mesh->need_attribute(scene, ATTR_STD_PTEX_UV);
-
-	SubdParams sdparams(mesh, used_shaders[0], true, need_ptex);
-	sdparams.dicing_rate = RNA_float_get(cmesh, "dicing_rate");
-	//scene->camera->update();
-	//sdparams.camera = scene->camera;
+	scene->camera->update();
+	sdparams.camera = scene->camera;
+	sdparams.objecttoworld = get_transform(b_ob.matrix_world());
 
 	/* tesselate */
 	DiagSplit dsplit(sdparams);
-	sdmesh.tessellate(&dsplit);
+	basemesh.tessellate(&dsplit);
 }
 
 /* Sync */
 
-Mesh *BlenderSync::sync_mesh(BL::Object b_ob, bool object_updated, bool hide_tris)
+Mesh *BlenderSync::sync_mesh(BL::Object& b_ob,
+                             bool object_updated,
+                             bool hide_tris)
 {
 	/* When viewport display is not needed during render we can force some
 	 * caches to be releases from blender side in order to reduce peak memory
@@ -611,14 +698,17 @@ Mesh *BlenderSync::sync_mesh(BL::Object b_ob, bool object_updated, bool hide_tri
 	BL::Material material_override = render_layer.material_override;
 
 	/* find shader indices */
-	vector<uint> used_shaders;
+	vector<Shader*> used_shaders;
 
 	BL::Object::material_slots_iterator slot;
 	for(b_ob.material_slots.begin(slot); slot != b_ob.material_slots.end(); ++slot) {
-		if(material_override)
+		if(material_override) {
 			find_shader(material_override, used_shaders, scene->default_surface);
-		else
-			find_shader(slot->material(), used_shaders, scene->default_surface);
+		}
+		else {
+			BL::ID b_material(slot->material());
+			find_shader(b_material, used_shaders, scene->default_surface);
+		}
 	}
 
 	if(used_shaders.size() == 0) {
@@ -650,8 +740,8 @@ Mesh *BlenderSync::sync_mesh(BL::Object b_ob, bool object_updated, bool hide_tri
 			 * because the shader needs different mesh attributes */
 			bool attribute_recalc = false;
 
-			foreach(uint shader, mesh->used_shaders)
-				if(scene->shaders[shader]->need_update_attributes)
+			foreach(Shader *shader, mesh->used_shaders)
+				if(shader->need_update_attributes)
 					attribute_recalc = true;
 
 			if(!attribute_recalc)
@@ -668,11 +758,12 @@ Mesh *BlenderSync::sync_mesh(BL::Object b_ob, bool object_updated, bool hide_tri
 	/* create derived mesh */
 	PointerRNA cmesh = RNA_pointer_get(&b_ob_data.ptr, "cycles");
 
-	vector<Mesh::Triangle> oldtriangle = mesh->triangles;
+	array<int> oldtriangle = mesh->triangles;
 	
 	/* compares curve_keys rather than strands in order to handle quick hair
 	 * adjustments in dynamic BVH - other methods could probably do this better*/
-	vector<float4> oldcurve_keys = mesh->curve_keys;
+	array<float3> oldcurve_keys = mesh->curve_keys;
+	array<float> oldcurve_radius = mesh->curve_radius;
 
 	mesh->clear();
 	mesh->used_shaders = used_shaders;
@@ -693,8 +784,9 @@ Mesh *BlenderSync::sync_mesh(BL::Object b_ob, bool object_updated, bool hide_tri
 
 		if(b_mesh) {
 			if(render_layer.use_surfaces && !hide_tris) {
-				if(cmesh.data && experimental && RNA_boolean_get(&cmesh, "use_subdivision"))
-					create_subd_mesh(scene, mesh, b_mesh, &cmesh, used_shaders);
+				if(cmesh.data && experimental && RNA_enum_get(&cmesh, "subdivision_type"))
+					create_subd_mesh(scene, mesh, b_ob, b_mesh, &cmesh, used_shaders,
+					                 dicing_rate, max_subdivisions);
 				else
 					create_mesh(scene, mesh, b_mesh, used_shaders);
 
@@ -716,7 +808,10 @@ Mesh *BlenderSync::sync_mesh(BL::Object b_ob, bool object_updated, bool hide_tri
 
 	/* displacement method */
 	if(cmesh.data) {
-		const int method = RNA_enum_get(&cmesh, "displacement_method");
+		const int method = get_enum(cmesh,
+		                            "displacement_method",
+		                            Mesh::DISPLACE_NUM_METHODS,
+		                            Mesh::DISPLACE_BUMP);
 
 		if(method == 0 || !experimental)
 			mesh->displacement_method = Mesh::DISPLACE_BUMP;
@@ -732,14 +827,21 @@ Mesh *BlenderSync::sync_mesh(BL::Object b_ob, bool object_updated, bool hide_tri
 	if(oldtriangle.size() != mesh->triangles.size())
 		rebuild = true;
 	else if(oldtriangle.size()) {
-		if(memcmp(&oldtriangle[0], &mesh->triangles[0], sizeof(Mesh::Triangle)*oldtriangle.size()) != 0)
+		if(memcmp(&oldtriangle[0], &mesh->triangles[0], sizeof(int)*oldtriangle.size()) != 0)
 			rebuild = true;
 	}
 
 	if(oldcurve_keys.size() != mesh->curve_keys.size())
 		rebuild = true;
 	else if(oldcurve_keys.size()) {
-		if(memcmp(&oldcurve_keys[0], &mesh->curve_keys[0], sizeof(float4)*oldcurve_keys.size()) != 0)
+		if(memcmp(&oldcurve_keys[0], &mesh->curve_keys[0], sizeof(float3)*oldcurve_keys.size()) != 0)
+			rebuild = true;
+	}
+
+	if(oldcurve_radius.size() != mesh->curve_radius.size())
+		rebuild = true;
+	else if(oldcurve_radius.size()) {
+		if(memcmp(&oldcurve_radius[0], &mesh->curve_radius[0], sizeof(float)*oldcurve_radius.size()) != 0)
 			rebuild = true;
 	}
 	
@@ -748,7 +850,9 @@ Mesh *BlenderSync::sync_mesh(BL::Object b_ob, bool object_updated, bool hide_tri
 	return mesh;
 }
 
-void BlenderSync::sync_mesh_motion(BL::Object b_ob, Object *object, float motion_time)
+void BlenderSync::sync_mesh_motion(BL::Object& b_ob,
+                                   Object *object,
+                                   float motion_time)
 {
 	/* ensure we only sync instanced meshes once */
 	Mesh *mesh = object->mesh;
@@ -834,14 +938,15 @@ void BlenderSync::sync_mesh_motion(BL::Object b_ob, Object *object, float motion
 			Attribute *attr_mP = mesh->curve_attributes.find(ATTR_STD_MOTION_VERTEX_POSITION);
 
 			if(attr_mP) {
-				float4 *keys = &mesh->curve_keys[0];
-				memcpy(attr_mP->data_float4() + time_index*numkeys, keys, sizeof(float4)*numkeys);
+				float3 *keys = &mesh->curve_keys[0];
+				memcpy(attr_mP->data_float3() + time_index*numkeys, keys, sizeof(float3)*numkeys);
 			}
 		}
 
 		return;
 	}
 
+	/* TODO(sergey): Perform preliminary check for number of verticies. */
 	if(numverts) {
 		/* find attributes */
 		Attribute *attr_mP = mesh->attributes.find(ATTR_STD_MOTION_VERTEX_POSITION);
@@ -873,9 +978,16 @@ void BlenderSync::sync_mesh_motion(BL::Object b_ob, Object *object, float motion
 
 		/* in case of new attribute, we verify if there really was any motion */
 		if(new_attribute) {
-			if(i != numverts || memcmp(mP, &mesh->verts[0], sizeof(float3)*numverts) == 0) {
+			if(b_mesh.vertices.length() != numverts ||
+			   memcmp(mP, &mesh->verts[0], sizeof(float3)*numverts) == 0)
+			{
 				/* no motion, remove attributes again */
-				VLOG(1) << "No actual deformation motion for object " << b_ob.name();
+				if(b_mesh.vertices.length() != numverts) {
+					VLOG(1) << "Topology differs, disabling motion blur.";
+				}
+				else {
+					VLOG(1) << "No actual deformation motion for object " << b_ob.name();
+				}
 				mesh->attributes.remove(ATTR_STD_MOTION_VERTEX_POSITION);
 				if(attr_mN)
 					mesh->attributes.remove(ATTR_STD_MOTION_VERTEX_NORMAL);

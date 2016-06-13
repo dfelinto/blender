@@ -29,7 +29,6 @@
  * BLI_string_utf8() for unicode conversion.
  */
 
-
 #include <Python.h>
 #include <frameobject.h>
 
@@ -39,12 +38,14 @@
 
 #include "python_utildefines.h"
 
+#ifndef MATH_STANDALONE
 /* only for BLI_strncpy_wchar_from_utf8, should replace with py funcs but too late in release now */
 #include "BLI_string_utf8.h"
+#endif
 
 #ifdef _WIN32
 #include "BLI_path_util.h"  /* BLI_setenv() */
-#include "BLI_math_base.h"  /* finite() */
+#include "BLI_math_base.h"  /* isfinite() */
 #endif
 
 /* array utility function */
@@ -199,6 +200,27 @@ void PyC_List_Fill(PyObject *list, PyObject *value)
 		Py_INCREF(value);
 	}
 }
+
+/**
+ * Use with PyArg_ParseTuple's "O&" formatting.
+ */
+int PyC_ParseBool(PyObject *o, void *p)
+{
+	bool *bool_p = p;
+	long value;
+	if (((value = PyLong_AsLong(o)) == -1) || !ELEM(value, 0, 1)) {
+		PyErr_Format(PyExc_ValueError,
+		             "expected a bool or int (0/1), got %s",
+		             Py_TYPE(o)->tp_name);
+		return 0;
+	}
+
+	*bool_p = value ? true : false;
+	return 1;
+}
+
+
+#ifndef MATH_STANDALONE
 
 /* for debugging */
 void PyC_ObSpit(const char *name, PyObject *var)
@@ -534,15 +556,6 @@ const char *PyC_UnicodeAsByte(PyObject *py_str, PyObject **coerce)
 		if (PyBytes_Check(py_str)) {
 			return PyBytes_AS_STRING(py_str);
 		}
-#ifdef WIN32
-		/* bug [#31856] oddly enough, Python3.2 --> 3.3 on Windows will throw an
-		 * exception here this needs to be fixed in python:
-		 * see: bugs.python.org/issue15859 */
-		else if (!PyUnicode_Check(py_str)) {
-			PyErr_BadArgument();
-			return NULL;
-		}
-#endif
 		else if ((*coerce = PyUnicode_EncodeFSDefault(py_str))) {
 			return PyBytes_AS_STRING(*coerce);
 		}
@@ -666,7 +679,8 @@ void PyC_SetHomePath(const char *py_path_bundle)
 
 bool PyC_IsInterpreterActive(void)
 {
-	return (((PyThreadState *)_Py_atomic_load_relaxed(&_PyThreadState_Current)) != NULL);
+	/* instead of PyThreadState_Get, which calls Py_FatalError */
+	return (PyThreadState_GetDict() != NULL);
 }
 
 /* Would be nice if python had this built in
@@ -710,7 +724,7 @@ void PyC_RunQuicky(const char *filepath, int n, ...)
 			}
 
 			if (ret == NULL) {
-				printf("PyC_InlineRun error, line:%d\n", __LINE__);
+				printf("%s error, line:%d\n", __func__, __LINE__);
 				PyErr_Print();
 				PyErr_Clear();
 
@@ -784,7 +798,7 @@ void PyC_RunQuicky(const char *filepath, int n, ...)
 						Py_DECREF(ret);
 					}
 					else {
-						printf("PyC_InlineRun error on arg '%d', line:%d\n", i, __LINE__);
+						printf("%s error on arg '%d', line:%d\n", __func__, i, __LINE__);
 						PyC_ObSpit("failed converting:", item_new);
 						PyErr_Print();
 						PyErr_Clear();
@@ -795,11 +809,11 @@ void PyC_RunQuicky(const char *filepath, int n, ...)
 				va_end(vargs);
 			}
 			else {
-				printf("PyC_InlineRun error, 'values' not a list, line:%d\n", __LINE__);
+				printf("%s error, 'values' not a list, line:%d\n", __func__, __LINE__);
 			}
 		}
 		else {
-			printf("PyC_InlineRun error line:%d\n", __LINE__);
+			printf("%s error line:%d\n", __func__, __LINE__);
 			PyErr_Print();
 			PyErr_Clear();
 		}
@@ -957,14 +971,14 @@ PyObject *PyC_FlagSet_FromBitfield(PyC_FlagSet *items, int flag)
 
 
 /**
- * \return -1 on error, else 0
+ * \return success
  *
  * \note it is caller's responsibility to acquire & release GIL!
  */
-int PyC_RunString_AsNumber(const char *expr, double *value, const char *filename)
+bool PyC_RunString_AsNumber(const char *expr, double *value, const char *filename)
 {
 	PyObject *py_dict, *mod, *retval;
-	int error_ret = 0;
+	bool ok = true;
 	PyObject *main_mod = NULL;
 
 	PyC_MainModule_Backup(&main_mod);
@@ -984,7 +998,7 @@ int PyC_RunString_AsNumber(const char *expr, double *value, const char *filename
 	retval = PyRun_String(expr, Py_eval_input, py_dict, py_dict);
 
 	if (retval == NULL) {
-		error_ret = -1;
+		ok = false;
 	}
 	else {
 		double val;
@@ -1010,9 +1024,9 @@ int PyC_RunString_AsNumber(const char *expr, double *value, const char *filename
 		Py_DECREF(retval);
 
 		if (val == -1 && PyErr_Occurred()) {
-			error_ret = -1;
+			ok = false;
 		}
-		else if (!finite(val)) {
+		else if (!isfinite(val)) {
 			*value = 0.0;
 		}
 		else {
@@ -1022,23 +1036,7 @@ int PyC_RunString_AsNumber(const char *expr, double *value, const char *filename
 
 	PyC_MainModule_Restore(main_mod);
 
-	return error_ret;
+	return ok;
 }
 
-/**
- * Use with PyArg_ParseTuple's "O&" formatting.
- */
-int PyC_ParseBool(PyObject *o, void *p)
-{
-	bool *bool_p = p;
-	long value;
-	if (((value = PyLong_AsLong(o)) == -1) || !ELEM(value, 0, 1)) {
-		PyErr_Format(PyExc_ValueError,
-		             "expected a bool or int (0/1), got %s",
-		             Py_TYPE(o)->tp_name);
-		return 0;
-	}
-
-	*bool_p = value ? true : false;
-	return 1;
-}
+#endif  /* #ifndef MATH_STANDALONE */

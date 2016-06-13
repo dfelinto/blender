@@ -54,7 +54,6 @@
 #include "KX_PyConstraintBinding.h"
 #include "KX_PythonMain.h"
 
-#include "RAS_GLExtensionManager.h"
 #include "RAS_OpenGLRasterizer.h"
 #include "RAS_ListRasterizer.h"
 
@@ -250,12 +249,6 @@ extern "C" void StartKetsjiShell(struct bContext *C, struct ARegion *ar, rcti *c
 	
 	PyObject *pyGlobalDict = PyDict_New(); /* python utility storage, spans blend file loading */
 #endif
-	
-	bgl::InitExtensions(true);
-
-	// VBO code for derived mesh is not compatible with BGE (couldn't find why), so disable
-	int disableVBO = (U.gameflags & USER_DISABLE_VBO);
-	U.gameflags |= USER_DISABLE_VBO;
 
 	// Globals to be carried on over blender files
 	GlobalSettings gs;
@@ -306,12 +299,20 @@ extern "C" void StartKetsjiShell(struct bContext *C, struct ARegion *ar, rcti *c
 			canvas->SetSwapInterval((startscene->gm.vsync == VSYNC_ON) ? 1 : 0);
 
 		RAS_IRasterizer* rasterizer = NULL;
+		RAS_STORAGE_TYPE raster_storage = RAS_AUTO_STORAGE;
+
+		if (startscene->gm.raster_storage == RAS_STORE_VBO) {
+			raster_storage = RAS_VBO;
+		}
+		else if (startscene->gm.raster_storage == RAS_STORE_VA) {
+			raster_storage = RAS_VA;
+		}
 		//Don't use displaylists with VBOs
 		//If auto starts using VBOs, make sure to check for that here
-		if (displaylists && startscene->gm.raster_storage != RAS_STORE_VBO)
-			rasterizer = new RAS_ListRasterizer(canvas, true, startscene->gm.raster_storage);
+		if (displaylists && raster_storage != RAS_VBO)
+			rasterizer = new RAS_ListRasterizer(canvas, true, raster_storage);
 		else
-			rasterizer = new RAS_OpenGLRasterizer(canvas, startscene->gm.raster_storage);
+			rasterizer = new RAS_OpenGLRasterizer(canvas, raster_storage);
 
 		RAS_IRasterizer::MipmapOption mipmapval = rasterizer->GetMipmapping();
 
@@ -340,6 +341,7 @@ extern "C" void StartKetsjiShell(struct bContext *C, struct ARegion *ar, rcti *c
 		ketsjiengine->SetUseFixedTime(usefixed);
 		ketsjiengine->SetTimingDisplay(frameRate, profile, properties);
 		ketsjiengine->SetRestrictAnimationFPS(restrictAnimFPS);
+		ketsjiengine->SetRender(true);
 		KX_KetsjiEngine::SetExitKey(ConvertKeyCode(startscene->gm.exitkey));
 
 		//set the global settings (carried over if restart/load new files)
@@ -359,25 +361,22 @@ extern "C" void StartKetsjiShell(struct bContext *C, struct ARegion *ar, rcti *c
 		}
 
 		// some blender stuff
-		float camzoom;
+		float camzoom = 1.0f;
 		int draw_letterbox = 0;
-		
+
 		if (rv3d->persp==RV3D_CAMOB) {
 			if (startscene->gm.framing.type == SCE_GAMEFRAMING_BARS) { /* Letterbox */
-				camzoom = 1.0f;
 				draw_letterbox = 1;
 			}
 			else {
 				camzoom = 1.0f / BKE_screen_view3d_zoom_to_fac(rv3d->camzoom);
 			}
 		}
-		else {
-			camzoom = 2.0;
-		}
 
 		rasterizer->SetDrawingMode(drawtype);
 		ketsjiengine->SetCameraZoom(camzoom);
-		
+		ketsjiengine->SetCameraOverrideZoom(2.0f);
+
 		// if we got an exitcode 3 (KX_EXIT_REQUEST_START_OTHER_GAME) load a different file
 		if (exitrequested == KX_EXIT_REQUEST_START_OTHER_GAME || exitrequested == KX_EXIT_REQUEST_RESTART_GAME)
 		{
@@ -588,11 +587,22 @@ extern "C" void StartKetsjiShell(struct bContext *C, struct ARegion *ar, rcti *c
 				// inside the GameLogic dictionary when the python interpreter is finalized.
 				// which allows the scene to safely delete them :)
 				// see: (space.c)->start_game
-
-				PyDict_Clear(PyModule_GetDict(gameLogic));
-				PyDict_SetItemString(PyModule_GetDict(gameLogic), "globalDict", pyGlobalDict);
+				
+				//PyDict_Clear(PyModule_GetDict(gameLogic));
+				
+				// Keep original items, means python plugins will autocomplete members
+				PyObject *gameLogic_keys_new = PyDict_Keys(PyModule_GetDict(gameLogic));
+				const Py_ssize_t numitems= PyList_GET_SIZE(gameLogic_keys_new);
+				Py_ssize_t listIndex;
+				for (listIndex=0; listIndex < numitems; listIndex++) {
+					PyObject *item = PyList_GET_ITEM(gameLogic_keys_new, listIndex);
+					if (!PySequence_Contains(gameLogic_keys, item)) {
+						PyDict_DelItem(	PyModule_GetDict(gameLogic), item);
+					}
+				}
+				Py_DECREF(gameLogic_keys_new);
+				gameLogic_keys_new = NULL;
 #endif
-
 				ketsjiengine->StopEngine();
 #ifdef WITH_PYTHON
 				exitGamePythonScripting();
@@ -668,14 +678,12 @@ extern "C" void StartKetsjiShell(struct bContext *C, struct ARegion *ar, rcti *c
 	
 	} while (exitrequested == KX_EXIT_REQUEST_RESTART_GAME || exitrequested == KX_EXIT_REQUEST_START_OTHER_GAME);
 	
-	if (!disableVBO)
-		U.gameflags &= ~USER_DISABLE_VBO;
-
 	if (bfd) BLO_blendfiledata_free(bfd);
 
 	BLI_strncpy(G.main->name, oldsce, sizeof(G.main->name));
 
 #ifdef WITH_PYTHON
+	PyDict_Clear(pyGlobalDict);
 	Py_DECREF(pyGlobalDict);
 
 	// Release Python's GIL

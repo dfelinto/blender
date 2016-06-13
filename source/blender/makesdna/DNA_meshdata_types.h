@@ -71,7 +71,7 @@ typedef struct MVert {
  * at the moment alpha is abused for vertex painting and not used for transparency, note that red and blue are swapped
  */
 typedef struct MCol {
-	char a, r, g, b;
+	unsigned char a, r, g, b;
 } MCol;
 
 /* new face structure, replaces MFace, which is now only used for storing tessellations.*/
@@ -224,7 +224,7 @@ enum {
  * \note red and blue are _not_ swapped, as they are with #MCol
  */
 typedef struct MLoopCol {
-	char r, g, b, a;
+	unsigned char r, g, b, a;
 } MLoopCol;
 
 #define MESH_MLOOPCOL_FROM_MCOL(_mloopcol, _mcol) \
@@ -445,6 +445,16 @@ enum {
 
 /* number of tri's that make up this polygon once tessellated */
 #define ME_POLY_TRI_TOT(mp) ((mp)->totloop - 2)
+
+/**
+ * Check out-of-bounds material, note that this is nearly always prevented,
+ * yet its still possible in rare cases.
+ * So usage such as array lookup needs to check.
+ */
+#define ME_MAT_NR_TEST(mat_nr, totmat) \
+	(CHECK_TYPE_ANY(mat_nr, short, const short), \
+	 CHECK_TYPE_ANY(totmat, short, const short), \
+	 (LIKELY(mat_nr < totmat) ? mat_nr : 0))
 
 /* mselect->type */
 enum {

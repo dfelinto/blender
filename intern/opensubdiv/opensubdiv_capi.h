@@ -85,7 +85,7 @@ const struct OpenSubdiv_TopologyRefinerDescr *openSubdiv_getGLMeshTopologyRefine
         OpenSubdiv_GLMesh *gl_mesh);
 
 /* ** Initialize/Deinitialize global OpenGL drawing buffers/GLSL programs ** */
-void openSubdiv_osdGLDisplayInit(void);
+bool openSubdiv_osdGLDisplayInit(void);
 void openSubdiv_osdGLDisplayDeinit(void);
 
 /* ** Evaluator API ** */
@@ -132,16 +132,18 @@ void openSubdiv_evaluateVarying(OpenSubdiv_EvaluatorDescr *evaluator_descr,
 void openSubdiv_osdGLMeshDisplayPrepare(int use_osd_glsl,
                                         int active_uv_index);
 
-/* Draw patches which corresponds to a given partition. */
+/* Draw specified patches. */
 void openSubdiv_osdGLMeshDisplay(OpenSubdiv_GLMesh *gl_mesh,
                                  int fill_quads,
-                                 int start_partition,
-                                 int num_partitions);
+                                 int start_patch,
+                                 int num_patches);
 
 /* ** Utility functions ** */
 int openSubdiv_supportGPUDisplay(void);
 int openSubdiv_getAvailableEvaluators(void);
+void openSubdiv_init(bool gpu_legacy_support);
 void openSubdiv_cleanup(void);
+bool openSubdiv_gpu_legacy_support(void);
 
 #ifdef __cplusplus
 }

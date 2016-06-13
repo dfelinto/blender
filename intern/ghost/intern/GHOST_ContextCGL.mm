@@ -58,16 +58,9 @@ GHOST_ContextCGL::GHOST_ContextCGL(
         int contextFlags,
         int contextResetNotificationStrategy)
     : GHOST_Context(stereoVisual, numOfAASamples),
-      m_window(window),
       m_openGLView(openGLView),
-      m_contextProfileMask(contextProfileMask),
-      m_contextMajorVersion(contextMajorVersion),
-      m_contextMinorVersion(contextMinorVersion),
-      m_contextFlags(contextFlags),
-      m_contextResetNotificationStrategy(contextResetNotificationStrategy),
       m_openGLContext(nil)
 {
-	assert(window != nil);
 	assert(openGLView != nil);
 }
 
@@ -183,10 +176,6 @@ static void makeAttribList(
 {
 	// Pixel Format Attributes for the windowed NSOpenGLContext
 	attribs.push_back(NSOpenGLPFADoubleBuffer);
-
-	// Guarantees the back buffer contents to be valid after a call to NSOpenGLContext object's flushBuffer
-	// needed for 'Draw Overlap' drawing method
-	attribs.push_back(NSOpenGLPFABackingStore);
 
 	// Force software OpenGL, for debugging
 	/* XXX jwilkins: fixed this to work on Intel macs? useful feature for Windows and Linux too?

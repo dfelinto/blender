@@ -334,6 +334,8 @@ typedef struct ObjectRen {
 	char (*mcol)[MAX_CUSTOMDATA_LAYER_NAME];
 	int  actmtface, actmcol, bakemtface;
 
+	char tangent_mask; /* which tangent layer should be calculated */
+
 	float obmat[4][4];	/* only used in convertblender.c, for instancing */
 
 	/* used on makeraytree */
@@ -353,6 +355,10 @@ typedef struct ObjectInstanceRen {
 
 	float mat[4][4], imat[4][4];
 	float nmat[3][3]; /* nmat is inverse mat tranposed */
+
+	float obmat[4][4], obinvmat[4][4];
+	float localtoviewmat[4][4], localtoviewinvmat[4][4];
+
 	short flag;
 
 	float dupliorco[3], dupliuv[2];
@@ -433,7 +439,7 @@ typedef struct HaloRen {
 	unsigned int lay;
 	struct Material *mat;
 	struct ImagePool *pool;
-	bool skip_load_image;
+	bool skip_load_image, texnode_preview;
 } HaloRen;
 
 /* ------------------------------------------------------------------------- */
@@ -565,6 +571,7 @@ typedef struct LampRen {
 	
 	short falloff_type;
 	float ld1, ld2;
+	float coeff_const, coeff_lin, coeff_quad;
 	struct CurveMapping *curfalloff;
 
 	/* copied from Lamp, to decouple more rendering stuff */

@@ -34,7 +34,7 @@
 #include "DNA_object_types.h"
 #include "DNA_key_types.h"
 #include "DNA_mesh_types.h"
-#include "DNA_ipo_types.h"
+#include "DNA_curve_types.h"
 
 #include "BLI_utildefines.h"
 #include "BLI_math.h"
@@ -141,13 +141,15 @@ static int customdata_compare(CustomData *c1, CustomData *c2, Mesh *m1, Mesh *m2
 		while (i1 < c1->totlayer && !ELEM(l1->type, CD_MVERT, CD_MEDGE, CD_MPOLY,
 		                                  CD_MLOOPUV, CD_MLOOPCOL, CD_MTEXPOLY, CD_MDEFORMVERT))
 		{
-			i1++, l1++;
+			i1++;
+			l1++;
 		}
 
 		while (i2 < c2->totlayer && !ELEM(l2->type, CD_MVERT, CD_MEDGE, CD_MPOLY,
 		                                  CD_MLOOPUV, CD_MLOOPCOL, CD_MTEXPOLY, CD_MDEFORMVERT))
 		{
-			i2++, l2++;
+			i2++;
+			l2++;
 		}
 		
 		if (l1->type == CD_MVERT) {
@@ -438,13 +440,14 @@ void BKE_mesh_unlink(Mesh *me)
 
 	if (me->mat) {
 		for (a = 0; a < me->totcol; a++) {
-			if (me->mat[a]) me->mat[a]->id.us--;
+			if (me->mat[a])
+				id_us_min(&me->mat[a]->id);
 			me->mat[a] = NULL;
 		}
 	}
 
 	if (me->key) {
-		me->key->id.us--;
+		id_us_min(&me->key->id);
 	}
 	me->key = NULL;
 	
@@ -490,14 +493,12 @@ static void mesh_tessface_clear_intern(Mesh *mesh, int free_customdata)
 	mesh->totface = 0;
 }
 
-Mesh *BKE_mesh_add(Main *bmain, const char *name)
+void BKE_mesh_init(Mesh *me)
 {
-	Mesh *me;
-	
-	me = BKE_libblock_alloc(bmain, ID_ME, name);
-	
+	BLI_assert(MEMCMP_STRUCT_OFS_IS_ZERO(me, id));
+
 	me->size[0] = me->size[1] = me->size[2] = 1.0;
-	me->smoothresh = 30;
+	me->smoothresh = DEG2RADF(30);
 	me->texflag = ME_AUTOSPACE;
 
 	/* disable because its slow on many GPU's, see [#37518] */
@@ -511,6 +512,15 @@ Mesh *BKE_mesh_add(Main *bmain, const char *name)
 	CustomData_reset(&me->fdata);
 	CustomData_reset(&me->pdata);
 	CustomData_reset(&me->ldata);
+}
+
+Mesh *BKE_mesh_add(Main *bmain, const char *name)
+{
+	Mesh *me;
+
+	me = BKE_libblock_alloc(bmain, ID_ME, name);
+
+	BKE_mesh_init(me);
 
 	return me;
 }
@@ -585,14 +595,17 @@ Mesh *BKE_mesh_copy(Mesh *me)
 	return BKE_mesh_copy_ex(G.main, me);
 }
 
-BMesh *BKE_mesh_to_bmesh(Mesh *me, Object *ob)
+BMesh *BKE_mesh_to_bmesh(Mesh *me, Object *ob, const bool add_key_index)
 {
 	BMesh *bm;
 	const BMAllocTemplate allocsize = BMALLOC_TEMPLATE_FROM_ME(me);
 
 	bm = BM_mesh_create(&allocsize);
 
-	BM_mesh_bm_from_me(bm, me, false, true, ob->shapenr);
+	BM_mesh_bm_from_me(
+	        bm, me, (&(struct BMeshFromMeshParams){
+	            .add_key_index = add_key_index, .use_shapekey = true, .active_shapekey = ob->shapenr,
+	        }));
 
 	return bm;
 }
@@ -987,7 +1000,7 @@ int test_index_face(MFace *mface, CustomData *fdata, int mfindex, int nr)
 			SWAP(unsigned int, mface->v2, mface->v3);
 
 			if (fdata)
-				CustomData_swap(fdata, mfindex, corner_indices);
+				CustomData_swap_corners(fdata, mfindex, corner_indices);
 		}
 	}
 	else if (nr == 4) {
@@ -998,7 +1011,7 @@ int test_index_face(MFace *mface, CustomData *fdata, int mfindex, int nr)
 			SWAP(unsigned int, mface->v2, mface->v4);
 
 			if (fdata)
-				CustomData_swap(fdata, mfindex, corner_indices);
+				CustomData_swap_corners(fdata, mfindex, corner_indices);
 		}
 	}
 
@@ -1024,7 +1037,7 @@ void BKE_mesh_assign_object(Object *ob, Mesh *me)
 	if (ob->type == OB_MESH) {
 		old = ob->data;
 		if (old)
-			old->id.us--;
+			id_us_min(&old->id);
 		ob->data = me;
 		id_us_plus((ID *)me);
 	}
@@ -1721,7 +1734,7 @@ void BKE_mesh_to_curve(Scene *scene, Object *ob)
 
 		cu->nurb = nurblist;
 
-		((Mesh *)ob->data)->id.us--;
+		id_us_min(&((Mesh *)ob->data)->id);
 		ob->data = cu;
 		ob->type = OB_CURVE;
 
@@ -2199,8 +2212,9 @@ void BKE_mesh_calc_normals_split(Mesh *mesh)
 	}
 	else {
 		polynors = MEM_mallocN(sizeof(float[3]) * mesh->totpoly, __func__);
-		BKE_mesh_calc_normals_poly(mesh->mvert, mesh->totvert, mesh->mloop, mesh->mpoly, mesh->totloop, mesh->totpoly,
-		                           polynors, false);
+		BKE_mesh_calc_normals_poly(
+		            mesh->mvert, NULL, mesh->totvert,
+		            mesh->mloop, mesh->mpoly, mesh->totloop, mesh->totpoly, polynors, false);
 		free_polynors = true;
 	}
 
@@ -2237,7 +2251,7 @@ void BKE_mesh_split_faces(Mesh *mesh)
 		BKE_mesh_calc_normals_split(mesh);
 	}
 	lnors = CustomData_get_layer(&mesh->ldata, CD_NORMAL);
-	/* Count. */
+	/* Count number of vertices to be split. */
 	for (poly = 0; poly < num_polys; poly++) {
 		MPoly *mp = &mpoly[poly];
 		int loop;
@@ -2255,19 +2269,16 @@ void BKE_mesh_split_faces(Mesh *mesh)
 		/* No new vertices are to be added, can do early exit. */
 		return;
 	}
-	/* Actual split. */
+	/* Reallocate all vert and edge related data. */
 	mesh->totvert += num_new_verts;
 	mesh->totedge += 2 * num_new_verts;
-	mvert = mesh->mvert = MEM_reallocN(mesh->mvert,
-	                                   sizeof(MVert) * mesh->totvert);
-	medge = mesh->medge = MEM_reallocN(mesh->medge,
-	                                   sizeof(MEdge) * mesh->totedge);
-	if (mesh->dvert != NULL) {
-		mesh->dvert = MEM_reallocN(mesh->dvert, sizeof(MDeformVert) * mesh->totvert);
-		CustomData_set_layer(&mesh->vdata, CD_MDEFORMVERT, mesh->dvert);
-	}
-	CustomData_set_layer(&mesh->vdata, CD_MVERT, mesh->mvert);
-	CustomData_set_layer(&mesh->edata, CD_MEDGE, mesh->medge);
+	CustomData_realloc(&mesh->vdata, mesh->totvert);
+	CustomData_realloc(&mesh->edata, mesh->totedge);
+	/* Update pointers to a newly allocated memory. */
+	BKE_mesh_update_customdata_pointers(mesh, false);
+	mvert = mesh->mvert;
+	medge = mesh->medge;
+	/* Perform actual vertex split. */
 	num_new_verts = 0;
 	for (poly = 0; poly < num_polys; poly++) {
 		MPoly *mp = &mpoly[poly];
@@ -2341,7 +2352,20 @@ Mesh *BKE_mesh_new_from_object(
 			/* copies object and modifiers (but not the data) */
 			tmpobj = BKE_object_copy_ex(bmain, ob, true);
 			tmpcu = (Curve *)tmpobj->data;
-			tmpcu->id.us--;
+			id_us_min(&tmpcu->id);
+
+			/* Copy cached display list, it might be needed by the stack evaluation.
+			 * Ideally stack should be able to use render-time display list, but doing
+			 * so is quite tricky and not safe so close to the release.
+			 *
+			 * TODO(sergey): Look into more proper solution.
+			 */
+			if (ob->curve_cache != NULL) {
+				if (tmpobj->curve_cache == NULL) {
+					tmpobj->curve_cache = MEM_callocN(sizeof(CurveCache), "CurveCache for curve types");
+				}
+				BKE_displist_copy(&tmpobj->curve_cache->disp, &ob->curve_cache->disp);
+			}
 
 			/* if getting the original caged mesh, delete object modifiers */
 			if (cage)
@@ -2398,7 +2422,7 @@ Mesh *BKE_mesh_new_from_object(
 
 			tmpmesh = BKE_mesh_add(bmain, "Mesh");
 			/* BKE_mesh_add gives us a user count we don't need */
-			tmpmesh->id.us--;
+			id_us_min(&tmpmesh->id);
 
 			if (render) {
 				ListBase disp = {NULL, NULL};
@@ -2453,7 +2477,7 @@ Mesh *BKE_mesh_new_from_object(
 			}
 
 			/* BKE_mesh_add/copy gives us a user count we don't need */
-			tmpmesh->id.us--;
+			id_us_min(&tmpmesh->id);
 
 			break;
 		default:
@@ -2476,7 +2500,7 @@ Mesh *BKE_mesh_new_from_object(
 					tmpmesh->mat[i] = ob->matbits[i] ? ob->mat[i] : tmpcu->mat[i];
 
 					if (tmpmesh->mat[i]) {
-						tmpmesh->mat[i]->id.us++;
+						id_us_plus(&tmpmesh->mat[i]->id);
 					}
 				}
 			}
@@ -2493,7 +2517,7 @@ Mesh *BKE_mesh_new_from_object(
 				for (i = tmpmb->totcol; i-- > 0; ) {
 					tmpmesh->mat[i] = tmpmb->mat[i]; /* CRASH HERE ??? */
 					if (tmpmesh->mat[i]) {
-						tmpmb->mat[i]->id.us++;
+						id_us_plus(&tmpmb->mat[i]->id);
 					}
 				}
 			}
@@ -2513,7 +2537,7 @@ Mesh *BKE_mesh_new_from_object(
 						tmpmesh->mat[i] = ob->matbits[i] ? ob->mat[i] : origmesh->mat[i];
 
 						if (tmpmesh->mat[i]) {
-							tmpmesh->mat[i]->id.us++;
+							id_us_plus(&tmpmesh->mat[i]->id);
 						}
 					}
 				}

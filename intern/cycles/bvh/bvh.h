@@ -20,7 +20,6 @@
 
 #include "bvh_params.h"
 
-#include "util_string.h"
 #include "util_types.h"
 #include "util_vector.h"
 
@@ -30,7 +29,6 @@ class BVHNode;
 struct BVHStackEntry;
 class BVHParams;
 class BoundBox;
-class CacheData;
 class LeafNode;
 class Object;
 class Progress;
@@ -54,8 +52,8 @@ struct PackedBVH {
 	array<int4> leaf_nodes;
 	/* object index to BVH node index mapping for instances */
 	array<int> object_node; 
-	/* precomputed triangle intersection data, one triangle is 4x float4 */
-	array<float4> tri_woop;
+	/* Aligned triangle storage for fatser lookup in the kernel. */
+	array<float4> tri_storage;
 	/* primitive type - triangle or strand */
 	array<int> prim_type;
 	/* visibility visibilitys for primitives */
@@ -69,13 +67,9 @@ struct PackedBVH {
 	/* index of the root node. */
 	int root_index;
 
-	/* surface area heuristic, for building top level BVH */
-	float SAH;
-
 	PackedBVH()
 	{
 		root_index = 0;
-		SAH = 0.0f;
 	}
 };
 
@@ -87,7 +81,6 @@ public:
 	PackedBVH pack;
 	BVHParams params;
 	vector<Object*> objects;
-	string cache_filename;
 
 	static BVH *create(const BVHParams& params, const vector<Object*>& objects);
 	virtual ~BVH() {}
@@ -95,18 +88,12 @@ public:
 	void build(Progress& progress);
 	void refit(Progress& progress);
 
-	void clear_cache_except();
-
 protected:
 	BVH(const BVHParams& params, const vector<Object*>& objects);
 
-	/* cache */
-	bool cache_read(CacheData& key);
-	void cache_write(CacheData& key);
-
 	/* triangles and strands*/
 	void pack_primitives();
-	void pack_triangle(int idx, float4 woop[3]);
+	void pack_triangle(int idx, float4 storage[3]);
 
 	/* merge instance BVH's */
 	void pack_instances(size_t nodes_size, size_t leaf_nodes_size);

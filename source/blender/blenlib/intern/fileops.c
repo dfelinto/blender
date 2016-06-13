@@ -193,15 +193,25 @@ bool BLI_file_is_writable(const char *filename)
 
 /**
  * Creates the file with nothing in it, or updates its last-modified date if it already exists.
- * Returns true if successful. (like the unix touch command)
+ * Returns true if successful (like the unix touch command).
  */
 bool BLI_file_touch(const char *file)
 {
 	FILE *f = BLI_fopen(file, "r+b");
+
 	if (f != NULL) {
 		int c = getc(f);
-		rewind(f);
-		putc(c, f);
+
+		if (c == EOF) {
+			/* Empty file, reopen in truncate write mode... */
+			fclose(f);
+			f = BLI_fopen(file, "w+b");
+		}
+		else {
+			/* Otherwise, rewrite first byte. */
+			rewind(f);
+			putc(c, f);
+		}
 	}
 	else {
 		f = BLI_fopen(file, "wb");
@@ -220,10 +230,10 @@ static void callLocalErrorCallBack(const char *err)
 	printf("%s\n", err);
 }
 
-static char str[MAXPATHLEN + 12];
-
 FILE *BLI_fopen(const char *filename, const char *mode)
 {
+	BLI_assert(!BLI_path_is_rel(filename));
+
 	return ufopen(filename, mode);
 }
 
@@ -247,41 +257,42 @@ void *BLI_gzopen(const char *filename, const char *mode)
 {
 	gzFile gzfile;
 
-	if (!filename || !mode) {
-		return 0;
-	}
-	else {
-		/* xxx Creates file before transcribing the path */
-		if (mode[0] == 'w')
-			fclose(ufopen(filename, "a"));
+	BLI_assert(!BLI_path_is_rel(filename));
 
-		/* temporary #if until we update all libraries to 1.2.7
-		 * for correct wide char path handling */
+	/* xxx Creates file before transcribing the path */
+	if (mode[0] == 'w')
+		fclose(ufopen(filename, "a"));
+
+	/* temporary #if until we update all libraries to 1.2.7
+	 * for correct wide char path handling */
 #if ZLIB_VERNUM >= 0x1270 && !defined(FREE_WINDOWS)
-		UTF16_ENCODE(filename);
+	UTF16_ENCODE(filename);
 
-		gzfile = gzopen_w(filename_16, mode);
+	gzfile = gzopen_w(filename_16, mode);
 
-		UTF16_UN_ENCODE(filename);
+	UTF16_UN_ENCODE(filename);
 #else
-		{
-			char short_name[256];
-			BLI_get_short_name(short_name, filename);
-			gzfile = gzopen(short_name, mode);
-		}
-#endif
+	{
+		char short_name[256];
+		BLI_get_short_name(short_name, filename);
+		gzfile = gzopen(short_name, mode);
 	}
+#endif
 
 	return gzfile;
 }
 
 int   BLI_open(const char *filename, int oflag, int pmode)
 {
+	BLI_assert(!BLI_path_is_rel(filename));
+
 	return uopen(filename, oflag, pmode);
 }
 
 int   BLI_access(const char *filename, int mode)
 {
+	BLI_assert(!BLI_path_is_rel(filename));
+
 	return uaccess(filename, mode);
 }
 
@@ -293,7 +304,7 @@ static bool delete_unique(const char *path, const bool dir)
 
 	if (dir) {
 		err = !RemoveDirectoryW(path_16);
-		if (err) printf("Unable to remove directory");
+		if (err) printf("Unable to remove directory\n");
 	}
 	else {
 		err = !DeleteFileW(path_16);
@@ -351,6 +362,8 @@ int BLI_delete(const char *file, bool dir, bool recursive)
 {
 	int err;
 
+	BLI_assert(!BLI_path_is_rel(file));
+
 	if (recursive) {
 		err = delete_recursive(file);
 	}
@@ -365,6 +378,7 @@ int BLI_delete(const char *file, bool dir, bool recursive)
 #if 0
 int BLI_move(const char *file, const char *to)
 {
+	char str[MAXPATHLEN + 12];
 	int err;
 
 	/* windows doesn't support moving to a directory
@@ -396,6 +410,7 @@ int BLI_move(const char *file, const char *to)
 
 int BLI_copy(const char *file, const char *to)
 {
+	char str[MAXPATHLEN + 12];
 	int err;
 
 	/* windows doesn't support copying to a directory
@@ -424,13 +439,16 @@ int BLI_copy(const char *file, const char *to)
 	return err;
 }
 
+#if 0
 int BLI_create_symlink(const char *file, const char *to)
 {
+	/* See patch from T30870, should this ever become needed. */
 	callLocalErrorCallBack("Linking files is unsupported on Windows");
 	(void)file;
 	(void)to;
 	return 1;
 }
+#endif
 
 /** \return true on success (i.e. given path now exists on FS), false otherwise. */
 bool BLI_dir_create_recursive(const char *dirname)
@@ -552,7 +570,7 @@ static int recursive_operation(const char *startfrom, const char *startto,
 	char *from_path = NULL, *to_path = NULL;
 	struct dirent **dirlist = NULL;
 	size_t from_alloc_len = -1, to_alloc_len = -1;
-	int i, n, ret = 0;
+	int i, n = 0, ret = 0;
 
 	do {  /* once */
 		/* ensure there's no trailing slash in file path */
@@ -702,6 +720,8 @@ int   BLI_access(const char *filename, int mode)
 /**
  * Deletes the specified file or directory (depending on dir), optionally
  * doing recursive delete of directory contents.
+ *
+ * \return zero on success (matching 'remove' behavior).
  */
 int BLI_delete(const char *file, bool dir, bool recursive)
 {
@@ -807,7 +827,7 @@ static int copy_single_file(const char *from, const char *to)
 		ssize_t link_len;
 
 		/* get large enough buffer to read link content */
-		if (st.st_size < sizeof(buf)) {
+		if ((st.st_size + 1) < sizeof(buf)) {
 			link_buffer = buf;
 			need_free = 0;
 		}
@@ -825,7 +845,7 @@ static int copy_single_file(const char *from, const char *to)
 			return RecursiveOp_Callback_Error;
 		}
 
-		link_buffer[link_len] = 0;
+		link_buffer[link_len] = '\0';
 
 		if (symlink(link_buffer, to)) {
 			perror("symlink");
@@ -968,10 +988,12 @@ int BLI_copy(const char *file, const char *to)
 	return ret;
 }
 
+#if 0
 int BLI_create_symlink(const char *file, const char *to)
 {
 	return symlink(to, file);
 }
+#endif
 
 /** \return true on success (i.e. given path now exists on FS), false otherwise. */
 bool BLI_dir_create_recursive(const char *dirname)
@@ -1023,9 +1045,14 @@ bool BLI_dir_create_recursive(const char *dirname)
 	return ret;
 }
 
+/**
+ * \return zero on success (matching 'rename' behavior).
+ */
 int BLI_rename(const char *from, const char *to)
 {
-	if (!BLI_exists(from)) return 0;
+	if (!BLI_exists(from)) {
+		return 1;
+	}
 	
 	if (BLI_exists(to))
 		if (BLI_delete(to, false, false)) return 1;

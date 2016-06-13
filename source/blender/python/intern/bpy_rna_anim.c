@@ -27,7 +27,7 @@
  */
 
 #include <Python.h>
-#include <float.h> /* FLT_MIN/MAX */
+#include <float.h> /* FLT_MAX */
 
 #include "MEM_guardedalloc.h"
 
@@ -171,7 +171,7 @@ static int pyrna_struct_keyframe_parse(
 
 	/* flag may be null (no option currently for remove keyframes e.g.). */
 	if (options) {
-		if (pyoptions && (pyrna_set_to_enum_bitfield(keying_flag_items, pyoptions, options, error_prefix) == -1)) {
+		if (pyoptions && (pyrna_set_to_enum_bitfield(rna_enum_keying_flag_items, pyoptions, options, error_prefix) == -1)) {
 			return -1;
 		}
 
@@ -188,18 +188,19 @@ char pyrna_struct_keyframe_insert_doc[] =
 "\n"
 "   :arg data_path: path to the property to key, analogous to the fcurve's data path.\n"
 "   :type data_path: string\n"
-"   :arg index: array index of the property to key. Defaults to -1 which will key all indices or a single channel "
-               "if the property is not an array.\n"
+"   :arg index: array index of the property to key.\n"
+"      Defaults to -1 which will key all indices or a single channel if the property is not an array.\n"
 "   :type index: int\n"
 "   :arg frame: The frame on which the keyframe is inserted, defaulting to the current frame.\n"
 "   :type frame: float\n"
 "   :arg group: The name of the group the F-Curve should be added to if it doesn't exist yet.\n"
 "   :type group: str\n"
-"   :arg options: Some optional flags:\n"
-"                     'NEEDED': Only insert keyframes where they're needed in the relevant F-Curves.\n"
-"                     'VISUAL': Insert keyframes based on 'visual transforms'.\n"
-"                     'XYZ_TO_RGB': Color for newly added transformation F-Curves (Location, Rotation, Scale) "
-                                   "and also Color is based on the transform axis.\n"
+"   :arg options: Optional flags:\n"
+"\n"
+"      - ``INSERTKEY_NEEDED`` Only insert keyframes where they're needed in the relevant F-Curves.\n"
+"      - ``INSERTKEY_VISUAL`` Insert keyframes based on 'visual transforms'.\n"
+"      - ``INSERTKEY_XYZ_TO_RGB`` Color for newly added transformation F-Curves (Location, Rotation, Scale)\n"
+"         and also Color is based on the transform axis.\n"
 "   :type flag: set\n"
 "   :return: Success of keyframe insertion.\n"
 "   :rtype: boolean\n"
@@ -211,6 +212,7 @@ PyObject *pyrna_struct_keyframe_insert(BPy_StructRNA *self, PyObject *args, PyOb
 	int index = -1;
 	float cfra = FLT_MAX;
 	const char *group_name = NULL;
+	char keytype = BEZT_KEYTYPE_KEYFRAME; /* XXX: Expose this as a one-off option... */
 	int options = 0;
 
 	PYRNA_STRUCT_CHECK_OBJ(self);
@@ -227,7 +229,7 @@ PyObject *pyrna_struct_keyframe_insert(BPy_StructRNA *self, PyObject *args, PyOb
 
 		BKE_reports_init(&reports, RPT_STORE);
 
-		result = insert_keyframe(&reports, (ID *)self->ptr.id.data, NULL, group_name, path_full, index, cfra, options);
+		result = insert_keyframe(&reports, (ID *)self->ptr.id.data, NULL, group_name, path_full, index, cfra, keytype, options);
 		MEM_freeN((void *)path_full);
 
 		if (BPy_reports_to_error(&reports, PyExc_RuntimeError, true) == -1)

@@ -37,6 +37,7 @@
 
 #include "RNA_types.h"
 
+#include "BLI_bitmap.h"
 #include "BLI_dynstr.h"
 #include "BLI_string.h"
 #include "BLI_listbase.h"
@@ -920,7 +921,7 @@ static PyObject *pyrna_prop_str(BPy_PropertyRNA *self)
 
 	type = RNA_property_type(self->prop);
 
-	if (RNA_enum_id_from_value(property_type_items, type, &type_id) == 0) {
+	if (RNA_enum_id_from_value(rna_enum_property_type_items, type, &type_id) == 0) {
 		PyErr_SetString(PyExc_RuntimeError, "could not use property type, internal error"); /* should never happen */
 		return NULL;
 	}
@@ -972,7 +973,9 @@ static PyObject *pyrna_prop_str(BPy_PropertyRNA *self)
 	                            RNA_property_identifier(self->prop));
 }
 
-static PyObject *pyrna_prop_repr(BPy_PropertyRNA *self)
+static PyObject *pyrna_prop_repr_ex(
+        BPy_PropertyRNA *self,
+        const int index_dim, const int index)
 {
 	ID *id = self->ptr.id.data;
 	PyObject *tmp_str;
@@ -986,17 +989,19 @@ static PyObject *pyrna_prop_repr(BPy_PropertyRNA *self)
 
 	tmp_str = PyUnicode_FromString(id->name + 2);
 
-	path = RNA_path_from_ID_to_property(&self->ptr, self->prop);
+	path = RNA_path_from_ID_to_property_index(&self->ptr, self->prop, index_dim, index);
+
 	if (path) {
+		const char *data_delim = (path[0] == '[') ? "" : ".";
 		if (GS(id->name) == ID_NT) { /* nodetree paths are not accurate */
 			ret = PyUnicode_FromFormat("bpy.data...%s",
 			                           path);
 		}
 		else {
-			ret = PyUnicode_FromFormat("bpy.data.%s[%R].%s",
+			ret = PyUnicode_FromFormat("bpy.data.%s[%R]%s%s",
 			                           BKE_idcode_to_name_plural(GS(id->name)),
 			                           tmp_str,
-			                           path);
+			                           data_delim, path);
 		}
 
 		MEM_freeN((void *)path);
@@ -1013,6 +1018,15 @@ static PyObject *pyrna_prop_repr(BPy_PropertyRNA *self)
 	return ret;
 }
 
+static PyObject *pyrna_prop_repr(BPy_PropertyRNA *self)
+{
+	return pyrna_prop_repr_ex(self, 0, -1);
+}
+
+static PyObject *pyrna_prop_array_repr(BPy_PropertyArrayRNA *self)
+{
+	return pyrna_prop_repr_ex((BPy_PropertyRNA *)self, self->arraydim, self->arrayoffset);
+}
 
 static PyObject *pyrna_func_repr(BPy_FunctionRNA *self)
 {
@@ -1175,6 +1189,69 @@ static int pyrna_string_to_enum(PyObject *item, PointerRNA *ptr, PropertyRNA *pr
 	return 0;
 }
 
+/**
+ * Takes a set of strings and map it to and array of booleans.
+ *
+ * Useful when the values aren't flags.
+ *
+ * \param type_convert_sign: Maps signed to unsigned range,
+ * needed when we want to use the full range of a signed short/char.
+ */
+BLI_bitmap *pyrna_set_to_enum_bitmap(
+        EnumPropertyItem *items, PyObject *value,
+        int type_size, bool type_convert_sign,
+        int bitmap_size,
+        const char *error_prefix)
+{
+	/* set looping */
+	Py_ssize_t pos = 0;
+	Py_ssize_t hash = 0;
+	PyObject *key;
+
+	BLI_bitmap *bitmap = BLI_BITMAP_NEW(bitmap_size, __func__);
+
+	while (_PySet_NextEntry(value, &pos, &key, &hash)) {
+		const char *param = _PyUnicode_AsString(key);
+		if (param == NULL) {
+			PyErr_Format(PyExc_TypeError,
+			             "%.200s expected a string, not %.200s",
+			             error_prefix, Py_TYPE(key)->tp_name);
+			goto error;
+		}
+
+		int ret;
+		if (pyrna_enum_value_from_id(items, param, &ret, error_prefix) == -1) {
+			goto error;
+		}
+
+		int index = ret;
+
+		if (type_convert_sign) {
+			if (type_size == 2) {
+				union { signed short as_signed; unsigned short as_unsigned; } ret_convert;
+				ret_convert.as_signed = (signed short)ret;
+				index = (int)ret_convert.as_unsigned;
+			}
+			else if (type_size == 1) {
+				union { signed char as_signed; unsigned char as_unsigned; } ret_convert;
+				ret_convert.as_signed = (signed char)ret;
+				index = (int)ret_convert.as_unsigned;
+			}
+			else {
+				BLI_assert(0);
+			}
+		}
+		BLI_assert(index < bitmap_size);
+		BLI_BITMAP_ENABLE(bitmap, index);
+	}
+
+	return bitmap;
+
+error:
+	MEM_freeN(bitmap);
+	return NULL;
+}
+
 /* 'value' _must_ be a set type, error check before calling */
 int pyrna_set_to_enum_bitfield(EnumPropertyItem *items, PyObject *value, int *r_value, const char *error_prefix)
 {
@@ -1302,27 +1379,32 @@ static PyObject *pyrna_enum_to_py(PointerRNA *ptr, PropertyRNA *prop, int val)
 				ret = PyUnicode_FromString(enum_item->identifier);
 			}
 			else {
-				const char *ptr_name = RNA_struct_name_get_alloc(ptr, NULL, 0, NULL);
+				RNA_property_enum_items(NULL, ptr, prop, &enum_item, NULL, &free);
 
-				/* prefer not fail silently in case of api errors, maybe disable it later */
-				printf("RNA Warning: Current value \"%d\" "
-				       "matches no enum in '%s', '%s', '%s'\n",
-				       val, RNA_struct_identifier(ptr->type),
-				       ptr_name, RNA_property_identifier(prop));
+				/* Do not print warning in case of DummyRNA_NULL_items, this one will never match any value... */
+				if (enum_item != DummyRNA_NULL_items) {
+					const char *ptr_name = RNA_struct_name_get_alloc(ptr, NULL, 0, NULL);
 
-#if 0           /* gives python decoding errors while generating docs :( */
-				char error_str[256];
-				BLI_snprintf(error_str, sizeof(error_str),
-				             "RNA Warning: Current value \"%d\" "
-				             "matches no enum in '%s', '%s', '%s'",
-				             val, RNA_struct_identifier(ptr->type),
-				             ptr_name, RNA_property_identifier(prop));
+					/* prefer not fail silently in case of api errors, maybe disable it later */
+					printf("RNA Warning: Current value \"%d\" "
+						   "matches no enum in '%s', '%s', '%s'\n",
+						   val, RNA_struct_identifier(ptr->type),
+						   ptr_name, RNA_property_identifier(prop));
 
-				PyErr_Warn(PyExc_RuntimeWarning, error_str);
+#if 0				/* gives python decoding errors while generating docs :( */
+					char error_str[256];
+					BLI_snprintf(error_str, sizeof(error_str),
+					             "RNA Warning: Current value \"%d\" "
+					             "matches no enum in '%s', '%s', '%s'",
+					             val, RNA_struct_identifier(ptr->type),
+					             ptr_name, RNA_property_identifier(prop));
+
+					PyErr_Warn(PyExc_RuntimeWarning, error_str);
 #endif
 
-				if (ptr_name)
-					MEM_freeN((void *)ptr_name);
+					if (ptr_name)
+						MEM_freeN((void *)ptr_name);
+				}
 
 				ret = PyUnicode_FromString("");
 			}
@@ -2632,13 +2714,147 @@ static PyObject *pyrna_prop_array_subscript(BPy_PropertyArrayRNA *self, PyObject
 	}
 }
 
-/* could call (pyrna_py_to_prop_array_index(self, i, value) in a loop but it is slow */
-static int prop_subscript_ass_array_slice(PointerRNA *ptr, PropertyRNA *prop,
-                                          int start, int stop, int length, PyObject *value_orig)
+/**
+ * Helpers for #prop_subscript_ass_array_slice
+ */
+
+static PyObject *prop_subscript_ass_array_slice__as_seq_fast(PyObject *value, int length)
 {
+	PyObject *value_fast;
+	if (!(value_fast = PySequence_Fast(
+	          value,
+	          "bpy_prop_array[slice] = value: "
+	          "element in assignment is not a sequence type")))
+	{
+		return NULL;
+	}
+	else if (PySequence_Fast_GET_SIZE(value_fast) != length) {
+		Py_DECREF(value_fast);
+		PyErr_SetString(
+		        PyExc_ValueError,
+		        "bpy_prop_array[slice] = value: "
+		        "re-sizing bpy_struct element in arrays isn't supported");
+
+		return NULL;
+	}
+	else {
+		return value_fast;
+	}
+}
+
+static int prop_subscript_ass_array_slice__float_recursive(
+        PyObject **value_items, float *value,
+        int totdim, const int dimsize[],
+        const float range[2])
+{
+	const int length = dimsize[0];
+	if (totdim > 1) {
+		int index = 0;
+		int i;
+		for (i = 0; i != length; i++) {
+			PyObject *subvalue = prop_subscript_ass_array_slice__as_seq_fast(value_items[i], dimsize[1]);
+			if (UNLIKELY(subvalue == NULL)) {
+				return 0;
+			}
+
+			index += prop_subscript_ass_array_slice__float_recursive(
+			        PySequence_Fast_ITEMS(subvalue), &value[index],
+			        totdim - 1, &dimsize[1], range);
+
+			Py_DECREF(subvalue);
+		}
+		return index;
+	}
+	else {
+		BLI_assert(totdim == 1);
+		const float min = range[0], max = range[1];
+		int i;
+		for (i = 0; i != length; i++) {
+			float v = PyFloat_AsDouble(value_items[i]);
+			CLAMP(v, min, max);
+			value[i] = v;
+		}
+		return i;
+	}
+}
+
+static int prop_subscript_ass_array_slice__int_recursive(
+        PyObject **value_items, int *value,
+        int totdim, const int dimsize[],
+        const int range[2])
+{
+	const int length = dimsize[0];
+	if (totdim > 1) {
+		int index = 0;
+		int i;
+		for (i = 0; i != length; i++) {
+			PyObject *subvalue = prop_subscript_ass_array_slice__as_seq_fast(value_items[i], dimsize[1]);
+			if (UNLIKELY(subvalue == NULL)) {
+				return 0;
+			}
+
+			index += prop_subscript_ass_array_slice__int_recursive(
+			        PySequence_Fast_ITEMS(subvalue), &value[index],
+			        totdim - 1, &dimsize[1], range);
+
+			Py_DECREF(subvalue);
+		}
+		return index;
+	}
+	else {
+		BLI_assert(totdim == 1);
+		const int min = range[0], max = range[1];
+		int i;
+		for (i = 0; i != length; i++) {
+			int v = PyLong_AsLong(value_items[i]);
+			CLAMP(v, min, max);
+			value[i] = v;
+		}
+		return i;
+	}
+}
+
+static int prop_subscript_ass_array_slice__bool_recursive(
+        PyObject **value_items, int *value,
+        int totdim, const int dimsize[])
+{
+	const int length = dimsize[0];
+	if (totdim > 1) {
+		int index = 0;
+		int i;
+		for (i = 0; i != length; i++) {
+			PyObject *subvalue = prop_subscript_ass_array_slice__as_seq_fast(value_items[i], dimsize[1]);
+			if (UNLIKELY(subvalue == NULL)) {
+				return 0;
+			}
+
+			index += prop_subscript_ass_array_slice__bool_recursive(
+			        PySequence_Fast_ITEMS(subvalue), &value[index],
+			        totdim - 1, &dimsize[1]);
+
+			Py_DECREF(subvalue);
+		}
+		return index;
+	}
+	else {
+		BLI_assert(totdim == 1);
+		int i;
+		for (i = 0; i != length; i++) {
+			int v = PyLong_AsLong(value_items[i]);
+			value[i] = v;
+		}
+		return i;
+	}
+}
+
+/* could call (pyrna_py_to_prop_array_index(self, i, value) in a loop but it is slow */
+static int prop_subscript_ass_array_slice(
+        PointerRNA *ptr, PropertyRNA *prop, int arraydim, int arrayoffset,
+        int start, int stop, int length, PyObject *value_orig)
+{
+	const int length_flat = RNA_property_array_length(ptr, prop);
 	PyObject *value;
 	PyObject **value_items;
-	int count;
 	void *values_alloc = NULL;
 	int ret = 0;
 
@@ -2659,70 +2875,85 @@ static int prop_subscript_ass_array_slice(PointerRNA *ptr, PropertyRNA *prop,
 		return -1;
 	}
 
+	int dimsize[3];
+	int totdim = RNA_property_array_dimension(ptr, prop, dimsize);
+	if (totdim > 1) {
+		BLI_assert(dimsize[arraydim] == length);
+	}
+
+	int span = 1;
+	if (totdim > 1) {
+		for (int i = arraydim + 1; i < totdim; i++) {
+			span *= dimsize[i];
+		}
+	}
+
 	value_items = PySequence_Fast_ITEMS(value);
 	switch (RNA_property_type(prop)) {
 		case PROP_FLOAT:
 		{
 			float values_stack[PYRNA_STACK_ARRAY];
-			float *values, fval;
-
-			float min, max;
-			RNA_property_float_range(ptr, prop, &min, &max);
-
-			if (length > PYRNA_STACK_ARRAY) { values = values_alloc = PyMem_MALLOC(sizeof(float) * length); }
-			else                            { values = values_stack; }
-			if (start != 0 || stop != length) /* partial assignment? - need to get the array */
+			float *values = (length_flat > PYRNA_STACK_ARRAY) ?
+			                (values_alloc = PyMem_MALLOC(sizeof(*values) * length_flat)) : values_stack;
+			if (start != 0 || stop != length) {
+				/* partial assignment? - need to get the array */
 				RNA_property_float_get_array(ptr, prop, values);
-
-			for (count = start; count < stop; count++) {
-				fval = PyFloat_AsDouble(value_items[count - start]);
-				CLAMP(fval, min, max);
-				values[count] = fval;
 			}
+
+			float range[2];
+			RNA_property_float_range(ptr, prop, &range[0], &range[1]);
+
+			dimsize[arraydim] = stop - start;
+			prop_subscript_ass_array_slice__float_recursive(
+			        value_items, &values[arrayoffset + (start * span)],
+			        totdim - arraydim, &dimsize[arraydim],
+			        range);
 
 			if (PyErr_Occurred()) ret = -1;
 			else                  RNA_property_float_set_array(ptr, prop, values);
 			break;
 		}
-		case PROP_BOOLEAN:
-		{
-			int values_stack[PYRNA_STACK_ARRAY];
-			int *values;
-			if (length > PYRNA_STACK_ARRAY) { values = values_alloc = PyMem_MALLOC(sizeof(int) * length); }
-			else                            { values = values_stack; }
-
-			if (start != 0 || stop != length) /* partial assignment? - need to get the array */
-				RNA_property_boolean_get_array(ptr, prop, values);
-
-			for (count = start; count < stop; count++)
-				values[count] = PyLong_AsLong(value_items[count - start]);
-
-			if (PyErr_Occurred()) ret = -1;
-			else                  RNA_property_boolean_set_array(ptr, prop, values);
-			break;
-		}
 		case PROP_INT:
 		{
 			int values_stack[PYRNA_STACK_ARRAY];
-			int *values, ival;
-
-			int min, max;
-			RNA_property_int_range(ptr, prop, &min, &max);
-
-			if (length > PYRNA_STACK_ARRAY) { values = values_alloc = PyMem_MALLOC(sizeof(int) * length); }
-			else                            { values = values_stack; }
-
-			if (start != 0 || stop != length) /* partial assignment? - need to get the array */
+			int *values = (length_flat > PYRNA_STACK_ARRAY) ?
+			              (values_alloc = PyMem_MALLOC(sizeof(*values) * length_flat)) : values_stack;
+			if (start != 0 || stop != length) {
+				/* partial assignment? - need to get the array */
 				RNA_property_int_get_array(ptr, prop, values);
-
-			for (count = start; count < stop; count++) {
-				ival = PyLong_AsLong(value_items[count - start]);
-				CLAMP(ival, min, max);
-				values[count] = ival;
 			}
+
+			int range[2];
+			RNA_property_int_range(ptr, prop, &range[0], &range[1]);
+
+			dimsize[arraydim] = stop - start;
+			prop_subscript_ass_array_slice__int_recursive(
+			        value_items, &values[arrayoffset + (start * span)],
+			        totdim - arraydim, &dimsize[arraydim],
+			        range);
 
 			if (PyErr_Occurred()) ret = -1;
 			else                  RNA_property_int_set_array(ptr, prop, values);
+			break;
+		}
+		case PROP_BOOLEAN:
+		{
+			int values_stack[PYRNA_STACK_ARRAY];
+			int *values = (length_flat > PYRNA_STACK_ARRAY) ?
+			              (values_alloc = PyMem_MALLOC(sizeof(*values) * length_flat)) : values_stack;
+
+			if (start != 0 || stop != length) {
+				/* partial assignment? - need to get the array */
+				RNA_property_boolean_get_array(ptr, prop, values);
+			}
+
+			dimsize[arraydim] = stop - start;
+			prop_subscript_ass_array_slice__bool_recursive(
+			        value_items, &values[arrayoffset + (start * span)],
+			        totdim - arraydim, &dimsize[arraydim]);
+
+			if (PyErr_Occurred()) ret = -1;
+			else                  RNA_property_boolean_set_array(ptr, prop, values);
 			break;
 		}
 		default:
@@ -2783,7 +3014,7 @@ static int pyrna_prop_array_ass_subscript(BPy_PropertyArrayRNA *self, PyObject *
 		}
 	}
 	else if (PySlice_Check(key)) {
-		int len = RNA_property_array_length(&self->ptr, self->prop);
+		Py_ssize_t len = pyrna_prop_array_length(self);
 		Py_ssize_t start, stop, step, slicelength;
 
 		if (PySlice_GetIndicesEx(key, len, &start, &stop, &step, &slicelength) < 0) {
@@ -2793,7 +3024,9 @@ static int pyrna_prop_array_ass_subscript(BPy_PropertyArrayRNA *self, PyObject *
 			ret = 0; /* do nothing */
 		}
 		else if (step == 1) {
-			ret = prop_subscript_ass_array_slice(&self->ptr, self->prop, start, stop, len, value);
+			ret = prop_subscript_ass_array_slice(
+			        &self->ptr, self->prop, self->arraydim, self->arrayoffset,
+			        start, stop, len, value);
 		}
 		else {
 			PyErr_SetString(PyExc_TypeError, "slice steps not supported with rna");
@@ -3386,6 +3619,21 @@ static PyObject *pyrna_prop_as_bytes(BPy_PropertyRNA *self)
 
 		return ret;
 	}
+}
+
+PyDoc_STRVAR(pyrna_prop_update_doc,
+".. method:: update()\n"
+"\n"
+"   Execute the properties update callback.\n"
+"\n"
+"   .. note::\n"
+"      This is called when assigning a property,\n"
+"      however in rare cases its useful to call explicitly.\n"
+);
+static PyObject *pyrna_prop_update(BPy_PropertyRNA *self)
+{
+	RNA_property_update(BPy_GetContext(), &self->ptr, self->prop);
+	Py_RETURN_NONE;
 }
 
 PyDoc_STRVAR(pyrna_struct_type_recast_doc,
@@ -4721,6 +4969,7 @@ static struct PyMethodDef pyrna_struct_methods[] = {
 static struct PyMethodDef pyrna_prop_methods[] = {
 	{"path_from_id", (PyCFunction)pyrna_prop_path_from_id, METH_NOARGS, pyrna_prop_path_from_id_doc},
 	{"as_bytes", (PyCFunction)pyrna_prop_as_bytes, METH_NOARGS, pyrna_prop_as_bytes_doc},
+	{"update", (PyCFunction)pyrna_prop_update, METH_NOARGS, pyrna_prop_update_doc},
 	{"__dir__", (PyCFunction)pyrna_prop_dir, METH_NOARGS, NULL},
 	{NULL, NULL, 0, NULL}
 };
@@ -5604,7 +5853,7 @@ PyTypeObject pyrna_prop_array_Type = {
 	NULL,                       /* getattrfunc tp_getattr; */
 	NULL,                       /* setattrfunc tp_setattr; */
 	NULL,                       /* tp_compare */ /* DEPRECATED in python 3.0! */
-	NULL, /* subclassed */       /* tp_repr */
+	(reprfunc)pyrna_prop_array_repr, /* tp_repr */
 
 	/* Method suites for standard classes */
 
@@ -6661,6 +6910,21 @@ PyObject *BPY_rna_types(void)
 	/* add __name__ since help() expects its */
 	PyDict_SetItem(pyrna_basetype_Type.tp_dict, bpy_intern_str___name__, bpy_intern_str_bpy_types);
 
+	/* internal base types we have no other accessors for */
+	{
+		PyTypeObject *pyrna_types[] = {
+		    &pyrna_struct_meta_idprop_Type,
+		    &pyrna_struct_Type,
+		    &pyrna_prop_Type,
+		    &pyrna_prop_array_Type,
+		    &pyrna_prop_collection_Type,
+		    &pyrna_func_Type,
+		};
+
+		for (int i = 0; i < ARRAY_SIZE(pyrna_types); i += 1) {
+			PyDict_SetItemString(pyrna_basetype_Type.tp_dict, pyrna_types[i]->tp_name, (PyObject *)pyrna_types[i]);
+		}
+	}
 
 	self = (BPy_BaseTypeRNA *)PyObject_NEW(BPy_BaseTypeRNA, &pyrna_basetype_Type);
 
@@ -7111,12 +7375,8 @@ static int bpy_class_call(bContext *C, PointerRNA *ptr, FunctionRNA *func, Param
 	PointerRNA funcptr;
 	int err = 0, i, ret_len = 0, arg_count;
 	int flag = RNA_function_flag(func);
-	const char is_staticmethod = (flag & FUNC_NO_SELF) && !(flag & FUNC_USE_SELF_TYPE);
-	const char is_classmethod = (flag & FUNC_NO_SELF) && (flag & FUNC_USE_SELF_TYPE);
-
-	/* annoying!, need to check if the screen gets set to NULL which is a
-	 * hint that the file was actually re-loaded. */
-	char is_valid_wm;
+	const bool is_staticmethod = (flag & FUNC_NO_SELF) && !(flag & FUNC_USE_SELF_TYPE);
+	const bool is_classmethod = (flag & FUNC_NO_SELF) && (flag & FUNC_USE_SELF_TYPE);
 
 	PropertyRNA *pret_single = NULL;
 	void *retdata_single = NULL;
@@ -7143,7 +7403,9 @@ static int bpy_class_call(bContext *C, PointerRNA *ptr, FunctionRNA *func, Param
 	if (C == NULL)
 		C = BPy_GetContext();
 
-	is_valid_wm = (CTX_wm_manager(C) != NULL);
+	/* annoying!, need to check if the screen gets set to NULL which is a
+	 * hint that the file was actually re-loaded. */
+	const bool is_valid_wm = (CTX_wm_manager(C) != NULL);
 
 	bpy_context_set(C, &gilstate);
 

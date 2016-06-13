@@ -50,7 +50,6 @@ static PyStructSequence_Field app_builtopts_info_fields[] = {
 	{(char *)"image_hdr", NULL},
 	{(char *)"image_openexr", NULL},
 	{(char *)"image_openjpeg", NULL},
-	{(char *)"image_redcode", NULL},
 	{(char *)"image_tiff", NULL},
 	{(char *)"input_ndof", NULL},
 	{(char *)"audaspace", NULL},
@@ -69,6 +68,7 @@ static PyStructSequence_Field app_builtopts_info_fields[] = {
 	{(char *)"opencolorio", NULL},
 	{(char *)"player", NULL},
 	{(char *)"openmp", NULL},
+	{(char *)"openvdb", NULL},
 	{NULL}
 };
 
@@ -189,12 +189,6 @@ static PyObject *make_builtopts_info(void)
 	SetObjIncref(Py_False);
 #endif
 
-#ifdef WITH_REDCODE
-	SetObjIncref(Py_True);
-#else
-	SetObjIncref(Py_False);
-#endif
-
 #ifdef WITH_TIFF
 	SetObjIncref(Py_True);
 #else
@@ -298,6 +292,12 @@ static PyObject *make_builtopts_info(void)
 #endif
 
 #ifdef _OPENMP
+	SetObjIncref(Py_True);
+#else
+	SetObjIncref(Py_False);
+#endif
+
+#ifdef WITH_OPENVDB
 	SetObjIncref(Py_True);
 #else
 	SetObjIncref(Py_False);

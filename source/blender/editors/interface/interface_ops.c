@@ -151,6 +151,53 @@ static void UI_OT_copy_data_path_button(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER;
 }
 
+static int copy_python_command_button_poll(bContext *C)
+{
+	uiBut *but = UI_context_active_but_get(C);
+
+	if (but && (but->optype != NULL)) {
+		return 1;
+	}
+
+	return 0;
+}
+
+static int copy_python_command_button_exec(bContext *C, wmOperator *UNUSED(op))
+{
+	uiBut *but = UI_context_active_but_get(C);
+
+	if (but && (but->optype != NULL)) {
+		PointerRNA *opptr;
+		char *str;
+		opptr = UI_but_operator_ptr_get(but); /* allocated when needed, the button owns it */
+
+		str = WM_operator_pystring_ex(C, NULL, false, true, but->optype, opptr);
+
+		WM_clipboard_text_set(str, 0);
+
+		MEM_freeN(str);
+
+		return OPERATOR_FINISHED;
+	}
+
+	return OPERATOR_CANCELLED;
+}
+
+static void UI_OT_copy_python_command_button(wmOperatorType *ot)
+{
+	/* identifiers */
+	ot->name = "Copy Python Command";
+	ot->idname = "UI_OT_copy_python_command_button";
+	ot->description = "Copy the Python command matching this button";
+
+	/* callbacks */
+	ot->exec = copy_python_command_button_exec;
+	ot->poll = copy_python_command_button_poll;
+
+	/* flags */
+	ot->flag = OPTYPE_REGISTER;
+}
+
 /* Reset to Default Values Button Operator ------------------------ */
 
 static int operator_button_property_finish(bContext *C, PointerRNA *ptr, PropertyRNA *prop)
@@ -358,7 +405,7 @@ bool UI_context_copy_to_selected_list(
 					Object *ob = link->ptr.id.data;
 					if (ob->data) {
 						ID *id_data = ob->data;
-						id_data->flag |= LIB_DOIT;
+						id_data->tag |= LIB_TAG_DOIT;
 					}
 				}
 
@@ -368,7 +415,7 @@ bool UI_context_copy_to_selected_list(
 					link_next = link->next;
 
 					if ((id_data == NULL) ||
-					    (id_data->flag & LIB_DOIT) == 0 ||
+					    (id_data->tag & LIB_TAG_DOIT) == 0 ||
 					    (id_data->lib) ||
 					    (GS(id_data->name) != id_code))
 					{
@@ -381,7 +428,7 @@ bool UI_context_copy_to_selected_list(
 					}
 
 					if (id_data) {
-						id_data->flag &= ~LIB_DOIT;
+						id_data->tag &= ~LIB_TAG_DOIT;
 					}
 				}
 			}
@@ -510,7 +557,7 @@ static void UI_OT_copy_to_selected_button(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
 	/* properties */
-	RNA_def_boolean(ot->srna, "all", 1, "All", "Reset to default values all elements of the array");
+	RNA_def_boolean(ot->srna, "all", true, "All", "Copy to selected all elements of the array");
 }
 
 /* Reports to Textblock Operator ------------------------ */
@@ -850,7 +897,7 @@ static int edittranslation_exec(bContext *C, wmOperator *op)
 		}
 		ot = WM_operatortype_find(EDTSRC_I18N_OP_NAME, 0);
 		if (ot == NULL) {
-			BKE_reportf(op->reports, RPT_ERROR, "Could not find operator '%s'! Please enable ui_translate addon "
+			BKE_reportf(op->reports, RPT_ERROR, "Could not find operator '%s'! Please enable ui_translate add-on "
 			                                    "in the User Preferences", EDTSRC_I18N_OP_NAME);
 			return OPERATOR_CANCELLED;
 		}
@@ -1040,10 +1087,11 @@ static void UI_OT_drop_color(wmOperatorType *ot)
 /* ********************************************************* */
 /* Registration */
 
-void ED_button_operatortypes(void)
+void ED_operatortypes_ui(void)
 {
 	WM_operatortype_append(UI_OT_reset_default_theme);
 	WM_operatortype_append(UI_OT_copy_data_path_button);
+	WM_operatortype_append(UI_OT_copy_python_command_button);
 	WM_operatortype_append(UI_OT_reset_default_button);
 	WM_operatortype_append(UI_OT_unset_property_button);
 	WM_operatortype_append(UI_OT_copy_to_selected_button);
@@ -1059,4 +1107,17 @@ void ED_button_operatortypes(void)
 	WM_operatortype_append(UI_OT_eyedropper_color);
 	WM_operatortype_append(UI_OT_eyedropper_id);
 	WM_operatortype_append(UI_OT_eyedropper_depth);
+	WM_operatortype_append(UI_OT_eyedropper_driver);
+}
+
+/**
+ * \brief User Interface Keymap
+ *
+ * For now only modal maps here, since UI uses special ui-handlers instead of operators.
+ */
+void ED_keymap_ui(wmKeyConfig *keyconf)
+{
+	WM_keymap_find(keyconf, "User Interface", 0, 0);
+
+	eyedropper_modal_keymap(keyconf);
 }

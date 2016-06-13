@@ -18,6 +18,7 @@
 #define __MESH_H__
 
 #include "attribute.h"
+#include "node.h"
 #include "shader.h"
 
 #include "util_boundbox.h"
@@ -38,11 +39,14 @@ class Progress;
 class Scene;
 class SceneParams;
 class AttributeRequest;
+class DiagSplit;
 
 /* Mesh */
 
-class Mesh {
+class Mesh : public Node {
 public:
+	NODE_DECLARE;
+
 	/* Mesh Triangle */
 	struct Triangle {
 		int v[3];
@@ -50,25 +54,49 @@ public:
 		void bounds_grow(const float3 *verts, BoundBox& bounds) const;
 	};
 
+	Triangle get_triangle(size_t i) const
+	{
+		Triangle tri = {{triangles[i*3 + 0], triangles[i*3 + 1], triangles[i*3 + 2]}};
+		return tri;
+	}
+
+	size_t num_triangles() const
+	{
+		return triangles.size() / 3;
+	}
+
 	/* Mesh Curve */
 	struct Curve {
 		int first_key;
 		int num_keys;
-		uint shader;
 
 		int num_segments() { return num_keys - 1; }
 
-		void bounds_grow(const int k, const float4 *curve_keys, BoundBox& bounds) const;
+		void bounds_grow(const int k, const float3 *curve_keys, const float *curve_radius, BoundBox& bounds) const;
 	};
+
+	Curve get_curve(size_t i) const
+	{
+		int first = curve_first_key[i];
+		int next_first = (i+1 < curve_first_key.size()) ? curve_first_key[i+1] : curve_keys.size();
+
+		Curve curve = {first, next_first - first};
+		return curve;
+	}
+
+	size_t num_curves() const
+	{
+		return curve_first_key.size();
+	}
 
 	/* Displacement */
 	enum DisplacementMethod {
-		DISPLACE_BUMP,
-		DISPLACE_TRUE,
-		DISPLACE_BOTH
-	};
+		DISPLACE_BUMP = 0,
+		DISPLACE_TRUE = 1,
+		DISPLACE_BOTH = 2,
 
-	ustring name;
+		DISPLACE_NUM_METHODS,
+	};
 
 	/* Mesh Data */
 	enum GeometryFlags {
@@ -79,17 +107,21 @@ public:
 	int geometry_flags;  /* used to distinguish meshes with no verts
 	                        and meshed for which geometry is not created */
 
-	vector<float3> verts;
-	vector<Triangle> triangles;
-	vector<uint> shader;
-	vector<bool> smooth;
+	array<int> triangles;
+	array<float3> verts;
+	array<int> shader;
+	array<bool> smooth;
+	array<bool> forms_quad; /* used to tell if triangle is part of a quad patch */
 
 	bool has_volume;  /* Set in the device_update_flags(). */
+	bool has_surface_bssrdf;  /* Set in the device_update_flags(). */
 
-	vector<float4> curve_keys; /* co + radius */
-	vector<Curve> curves;
+	array<float3> curve_keys;
+	array<float> curve_radius;
+	array<int> curve_first_key;
+	array<int> curve_shader;
 
-	vector<uint> used_shaders;
+	vector<Shader*> used_shaders;
 	AttributeSet attributes;
 	AttributeSet curve_attributes;
 
@@ -118,12 +150,16 @@ public:
 	Mesh();
 	~Mesh();
 
-	void reserve(int numverts, int numfaces, int numcurves, int numcurvekeys);
+	void resize_mesh(int numverts, int numfaces);
+	void reserve_mesh(int numverts, int numfaces);
+	void resize_curves(int numcurves, int numkeys);
+	void reserve_curves(int numcurves, int numkeys);
 	void clear();
-	void set_triangle(int i, int v0, int v1, int v2, int shader, bool smooth);
-	void add_triangle(int v0, int v1, int v2, int shader, bool smooth);
+	void add_vertex(float3 P);
+	void add_vertex_slow(float3 P);
+	void add_triangle(int v0, int v1, int v2, int shader, bool smooth, bool forms_quad = false);
 	void add_curve_key(float3 loc, float radius);
-	void add_curve(int first_key, int num_keys, int shader);
+	void add_curve(int first_key, int shader);
 	int split_vertex(int vertex);
 
 	void compute_bounds();
@@ -141,6 +177,21 @@ public:
 	void tag_update(Scene *scene, bool rebuild);
 
 	bool has_motion_blur() const;
+
+	/* Check whether the mesh should have own BVH built separately. Briefly,
+	 * own BVH is needed for mesh, if:
+	 *
+	 * - It is instanced multiple times, so each instance object should share the
+	 *   same BVH tree.
+	 * - Special ray intersection is needed, for example to limit subsurface rays
+	 *   to only the mesh itself.
+	 */
+	bool need_build_bvh() const;
+
+	/* Check if the mesh should be treated as instanced. */
+	bool is_instanced() const;
+
+	void tessellate(DiagSplit *split);
 };
 
 /* Mesh Manager */

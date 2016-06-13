@@ -144,8 +144,8 @@ public:
 	 * \return	Indication of success.
 	 */
 	GHOST_TSuccess beginFullScreen(const GHOST_DisplaySetting& setting, GHOST_IWindow **window,
-	                                       const bool stereoVisual, const GHOST_TUns16 numOfAASamples = 0);
-		
+	                               const bool stereoVisual, const bool alphaBackground, const GHOST_TUns16 numOfAASamples = 0);
+
 	/**
 	 * Updates the resolution while in fullscreen mode.
 	 * \param setting	The new setting of the display.
@@ -190,9 +190,8 @@ public:
 	/**
 	 * Dispatches all the events on the stack.
 	 * The event stack will be empty afterwards.
-	 * \return Indication as to whether any of the consumers handled the events.
 	 */
-	bool dispatchEvents();
+	void dispatchEvents();
 
 	/**
 	 * Adds the given event consumer to our list.
@@ -337,7 +336,7 @@ protected:
 	 * \return Indication of success.
 	 */
 	GHOST_TSuccess createFullScreenWindow(GHOST_Window **window, const GHOST_DisplaySetting &settings,
-	                                              const bool stereoVisual, const GHOST_TUns16 numOfAASamples = 0);
+	                                      const bool stereoVisual, const bool alphaBackground = 0, const GHOST_TUns16 numOfAASamples = 0);
 
 	/** The display manager (platform dependent). */
 	GHOST_DisplayManager *m_displayManager;

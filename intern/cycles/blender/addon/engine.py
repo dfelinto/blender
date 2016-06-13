@@ -30,8 +30,8 @@ def _is_using_buggy_driver():
         version = bgl.glGetString(bgl.GL_VERSION)
         if version.endswith("Compatibility Profile Context"):
             # Old HD 4xxx and 5xxx series drivers did not have driver version
-            # in the version string, but thsoe cards do not quite work and
-            # cusing crashes.
+            # in the version string, but those cards do not quite work and
+            # causing crashes.
             return True
         regex = re.compile(".*Compatibility Profile Context ([0-9]+(\.[0-9]+)+)$")
         if not regex.match(version):
@@ -49,12 +49,42 @@ def _workaround_buggy_drivers():
             print("Cycles: OpenGL driver known to be buggy, disabling OpenCL platform.")
             _cycles.opencl_disable()
 
+
+def _parse_command_line():
+    import sys
+
+    argv = sys.argv
+    if "--" not in argv:
+        return
+
+    argv = argv[argv.index("--") + 1:]
+
+    num_resumable_chunks = None
+    current_resumable_chunk = None
+
+    # TODO(sergey): Add some nice error ptins if argument is not used properly.
+    idx = 0
+    while idx < len(argv) - 1:
+        arg = argv[idx]
+        if arg == '--cycles-resumable-num-chunks':
+            num_resumable_chunks = int(argv[idx + 1])
+        elif arg == '--cycles-resumable-current-chunk':
+            current_resumable_chunk = int(argv[idx + 1])
+        idx += 1
+
+    if num_resumable_chunks is not None and current_resumable_chunk is not None:
+        import _cycles
+        _cycles.set_resumable_chunks(num_resumable_chunks,
+                                     current_resumable_chunk)
+
+
 def init():
     import bpy
     import _cycles
     import os.path
+    import sys
 
-    # Workaroud posibly buggy legacy drivers which crashes on the OpenCL
+    # Workaround possibly buggy legacy drivers which crashes on the OpenCL
     # device enumeration.
     #
     # This checks are not really correct because they might still fail
@@ -71,7 +101,11 @@ def init():
     user_path = os.path.dirname(os.path.abspath(bpy.utils.user_resource('CONFIG', '')))
 
     _cycles.init(path, user_path, bpy.app.background)
+    _parse_command_line()
 
+def exit():
+    import _cycles
+    _cycles.exit()
 
 def create(engine, data, scene, region=None, v3d=None, rv3d=None, preview_osl=False):
     import bpy
@@ -86,6 +120,11 @@ def create(engine, data, scene, region=None, v3d=None, rv3d=None, preview_osl=Fa
         v3d = v3d.as_pointer()
     if rv3d:
         rv3d = rv3d.as_pointer()
+
+    if bpy.app.debug_value == 256:
+        _cycles.debug_flags_update(scene)
+    else:
+        _cycles.debug_flags_reset()
 
     engine.session = _cycles.create(engine.as_pointer(), userpref, data, scene, region, v3d, rv3d, preview_osl)
 
@@ -104,11 +143,11 @@ def render(engine):
         _cycles.render(engine.session)
 
 
-def bake(engine, obj, pass_type, object_id, pixel_array, num_pixels, depth, result):
+def bake(engine, obj, pass_type, pass_filter, object_id, pixel_array, num_pixels, depth, result):
     import _cycles
     session = getattr(engine, "session", None)
     if session is not None:
-        _cycles.bake(engine.session, obj.as_pointer(), pass_type, object_id, pixel_array.as_pointer(), num_pixels, depth, result.as_pointer())
+        _cycles.bake(engine.session, obj.as_pointer(), pass_type, pass_filter, object_id, pixel_array.as_pointer(), num_pixels, depth, result.as_pointer())
 
 
 def reset(engine, data, scene):

@@ -35,6 +35,7 @@ __all__ = (
     "extensions_audio",
     "is_subdir",
     "module_names",
+    "native_pathsep",
     "reduce_dirs",
     "relpath",
     "resolve_ncase",
@@ -69,19 +70,23 @@ def abspath(path, start=None, library=None):
     if isinstance(path, bytes):
         if path.startswith(b"//"):
             if library:
-                start = _os.path.dirname(abspath(_getattr_bytes(library, "filepath")))
-            return _os.path.join(_os.path.dirname(_getattr_bytes(_bpy.data, "filepath"))
-                                 if start is None else start,
-                                 path[2:],
-                                 )
+                start = _os.path.dirname(
+                        abspath(_getattr_bytes(library, "filepath")))
+            return _os.path.join(
+                    _os.path.dirname(_getattr_bytes(_bpy.data, "filepath"))
+                    if start is None else start,
+                    path[2:],
+                    )
     else:
         if path.startswith("//"):
             if library:
-                start = _os.path.dirname(abspath(library.filepath))
-            return _os.path.join(_os.path.dirname(_bpy.data.filepath)
-                                 if start is None else start,
-                                 path[2:],
-                                 )
+                start = _os.path.dirname(
+                        abspath(library.filepath))
+            return _os.path.join(
+                    _os.path.dirname(_bpy.data.filepath)
+                    if start is None else start,
+                    path[2:],
+                    )
 
     return path
 
@@ -118,13 +123,13 @@ def is_subdir(path, directory):
     :arg path: An absolute path.
     :type path: string or bytes
     """
-    from os.path import normpath, normcase
+    from os.path import normpath, normcase, sep
     path = normpath(normcase(path))
     directory = normpath(normcase(directory))
     if len(path) > len(directory):
-        if path.startswith(directory):
-            sep = ord(_os.sep) if isinstance(directory, bytes) else _os.sep
-            return (path[len(directory)] == sep)
+        sep = sep.encode('ascii') if isinstance(directory, bytes) else sep
+        if path.startswith(directory.rstrip(sep) + sep):
+            return True
     return False
 
 
@@ -283,22 +288,21 @@ def ensure_ext(filepath, ext, case_sensitive=False):
     """
     Return the path with the extension added if it is not already set.
 
-    :arg ext: The extension to check for.
+    :arg ext: The extension to check for, can be a compound extension. Should
+              start with a dot, such as '.blend' or '.tar.gz'.
     :type ext: string
     :arg case_sensitive: Check for matching case when comparing extensions.
     :type case_sensitive: bool
     """
-    fn_base, fn_ext = _os.path.splitext(filepath)
-    if fn_base and fn_ext:
-        if ((case_sensitive and ext == fn_ext) or
-            (ext.lower() == fn_ext.lower())):
 
+    if case_sensitive:
+        if filepath.endswith(ext):
             return filepath
-        else:
-            return fn_base + ext
-
     else:
-        return filepath + ext
+        if filepath[-len(ext):].lower().endswith(ext.lower()):
+            return filepath
+
+    return filepath + ext
 
 
 def module_names(path, recursive=False):
@@ -344,6 +348,28 @@ def basename(path):
     Use for Windows compatibility.
     """
     return _os.path.basename(path[2:] if path[:2] in {"//", b"//"} else path)
+
+
+def native_pathsep(path):
+    """
+    Replace the path separator with the systems native ``os.sep``.
+    """
+    if type(path) is str:
+        if _os.sep == "/":
+            return path.replace("\\", "/")
+        else:
+            if path.startswith("//"):
+                return "//" + path[2:].replace("/", "\\")
+            else:
+                return path.replace("/", "\\")
+    else:  # bytes
+        if _os.sep == "/":
+            return path.replace(b"\\", b"/")
+        else:
+            if path.startswith(b"//"):
+                return b"//" + path[2:].replace(b"/", b"\\")
+            else:
+                return path.replace(b"/", b"\\")
 
 
 def reduce_dirs(dirs):

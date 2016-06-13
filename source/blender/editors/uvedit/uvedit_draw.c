@@ -65,6 +65,8 @@
 
 #include "uvedit_intern.h"
 
+#include "GPU_basic_shader.h"
+
 /* use editmesh tessface */
 #define USE_EDBM_LOOPTRIS
 
@@ -81,7 +83,7 @@ void ED_image_draw_cursor(ARegion *ar, const float cursor[2])
 	y_fac = zoom[1];
 	
 	cpack(0xFFFFFF);
-	glTranslatef(cursor[0], cursor[1], 0.0);
+	glTranslate2fv(cursor);
 	fdrawline(-0.05f * x_fac, 0, 0, 0.05f * y_fac);
 	fdrawline(0, 0.05f * y_fac, 0.05f * x_fac, 0.0f);
 	fdrawline(0.05f * x_fac, 0.0f, 0.0f, -0.05f * y_fac);
@@ -187,8 +189,8 @@ static void draw_uvs_stretch(SpaceImage *sima, Scene *scene, BMEditMesh *em, MTe
 			
 			BM_ITER_MESH (efa, &iter, bm, BM_FACES_OF_MESH) {
 				const int efa_len = efa->len;
-				float (*tf_uv)[2]     = (float (*)[2])BLI_buffer_resize_data(&tf_uv_buf,     vec2f, efa_len);
-				float (*tf_uvorig)[2] = (float (*)[2])BLI_buffer_resize_data(&tf_uvorig_buf, vec2f, efa_len);
+				float (*tf_uv)[2]     = (float (*)[2])BLI_buffer_reinit_data(&tf_uv_buf,     vec2f, efa_len);
+				float (*tf_uvorig)[2] = (float (*)[2])BLI_buffer_reinit_data(&tf_uvorig_buf, vec2f, efa_len);
 				tf = BM_ELEM_CD_GET_VOID_P(efa, cd_poly_tex_offset);
 
 				BM_ITER_ELEM_INDEX (l, &liter, efa, BM_LOOPS_OF_FACE, i) {
@@ -230,8 +232,8 @@ static void draw_uvs_stretch(SpaceImage *sima, Scene *scene, BMEditMesh *em, MTe
 				BM_ITER_MESH (efa, &iter, bm, BM_FACES_OF_MESH) {
 					if (BM_elem_flag_test(efa, BM_ELEM_TAG)) {
 						const int efa_len = efa->len;
-						float (*tf_uv)[2]     = (float (*)[2])BLI_buffer_resize_data(&tf_uv_buf,     vec2f, efa_len);
-						float (*tf_uvorig)[2] = (float (*)[2])BLI_buffer_resize_data(&tf_uvorig_buf, vec2f, efa_len);
+						float (*tf_uv)[2]     = (float (*)[2])BLI_buffer_reinit_data(&tf_uv_buf,     vec2f, efa_len);
+						float (*tf_uvorig)[2] = (float (*)[2])BLI_buffer_reinit_data(&tf_uvorig_buf, vec2f, efa_len);
 
 						area = BM_face_calc_area(efa) / totarea;
 
@@ -277,19 +279,17 @@ static void draw_uvs_stretch(SpaceImage *sima, Scene *scene, BMEditMesh *em, MTe
 
 			col[3] = 0.5f; /* hard coded alpha, not that nice */
 			
-			glShadeModel(GL_SMOOTH);
-			
 			BM_ITER_MESH (efa, &iter, bm, BM_FACES_OF_MESH) {
 				tf = BM_ELEM_CD_GET_VOID_P(efa, cd_poly_tex_offset);
 				
 				if (uvedit_face_visible_test(scene, ima, efa, tf)) {
 					const int efa_len = efa->len;
-					float (*tf_uv)[2]     = (float (*)[2])BLI_buffer_resize_data(&tf_uv_buf,     vec2f, efa_len);
-					float (*tf_uvorig)[2] = (float (*)[2])BLI_buffer_resize_data(&tf_uvorig_buf, vec2f, efa_len);
-					float *uvang = BLI_buffer_resize_data(&uvang_buf, float, efa_len);
-					float *ang   = BLI_buffer_resize_data(&ang_buf,   float, efa_len);
-					float (*av)[3]  = (float (*)[3])BLI_buffer_resize_data(&av_buf, vec3f, efa_len);
-					float (*auv)[2] = (float (*)[2])BLI_buffer_resize_data(&auv_buf, vec2f, efa_len);
+					float (*tf_uv)[2]     = (float (*)[2])BLI_buffer_reinit_data(&tf_uv_buf,     vec2f, efa_len);
+					float (*tf_uvorig)[2] = (float (*)[2])BLI_buffer_reinit_data(&tf_uvorig_buf, vec2f, efa_len);
+					float *uvang = BLI_buffer_reinit_data(&uvang_buf, float, efa_len);
+					float *ang   = BLI_buffer_reinit_data(&ang_buf,   float, efa_len);
+					float (*av)[3]  = (float (*)[3])BLI_buffer_reinit_data(&av_buf, vec3f, efa_len);
+					float (*auv)[2] = (float (*)[2])BLI_buffer_reinit_data(&auv_buf, vec2f, efa_len);
 					int j;
 
 					BM_elem_flag_enable(efa, BM_ELEM_TAG);
@@ -341,8 +341,6 @@ static void draw_uvs_stretch(SpaceImage *sima, Scene *scene, BMEditMesh *em, MTe
 			BLI_buffer_free(&ang_buf);
 			BLI_buffer_free(&av_buf);
 			BLI_buffer_free(&auv_buf);
-
-			glShadeModel(GL_FLAT);
 
 			break;
 		}
@@ -637,8 +635,8 @@ static void draw_uvs(SpaceImage *sima, Scene *scene, Object *obedit)
 
 					if (tf == activetf) {
 						/* only once */
-						glEnable(GL_POLYGON_STIPPLE);
-						glPolygonStipple(stipple_quarttone);
+						GPU_basic_shader_bind(GPU_SHADER_STIPPLE | GPU_SHADER_USE_COLOR);
+						GPU_basic_shader_stipple(GPU_SHADER_STIPPLE_QUARTTONE);
 						UI_ThemeColor4(TH_EDITMESH_ACTIVE);
 					}
 					else {
@@ -650,7 +648,7 @@ static void draw_uvs(SpaceImage *sima, Scene *scene, Object *obedit)
 					glEnd();
 
 					if (tf == activetf) {
-						glDisable(GL_POLYGON_STIPPLE);
+						GPU_basic_shader_bind(GPU_SHADER_USE_COLOR);
 					}
 				}
 				else {
@@ -713,8 +711,8 @@ static void draw_uvs(SpaceImage *sima, Scene *scene, Object *obedit)
 			glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 			UI_ThemeColor4(TH_EDITMESH_ACTIVE);
 
-			glEnable(GL_POLYGON_STIPPLE);
-			glPolygonStipple(stipple_quarttone);
+			GPU_basic_shader_bind(GPU_SHADER_STIPPLE | GPU_SHADER_USE_COLOR);
+			GPU_basic_shader_stipple(GPU_SHADER_STIPPLE_QUARTTONE);
 
 			glBegin(GL_POLYGON);
 			BM_ITER_ELEM (l, &liter, activef, BM_LOOPS_OF_FACE) {
@@ -723,7 +721,7 @@ static void draw_uvs(SpaceImage *sima, Scene *scene, Object *obedit)
 			}
 			glEnd();
 
-			glDisable(GL_POLYGON_STIPPLE);
+			GPU_basic_shader_bind(GPU_SHADER_USE_COLOR);
 			glDisable(GL_BLEND);
 		}
 	}
@@ -736,7 +734,9 @@ static void draw_uvs(SpaceImage *sima, Scene *scene, Object *obedit)
 		glEnable(GL_BLEND);
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	}
-	
+
+	glLineWidth(1);
+
 	switch (sima->dt_uv) {
 		case SI_UVDT_DASH:
 			BM_ITER_MESH (efa, &iter, bm, BM_FACES_OF_MESH) {
@@ -790,8 +790,7 @@ static void draw_uvs(SpaceImage *sima, Scene *scene, Object *obedit)
 				UI_GetThemeColor4ubv(TH_EDGE_SELECT, col1);
 
 				if (interpedges) {
-					glShadeModel(GL_SMOOTH);
-
+					GPU_basic_shader_bind(GPU_SHADER_USE_COLOR);
 					BM_ITER_MESH (efa, &iter, bm, BM_FACES_OF_MESH) {
 						if (!BM_elem_flag_test(efa, BM_ELEM_TAG))
 							continue;
@@ -806,8 +805,6 @@ static void draw_uvs(SpaceImage *sima, Scene *scene, Object *obedit)
 						}
 						glEnd();
 					}
-
-					glShadeModel(GL_FLAT);
 				}
 				else {
 					BM_ITER_MESH (efa, &iter, bm, BM_FACES_OF_MESH) {
@@ -854,37 +851,37 @@ static void draw_uvs(SpaceImage *sima, Scene *scene, Object *obedit)
 		float cent[2];
 		
 		pointsize = UI_GetThemeValuef(TH_FACEDOT_SIZE);
-		glPointSize(pointsize); // TODO - drawobject.c changes this value after - Investigate!
+		glPointSize(pointsize);
 		
+		glBegin(GL_POINTS);
+
 		/* unselected faces */
 		UI_ThemeColor(TH_WIRE);
 
-		bglBegin(GL_POINTS);
 		BM_ITER_MESH (efa, &iter, bm, BM_FACES_OF_MESH) {
 			if (!BM_elem_flag_test(efa, BM_ELEM_TAG))
 				continue;
 
 			if (!uvedit_face_select_test(scene, efa, cd_loop_uv_offset)) {
 				uv_poly_center(efa, cent, cd_loop_uv_offset);
-				bglVertex2fv(cent);
+				glVertex2fv(cent);
 			}
 		}
-		bglEnd();
 
 		/* selected faces */
 		UI_ThemeColor(TH_FACE_DOT);
 
-		bglBegin(GL_POINTS);
 		BM_ITER_MESH (efa, &iter, bm, BM_FACES_OF_MESH) {
 			if (!BM_elem_flag_test(efa, BM_ELEM_TAG))
 				continue;
 
 			if (uvedit_face_select_test(scene, efa, cd_loop_uv_offset)) {
 				uv_poly_center(efa, cent, cd_loop_uv_offset);
-				bglVertex2fv(cent);
+				glVertex2fv(cent);
 			}
 		}
-		bglEnd();
+
+		glEnd();
 	}
 
 	/* 6. draw uv vertices */
@@ -895,7 +892,7 @@ static void draw_uvs(SpaceImage *sima, Scene *scene, Object *obedit)
 		pointsize = UI_GetThemeValuef(TH_VERTEX_SIZE);
 		glPointSize(pointsize);
 	
-		bglBegin(GL_POINTS);
+		glBegin(GL_POINTS);
 		BM_ITER_MESH (efa, &iter, bm, BM_FACES_OF_MESH) {
 			if (!BM_elem_flag_test(efa, BM_ELEM_TAG))
 				continue;
@@ -903,17 +900,17 @@ static void draw_uvs(SpaceImage *sima, Scene *scene, Object *obedit)
 			BM_ITER_ELEM (l, &liter, efa, BM_LOOPS_OF_FACE) {
 				luv = BM_ELEM_CD_GET_VOID_P(l, cd_loop_uv_offset);
 				if (!uvedit_uv_select_test(scene, l, cd_loop_uv_offset))
-					bglVertex2fv(luv->uv);
+					glVertex2fv(luv->uv);
 			}
 		}
-		bglEnd();
+		glEnd();
 	
 		/* pinned uvs */
 		/* give odd pointsizes odd pin pointsizes */
 		glPointSize(pointsize * 2 + (((int)pointsize % 2) ? (-1) : 0));
 		cpack(0xFF);
 	
-		bglBegin(GL_POINTS);
+		glBegin(GL_POINTS);
 		BM_ITER_MESH (efa, &iter, bm, BM_FACES_OF_MESH) {
 			if (!BM_elem_flag_test(efa, BM_ELEM_TAG))
 				continue;
@@ -922,16 +919,16 @@ static void draw_uvs(SpaceImage *sima, Scene *scene, Object *obedit)
 				luv = BM_ELEM_CD_GET_VOID_P(l, cd_loop_uv_offset);
 
 				if (luv->flag & MLOOPUV_PINNED)
-					bglVertex2fv(luv->uv);
+					glVertex2fv(luv->uv);
 			}
 		}
-		bglEnd();
+		glEnd();
 	
 		/* selected uvs */
 		UI_ThemeColor(TH_VERTEX_SELECT);
 		glPointSize(pointsize);
 	
-		bglBegin(GL_POINTS);
+		glBegin(GL_POINTS);
 		BM_ITER_MESH (efa, &iter, bm, BM_FACES_OF_MESH) {
 			if (!BM_elem_flag_test(efa, BM_ELEM_TAG))
 				continue;
@@ -940,13 +937,11 @@ static void draw_uvs(SpaceImage *sima, Scene *scene, Object *obedit)
 				luv = BM_ELEM_CD_GET_VOID_P(l, cd_loop_uv_offset);
 
 				if (uvedit_uv_select_test(scene, l, cd_loop_uv_offset))
-					bglVertex2fv(luv->uv);
+					glVertex2fv(luv->uv);
 			}
 		}
-		bglEnd();
+		glEnd();
 	}
-
-	glPointSize(1.0);
 }
 
 

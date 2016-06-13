@@ -80,6 +80,9 @@ static int rule_goal_avoid(BoidRule *rule, BoidBrainData *bbd, BoidValues *val, 
 	float priority = 0.0f, len = 0.0f;
 	int ret = 0;
 
+	int p = 0;
+	efd.index = cur_efd.index = &p;
+
 	pd_point_from_particle(bbd->sim, pa, &pa->state, &epoint);
 
 	/* first find out goal/predator with highest priority */
@@ -307,6 +310,7 @@ static int rule_avoid_collision(BoidRule *rule, BoidBrainData *bbd, BoidValues *
 		ParticleSystem *epsys = psys_get_target_system(bbd->sim->ob, pt);
 
 		if (epsys) {
+			BLI_assert(epsys->tree != NULL);
 			neighbors = BLI_kdtree_range_search__normal(
 			        epsys->tree, pa->prev_state.co, pa->prev_state.ave,
 			        &ptn, acbr->look_ahead * len_v3(pa->prev_state.vel));
@@ -1006,9 +1010,11 @@ void boid_brain(BoidBrainData *bbd, int p, ParticleData *pa)
 		case eBoidRulesetType_Random:
 		{
 			/* use random rule for each particle (always same for same particle though) */
-			rule = BLI_findlink(&state->rules, rand % BLI_listbase_count(&state->rules));
-
-			apply_boid_rule(bbd, rule, &val, pa, -1.0);
+			const int n = BLI_listbase_count(&state->rules);
+			if (n) {
+				rule = BLI_findlink(&state->rules, rand % n);
+				apply_boid_rule(bbd, rule, &val, pa, -1.0);
+			}
 			break;
 		}
 		case eBoidRulesetType_Average:
@@ -1500,7 +1506,7 @@ BoidRule *boid_new_rule(int type)
 
 	rule->type = type;
 	rule->flag |= BOIDRULE_IN_AIR|BOIDRULE_ON_LAND;
-	BLI_strncpy(rule->name, boidrule_type_items[type-1].name, sizeof(rule->name));
+	BLI_strncpy(rule->name, rna_enum_boidrule_type_items[type-1].name, sizeof(rule->name));
 
 	return rule;
 }

@@ -43,13 +43,15 @@
 
 #include "BLT_translation.h"
 
+#include "UI_resources.h"
+
 #include "WM_types.h"
 
 
 
 /* XXX: this RNA enum define is currently duplicated for objects,
  * since there is some text here which is not applicable */
-EnumPropertyItem posebone_rotmode_items[] = {
+EnumPropertyItem rna_enum_posebone_rotmode_items[] = {
 	{ROT_MODE_QUAT, "QUATERNION", 0, "Quaternion (WXYZ)", "No Gimbal Lock (default)"},
 	{ROT_MODE_XYZ, "XYZ", 0, "XYZ Euler", "XYZ Rotation Order (prone to Gimbal Lock)"},
 	{ROT_MODE_XZY, "XZY", 0, "XZY Euler", "XZY Rotation Order (prone to Gimbal Lock)"},
@@ -63,28 +65,28 @@ EnumPropertyItem posebone_rotmode_items[] = {
 };
 
 /* Bone and Group Color Sets */
-EnumPropertyItem color_sets_items[] = {
+EnumPropertyItem rna_enum_color_sets_items[] = {
 	{0, "DEFAULT", 0, "Default Colors", ""},
-	{1, "THEME01", 0, "01 - Theme Color Set", ""},
-	{2, "THEME02", 0, "02 - Theme Color Set", ""},
-	{3, "THEME03", 0, "03 - Theme Color Set", ""},
-	{4, "THEME04", 0, "04 - Theme Color Set", ""},
-	{5, "THEME05", 0, "05 - Theme Color Set", ""},
-	{6, "THEME06", 0, "06 - Theme Color Set", ""},
-	{7, "THEME07", 0, "07 - Theme Color Set", ""},
-	{8, "THEME08", 0, "08 - Theme Color Set", ""},
-	{9, "THEME09", 0, "09 - Theme Color Set", ""},
-	{10, "THEME10", 0, "10 - Theme Color Set", ""},
-	{11, "THEME11", 0, "11 - Theme Color Set", ""},
-	{12, "THEME12", 0, "12 - Theme Color Set", ""},
-	{13, "THEME13", 0, "13 - Theme Color Set", ""},
-	{14, "THEME14", 0, "14 - Theme Color Set", ""},
-	{15, "THEME15", 0, "15 - Theme Color Set", ""},
-	{16, "THEME16", 0, "16 - Theme Color Set", ""},
-	{17, "THEME17", 0, "17 - Theme Color Set", ""},
-	{18, "THEME18", 0, "18 - Theme Color Set", ""},
-	{19, "THEME19", 0, "19 - Theme Color Set", ""},
-	{20, "THEME20", 0, "20 - Theme Color Set", ""},
+	{1, "THEME01", VICO_COLORSET_01_VEC, "01 - Theme Color Set", ""},
+	{2, "THEME02", VICO_COLORSET_02_VEC, "02 - Theme Color Set", ""},
+	{3, "THEME03", VICO_COLORSET_03_VEC, "03 - Theme Color Set", ""},
+	{4, "THEME04", VICO_COLORSET_04_VEC, "04 - Theme Color Set", ""},
+	{5, "THEME05", VICO_COLORSET_05_VEC, "05 - Theme Color Set", ""},
+	{6, "THEME06", VICO_COLORSET_06_VEC, "06 - Theme Color Set", ""},
+	{7, "THEME07", VICO_COLORSET_07_VEC, "07 - Theme Color Set", ""},
+	{8, "THEME08", VICO_COLORSET_08_VEC, "08 - Theme Color Set", ""},
+	{9, "THEME09", VICO_COLORSET_09_VEC, "09 - Theme Color Set", ""},
+	{10, "THEME10", VICO_COLORSET_10_VEC, "10 - Theme Color Set", ""},
+	{11, "THEME11", VICO_COLORSET_11_VEC, "11 - Theme Color Set", ""},
+	{12, "THEME12", VICO_COLORSET_12_VEC, "12 - Theme Color Set", ""},
+	{13, "THEME13", VICO_COLORSET_13_VEC, "13 - Theme Color Set", ""},
+	{14, "THEME14", VICO_COLORSET_14_VEC, "14 - Theme Color Set", ""},
+	{15, "THEME15", VICO_COLORSET_15_VEC, "15 - Theme Color Set", ""},
+	{16, "THEME16", VICO_COLORSET_16_VEC, "16 - Theme Color Set", ""},
+	{17, "THEME17", VICO_COLORSET_17_VEC, "17 - Theme Color Set", ""},
+	{18, "THEME18", VICO_COLORSET_18_VEC, "18 - Theme Color Set", ""},
+	{19, "THEME19", VICO_COLORSET_19_VEC, "19 - Theme Color Set", ""},
+	{20, "THEME20", VICO_COLORSET_20_VEC, "20 - Theme Color Set", ""},
 	{-1, "CUSTOM", 0, "Custom Color Set", ""},
 	{0, NULL, 0, NULL, NULL}
 };
@@ -532,7 +534,7 @@ static bConstraint *rna_PoseChannel_constraints_new(bPoseChannel *pchan, int typ
 static void rna_PoseChannel_constraints_remove(ID *id, bPoseChannel *pchan, ReportList *reports, PointerRNA *con_ptr)
 {
 	bConstraint *con = con_ptr->data;
-	const short is_ik = ELEM(con->type, CONSTRAINT_TYPE_KINEMATIC, CONSTRAINT_TYPE_SPLINEIK);
+	const bool is_ik = ELEM(con->type, CONSTRAINT_TYPE_KINEMATIC, CONSTRAINT_TYPE_SPLINEIK);
 	Object *ob = (Object *)id;
 
 	if (BLI_findindex(&pchan->constraints, con) == -1) {
@@ -675,7 +677,7 @@ void rna_def_actionbone_group_common(StructRNA *srna, int update_flag, const cha
 	/* color set + colors */
 	prop = RNA_def_property(srna, "color_set", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_sdna(prop, NULL, "customCol");
-	RNA_def_property_enum_items(prop, color_sets_items);
+	RNA_def_property_enum_items(prop, rna_enum_color_sets_items);
 	RNA_def_property_enum_funcs(prop, NULL, "rna_ActionGroup_colorset_set", NULL);
 	RNA_def_property_ui_text(prop, "Color Set", "Custom color set to use");
 	RNA_def_property_update(prop, update_flag, update_cb);
@@ -760,7 +762,7 @@ static void rna_def_pose_channel_constraints(BlenderRNA *brna, PropertyRNA *cpro
 	parm = RNA_def_pointer(func, "constraint", "Constraint", "", "New constraint");
 	RNA_def_function_return(func, parm);
 	/* constraint to add */
-	parm = RNA_def_enum(func, "type", constraint_type_items, 1, "", "Constraint type to add");
+	parm = RNA_def_enum(func, "type", rna_enum_constraint_type_items, 1, "", "Constraint type to add");
 	RNA_def_property_flag(parm, PROP_REQUIRED);
 
 	func = RNA_def_function(srna, "remove", "rna_PoseChannel_constraints_remove");
@@ -865,11 +867,55 @@ static void rna_def_pose_channel(BlenderRNA *brna)
 	
 	prop = RNA_def_property(srna, "rotation_mode", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_sdna(prop, NULL, "rotmode");
-	RNA_def_property_enum_items(prop, posebone_rotmode_items); /* XXX move to using a single define of this someday */
+	RNA_def_property_enum_items(prop, rna_enum_posebone_rotmode_items); /* XXX move to using a single define of this someday */
 	RNA_def_property_enum_funcs(prop, NULL, "rna_PoseChannel_rotation_mode_set", NULL);
 	/* XXX... disabled, since proxy-locked layers are currently used for ensuring proxy-syncing too */
 	RNA_def_property_editable_func(prop, "rna_PoseChannel_proxy_editable");
 	RNA_def_property_ui_text(prop, "Rotation Mode", "");
+	RNA_def_property_update(prop, NC_OBJECT | ND_POSE, "rna_Pose_update");
+	
+	/* Curved bones settings - Applied on top of restpose values */
+	rna_def_bone_curved_common(srna, true);
+	
+	/* Custom BBone next/prev sources */
+	prop = RNA_def_property(srna, "use_bbone_custom_handles", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "bboneflag", PCHAN_BBONE_CUSTOM_HANDLES);
+	RNA_def_property_ui_text(prop, "Use Custom Handle References", 
+	                         "Use custom reference bones as handles for B-Bones instead of next/previous bones, "
+	                         "leave these blank to use only B-Bone offset properties to control the shape");
+	RNA_def_property_editable_func(prop, "rna_PoseChannel_proxy_editable");
+	RNA_def_property_update(prop, NC_OBJECT | ND_POSE, "rna_Pose_update");
+	
+	prop = RNA_def_property(srna, "bbone_custom_handle_start", PROP_POINTER, PROP_NONE);
+	RNA_def_property_pointer_sdna(prop, NULL, "bbone_prev");
+	RNA_def_property_struct_type(prop, "PoseBone");
+	RNA_def_property_flag(prop, PROP_EDITABLE);
+	RNA_def_property_ui_text(prop, "B-Bone Start Handle",
+	                         "Bone that serves as the start handle for the B-Bone curve");
+	RNA_def_property_editable_func(prop, "rna_PoseChannel_proxy_editable");
+	RNA_def_property_update(prop, NC_OBJECT | ND_POSE, "rna_Pose_update");
+	
+	prop = RNA_def_property(srna, "use_bbone_relative_start_handle", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "bboneflag", PCHAN_BBONE_CUSTOM_START_REL);
+	RNA_def_property_ui_text(prop, "Relative B-Bone Start Handle", 
+	                         "Use treat custom start handle position as a relative value");
+	RNA_def_property_editable_func(prop, "rna_PoseChannel_proxy_editable");
+	RNA_def_property_update(prop, NC_OBJECT | ND_POSE, "rna_Pose_update");
+	
+	prop = RNA_def_property(srna, "bbone_custom_handle_end", PROP_POINTER, PROP_NONE);
+	RNA_def_property_pointer_sdna(prop, NULL, "bbone_next");
+	RNA_def_property_struct_type(prop, "PoseBone");
+	RNA_def_property_flag(prop, PROP_EDITABLE);
+	RNA_def_property_ui_text(prop, "B-Bone End Handle",
+	                         "Bone that serves as the end handle for the B-Bone curve");
+	RNA_def_property_editable_func(prop, "rna_PoseChannel_proxy_editable");
+	RNA_def_property_update(prop, NC_OBJECT | ND_POSE, "rna_Pose_update");
+	
+	prop = RNA_def_property(srna, "use_bbone_relative_end_handle", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "bboneflag", PCHAN_BBONE_CUSTOM_END_REL);
+	RNA_def_property_ui_text(prop, "Relative B-Bone End Handle", 
+	                         "Use treat custom end handle position as a relative value");
+	RNA_def_property_editable_func(prop, "rna_PoseChannel_proxy_editable");
 	RNA_def_property_update(prop, NC_OBJECT | ND_POSE, "rna_Pose_update");
 	
 	/* transform matrices - should be read-only since these are set directly by AnimSys evaluation */
@@ -1062,6 +1108,17 @@ static void rna_def_pose_channel(BlenderRNA *brna)
 	RNA_def_property_editable_func(prop, "rna_PoseChannel_proxy_editable");
 	RNA_def_property_update(prop, NC_OBJECT | ND_POSE, "rna_Pose_update");
 	
+	prop = RNA_def_property(srna, "custom_shape_scale", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_float_sdna(prop, NULL, "custom_scale");
+	RNA_def_property_range(prop, 0.0f, 1000.0f);
+	RNA_def_property_ui_text(prop, "Custom Shape Scale", "Adjust the size of the custom shape");
+	RNA_def_property_update(prop, NC_OBJECT | ND_POSE, "rna_Pose_update");
+
+	prop = RNA_def_property(srna, "use_custom_shape_bone_size", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_negative_sdna(prop, NULL, "drawflag", PCHAN_DRAW_NO_CUSTOM_BONE_SIZE);
+	RNA_def_property_ui_text(prop, "Use Bone Size", "Scale the custom object by the bone length");
+	RNA_def_property_update(prop, NC_OBJECT | ND_POSE, "rna_Pose_update");
+
 	prop = RNA_def_property(srna, "custom_shape_transform", PROP_POINTER, PROP_NONE);
 	RNA_def_property_pointer_sdna(prop, NULL, "custom_tx");
 	RNA_def_property_struct_type(prop, "PoseBone");

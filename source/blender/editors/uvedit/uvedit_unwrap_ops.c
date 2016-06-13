@@ -49,6 +49,8 @@
 #include "BLI_uvproject.h"
 #include "BLI_string.h"
 
+#include "BLT_translation.h"
+
 #include "BKE_cdderivedmesh.h"
 #include "BKE_subsurf.h"
 #include "BKE_context.h"
@@ -61,6 +63,8 @@
 #include "BKE_editmesh.h"
 
 #include "PIL_time.h"
+
+#include "UI_interface.h"
 
 #include "ED_image.h"
 #include "ED_mesh.h"
@@ -145,9 +149,15 @@ static bool ED_uvedit_ensure_uvs(bContext *C, Scene *scene, Object *obedit)
 	if (ima)
 		ED_uvedit_assign_image(bmain, scene, obedit, ima, NULL);
 	
-	/* select new UV's */
+	/* select new UV's (ignore UV_SYNC_SELECTION in this case) */
 	BM_ITER_MESH (efa, &iter, em->bm, BM_FACES_OF_MESH) {
-		uvedit_face_select_enable(scene, em, efa, false, cd_loop_uv_offset);
+		BMIter liter;
+		BMLoop *l;
+
+		BM_ITER_ELEM (l, &liter, efa, BM_LOOPS_OF_FACE) {
+			MLoopUV *luv = BM_ELEM_CD_GET_VOID_P(l, cd_loop_uv_offset);
+			luv->flag |= MLOOPUV_VERTSEL;
+		}
 	}
 
 	return 1;
@@ -217,7 +227,7 @@ void ED_uvedit_get_aspect(Scene *scene, Object *ob, BMesh *bm, float *aspx, floa
 }
 
 static void construct_param_handle_face_add(ParamHandle *handle, Scene *scene,
-                                            BMFace *efa, const int cd_loop_uv_offset)
+                                            BMFace *efa, int face_index, const int cd_loop_uv_offset)
 {
 	ParamKey key;
 	ParamKey *vkeys = BLI_array_alloca(vkeys, efa->len);
@@ -230,7 +240,7 @@ static void construct_param_handle_face_add(ParamHandle *handle, Scene *scene,
 	BMIter liter;
 	BMLoop *l;
 
-	key = (ParamKey)efa;
+	key = (ParamKey)face_index;
 
 	/* let parametrizer split the ngon, it can make better decisions
 	 * about which split is best for unwrapping than scanfill */
@@ -256,6 +266,7 @@ static ParamHandle *construct_param_handle(Scene *scene, Object *ob, BMesh *bm,
 	BMLoop *l;
 	BMEdge *eed;
 	BMIter iter, liter;
+	int i;
 	
 	const int cd_loop_uv_offset = CustomData_get_offset(&bm->ldata, CD_MLOOPUV);
 
@@ -273,7 +284,7 @@ static ParamHandle *construct_param_handle(Scene *scene, Object *ob, BMesh *bm,
 	/* we need the vert indices */
 	BM_mesh_elem_index_ensure(bm, BM_VERT);
 	
-	BM_ITER_MESH (efa, &iter, bm, BM_FACES_OF_MESH) {
+	BM_ITER_MESH_INDEX (efa, &iter, bm, BM_FACES_OF_MESH, i) {
 
 		if ((BM_elem_flag_test(efa, BM_ELEM_HIDDEN)) || (sel && BM_elem_flag_test(efa, BM_ELEM_SELECT) == 0)) {
 			continue;
@@ -293,7 +304,7 @@ static ParamHandle *construct_param_handle(Scene *scene, Object *ob, BMesh *bm,
 			}
 		}
 
-		construct_param_handle_face_add(handle, scene, efa, cd_loop_uv_offset);
+		construct_param_handle_face_add(handle, scene, efa, i, cd_loop_uv_offset);
 	}
 
 	if (!implicit) {
@@ -344,7 +355,8 @@ static ParamHandle *construct_param_handle_subsurfed(Scene *scene, Object *ob, B
 {
 	ParamHandle *handle;
 	/* index pointers */
-	MFace *face;
+	MPoly *mpoly;
+	MLoop *mloop;
 	MEdge *edge;
 	int i;
 
@@ -356,11 +368,12 @@ static ParamHandle *construct_param_handle_subsurfed(Scene *scene, Object *ob, B
 	/* Used to hold subsurfed Mesh */
 	DerivedMesh *derivedMesh, *initialDerived;
 	/* holds original indices for subsurfed mesh */
-	const int *origVertIndices, *origEdgeIndices, *origFaceIndices, *origPolyIndices;
+	const int *origVertIndices, *origEdgeIndices, *origPolyIndices;
 	/* Holds vertices of subsurfed mesh */
 	MVert *subsurfedVerts;
 	MEdge *subsurfedEdges;
-	MFace *subsurfedFaces;
+	MPoly *subsurfedPolys;
+	MLoop *subsurfedLoops;
 	/* number of vertices and faces for subsurfed mesh*/
 	int numOfEdges, numOfFaces;
 
@@ -398,15 +411,15 @@ static ParamHandle *construct_param_handle_subsurfed(Scene *scene, Object *ob, B
 	/* get the derived data */
 	subsurfedVerts = derivedMesh->getVertArray(derivedMesh);
 	subsurfedEdges = derivedMesh->getEdgeArray(derivedMesh);
-	subsurfedFaces = derivedMesh->getTessFaceArray(derivedMesh);
+	subsurfedPolys = derivedMesh->getPolyArray(derivedMesh);
+	subsurfedLoops = derivedMesh->getLoopArray(derivedMesh);
 
 	origVertIndices = derivedMesh->getVertDataArray(derivedMesh, CD_ORIGINDEX);
 	origEdgeIndices = derivedMesh->getEdgeDataArray(derivedMesh, CD_ORIGINDEX);
-	origFaceIndices = derivedMesh->getTessFaceDataArray(derivedMesh, CD_ORIGINDEX);
 	origPolyIndices = derivedMesh->getPolyDataArray(derivedMesh, CD_ORIGINDEX);
 
 	numOfEdges = derivedMesh->getNumEdges(derivedMesh);
-	numOfFaces = derivedMesh->getNumTessFaces(derivedMesh);
+	numOfFaces = derivedMesh->getNumPolys(derivedMesh);
 
 	faceMap = MEM_mallocN(numOfFaces * sizeof(BMFace *), "unwrap_edit_face_map");
 
@@ -415,7 +428,7 @@ static ParamHandle *construct_param_handle_subsurfed(Scene *scene, Object *ob, B
 
 	/* map subsurfed faces to original editFaces */
 	for (i = 0; i < numOfFaces; i++)
-		faceMap[i] = BM_face_at_index(em->bm, DM_origindex_mface_mpoly(origFaceIndices, origPolyIndices, i));
+		faceMap[i] = BM_face_at_index(em->bm, origPolyIndices[i]);
 
 	edgeMap = MEM_mallocN(numOfEdges * sizeof(BMEdge *), "unwrap_edit_edge_map");
 
@@ -427,14 +440,12 @@ static ParamHandle *construct_param_handle_subsurfed(Scene *scene, Object *ob, B
 	}
 
 	/* Prepare and feed faces to the solver */
-	for (i = 0; i < numOfFaces; i++) {
+	for (i = 0, mpoly = subsurfedPolys; i < numOfFaces; i++, mpoly++) {
 		ParamKey key, vkeys[4];
 		ParamBool pin[4], select[4];
 		float *co[4];
 		float *uv[4];
 		BMFace *origFace = faceMap[i];
-
-		face = subsurfedFaces + i;
 
 		if (scene->toolsettings->uv_flag & UV_SYNC_SELECTION) {
 			if (BM_elem_flag_test(origFace, BM_ELEM_HIDDEN))
@@ -445,24 +456,27 @@ static ParamHandle *construct_param_handle_subsurfed(Scene *scene, Object *ob, B
 				continue;
 		}
 
-		/* We will not check for v4 here. Subsurfed mfaces always have 4 vertices. */
-		key = (ParamKey)face;
-		vkeys[0] = (ParamKey)face->v1;
-		vkeys[1] = (ParamKey)face->v2;
-		vkeys[2] = (ParamKey)face->v3;
-		vkeys[3] = (ParamKey)face->v4;
+		mloop = &subsurfedLoops[mpoly->loopstart];
 
-		co[0] = subsurfedVerts[face->v1].co;
-		co[1] = subsurfedVerts[face->v2].co;
-		co[2] = subsurfedVerts[face->v3].co;
-		co[3] = subsurfedVerts[face->v4].co;
+		/* We will not check for v4 here. Subsurfed mfaces always have 4 vertices. */
+		BLI_assert(mpoly->totloop == 4);
+		key = (ParamKey)i;
+		vkeys[0] = (ParamKey)mloop[0].v;
+		vkeys[1] = (ParamKey)mloop[1].v;
+		vkeys[2] = (ParamKey)mloop[2].v;
+		vkeys[3] = (ParamKey)mloop[3].v;
+
+		co[0] = subsurfedVerts[mloop[0].v].co;
+		co[1] = subsurfedVerts[mloop[1].v].co;
+		co[2] = subsurfedVerts[mloop[2].v].co;
+		co[3] = subsurfedVerts[mloop[3].v].co;
 		
 		/* This is where all the magic is done. If the vertex exists in the, we pass the original uv pointer to the solver, thus
 		 * flushing the solution to the edit mesh. */
-		texface_from_original_index(origFace, origVertIndices[face->v1], &uv[0], &pin[0], &select[0], scene, cd_loop_uv_offset);
-		texface_from_original_index(origFace, origVertIndices[face->v2], &uv[1], &pin[1], &select[1], scene, cd_loop_uv_offset);
-		texface_from_original_index(origFace, origVertIndices[face->v3], &uv[2], &pin[2], &select[2], scene, cd_loop_uv_offset);
-		texface_from_original_index(origFace, origVertIndices[face->v4], &uv[3], &pin[3], &select[3], scene, cd_loop_uv_offset);
+		texface_from_original_index(origFace, origVertIndices[mloop[0].v], &uv[0], &pin[0], &select[0], scene, cd_loop_uv_offset);
+		texface_from_original_index(origFace, origVertIndices[mloop[1].v], &uv[1], &pin[1], &select[1], scene, cd_loop_uv_offset);
+		texface_from_original_index(origFace, origVertIndices[mloop[2].v], &uv[2], &pin[2], &select[2], scene, cd_loop_uv_offset);
+		texface_from_original_index(origFace, origVertIndices[mloop[3].v], &uv[3], &pin[3], &select[3], scene, cd_loop_uv_offset);
 
 		param_face_add(handle, key, 4, vkeys, co, uv, pin, select, NULL);
 	}
@@ -544,12 +558,13 @@ static void minimize_stretch_iteration(bContext *C, wmOperator *op, bool interac
 	RNA_int_set(op->ptr, "iterations", ms->i);
 
 	if (interactive && (PIL_check_seconds_timer() - ms->lasttime > 0.5)) {
-		char str[100];
+		char str[UI_MAX_DRAW_STR];
 
 		param_flush(ms->handle);
 
 		if (sa) {
-			BLI_snprintf(str, sizeof(str), "Minimize Stretch. Blend %.2f (Press + and -, or scroll wheel to set)", ms->blend);
+			BLI_snprintf(str, sizeof(str),
+			             IFACE_("Minimize Stretch. Blend %.2f (Press + and -, or scroll wheel to set)"), ms->blend);
 			ED_area_headerprint(sa, str);
 		}
 
@@ -856,12 +871,12 @@ void ED_uvedit_live_unwrap(Scene *scene, Object *obedit)
 static void uv_map_transform_center(Scene *scene, View3D *v3d, float *result, 
                                     Object *ob, BMEditMesh *em)
 {
-	int around = (v3d) ? v3d->around : V3D_CENTER;
+	const int around = (v3d) ? v3d->around : V3D_AROUND_CENTER_BOUNDS;
 
 	/* only operates on the edit object - this is all that's needed now */
 
 	switch (around) {
-		case V3D_CENTER: /* bounding box center */
+		case V3D_AROUND_CENTER_BOUNDS: /* bounding box center */
 		{
 			BMFace *efa;
 			BMLoop *l;
@@ -880,15 +895,15 @@ static void uv_map_transform_center(Scene *scene, View3D *v3d, float *result,
 			mid_v3_v3v3(result, min, max);
 			break;
 		}
-		case V3D_CURSOR:  /* cursor center */
+		case V3D_AROUND_CURSOR:  /* cursor center */
 		{
 			const float *curs = ED_view3d_cursor3d_get(scene, v3d);
 			/* shift to objects world */
 			sub_v3_v3v3(result, curs, ob->obmat[3]);
 			break;
 		}
-		case V3D_LOCAL:     /* object center */
-		case V3D_CENTROID:  /* multiple objects centers, only one object here*/
+		case V3D_AROUND_LOCAL_ORIGINS:  /* object center */
+		case V3D_AROUND_CENTER_MEAN:    /* multiple objects centers, only one object here*/
 		default:
 			zero_v3(result);
 			break;

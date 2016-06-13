@@ -168,7 +168,9 @@ public:
 	               InterpolationType interpolation,
 	               ExtensionType extension)
 	{
-		VLOG(1) << "Texture allocate: " << name << ", " << mem.memory_size() << " bytes.";
+		VLOG(1) << "Texture allocate: " << name << ", "
+		        << string_human_readable_number(mem.memory_size()) << " bytes. ("
+		        << string_human_readable_size(mem.memory_size()) << ")";
 
 		thread_scoped_lock lock(rpc_lock);
 
@@ -647,6 +649,9 @@ protected:
 
 			if(task.shader_output)
 				task.shader_output = device_ptr_from_client_pointer(task.shader_output);
+
+			if(task.shader_output_luma)
+				task.shader_output_luma = device_ptr_from_client_pointer(task.shader_output_luma);
 
 
 			task.acquire_tile = function_bind(&DeviceServer::task_acquire_tile, this, _1, _2);

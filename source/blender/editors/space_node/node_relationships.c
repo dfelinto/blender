@@ -29,8 +29,6 @@
  *  \ingroup spnode
  */
 
-#include <ctype.h>
-
 #include "MEM_guardedalloc.h"
 
 #include "DNA_node_types.h"
@@ -41,6 +39,8 @@
 
 #include "BKE_context.h"
 #include "BKE_global.h"
+#include "BKE_library.h"
+#include "BKE_main.h"
 #include "BKE_node.h"
 
 #include "ED_node.h"  /* own include */
@@ -60,6 +60,104 @@
 #include "BLT_translation.h"
 
 #include "node_intern.h"  /* own include */
+
+/* ****************** Relations helpers *********************** */
+
+static bool ntree_check_nodes_connected_dfs(bNodeTree *ntree,
+                                            bNode *from,
+                                            bNode *to)
+{
+	if (from->flag & NODE_TEST) {
+		return false;
+	}
+	from->flag |= NODE_TEST;
+	for (bNodeLink *link = ntree->links.first; link != NULL; link = link->next) {
+		if (link->fromnode == from) {
+			if (link->tonode == to) {
+				return true;
+			}
+			else {
+				if (ntree_check_nodes_connected_dfs(ntree, link->tonode, to)) {
+					return true;
+				}
+			}
+		}
+	}
+	return false;
+}
+
+static bool ntree_check_nodes_connected(bNodeTree *ntree, bNode *from, bNode *to)
+{
+	if (from == to) {
+		return true;
+	}
+	ntreeNodeFlagSet(ntree, NODE_TEST, false);
+	return ntree_check_nodes_connected_dfs(ntree, from, to);
+}
+
+static bool node_group_has_output_dfs(bNode *node)
+{
+	bNodeTree *ntree = (bNodeTree *)node->id;
+	if (ntree->id.tag & LIB_TAG_DOIT) {
+		return false;
+	}
+	ntree->id.tag |= LIB_TAG_DOIT;
+	for (bNode *current_node = ntree->nodes.first;
+	     current_node != NULL;
+	     current_node = current_node->next)
+	{
+		if (current_node->type == NODE_GROUP) {
+			if (current_node->id && node_group_has_output_dfs(current_node)) {
+				return true;
+			}
+		}
+		if (current_node->flag & NODE_DO_OUTPUT &&
+		    current_node->type != NODE_GROUP_OUTPUT)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+static bool node_group_has_output(bNode *node)
+{
+	Main *bmain = G.main;
+	BLI_assert(node->type == NODE_GROUP);
+	bNodeTree *ntree = (bNodeTree *)node->id;
+	if (ntree == NULL) {
+		return false;
+	}
+	BKE_main_id_tag_listbase(&bmain->nodetree, LIB_TAG_DOIT, false);
+	return node_group_has_output_dfs(node);
+}
+
+bool node_connected_to_output(bNodeTree *ntree, bNode *node)
+{
+	for (bNode *current_node = ntree->nodes.first;
+	     current_node != NULL;
+	     current_node = current_node->next)
+	{
+		/* Special case for group nodes -- if modified node connected to a group
+		 * with active output inside we consider refresh is needed.
+		 *
+		 * We could make check more grained here by taking which socket the node
+		 * is connected to and so eventually.
+		 */
+		if (current_node->type == NODE_GROUP &&
+		    ntree_check_nodes_connected(ntree, node, current_node) &&
+		    node_group_has_output(current_node))
+		{
+			return true;
+		}
+		if (current_node->flag & NODE_DO_OUTPUT) {
+			if (ntree_check_nodes_connected(ntree, node, current_node)) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
 
 /* ****************** Add *********************** */
 
@@ -227,6 +325,10 @@ static void snode_autoconnect(SpaceNode *snode, const bool allow_multiple, const
 
 		node_fr = nli->node;
 		node_to = nli->next->node;
+		/* corner case: input/output node aligned the wrong way around (T47729) */
+		if (BLI_listbase_is_empty(&node_to->inputs) || BLI_listbase_is_empty(&node_fr->outputs)) {
+			SWAP(bNode *, node_fr, node_to);
+		}
 
 		/* if there are selected sockets, connect those */
 		for (sock_to = node_to->inputs.first; sock_to; sock_to = sock_to->next) {
@@ -412,15 +514,12 @@ void NODE_OT_link_viewer(wmOperatorType *ot)
 
 static void node_link_update_header(bContext *C, bNodeLinkDrag *UNUSED(nldrag))
 {
-#define HEADER_LENGTH 256
-	char header[HEADER_LENGTH];
+	char header[UI_MAX_DRAW_STR];
 
-	BLI_strncpy(header, IFACE_("LMB: drag node link, RMB: cancel"), HEADER_LENGTH);
+	BLI_strncpy(header, IFACE_("LMB: drag node link, RMB: cancel"), sizeof(header));
 	ED_area_headerprint(CTX_wm_area(C), header);
-#undef HEADER_LENGTH
 }
 
-/* update link_count fields to avoid repeated link counting */
 static int node_count_links(bNodeTree *ntree, bNodeSocket *sock)
 {
 	bNodeLink *link;
@@ -434,64 +533,13 @@ static int node_count_links(bNodeTree *ntree, bNodeSocket *sock)
 	return count;
 }
 
-/* test if two sockets are interchangeable
- * XXX this could be made into a tree-type callback for flexibility
- */
-static bool node_link_socket_match(bNodeSocket *a, bNodeSocket *b)
-{
-	/* tests if alphabetic prefix matches
-	 * this allows for imperfect matches, such as numeric suffixes,
-	 * like Color1/Color2
-	 */
-	int prefix_len = 0;
-	char *ca = a->name, *cb = b->name;
-	for (; *ca != '\0' && *cb != '\0'; ++ca, ++cb) {
-		/* end of common prefix? */
-		if (*ca != *cb) {
-			/* prefix delimited by non-alphabetic char */
-			if (isalpha(*ca) || isalpha(*cb))
-				return false;
-			break;
-		}
-		++prefix_len;
-	}
-	return prefix_len > 0;
-}
-
-/* find an eligible socket for linking */
-static bNodeSocket *node_find_linkable_socket(bNodeTree *ntree, bNode *node, bNodeSocket *cur, bool use_swap)
-{
-	int cur_link_count = node_count_links(ntree, cur);
-	if (cur_link_count <= cur->limit) {
-		/* current socket is fine, use it */
-		return cur;
-	}
-	else if (use_swap) {
-		/* link swapping: try to find a free slot with a matching name */
-		
-		bNodeSocket *first = cur->in_out == SOCK_IN ? node->inputs.first : node->outputs.first;
-		bNodeSocket *sock;
-		
-		sock = cur->next ? cur->next : first; /* wrap around the list end */
-		while (sock != cur) {
-			if (!nodeSocketIsHidden(sock) && node_link_socket_match(sock, cur)) {
-				int link_count = node_count_links(ntree, sock);
-				/* take +1 into account since we would add a new link */
-				if (link_count + 1 <= sock->limit)
-					return sock; /* found a valid free socket we can swap to */
-			}
-			
-			sock = sock->next ? sock->next : first; /* wrap around the list end */
-		}
-	}
-	return NULL;
-}
-
-static void node_remove_extra_links(SpaceNode *snode, bNodeLink *link, bool use_swap)
+static void node_remove_extra_links(SpaceNode *snode, bNodeLink *link)
 {
 	bNodeTree *ntree = snode->edittree;
 	bNodeSocket *from = link->fromsock, *to = link->tosock;
 	bNodeLink *tlink, *tlink_next;
+	int to_count = node_count_links(ntree, to);
+	int from_count = node_count_links(ntree, from);
 	
 	for (tlink = ntree->links.first; tlink; tlink = tlink_next) {
 		tlink_next = tlink->next;
@@ -499,28 +547,18 @@ static void node_remove_extra_links(SpaceNode *snode, bNodeLink *link, bool use_
 			continue;
 		
 		if (tlink && tlink->fromsock == from) {
-			bNodeSocket *new_from = node_find_linkable_socket(ntree, tlink->fromnode, from, use_swap);
-			if (new_from && new_from != from) {
-				/* redirect existing link */
-				tlink->fromsock = new_from;
-			}
-			else if (!new_from) {
-				/* no possible replacement, remove tlink */
+			if (from_count > from->limit) {
 				nodeRemLink(ntree, tlink);
 				tlink = NULL;
+				--from_count;
 			}
 		}
 		
 		if (tlink && tlink->tosock == to) {
-			bNodeSocket *new_to = node_find_linkable_socket(ntree, tlink->tonode, to, use_swap);
-			if (new_to && new_to != to) {
-				/* redirect existing link */
-				tlink->tosock = new_to;
-			}
-			else if (!new_to) {
-				/* no possible replacement, remove tlink */
+			if (to_count > to->limit) {
 				nodeRemLink(ntree, tlink);
 				tlink = NULL;
+				--to_count;
 			}
 		}
 	}
@@ -532,11 +570,22 @@ static void node_link_exit(bContext *C, wmOperator *op, bool apply_links)
 	bNodeTree *ntree = snode->edittree;
 	bNodeLinkDrag *nldrag = op->customdata;
 	LinkData *linkdata;
-	
+	bool do_tag_update = false;
+
+	/* avoid updates while applying links */
+	ntree->is_updating = true;
 	for (linkdata = nldrag->links.first; linkdata; linkdata = linkdata->next) {
 		bNodeLink *link = linkdata->data;
 		
 		if (apply_links && link->tosock && link->fromsock) {
+			/* before actually adding the link,
+			 * let nodes perform special link insertion handling
+			 */
+			if (link->fromnode->typeinfo->insert_link)
+				link->fromnode->typeinfo->insert_link(ntree, link->fromnode, link);
+			if (link->tonode->typeinfo->insert_link)
+				link->tonode->typeinfo->insert_link(ntree, link->tonode, link);
+			
 			/* add link to the node tree */
 			BLI_addtail(&ntree->links, link);
 			
@@ -546,15 +595,28 @@ static void node_link_exit(bContext *C, wmOperator *op, bool apply_links)
 			link->tonode->update |= NODE_UPDATE;
 			
 			/* we might need to remove a link */
-			node_remove_extra_links(snode, link, true);
+			node_remove_extra_links(snode, link);
+
+			if (link->tonode) {
+				do_tag_update |= (do_tag_update || node_connected_to_output(ntree, link->tonode));
+			}
 		}
-		else
+		else {
+			/* See note below, but basically TEST flag means that the link
+			 * was connected to output (or to a node which affects the
+			 * output).
+			 */
+			do_tag_update |= (link->flag & NODE_LINK_TEST) != 0;
 			nodeRemLink(ntree, link);
+		}
 	}
+	ntree->is_updating = false;
 	
 	ntreeUpdateTree(CTX_data_main(C), ntree);
 	snode_notify(C, snode);
-	snode_dag_update(C, snode);
+	if (do_tag_update) {
+		snode_dag_update(C, snode);
+	}
 	
 	BLI_remlink(&snode->linkdrag, nldrag);
 	/* links->data pointers are either held by the tree or freed already */
@@ -685,7 +747,18 @@ static bNodeLinkDrag *node_link_init(SpaceNode *snode, float cursor[2], bool det
 					*oplink = *link;
 					oplink->next = oplink->prev = NULL;
 					oplink->flag |= NODE_LINK_VALID;
-					
+
+					/* The link could be disconnected and in that case we
+					 * wouldn't be able to check whether tag update is
+					 * needed or not when releasing mouse button. So we
+					 * cache whether the link affects output or not here
+					 * using TEST flag.
+					 */
+					oplink->flag &= ~NODE_LINK_TEST;
+					if (node_connected_to_output(snode->edittree, link->tonode)) {
+						oplink->flag |= NODE_LINK_TEST;
+					}
+
 					BLI_addtail(&nldrag->links, linkdata);
 					nodeRemLink(snode->edittree, link);
 				}
@@ -700,7 +773,11 @@ static bNodeLinkDrag *node_link_init(SpaceNode *snode, float cursor[2], bool det
 			oplink->fromnode = node;
 			oplink->fromsock = sock;
 			oplink->flag |= NODE_LINK_VALID;
-			
+			oplink->flag &= ~NODE_LINK_TEST;
+			if (node_connected_to_output(snode->edittree, node)) {
+				oplink->flag |= NODE_LINK_TEST;
+			}
+
 			BLI_addtail(&nldrag->links, linkdata);
 		}
 	}
@@ -721,7 +798,11 @@ static bNodeLinkDrag *node_link_init(SpaceNode *snode, float cursor[2], bool det
 					*oplink = *link;
 					oplink->next = oplink->prev = NULL;
 					oplink->flag |= NODE_LINK_VALID;
-					
+					oplink->flag &= ~NODE_LINK_TEST;
+					if (node_connected_to_output(snode->edittree, link->tonode)) {
+						oplink->flag |= NODE_LINK_TEST;
+					}
+
 					BLI_addtail(&nldrag->links, linkdata);
 					nodeRemLink(snode->edittree, link);
 					
@@ -740,7 +821,11 @@ static bNodeLinkDrag *node_link_init(SpaceNode *snode, float cursor[2], bool det
 			oplink->tonode = node;
 			oplink->tosock = sock;
 			oplink->flag |= NODE_LINK_VALID;
-			
+			oplink->flag &= ~NODE_LINK_TEST;
+			if (node_connected_to_output(snode->edittree, node)) {
+				oplink->flag |= NODE_LINK_TEST;
+			}
+
 			BLI_addtail(&nldrag->links, linkdata);
 		}
 	}
@@ -849,7 +934,7 @@ void NODE_OT_link_make(wmOperatorType *ot)
 }
 
 /* ********************** Cut Link operator ***************** */
-static int cut_links_intersect(bNodeLink *link, float mcoords[][2], int tot)
+static bool cut_links_intersect(bNodeLink *link, float mcoords[][2], int tot)
 {
 	float coord_array[NODE_LINK_RESOL + 1][2];
 	int i, b;
@@ -858,7 +943,7 @@ static int cut_links_intersect(bNodeLink *link, float mcoords[][2], int tot)
 
 		for (i = 0; i < tot - 1; i++)
 			for (b = 0; b < NODE_LINK_RESOL; b++)
-				if (isect_line_line_v2(mcoords[i], mcoords[i + 1], coord_array[b], coord_array[b + 1]) > 0)
+				if (isect_seg_seg_v2(mcoords[i], mcoords[i + 1], coord_array[b], coord_array[b + 1]) > 0)
 					return 1;
 	}
 	return 0;
@@ -870,6 +955,7 @@ static int cut_links_exec(bContext *C, wmOperator *op)
 	ARegion *ar = CTX_wm_region(C);
 	float mcoords[256][2];
 	int i = 0;
+	bool do_tag_update = false;
 
 	RNA_BEGIN (op->ptr, itemptr, "path")
 	{
@@ -902,6 +988,8 @@ static int cut_links_exec(bContext *C, wmOperator *op)
 					found = true;
 				}
 
+				do_tag_update |= (do_tag_update || node_connected_to_output(snode->edittree, link->tonode));
+
 				snode_update(snode, link->tonode);
 				nodeRemLink(snode->edittree, link);
 			}
@@ -910,7 +998,9 @@ static int cut_links_exec(bContext *C, wmOperator *op)
 		if (found) {
 			ntreeUpdateTree(CTX_data_main(C), snode->edittree);
 			snode_notify(C, snode);
-			snode_dag_update(C, snode);
+			if (do_tag_update) {
+				snode_dag_update(C, snode);
+			}
 
 			return OPERATOR_FINISHED;
 		}
@@ -1436,7 +1526,7 @@ static void node_parent_offset_apply(NodeInsertOfsData *data, bNode *parent, con
 #define NODE_INSOFS_ANIM_DURATION 0.25f
 
 /**
- * Callback that applies NodeInsertOfsData.offset_x to a node or its parent, similiar
+ * Callback that applies NodeInsertOfsData.offset_x to a node or its parent, similar
  * to node_link_insert_offset_output_chain_cb below, but with slightly different logic
  */
 static bool node_link_insert_offset_frame_chain_cb(
@@ -1600,7 +1690,7 @@ static void node_link_insert_offset_ntree(
 				node_offset_apply(offs_node, addval);
 			}
 			else if (!insert->parent && offs_node->parent) {
-				node_offset_apply(offs_node->parent, addval);
+				node_offset_apply(nodeFindRootParent(offs_node), addval);
 			}
 			margin = addval;
 		}
@@ -1634,12 +1724,36 @@ static int node_insert_offset_modal(bContext *C, wmOperator *UNUSED(op), const w
 	NodeInsertOfsData *iofsd = snode->iofsd;
 	bNode *node;
 	float duration;
+	bool redraw = false;
 
 	if (!snode || event->type != TIMER || iofsd->anim_timer != event->customdata)
 		return OPERATOR_PASS_THROUGH;
 
-	/* end timer + free insert offset data */
 	duration = (float)iofsd->anim_timer->duration;
+
+	/* handle animation - do this before possibly aborting due to duration, since
+	 * main thread might be so busy that node hasn't reached final position yet */
+	for (node = snode->edittree->nodes.first; node; node = node->next) {
+		if (UNLIKELY(node->anim_ofsx)) {
+			const float endval = node->anim_init_locx + node->anim_ofsx;
+			if (IS_EQF(node->locx, endval) == false) {
+				node->locx = BLI_easing_cubic_ease_in_out(duration, node->anim_init_locx, node->anim_ofsx,
+				                                          NODE_INSOFS_ANIM_DURATION);
+				if (node->anim_ofsx < 0) {
+					CLAMP_MIN(node->locx, endval);
+				}
+				else {
+					CLAMP_MAX(node->locx, endval);
+				}
+				redraw = true;
+			}
+		}
+	}
+	if (redraw) {
+		ED_region_tag_redraw(CTX_wm_region(C));
+	}
+
+	/* end timer + free insert offset data */
 	if (duration > NODE_INSOFS_ANIM_DURATION) {
 		WM_event_remove_timer(CTX_wm_manager(C), NULL, iofsd->anim_timer);
 
@@ -1652,15 +1766,6 @@ static int node_insert_offset_modal(bContext *C, wmOperator *UNUSED(op), const w
 
 		return (OPERATOR_FINISHED | OPERATOR_PASS_THROUGH);
 	}
-
-	/* handle animation */
-	for (node = snode->edittree->nodes.first; node; node = node->next) {
-		if (node->anim_ofsx) {
-			node->locx = BLI_easing_cubic_ease_in_out(duration, node->anim_init_locx, node->anim_ofsx,
-			                                          NODE_INSOFS_ANIM_DURATION);
-		}
-	}
-	ED_region_tag_redraw(CTX_wm_region(C));
 
 	return OPERATOR_RUNNING_MODAL;
 }
@@ -1731,7 +1836,7 @@ void ED_node_link_insert(ScrArea *sa)
 			
 			link->tonode = select;
 			link->tosock = best_input;
-			node_remove_extra_links(snode, link, false);
+			node_remove_extra_links(snode, link);
 			link->flag &= ~NODE_LINKFLAG_HILITE;
 			
 			nodeAddLink(snode->edittree, select, best_output, node, sockto);

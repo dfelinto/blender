@@ -131,6 +131,14 @@ void CustomData_update_typemap(struct CustomData *data);
 bool CustomData_merge(const struct CustomData *source, struct CustomData *dest,
                       CustomDataMask mask, int alloctype, int totelem);
 
+/* Reallocate custom data to a new element count.
+ * Only affects on data layers which are owned by the CustomData itself,
+ * referenced data is kept unchanged,
+ *
+ * NOTE: Take care of referenced layers by yourself!
+ */
+void CustomData_realloc(struct CustomData *data, int totelem);
+
 /* bmesh version of CustomData_merge; merges the layouts of source and dest,
  * then goes through the mesh and makes sure all the customdata blocks are
  * consistent with the new layout.*/
@@ -236,7 +244,7 @@ void CustomData_free_elem(struct CustomData *data, int index, int count);
  */
 void CustomData_interp(
         const struct CustomData *source, struct CustomData *dest,
-        int *src_indices, float *weights, float *sub_weights,
+        const int *src_indices, const float *weights, const float *sub_weights,
         int count, int dest_index);
 void CustomData_bmesh_interp_n(
         struct CustomData *data, const void **src_blocks, const float *weights,
@@ -250,7 +258,9 @@ void CustomData_bmesh_interp(
 /* swaps the data in the element corners, to new corners with indices as
  * specified in corner_indices. for edges this is an array of length 2, for
  * faces an array of length 4 */
-void CustomData_swap(struct CustomData *data, int index, const int *corner_indices);
+void CustomData_swap_corners(struct CustomData *data, int index, const int *corner_indices);
+
+void CustomData_swap(struct CustomData *data, const int index_a, const int index_b);
 
 /* gets a pointer to the data element at index from the first layer of type
  * returns NULL if there is no layer of type
@@ -348,7 +358,7 @@ void CustomData_file_write_prepare(
         struct CustomDataLayer **r_write_layers, struct CustomDataLayer *write_layers_buff, size_t write_layers_size);
 
 /* query info over types */
-void CustomData_file_write_info(int type, const char **structname, int *structnum);
+void CustomData_file_write_info(int type, const char **r_struct_name, int *r_struct_num);
 int CustomData_sizeof(int type);
 
 /* get the name of a layer type */
@@ -372,6 +382,10 @@ void CustomData_from_bmeshpoly(struct CustomData *fdata, struct CustomData *pdat
 void CustomData_bmesh_update_active_layers(struct CustomData *fdata, struct CustomData *pdata, struct CustomData *ldata);
 void CustomData_bmesh_do_versions_update_active_layers(struct CustomData *fdata, struct CustomData *pdata, struct CustomData *ldata);
 void CustomData_bmesh_init_pool(struct CustomData *data, int totelem, const char htype);
+
+#ifndef NDEBUG
+bool CustomData_from_bmeshpoly_test(CustomData *fdata, CustomData *pdata, CustomData *ldata, bool fallback);
+#endif
 
 /* External file storage */
 
@@ -459,6 +473,8 @@ typedef struct CustomDataTransferLayerMap {
 	size_t data_size;    /* Size of actual data we transfer. */
 	size_t data_offset;  /* Offset of actual data we transfer (in element contained in data_src/dst). */
 	uint64_t data_flag;  /* For bitflag transfer, flag(s) to affect in transfered data. */
+
+	void *interp_data;   /* Opaque pointer, to be used by specific interp callback (e.g. transformspace for normals). */
 
 	cd_datatransfer_interp interp;
 } CustomDataTransferLayerMap;

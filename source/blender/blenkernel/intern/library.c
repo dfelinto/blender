@@ -59,6 +59,7 @@
 #include "DNA_movieclip_types.h"
 #include "DNA_mask_types.h"
 #include "DNA_node_types.h"
+#include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_screen_types.h"
 #include "DNA_speaker_types.h"
@@ -88,6 +89,7 @@
 #include "BKE_global.h"
 #include "BKE_group.h"
 #include "BKE_gpencil.h"
+#include "BKE_idcode.h"
 #include "BKE_idprop.h"
 #include "BKE_image.h"
 #include "BKE_ipo.h"
@@ -95,6 +97,7 @@
 #include "BKE_lamp.h"
 #include "BKE_lattice.h"
 #include "BKE_library.h"
+#include "BKE_library_query.h"
 #include "BKE_linestyle.h"
 #include "BKE_mesh.h"
 #include "BKE_material.h"
@@ -118,6 +121,9 @@
 #include "DEG_depsgraph.h"
 
 #include "RNA_access.h"
+
+#include "IMB_imbuf.h"
+#include "IMB_imbuf_types.h"
 
 #ifdef WITH_PYTHON
 #include "BPY_extern.h"
@@ -147,31 +153,73 @@ void BKE_id_lib_local_paths(Main *bmain, Library *lib, ID *id)
 void id_lib_extern(ID *id)
 {
 	if (id) {
-		if (id->flag & LIB_INDIRECT) {
-			id->flag -= LIB_INDIRECT;
-			id->flag |= LIB_EXTERN;
+		BLI_assert(BKE_idcode_is_linkable(GS(id->name)));
+		if (id->tag & LIB_TAG_INDIRECT) {
+			id->tag -= LIB_TAG_INDIRECT;
+			id->tag |= LIB_TAG_EXTERN;
 		}
 	}
 }
 
 /* ensure we have a real user */
+/* Note: Now that we have flags, we could get rid of the 'fake_user' special case, flags are enough to ensure
+ *       we always have a real user.
+ *       However, ID_REAL_USERS is used in several places outside of core library.c, so think we can wait later
+ *       to make this change... */
 void id_us_ensure_real(ID *id)
 {
 	if (id) {
-		if (ID_REAL_USERS(id) <= 0) {
-			id->us = MAX2(id->us, 0) + 1;
+		const int limit = ID_FAKE_USERS(id);
+		id->tag |= LIB_TAG_EXTRAUSER;
+		if (id->us <= limit) {
+			if (id->us < limit || ((id->us == limit) && (id->tag & LIB_TAG_EXTRAUSER_SET))) {
+				printf("ID user count error: %s (from '%s')\n", id->name, id->lib ? id->lib->filepath : "[Main]");
+				BLI_assert(0);
+			}
+			id->us = limit + 1;
+			id->tag |= LIB_TAG_EXTRAUSER_SET;
 		}
 	}
 }
 
+/* Unused currently... */
+void id_us_clear_real(ID *id)
+{
+	if (id && (id->tag & LIB_TAG_EXTRAUSER)) {
+		if (id->tag & LIB_TAG_EXTRAUSER_SET) {
+			id->us--;
+			BLI_assert(id->us >= ID_FAKE_USERS(id));
+		}
+		id->tag &= ~(LIB_TAG_EXTRAUSER | LIB_TAG_EXTRAUSER_SET);
+	}
+}
+
+/**
+ * Same as \a id_us_plus, but does not handle lib indirect -> extern.
+ * Only used by readfile.c so far, but simpler/safer to keep it here nonetheless.
+ */
+void id_us_plus_no_lib(ID *id)
+{
+	if (id) {
+		if ((id->tag & LIB_TAG_EXTRAUSER) && (id->tag & LIB_TAG_EXTRAUSER_SET)) {
+			BLI_assert(id->us >= 1);
+			/* No need to increase count, just tag extra user as no more set.
+			 * Avoids annoying & inconsistent +1 in user count. */
+			id->tag &= ~LIB_TAG_EXTRAUSER_SET;
+		}
+		else {
+			BLI_assert(id->us >= 0);
+			id->us++;
+		}
+	}
+}
+
+
 void id_us_plus(ID *id)
 {
 	if (id) {
-		id->us++;
-		if (id->flag & LIB_INDIRECT) {
-			id->flag -= LIB_INDIRECT;
-			id->flag |= LIB_EXTERN;
-		}
+		id_us_plus_no_lib(id);
+		id_lib_extern(id);
 	}
 }
 
@@ -179,15 +227,40 @@ void id_us_plus(ID *id)
 void id_us_min(ID *id)
 {
 	if (id) {
-		if (id->us < 2 && (id->flag & LIB_FAKEUSER)) {
-			id->us = 1;
-		}
-		else if (id->us <= 0) {
-			printf("ID user decrement error: %s\n", id->name);
+		const int limit = ID_FAKE_USERS(id);
+
+		if (id->us <= limit) {
+			printf("ID user decrement error: %s (from '%s'): %d <= %d\n",
+			       id->name, id->lib ? id->lib->filepath : "[Main]", id->us, limit);
+			/* We cannot assert here, because of how we 'delete' datablocks currently (setting their usercount to zero),
+			 * this is weak but it's how it works for now. */
+			/* BLI_assert(0); */
+			id->us = limit;
 		}
 		else {
 			id->us--;
 		}
+
+		if ((id->us == limit) && (id->tag & LIB_TAG_EXTRAUSER)) {
+			/* We need an extra user here, but never actually incremented user count for it so far, do it now. */
+			id_us_ensure_real(id);
+		}
+	}
+}
+
+void id_fake_user_set(ID *id)
+{
+	if (id && !(id->flag & LIB_FAKEUSER)) {
+		id->flag |= LIB_FAKEUSER;
+		id_us_plus(id);
+	}
+}
+
+void id_fake_user_clear(ID *id)
+{
+	if (id && (id->flag & LIB_FAKEUSER)) {
+		id->flag &= ~LIB_FAKEUSER;
+		id_us_min(id);
 	}
 }
 
@@ -195,7 +268,7 @@ void id_us_min(ID *id)
  * if the block can be made local. */
 bool id_make_local(ID *id, bool test)
 {
-	if (id->flag & LIB_INDIRECT)
+	if (id->tag & LIB_TAG_INDIRECT)
 		return false;
 
 	switch (GS(id->name)) {
@@ -259,8 +332,6 @@ bool id_make_local(ID *id, bool test)
 			return false; /* not implemented */
 		case ID_TXT:
 			return false; /* not implemented */
-		case ID_SCRIPT:
-			return false; /* deprecated */
 		case ID_SO:
 			return false; /* not implemented */
 		case ID_GR:
@@ -272,7 +343,7 @@ bool id_make_local(ID *id, bool test)
 			if (!test) BKE_action_make_local((bAction *)id);
 			return true;
 		case ID_NT:
-			if (!test) ntreeMakeLocal((bNodeTree *)id);
+			if (!test) ntreeMakeLocal((bNodeTree *)id, true);
 			return true;
 		case ID_BR:
 			if (!test) BKE_brush_make_local((Brush *)id);
@@ -355,8 +426,6 @@ bool id_copy(ID *id, ID **newid, bool test)
 		case ID_TXT:
 			if (!test) *newid = (ID *)BKE_text_copy(G.main, (Text *)id);
 			return true;
-		case ID_SCRIPT:
-			return false;  /* deprecated */
 		case ID_SO:
 			return false;  /* not implemented */
 		case ID_GR:
@@ -405,11 +474,11 @@ bool id_unlink(ID *id, int test)
 			break;
 		case ID_GR:
 			if (test) return true;
-			BKE_group_unlink((Group *)id);
+			BKE_group_unlink(mainlib, (Group *)id);
 			break;
 		case ID_OB:
 			if (test) return true;
-			BKE_object_unlink((Object *)id);
+			BKE_object_unlink(mainlib, (Object *)id);
 			break;
 	}
 
@@ -491,8 +560,6 @@ ListBase *which_libbase(Main *mainlib, short type)
 			return &(mainlib->vfont);
 		case ID_TXT:
 			return &(mainlib->text);
-		case ID_SCRIPT:
-			return &(mainlib->script);
 		case ID_SPK:
 			return &(mainlib->speaker);
 		case ID_SO:
@@ -527,21 +594,71 @@ ListBase *which_libbase(Main *mainlib, short type)
 	return NULL;
 }
 
-/* Flag all ids in listbase */
-void BKE_main_id_flag_listbase(ListBase *lb, const short flag, const bool value)
+/**
+ * Clear or set given tags for all ids in listbase (runtime tags).
+ */
+void BKE_main_id_tag_listbase(ListBase *lb, const int tag, const bool value)
 {
 	ID *id;
 	if (value) {
-		for (id = lb->first; id; id = id->next) id->flag |= flag;
+		for (id = lb->first; id; id = id->next) {
+			id->tag |= tag;
+		}
 	}
 	else {
-		const short nflag = ~flag;
-		for (id = lb->first; id; id = id->next) id->flag &= nflag;
+		const int ntag = ~tag;
+		for (id = lb->first; id; id = id->next) {
+			id->tag &= ntag;
+		}
 	}
 }
 
-/* Flag all ids in listbase */
-void BKE_main_id_flag_all(Main *bmain, const short flag, const bool value)
+/**
+ * Clear or set given tags for all ids of given type in bmain (runtime tags).
+ */
+void BKE_main_id_tag_idcode(struct Main *mainvar, const short type, const int tag, const bool value)
+{
+	ListBase *lb = which_libbase(mainvar, type);
+
+	BKE_main_id_tag_listbase(lb, tag, value);
+}
+
+/**
+ * Clear or set given tags for all ids in bmain (runtime tags).
+ */
+void BKE_main_id_tag_all(struct Main *mainvar, const int tag, const bool value)
+{
+	ListBase *lbarray[MAX_LIBARRAY];
+	int a;
+
+	a = set_listbasepointers(mainvar, lbarray);
+	while (a--) {
+		BKE_main_id_tag_listbase(lbarray[a], tag, value);
+	}
+}
+
+
+/**
+ * Clear or set given flags for all ids in listbase (persistent flags).
+ */
+void BKE_main_id_flag_listbase(ListBase *lb, const int flag, const bool value)
+{
+	ID *id;
+	if (value) {
+		for (id = lb->first; id; id = id->next)
+			id->tag |= flag;
+	}
+	else {
+		const int nflag = ~flag;
+		for (id = lb->first; id; id = id->next)
+			id->tag &= nflag;
+	}
+}
+
+/**
+ * Clear or set given flags for all ids in bmain (persistent flags).
+ */
+void BKE_main_id_flag_all(Main *bmain, const int flag, const bool value)
 {
 	ListBase *lbarray[MAX_LIBARRAY];
 	int a;
@@ -579,8 +696,9 @@ int set_listbasepointers(Main *main, ListBase **lb)
 	/* BACKWARDS! also watch order of free-ing! (mesh<->mat), first items freed last.
 	 * This is important because freeing data decreases usercounts of other datablocks,
 	 * if this data is its self freed it can crash. */
+	lb[a++] = &(main->library);  /* Libraries may be accessed from pretty much any other ID... */
 	lb[a++] = &(main->ipo);
-	lb[a++] = &(main->action); // xxx moved here to avoid problems when freeing with animato (aligorith)
+	lb[a++] = &(main->action); /* moved here to avoid problems when freeing with animato (aligorith) */
 	lb[a++] = &(main->key);
 	lb[a++] = &(main->gpencil); /* referenced by nodes, objects, view, scene etc, before to free after. */
 	lb[a++] = &(main->nodetree);
@@ -609,7 +727,6 @@ int set_listbasepointers(Main *main, ListBase **lb)
 	lb[a++] = &(main->palettes);
 	lb[a++] = &(main->paintcurves);
 	lb[a++] = &(main->brush);
-	lb[a++] = &(main->script);
 	lb[a++] = &(main->particle);
 	lb[a++] = &(main->speaker);
 
@@ -619,7 +736,6 @@ int set_listbasepointers(Main *main, ListBase **lb)
 	lb[a++] = &(main->object);
 	lb[a++] = &(main->linestyle); /* referenced by scenes */
 	lb[a++] = &(main->scene);
-	lb[a++] = &(main->library);
 	lb[a++] = &(main->wm);
 	lb[a++] = &(main->mask);
 	
@@ -644,7 +760,7 @@ int set_listbasepointers(Main *main, ListBase **lb)
  * Allocates and returns memory of the right size for the specified block type,
  * initialized to zero.
  */
-static ID *alloc_libblock_notest(short type)
+void *BKE_libblock_alloc_notest(short type)
 {
 	ID *id = NULL;
 	
@@ -702,9 +818,6 @@ static ID *alloc_libblock_notest(short type)
 			break;
 		case ID_TXT:
 			id = MEM_callocN(sizeof(Text), "text");
-			break;
-		case ID_SCRIPT:
-			//XXX id = MEM_callocN(sizeof(Script), "script");
 			break;
 		case ID_SPK:
 			id = MEM_callocN(sizeof(Speaker), "speaker");
@@ -766,7 +879,7 @@ void *BKE_libblock_alloc(Main *bmain, short type, const char *name)
 	ID *id = NULL;
 	ListBase *lb = which_libbase(bmain, type);
 	
-	id = alloc_libblock_notest(type);
+	id = BKE_libblock_alloc_notest(type);
 	if (id) {
 		BKE_main_lock(bmain);
 		BLI_addtail(lb, id);
@@ -779,6 +892,118 @@ void *BKE_libblock_alloc(Main *bmain, short type, const char *name)
 	}
 	DAG_id_type_tag(bmain, type);
 	return id;
+}
+
+/**
+ * Initialize an ID of given type, such that it has valid 'empty' data.
+ * ID is assumed to be just calloc'ed.
+ */
+void BKE_libblock_init_empty(ID *id)
+{
+	/* Note that only ID types that are not valid when filled of zero should have a callback here. */
+	switch (GS(id->name)) {
+		case ID_SCE:
+			BKE_scene_init((Scene *)id);
+			break;
+		case ID_LI:
+			/* Nothing to do. */
+			break;
+		case ID_OB:
+		{
+			Object *ob = (Object *)id;
+			ob->type = OB_EMPTY;
+			BKE_object_init(ob);
+			break;
+		}
+		case ID_ME:
+			BKE_mesh_init((Mesh *)id);
+			break;
+		case ID_CU:
+			BKE_curve_init((Curve *)id);
+			break;
+		case ID_MB:
+			BKE_mball_init((MetaBall *)id);
+			break;
+		case ID_MA:
+			BKE_material_init((Material *)id);
+			break;
+		case ID_TE:
+			BKE_texture_default((Tex *)id);
+			break;
+		case ID_IM:
+			BKE_image_init((Image *)id);
+			break;
+		case ID_LT:
+			BKE_lattice_init((Lattice *)id);
+			break;
+		case ID_LA:
+			BKE_lamp_init((Lamp *)id);
+			break;
+		case ID_SPK:
+			BKE_speaker_init((Speaker *)id);
+			break;
+		case ID_CA:
+			BKE_camera_init((Camera *)id);
+			break;
+		case ID_IP:
+			/* Should not be needed - animation from lib pre-2.5 is broken anyway. */
+			BLI_assert(0);
+			break;
+		case ID_KE:
+			/* Shapekeys are a complex topic too - they depend on their 'user' data type...
+			 * They are not linkable, though, so it should never reach here anyway. */
+			BLI_assert(0);
+			break;
+		case ID_WO:
+			BKE_world_init((World *)id);
+			break;
+		case ID_SCR:
+			/* Nothing to do. */
+			break;
+		case ID_VF:
+			BKE_vfont_init((VFont *)id);
+			break;
+		case ID_TXT:
+			BKE_text_init((Text *)id);
+			break;
+		case ID_SO:
+			/* Another fuzzy case, think NULLified content is OK here... */
+			break;
+		case ID_GR:
+			/* Nothing to do. */
+			break;
+		case ID_AR:
+			/* Nothing to do. */
+			break;
+		case ID_AC:
+			/* Nothing to do. */
+			break;
+		case ID_NT:
+			ntreeInitDefault((bNodeTree *)id);
+			break;
+		case ID_BR:
+			BKE_brush_init((Brush *)id);
+			break;
+		case ID_PA:
+			/* Nothing to do. */
+			break;
+		case ID_PC:
+			/* Nothing to do. */
+			break;
+		case ID_WM:
+			/* We should never reach this. */
+			BLI_assert(0);
+			break;
+		case ID_GD:
+			/* Nothing to do. */
+			break;
+		case ID_MSK:
+			/* Nothing to do. */
+			break;
+		case ID_LS:
+			BKE_linestyle_init((FreestyleLineStyle *)id);
+			break;
+	}
 }
 
 /* by spec, animdata is first item after ID */
@@ -822,7 +1047,7 @@ void *BKE_libblock_copy_ex(Main *bmain, ID *id)
 	}
 	
 	id->newid = idn;
-	idn->flag |= LIB_NEW;
+	idn->tag |= LIB_TAG_NEW;
 
 	BKE_libblock_copy_data(idn, id, false);
 	
@@ -834,7 +1059,7 @@ void *BKE_libblock_copy_nolib(ID *id, const bool do_action)
 	ID *idn;
 	size_t idn_len;
 
-	idn = alloc_libblock_notest(GS(id->name));
+	idn = BKE_libblock_alloc_notest(GS(id->name));
 	assert(idn != NULL);
 
 	BLI_strncpy(idn->name, id->name, sizeof(idn->name));
@@ -848,7 +1073,7 @@ void *BKE_libblock_copy_nolib(ID *id, const bool do_action)
 	}
 
 	id->newid = idn;
-	idn->flag |= LIB_NEW;
+	idn->tag |= LIB_TAG_NEW;
 	idn->us = 1;
 
 	BKE_libblock_copy_data(idn, id, do_action);
@@ -861,29 +1086,54 @@ void *BKE_libblock_copy(ID *id)
 	return BKE_libblock_copy_ex(G.main, id);
 }
 
+static int id_relink_looper(void *UNUSED(user_data), ID *UNUSED(self_id), ID **id_pointer, const int cd_flag)
+{
+	ID *id = *id_pointer;
+	if (id) {
+		/* See: NEW_ID macro */
+		if (id->newid) {
+			BKE_library_update_ID_link_user(id->newid, id, cd_flag);
+			*id_pointer = id->newid;
+		}
+		else if (id->tag & LIB_TAG_NEW) {
+			id->tag &= ~LIB_TAG_NEW;
+			BKE_libblock_relink(id);
+		}
+	}
+	return IDWALK_RET_NOP;
+}
+
+void BKE_libblock_relink(ID *id)
+{
+	if (id->lib)
+		return;
+
+	BKE_library_foreach_ID_link(id, id_relink_looper, NULL, 0);
+}
+
 static void BKE_library_free(Library *lib)
 {
 	if (lib->packedfile)
 		freePackedFile(lib->packedfile);
 }
 
-static void (*free_windowmanager_cb)(bContext *, wmWindowManager *) = NULL;
+static BKE_library_free_window_manager_cb free_windowmanager_cb = NULL;
 
-void BKE_library_callback_free_window_manager_set(void (*func)(bContext *C, wmWindowManager *) )
+void BKE_library_callback_free_window_manager_set(BKE_library_free_window_manager_cb func)
 {
 	free_windowmanager_cb = func;
 }
 
-static void (*free_notifier_reference_cb)(const void *) = NULL;
+static BKE_library_free_notifier_reference_cb free_notifier_reference_cb = NULL;
 
-void BKE_library_callback_free_notifier_reference_set(void (*func)(const void *) )
+void BKE_library_callback_free_notifier_reference_set(BKE_library_free_notifier_reference_cb func)
 {
 	free_notifier_reference_cb = func;
 }
 
-static void (*free_editor_id_reference_cb)(const ID *) = NULL;
+static BKE_library_free_editor_id_reference_cb free_editor_id_reference_cb = NULL;
 
-void BKE_library_callback_free_editor_id_reference_set(void (*func)(const ID *))
+void BKE_library_callback_free_editor_id_reference_set(BKE_library_free_editor_id_reference_cb func)
 {
 	free_editor_id_reference_cb = func;
 }
@@ -990,9 +1240,6 @@ void BKE_libblock_free_ex(Main *bmain, void *idv, bool do_id_user)
 		case ID_TXT:
 			BKE_text_free((Text *)id);
 			break;
-		case ID_SCRIPT:
-			/* deprecated */
-			break;
 		case ID_SPK:
 			BKE_speaker_free((Speaker *)id);
 			break;
@@ -1069,14 +1316,24 @@ void BKE_libblock_free_us(Main *bmain, void *idv)      /* test users */
 {
 	ID *id = idv;
 	
-	id->us--;
+	id_us_min(id);
 
-	if (id->us < 0) {
-		if (id->lib) printf("ERROR block %s %s users %d\n", id->lib->name, id->name, id->us);
-		else printf("ERROR block %s users %d\n", id->name, id->us);
+	/* XXX This is a temp (2.77) hack so that we keep same behavior as in 2.76 regarding groups when deleting an object.
+	 *     Since only 'user_one' usage of objects is groups, and only 'real user' usage of objects is scenes,
+	 *     removing that 'user_one' tag when there is no more real (scene) users of an object ensures it gets
+	 *     fully unlinked.
+	 *     Otherwise, there is no real way to get rid of an object anymore - better handling of this is TODO.
+	 */
+	if ((GS(id->name) == ID_OB) && (id->us == 1)) {
+		id_us_clear_real(id);
 	}
+
 	if (id->us == 0) {
-		if (GS(id->name) == ID_OB) BKE_object_unlink((Object *)id);
+		switch (GS(id->name)) {
+			case ID_OB:
+				BKE_object_unlink(bmain, (Object *)id);
+				break;
+		}
 		
 		BKE_libblock_free(bmain, id);
 	}
@@ -1096,6 +1353,8 @@ void BKE_main_free(Main *mainvar)
 	/* also call when reading a file, erase all, etc */
 	ListBase *lbarray[MAX_LIBARRAY];
 	int a;
+
+	MEM_SAFE_FREE(mainvar->blen_thumb);
 
 	a = set_listbasepointers(mainvar, lbarray);
 	while (a--) {
@@ -1142,6 +1401,7 @@ void BKE_main_free(Main *mainvar)
 				case  30: BKE_libblock_free_ex(mainvar, id, false); break;
 				case  31: BKE_libblock_free_ex(mainvar, id, false); break;
 				case  32: BKE_libblock_free_ex(mainvar, id, false); break;
+				case  33: BKE_libblock_free_ex(mainvar, id, false); break;
 				default:
 					BLI_assert(0);
 					break;
@@ -1164,6 +1424,74 @@ void BKE_main_lock(struct Main *bmain)
 void BKE_main_unlock(struct Main *bmain)
 {
 	BLI_spin_unlock((SpinLock *) bmain->lock);
+}
+
+/**
+ * Generates a raw .blend file thumbnail data from given image.
+ *
+ * \param bmain If not NULL, also store generated data in this Main.
+ * \param img ImBuf image to generate thumbnail data from.
+ * \return The generated .blend file raw thumbnail data.
+ */
+BlendThumbnail *BKE_main_thumbnail_from_imbuf(Main *bmain, ImBuf *img)
+{
+	BlendThumbnail *data = NULL;
+
+	if (bmain) {
+		MEM_SAFE_FREE(bmain->blen_thumb);
+	}
+
+	if (img) {
+		const size_t sz = BLEN_THUMB_MEMSIZE(img->x, img->y);
+		data = MEM_mallocN(sz, __func__);
+
+		IMB_rect_from_float(img);  /* Just in case... */
+		data->width = img->x;
+		data->height = img->y;
+		memcpy(data->rect, img->rect, sz - sizeof(*data));
+	}
+
+	if (bmain) {
+		bmain->blen_thumb = data;
+	}
+	return data;
+}
+
+/**
+ * Generates an image from raw .blend file thumbnail \a data.
+ *
+ * \param bmain Use this bmain->blen_thumb data if given \a data is NULL.
+ * \param data Raw .blend file thumbnail data.
+ * \return An ImBuf from given data, or NULL if invalid.
+ */
+ImBuf *BKE_main_thumbnail_to_imbuf(Main *bmain, BlendThumbnail *data)
+{
+	ImBuf *img = NULL;
+
+	if (!data && bmain) {
+		data = bmain->blen_thumb;
+	}
+
+	if (data) {
+		/* Note: we cannot use IMB_allocFromBuffer(), since it tries to dupalloc passed buffer, which will fail
+		 *       here (we do not want to pass the first two ints!). */
+		img = IMB_allocImBuf((unsigned int)data->width, (unsigned int)data->height, 32, IB_rect | IB_metadata);
+		memcpy(img->rect, data->rect, BLEN_THUMB_MEMSIZE(data->width, data->height) - sizeof(*data));
+	}
+
+	return img;
+}
+
+/**
+ * Generates an empty (black) thumbnail for given Main.
+ */
+void BKE_main_thumbnail_create(struct Main *bmain)
+{
+	MEM_SAFE_FREE(bmain->blen_thumb);
+
+	bmain->blen_thumb = MEM_callocN(BLEN_THUMB_MEMSIZE(BLEN_THUMB_SIZE, BLEN_THUMB_SIZE), __func__);
+	bmain->blen_thumb->width = BLEN_THUMB_SIZE;
+	bmain->blen_thumb->height = BLEN_THUMB_SIZE;
 }
 
 /* ***************** ID ************************ */
@@ -1400,20 +1728,18 @@ bool new_id(ListBase *lb, ID *id, const char *tname)
  * Pull an ID out of a library (make it local). Only call this for IDs that
  * don't have other library users.
  */
-void id_clear_lib_data(Main *bmain, ID *id)
+void id_clear_lib_data_ex(Main *bmain, ID *id, bool id_in_mainlist)
 {
 	bNodeTree *ntree = NULL;
 
 	BKE_id_lib_local_paths(bmain, id->lib, id);
 
-	if (id->flag & LIB_FAKEUSER) {
-		id->us--;
-		id->flag &= ~LIB_FAKEUSER;
-	}
+	id_fake_user_clear(id);
 
 	id->lib = NULL;
-	id->flag = LIB_LOCAL;
-	new_id(which_libbase(bmain, GS(id->name)), id, NULL);
+	id->tag &= ~(LIB_TAG_INDIRECT | LIB_TAG_EXTERN);
+	if (id_in_mainlist)
+		new_id(which_libbase(bmain, GS(id->name)), id, NULL);
 
 	/* internal bNodeTree blocks inside ID types below
 	 * also stores id->lib, make sure this stays in sync.
@@ -1421,7 +1747,7 @@ void id_clear_lib_data(Main *bmain, ID *id)
 	ntree = ntreeFromID(id);
 
 	if (ntree) {
-		ntree->id.lib = NULL;
+		ntreeMakeLocal(ntree, false);
 	}
 
 	if (GS(id->name) == ID_OB) {
@@ -1432,6 +1758,11 @@ void id_clear_lib_data(Main *bmain, ID *id)
 		}
 		object->proxy = object->proxy_from = object->proxy_group = NULL;
 	}
+}
+
+void id_clear_lib_data(Main *bmain, ID *id)
+{
+	id_clear_lib_data_ex(bmain, id, true);
 }
 
 /* next to indirect usage in read/writefile also in editobject.c scene.c */
@@ -1446,15 +1777,16 @@ void BKE_main_id_clear_newpoins(Main *bmain)
 		id = lbarray[a]->first;
 		while (id) {
 			id->newid = NULL;
-			id->flag &= ~LIB_NEW;
+			id->tag &= ~LIB_TAG_NEW;
 			id = id->next;
 		}
 	}
 }
 
-static void lib_indirect_test_id(ID *id, Library *lib)
+static void lib_indirect_test_id(ID *id, const Library *lib)
 {
-#define LIBTAG(a)   if (a && a->id.lib) { a->id.flag &= ~LIB_INDIRECT; a->id.flag |= LIB_EXTERN; } (void)0
+#define LIBTAG(a) \
+	if (a && a->id.lib) { a->id.tag &= ~LIB_TAG_INDIRECT; a->id.tag |= LIB_TAG_EXTERN; } (void)0
 	
 	if (id->lib) {
 		/* datablocks that were indirectly related are now direct links
@@ -1498,42 +1830,14 @@ static void lib_indirect_test_id(ID *id, Library *lib)
 #undef LIBTAG
 }
 
-void BKE_main_id_tag_listbase(ListBase *lb, const bool tag)
-{
-	ID *id;
-	if (tag) {
-		for (id = lb->first; id; id = id->next) {
-			id->flag |= LIB_DOIT;
-		}
-	}
-	else {
-		for (id = lb->first; id; id = id->next) {
-			id->flag &= ~LIB_DOIT;
-		}
-	}
-}
-
-void BKE_main_id_tag_idcode(struct Main *mainvar, const short type, const bool tag)
-{
-	ListBase *lb = which_libbase(mainvar, type);
-
-	BKE_main_id_tag_listbase(lb, tag);
-}
-
-void BKE_main_id_tag_all(struct Main *mainvar, const bool tag)
-{
-	ListBase *lbarray[MAX_LIBARRAY];
-	int a;
-
-	a = set_listbasepointers(mainvar, lbarray);
-	while (a--) {
-		BKE_main_id_tag_listbase(lbarray[a], tag);
-	}
-}
-
-/* if lib!=NULL, only all from lib local
- * bmain is almost certainly G.main */
-void BKE_library_make_local(Main *bmain, Library *lib, bool untagged_only)
+/** Make linked datablocks local.
+ *
+ * \param bmain Almost certainly G.main.
+ * \param lib If not NULL, only make local datablocks from this library.
+ * \param untagged_only If true, only make local datablocks not tagged with LIB_TAG_PRE_EXISTING.
+ * \param set_fake If true, set fake user on all localized datablocks (except group and objects ones).
+ */
+void BKE_library_make_local(Main *bmain, const Library *lib, const bool untagged_only, const bool set_fake)
 {
 	ListBase *lbarray[MAX_LIBARRAY];
 	ID *id, *idn;
@@ -1547,30 +1851,38 @@ void BKE_library_make_local(Main *bmain, Library *lib, bool untagged_only)
 			id->newid = NULL;
 			idn = id->next;      /* id is possibly being inserted again */
 			
-			/* The check on the second line (LIB_PRE_EXISTING) is done so its
+			/* The check on the second line (LIB_TAG_PRE_EXISTING) is done so its
 			 * possible to tag data you don't want to be made local, used for
 			 * appending data, so any libdata already linked wont become local
 			 * (very nasty to discover all your links are lost after appending)  
 			 * */
-			if (id->flag & (LIB_EXTERN | LIB_INDIRECT | LIB_NEW) &&
-			    ((untagged_only == false) || !(id->flag & LIB_PRE_EXISTING)))
+			if (id->tag & (LIB_TAG_EXTERN | LIB_TAG_INDIRECT | LIB_TAG_NEW) &&
+			    ((untagged_only == false) || !(id->tag & LIB_TAG_PRE_EXISTING)))
 			{
 				if (lib == NULL || id->lib == lib) {
 					if (id->lib) {
 						/* for Make Local > All we should be calling id_make_local,
 						 * but doing that breaks append (see #36003 and #36006), we
 						 * we should make it work with all datablocks and id.us==0 */
-						id_clear_lib_data(bmain, id); /* sets 'id->flag' */
+						id_clear_lib_data(bmain, id); /* sets 'id->tag' */
 
 						/* why sort alphabetically here but not in
 						 * id_clear_lib_data() ? - campbell */
 						id_sort_by_name(lbarray[a], id);
 					}
 					else {
-						id->flag &= ~(LIB_EXTERN | LIB_INDIRECT | LIB_NEW);
+						id->tag &= ~(LIB_TAG_EXTERN | LIB_TAG_INDIRECT | LIB_TAG_NEW);
+					}
+				}
+
+				if (set_fake) {
+					if (!ELEM(GS(id->name), ID_OB, ID_GR)) {
+						/* do not set fake user on objects, groups (instancing) */
+						id_fake_user_set(id);
 					}
 				}
 			}
+
 			id = idn;
 		}
 	}
@@ -1582,21 +1894,23 @@ void BKE_library_make_local(Main *bmain, Library *lib, bool untagged_only)
 	}
 }
 
-
-void test_idbutton(char *name)
+/**
+ * Use after setting the ID's name
+ * When name exists: call 'new_id'
+ */
+void BLI_libblock_ensure_unique_name(Main *bmain, const char *name)
 {
-	/* called from buttons: when name already exists: call new_id */
 	ListBase *lb;
 	ID *idtest;
-	
 
-	lb = which_libbase(G.main, GS(name));
+
+	lb = which_libbase(bmain, GS(name));
 	if (lb == NULL) return;
 	
 	/* search for id */
 	idtest = BLI_findstring(lb, name + 2, offsetof(ID, name) + 2);
 
-	if (idtest && !new_id(lb, idtest, name + 2)) {
+	if (idtest && !new_id(lb, idtest, idtest->name + 2)) {
 		id_sort_by_name(lb, idtest);
 	}
 }
@@ -1604,13 +1918,9 @@ void test_idbutton(char *name)
 /**
  * Sets the name of a block to name, suitably adjusted for uniqueness.
  */
-void rename_id(ID *id, const char *name)
+void BKE_libblock_rename(Main *bmain, ID *id, const char *name)
 {
-	ListBase *lb;
-
-	BLI_strncpy(id->name + 2, name, sizeof(id->name) - 2);
-	lb = which_libbase(G.main, GS(id->name));
-	
+	ListBase *lb = which_libbase(bmain, GS(id->name));
 	new_id(lb, id, name);
 }
 
@@ -1618,9 +1928,9 @@ void rename_id(ID *id, const char *name)
  * Returns in name the name of the block, with a 3-character prefix prepended
  * indicating whether it comes from a library, has a fake user, or no users.
  */
-void name_uiprefix_id(char *name, const ID *id)
+void BKE_id_ui_prefix(char name[MAX_ID_NAME + 1], const ID *id)
 {
-	name[0] = id->lib ? 'L' : ' ';
+	name[0] = id->lib ? (ID_MISSING(id) ? 'M' : 'L') : ' ';
 	name[1] = (id->flag & LIB_FAKEUSER) ? 'F' : ((id->us == 0) ? '0' : ' ');
 	name[2] = ' ';
 

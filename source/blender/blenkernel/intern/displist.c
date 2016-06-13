@@ -1521,7 +1521,7 @@ static void do_makeDispListCurveTypes(Scene *scene, Object *ob, ListBase *dispba
 
 		BKE_curve_bevelList_free(&ob->curve_cache->bev);
 
-		/* We only re-evlauate path if evaluation is not happening for orco.
+		/* We only re-evaluate path if evaluation is not happening for orco.
 		 * If the calculation happens for orco, we should never free data which
 		 * was needed before and only not needed for orco calculation.
 		 */
@@ -1600,7 +1600,7 @@ static void do_makeDispListCurveTypes(Scene *scene, Object *ob, ListBase *dispba
 						float bottom_no[3] = {0.0f};
 						float top_no[3] = {0.0f};
 						float firstblend = 0.0f, lastblend = 0.0f;
-						int i, start, steps;
+						int i, start, steps = 0;
 
 						if (nu->flagu & CU_NURB_CYCLIC) {
 							calc_bevfac_mapping_default(bl,
@@ -1861,6 +1861,8 @@ static void boundbox_displist_object(Object *ob)
 			INIT_MINMAX(min, max);
 			BKE_displist_minmax(&ob->curve_cache->disp, min, max);
 			BKE_boundbox_init_from_minmax(ob->bb, min, max);
+
+			ob->bb->flag &= ~BOUNDBOX_DIRTY;
 		}
 	}
 }

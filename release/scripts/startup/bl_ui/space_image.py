@@ -28,6 +28,7 @@ from bl_ui.properties_paint_common import (
 from bl_ui.properties_grease_pencil_common import (
         GreasePencilDrawingToolsPanel,
         GreasePencilStrokeEditPanel,
+        GreasePencilStrokeSculptPanel,
         GreasePencilDataPanel,
         )
 from bpy.app.translations import pgettext_iface as iface_
@@ -87,7 +88,7 @@ class IMAGE_MT_view(Menu):
         layout.prop(uv, "show_metadata")
         if paint.brush and (context.image_paint_object or sima.mode == 'PAINT'):
             layout.prop(uv, "show_texpaint")
-            layout.prop(toolsettings, "show_uv_local_view", text="Show same material")
+            layout.prop(toolsettings, "show_uv_local_view", text="Show Same Material")
 
         layout.separator()
 
@@ -112,6 +113,11 @@ class IMAGE_MT_view(Menu):
         layout.separator()
 
         if show_render:
+            layout.operator("image.render_border")
+            layout.operator("image.clear_render_border")
+
+            layout.separator()
+
             layout.operator("image.cycle_render_slot", text="Render Slot Cycle Next")
             layout.operator("image.cycle_render_slot", text="Render Slot Cycle Previous").reverse = True
             layout.separator()
@@ -207,18 +213,17 @@ class IMAGE_MT_image(Menu):
             layout.menu("IMAGE_MT_image_invert")
 
             if not show_render:
-                layout.separator()
-
                 if not ima.packed_file:
+                    layout.separator()
                     layout.operator("image.pack")
 
                 # only for dirty && specific image types, perhaps
                 # this could be done in operator poll too
                 if ima.is_dirty:
                     if ima.source in {'FILE', 'GENERATED'} and ima.type != 'OPEN_EXR_MULTILAYER':
+                        if ima.packed_file:
+                            layout.separator()
                         layout.operator("image.pack", text="Pack As PNG").as_png = True
-
-            layout.separator()
 
 
 class IMAGE_MT_image_invert(Menu):
@@ -705,7 +710,7 @@ class IMAGE_PT_tools_transform_uvs(Panel, UVToolsPanel):
         col.operator("transform.shear")
 
 
-class IMAGE_PT_paint(Panel, BrushButtonsPanel):
+class IMAGE_PT_paint(Panel, ImagePaintPanel):
     bl_label = "Paint"
     bl_category = "Tools"
 
@@ -720,6 +725,12 @@ class IMAGE_PT_paint(Panel, BrushButtonsPanel):
 
         if brush:
             brush_texpaint_common(self, context, layout, brush, settings)
+
+    @classmethod
+    def poll(cls, context):
+        sima = context.space_data
+        toolsettings = context.tool_settings.image_paint
+        return sima.show_paint
 
 
 class IMAGE_PT_tools_brush_overlay(BrushButtonsPanel, Panel):
@@ -920,7 +931,7 @@ class IMAGE_PT_paint_curve(BrushButtonsPanel, Panel):
         row.operator("brush.curve_preset", icon='NOCURVE', text="").shape = 'MAX'
 
 
-class VIEW3D_PT_tools_imagepaint_symmetry(BrushButtonsPanel, Panel):
+class IMAGE_PT_tools_imagepaint_symmetry(BrushButtonsPanel, Panel):
     bl_category = "Tools"
     bl_context = "imagepaint"
     bl_label = "Tiling"
@@ -936,7 +947,7 @@ class VIEW3D_PT_tools_imagepaint_symmetry(BrushButtonsPanel, Panel):
         row = col.row(align=True)
         row.prop(ipaint, "tile_x", text="X", toggle=True)
         row.prop(ipaint, "tile_y", text="Y", toggle=True)
- 
+
 
 class IMAGE_PT_tools_brush_appearance(BrushButtonsPanel, Panel):
     bl_label = "Appearance"
@@ -1184,6 +1195,11 @@ class IMAGE_PT_tools_grease_pencil_draw(GreasePencilDrawingToolsPanel, Panel):
 
 # Grease Pencil stroke editing tools
 class IMAGE_PT_tools_grease_pencil_edit(GreasePencilStrokeEditPanel, Panel):
+    bl_space_type = 'IMAGE_EDITOR'
+
+
+# Grease Pencil stroke sculpting tools
+class IMAGE_PT_tools_grease_pencil_sculpt(GreasePencilStrokeSculptPanel, Panel):
     bl_space_type = 'IMAGE_EDITOR'
 
 

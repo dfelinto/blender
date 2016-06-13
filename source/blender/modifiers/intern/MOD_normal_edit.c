@@ -38,6 +38,7 @@
 #include "BLI_bitmap.h"
 
 #include "BKE_cdderivedmesh.h"
+#include "BKE_library_query.h"
 #include "BKE_mesh.h"
 #include "BKE_deform.h"
 
@@ -84,7 +85,7 @@ static void generate_vert_coordinates(
 
 		/* Translate our coordinates so that center of ob_center is at (0, 0, 0). */
 		/* Get ob_center (world) coordinates in ob local coordinates.
-		 * No need to take into accound ob_center's space here, see T44027. */
+		 * No need to take into account ob_center's space here, see T44027. */
 		invert_m4_m4(inv_obmat, ob->obmat);
 		mul_v3_m4v3(diff, inv_obmat, ob_center->obmat[3]);
 		negate_v3(diff);
@@ -109,7 +110,7 @@ static void generate_vert_coordinates(
 /* Note this modifies nos_new in-place. */
 static void mix_normals(
         const float mix_factor, MDeformVert *dvert, const int defgrp_index, const bool use_invert_vgroup,
-        const short mix_mode,
+        const float mix_limit, const short mix_mode,
         const int num_verts, MLoop *mloop, float (*nos_old)[3], float (*nos_new)[3], const int num_loops)
 {
 	/* Mix with org normals... */
@@ -142,16 +143,53 @@ static void mix_normals(
 			case MOD_NORMALEDIT_MIX_COPY:
 				break;
 		}
-		interp_v3_v3v3_slerp_safe(*no_new, *no_old, *no_new, fac);
+
+		interp_v3_v3v3_slerp_safe(*no_new, *no_old, *no_new,
+		                          (mix_limit < M_PI) ? min_ff(fac, mix_limit / angle_v3v3(*no_new, *no_old)) : fac);
 	}
 
 	MEM_SAFE_FREE(facs);
 }
 
+/* Check poly normals and new loop normals are compatible, otherwise flip polygons
+ * (and invert matching poly normals). */
+static bool polygons_check_flip(
+        MLoop *mloop, float (*nos)[3], CustomData *ldata,
+        MPoly *mpoly, float (*polynors)[3], const int num_polys)
+{
+	MPoly *mp;
+	MDisps *mdisp = CustomData_get_layer(ldata, CD_MDISPS);
+	int i;
+	bool flipped = false;
+
+	for (i = 0, mp = mpoly; i < num_polys; i++, mp++) {
+		float norsum[3] = {0.0f};
+		float (*no)[3];
+		int j;
+
+		for (j = 0, no = &nos[mp->loopstart]; j < mp->totloop; j++, no++) {
+			add_v3_v3(norsum, *no);
+		}
+
+		if (!normalize_v3(norsum)) {
+			continue;
+		}
+
+		/* If average of new loop normals is opposed to polygon normal, flip polygon. */
+		if (dot_v3v3(polynors[i], norsum) < 0.0f) {
+			BKE_mesh_polygon_flip_ex(mp, mloop, ldata, nos, mdisp, true);
+			negate_v3(polynors[i]);
+			flipped = true;
+		}
+	}
+
+	return flipped;
+}
+
 static void normalEditModifier_do_radial(
         NormalEditModifierData *smd, Object *ob, DerivedMesh *dm,
         short (*clnors)[2], float (*loopnors)[3], float (*polynors)[3],
-        const short mix_mode, const float mix_factor,
+        const short mix_mode, const float mix_factor, const float mix_limit,
         MDeformVert *dvert, const int defgrp_index, const bool use_invert_vgroup,
         MVert *mvert, const int num_verts, MEdge *medge, const int num_edges,
         MLoop *mloop, const int num_loops, MPoly *mpoly, const int num_polys)
@@ -230,7 +268,13 @@ static void normalEditModifier_do_radial(
 
 	if (loopnors) {
 		mix_normals(mix_factor, dvert, defgrp_index, use_invert_vgroup,
-		            mix_mode, num_verts, mloop, loopnors, nos, num_loops);
+		            mix_limit, mix_mode, num_verts, mloop, loopnors, nos, num_loops);
+	}
+
+	if (polygons_check_flip(mloop, nos, dm->getLoopDataLayout(dm), mpoly, polynors, num_polys)) {
+		dm->dirty |= DM_DIRTY_TESS_CDLAYERS;
+		/* We need to recompute vertex normals! */
+		dm->calcNormals(dm);
 	}
 
 	BKE_mesh_normals_loop_custom_set(mvert, num_verts, medge, num_edges, mloop, nos, num_loops,
@@ -244,7 +288,7 @@ static void normalEditModifier_do_radial(
 static void normalEditModifier_do_directional(
         NormalEditModifierData *smd, Object *ob, DerivedMesh *dm,
         short (*clnors)[2], float (*loopnors)[3], float (*polynors)[3],
-        const short mix_mode, const float mix_factor,
+        const short mix_mode, const float mix_factor, const float mix_limit,
         MDeformVert *dvert, const int defgrp_index, const bool use_invert_vgroup,
         MVert *mvert, const int num_verts, MEdge *medge, const int num_edges,
         MLoop *mloop, const int num_loops, MPoly *mpoly, const int num_polys)
@@ -303,7 +347,11 @@ static void normalEditModifier_do_directional(
 
 	if (loopnors) {
 		mix_normals(mix_factor, dvert, defgrp_index, use_invert_vgroup,
-		            mix_mode, num_verts, mloop, loopnors, nos, num_loops);
+		            mix_limit, mix_mode, num_verts, mloop, loopnors, nos, num_loops);
+	}
+
+	if (polygons_check_flip(mloop, nos, dm->getLoopDataLayout(dm), mpoly, polynors, num_polys)) {
+		dm->dirty |= DM_DIRTY_TESS_CDLAYERS;
 	}
 
 	BKE_mesh_normals_loop_custom_set(mvert, num_verts, medge, num_edges, mloop, nos, num_loops,
@@ -341,7 +389,8 @@ static DerivedMesh *normalEditModifier_do(NormalEditModifierData *smd, Object *o
 	const bool use_invert_vgroup = ((smd->flag & MOD_NORMALEDIT_INVERT_VGROUP) != 0);
 	const bool use_current_clnors = !((smd->mix_mode == MOD_NORMALEDIT_MIX_COPY) &&
 	                                  (smd->mix_factor == 1.0f) &&
-	                                  (smd->defgrp_name[0] == '\0'));
+	                                  (smd->defgrp_name[0] == '\0') &&
+	                                  (smd->mix_limit == M_PI));
 
 	int defgrp_index;
 	MDeformVert *dvert;
@@ -387,7 +436,7 @@ static DerivedMesh *normalEditModifier_do(NormalEditModifierData *smd, Object *o
 	polynors = dm->getPolyDataArray(dm, CD_NORMAL);
 	if (!polynors) {
 		polynors = MEM_mallocN(sizeof(*polynors) * num_polys, __func__);
-		BKE_mesh_calc_normals_poly(mvert, num_verts, mloop, mpoly, num_loops, num_polys, polynors, false);
+		BKE_mesh_calc_normals_poly(mvert, NULL, num_verts, mloop, mpoly, num_loops, num_polys, polynors, false);
 		free_polynors = true;
 	}
 
@@ -396,13 +445,13 @@ static DerivedMesh *normalEditModifier_do(NormalEditModifierData *smd, Object *o
 	if (smd->mode == MOD_NORMALEDIT_MODE_RADIAL) {
 		normalEditModifier_do_radial(
 		            smd, ob, dm, clnors, loopnors, polynors,
-		            smd->mix_mode, smd->mix_factor, dvert, defgrp_index, use_invert_vgroup,
+		            smd->mix_mode, smd->mix_factor, smd->mix_limit, dvert, defgrp_index, use_invert_vgroup,
 		            mvert, num_verts, medge, num_edges, mloop, num_loops, mpoly, num_polys);
 	}
 	else if (smd->mode == MOD_NORMALEDIT_MODE_DIRECTIONAL) {
 		normalEditModifier_do_directional(
 		            smd, ob, dm, clnors, loopnors, polynors,
-		            smd->mix_mode, smd->mix_factor, dvert, defgrp_index, use_invert_vgroup,
+		            smd->mix_mode, smd->mix_factor, smd->mix_limit, dvert, defgrp_index, use_invert_vgroup,
 		            mvert, num_verts, medge, num_edges, mloop, num_loops, mpoly, num_polys);
 	}
 
@@ -421,6 +470,7 @@ static void initData(ModifierData *md)
 
 	smd->mix_mode = MOD_NORMALEDIT_MIX_COPY;
 	smd->mix_factor = 1.0f;
+	smd->mix_limit = M_PI;
 }
 
 static void copyData(ModifierData *md, ModifierData *target)
@@ -450,14 +500,7 @@ static void foreachObjectLink(ModifierData *md, Object *ob, ObjectWalkFunc walk,
 {
 	NormalEditModifierData *smd = (NormalEditModifierData *) md;
 
-	walk(userData, ob, &smd->target);
-}
-
-static void foreachIDLink(ModifierData *md, Object *ob, IDWalkFunc walk, void *userData)
-{
-	NormalEditModifierData *smd = (NormalEditModifierData *) md;
-
-	walk(userData, ob, (ID **)&smd->target);
+	walk(userData, ob, &smd->target, IDWALK_NOP);
 }
 
 static bool isDisabled(ModifierData *md, int UNUSED(useRenderParams))
@@ -504,7 +547,6 @@ ModifierTypeInfo modifierType_NormalEdit = {
 	/* structSize */        sizeof(NormalEditModifierData),
 	/* type */              eModifierTypeType_Constructive,
 	/* flags */             eModifierTypeFlag_AcceptsMesh |
-	                        eModifierTypeFlag_AcceptsCVs |
 	                        eModifierTypeFlag_SupportsMapping |
 	                        eModifierTypeFlag_SupportsEditmode |
 	                        eModifierTypeFlag_EnableInEditmode,
@@ -524,6 +566,6 @@ ModifierTypeInfo modifierType_NormalEdit = {
 	/* dependsOnTime */     NULL,
 	/* dependsOnNormals */  dependsOnNormals,
 	/* foreachObjectLink */ foreachObjectLink,
-	/* foreachIDLink */     foreachIDLink,
+	/* foreachIDLink */     NULL,
 	/* foreachTexLink */    NULL,
 };

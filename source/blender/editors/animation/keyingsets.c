@@ -955,8 +955,9 @@ int ANIM_apply_keyingset(bContext *C, ListBase *dsources, bAction *act, KeyingSe
 	ReportList *reports = CTX_wm_reports(C);
 	KS_Path *ksp;
 	const short base_kflags = ANIM_get_keyframing_flags(scene, 1);
-	short kflag = 0, success = 0;
 	const char *groupname = NULL;
+	short kflag = 0, success = 0;
+	char keytype = scene->toolsettings->keyframe_type;
 	
 	/* sanity checks */
 	if (ks == NULL)
@@ -1014,8 +1015,10 @@ int ANIM_apply_keyingset(bContext *C, ListBase *dsources, bAction *act, KeyingSe
 			PropertyRNA *prop;
 			
 			RNA_id_pointer_create(ksp->id, &id_ptr);
-			if (RNA_path_resolve_property(&id_ptr, ksp->rna_path, &ptr, &prop))
+			if (RNA_path_resolve_property(&id_ptr, ksp->rna_path, &ptr, &prop)) {
 				arraylen = RNA_property_array_length(&ptr, prop);
+				i = 0;  /* start from start of array, instead of the previously specified index - T48020 */
+			}
 		}
 		
 		/* we should do at least one step */
@@ -1028,7 +1031,7 @@ int ANIM_apply_keyingset(bContext *C, ListBase *dsources, bAction *act, KeyingSe
 		for (; i < arraylen; i++) {
 			/* action to take depends on mode */
 			if (mode == MODIFYKEY_MODE_INSERT)
-				success += insert_keyframe(reports, ksp->id, act, groupname, ksp->rna_path, i, cfra, kflag2);
+				success += insert_keyframe(reports, ksp->id, act, groupname, ksp->rna_path, i, cfra, keytype, kflag2);
 			else if (mode == MODIFYKEY_MODE_DELETE)
 				success += delete_keyframe(reports, ksp->id, act, groupname, ksp->rna_path, i, cfra, kflag2);
 		}

@@ -544,10 +544,10 @@ void ANIM_uiTemplate_fmodifier_draw(struct uiLayout *layout, struct ID *id, List
 
 
 /* free the copy/paste buffer */
-void free_fmodifiers_copybuf(void);
+void ANIM_fmodifiers_copybuf_free(void);
 
 /* copy the given F-Modifiers to the buffer, returning whether anything was copied or not
- * assuming that the buffer has been cleared already with free_fmodifiers_copybuf()
+ * assuming that the buffer has been cleared already with ANIM_fmodifiers_copybuf_free()
  *	- active: only copy the active modifier
  */
 bool ANIM_fmodifiers_copy_to_buf(ListBase *modifiers, bool active);
@@ -608,7 +608,7 @@ typedef enum eAnimUnitConv_Flags {
 	ANIM_UNITCONV_SKIPKNOTS  = (1 << 4),
 	/* Scale FCurve i a way it fits to -1..1 space */
 	ANIM_UNITCONV_NORMALIZE  = (1 << 5),
-	/* Only whennormalization is used: use scale factor from previous run,
+	/* Only when normalization is used: use scale factor from previous run,
 	 * prevents curves from jumping all over the place when tweaking them.
 	 */
 	ANIM_UNITCONV_NORMALIZE_FREEZE  = (1 << 6),
@@ -683,7 +683,9 @@ void ED_operatormacros_action(void);
 
 /* Action Editor - Action Management */
 struct AnimData *ED_actedit_animdata_from_context(struct bContext *C);
-void ED_animedit_unlink_action(struct bContext *C, struct ID *id, struct AnimData *adt, struct bAction *act, struct ReportList *reports);
+void ED_animedit_unlink_action(struct bContext *C, struct ID *id, 
+                               struct AnimData *adt, struct bAction *act,
+                               struct ReportList *reports, bool force_delete);
 
 /* ************************************************ */
 

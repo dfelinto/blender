@@ -37,11 +37,9 @@
 #include "BKE_main.h"
 #include "BKE_speaker.h"
 
-void *BKE_speaker_add(Main *bmain, const char *name)
+void BKE_speaker_init(Speaker *spk)
 {
-	Speaker *spk;
-
-	spk =  BKE_libblock_alloc(bmain, ID_SPK, name);
+	BLI_assert(MEMCMP_STRUCT_OFS_IS_ZERO(spk, id));
 
 	spk->attenuation = 1.0f;
 	spk->cone_angle_inner = 360.0f;
@@ -55,6 +53,15 @@ void *BKE_speaker_add(Main *bmain, const char *name)
 	spk->volume = 1.0f;
 	spk->volume_max = 1.0f;
 	spk->volume_min = 0.0f;
+}
+
+void *BKE_speaker_add(Main *bmain, const char *name)
+{
+	Speaker *spk;
+
+	spk =  BKE_libblock_alloc(bmain, ID_SPK, name);
+
+	BKE_speaker_init(spk);
 
 	return spk;
 }
@@ -65,13 +72,18 @@ Speaker *BKE_speaker_copy(Speaker *spk)
 
 	spkn = BKE_libblock_copy(&spk->id);
 	if (spkn->sound)
-		spkn->sound->id.us++;
+		id_us_plus(&spkn->sound->id);
 
 	if (spk->id.lib) {
 		BKE_id_lib_local_paths(G.main, spk->id.lib, &spkn->id);
 	}
 
 	return spkn;
+}
+
+static void extern_local_speaker(Speaker *spk)
+{
+	id_lib_extern((ID *)spk->sound);
 }
 
 void BKE_speaker_make_local(Speaker *spk)
@@ -88,6 +100,7 @@ void BKE_speaker_make_local(Speaker *spk)
 	if (spk->id.lib == NULL) return;
 	if (spk->id.us == 1) {
 		id_clear_lib_data(bmain, &spk->id);
+		extern_local_speaker(spk);
 		return;
 	}
 
@@ -102,6 +115,7 @@ void BKE_speaker_make_local(Speaker *spk)
 
 	if (is_local && is_lib == false) {
 		id_clear_lib_data(bmain, &spk->id);
+		extern_local_speaker(spk);
 	}
 	else if (is_local && is_lib) {
 		Speaker *spk_new = BKE_speaker_copy(spk);
@@ -116,8 +130,8 @@ void BKE_speaker_make_local(Speaker *spk)
 
 				if (ob->id.lib == NULL) {
 					ob->data = spk_new;
-					spk_new->id.us++;
-					spk->id.us--;
+					id_us_plus(&spk_new->id);
+					id_us_min(&spk->id);
 				}
 			}
 			ob = ob->id.next;
@@ -128,7 +142,7 @@ void BKE_speaker_make_local(Speaker *spk)
 void BKE_speaker_free(Speaker *spk)
 {
 	if (spk->sound)
-		spk->sound->id.us--;
+		id_us_min(&spk->sound->id);
 
 	BKE_animdata_free((ID *)spk);
 }

@@ -202,6 +202,9 @@ int WM_keymap_map_type_get(wmKeyMapItem *kmi)
 	if (kmi->type == KM_TEXTINPUT) {
 		return KMI_TYPE_TEXTINPUT;
 	}
+	if (ELEM(kmi->type, TABLET_STYLUS, TABLET_ERASER)) {
+		return KMI_TYPE_MOUSE;
+	}
 	return KMI_TYPE_KEYBOARD;
 }
 
@@ -586,8 +589,23 @@ static void wm_keymap_patch(wmKeyMap *km, wmKeyMap *diff_km)
 			/* Do not re-add an already existing keymap item! See T42088. */
 			/* We seek only for exact copy here! See T42137. */
 			kmi_add = wm_keymap_find_item_equals(km, kmdi->add_item);
+
+			/* If kmi_add is same as kmi_remove (can happen in some cases, typically when we got kmi_remove
+			 * from wm_keymap_find_item_equals_result()), no need to add or remove anything, see T45579. */
+			/* Note: This typically happens when we apply user-defined keymap diff to a base one that was exported
+			 *       with that customized keymap already. In that case:
+			 *         - wm_keymap_find_item_equals(km, kmdi->remove_item) finds nothing (because actual shortcut of
+			 *           current base does not match kmdi->remove_item any more).
+			 *         - wm_keymap_find_item_equals_result(km, kmdi->remove_item) finds the current kmi from
+			 *           base keymap (because it does exactly the same thing).
+			 *         - wm_keymap_find_item_equals(km, kmdi->add_item) finds the same kmi, since base keymap was
+			 *           exported with that user-defined shortcut already!
+			 *       Maybe we should rather keep user-defined keymaps specific to a given base one? */
+			if (kmi_add != NULL && kmi_add == kmi_remove) {
+				kmi_remove = NULL;
+			}
 			/* only if nothing to remove or item to remove found */
-			if (!kmi_add && (!kmdi->remove_item || kmi_remove)) {
+			else if (!kmi_add && (!kmdi->remove_item || kmi_remove)) {
 				kmi_add = wm_keymap_item_copy(kmdi->add_item);
 				kmi_add->flag |= KMI_USER_MODIFIED;
 
@@ -888,15 +906,21 @@ static void wm_user_modal_keymap_set_items(wmWindowManager *wm, wmKeyMap *km)
 
 const char *WM_key_event_string(const short type, const bool compact)
 {
-	const char *name = NULL;
+	EnumPropertyItem *it;
+	const int i = RNA_enum_from_value(rna_enum_event_type_items, (int)type);
+
+	if (i == -1) {
+		return "";
+	}
+	it = &rna_enum_event_type_items[i];
+
 	/* We first try enum items' description (abused as shortname here), and fall back to usual name if empty. */
-	if ((compact && RNA_enum_description(event_type_items, (int)type, &name) && name[0]) ||
-	    RNA_enum_name(event_type_items, (int)type, &name))
-	{
-		return IFACE_(name);
+	if (compact && it->description[0]) {
+		/* XXX No context for enum descriptions... In practice shall not be an issue though. */
+		return IFACE_(it->description);
 	}
 
-	return "";
+	return CTX_IFACE_(BLT_I18NCONTEXT_UI_EVENTS, it->name);
 }
 
 /* TODO: also support (some) value, like e.g. double-click? */
@@ -1277,17 +1301,12 @@ char *WM_key_event_operator_string(
 	return NULL;
 }
 
-int WM_key_event_operator_id(
+wmKeyMapItem *WM_key_event_operator(
         const bContext *C, const char *opname, int opcontext,
         IDProperty *properties, const bool is_hotkey,
         wmKeyMap **r_keymap)
 {
-	wmKeyMapItem *kmi = wm_keymap_item_find(C, opname, opcontext, properties, is_hotkey, true, r_keymap);
-	
-	if (kmi)
-		return kmi->id;
-	else
-		return 0;
+	return wm_keymap_item_find(C, opname, opcontext, properties, is_hotkey, true, r_keymap);
 }
 
 int WM_keymap_item_compare(wmKeyMapItem *k1, wmKeyMapItem *k2)
@@ -1768,7 +1787,7 @@ wmKeyMap *WM_keymap_guess_opname(const bContext *C, const char *opname)
 	}
 	/* UV Editor */
 	else if (STRPREFIX(opname, "UV_OT")) {
-		km = WM_keymap_find_all(C, "UV Editor", sl->spacetype, 0);
+		km = WM_keymap_find_all(C, "UV Editor", 0, 0);
 	}
 	/* Node Editor */
 	else if (STRPREFIX(opname, "NODE_OT")) {
@@ -1776,7 +1795,7 @@ wmKeyMap *WM_keymap_guess_opname(const bContext *C, const char *opname)
 	}
 	/* Animation Editor Channels */
 	else if (STRPREFIX(opname, "ANIM_OT_channels")) {
-		km = WM_keymap_find_all(C, "Animation Channels", sl->spacetype, 0);
+		km = WM_keymap_find_all(C, "Animation Channels", 0, 0);
 	}
 	/* Animation Generic - after channels */
 	else if (STRPREFIX(opname, "ANIM_OT")) {
@@ -1843,7 +1862,7 @@ wmKeyMap *WM_keymap_guess_opname(const bContext *C, const char *opname)
 				km = WM_keymap_find_all(C, "NLA Editor", sl->spacetype, 0);
 				break;
 			case SPACE_IMAGE:
-				km = WM_keymap_find_all(C, "UV Editor", sl->spacetype, 0);
+				km = WM_keymap_find_all(C, "UV Editor", 0, 0);
 				break;
 			case SPACE_NODE:
 				km = WM_keymap_find_all(C, "Node Editor", sl->spacetype, 0);

@@ -138,7 +138,7 @@ static bool collision_response(ClothModifierData *clmd, CollisionModifierData *c
 	bool result = false;
 	
 	float v1[3], v2_old[3], v2_new[3], v_rel_old[3], v_rel_new[3];
-	float epsilon2 = BLI_bvhtree_getepsilon(collmd->bvhtree);
+	float epsilon2 = BLI_bvhtree_get_epsilon(collmd->bvhtree);
 
 	float margin_distance = (float)collpair->distance - epsilon2;
 	float mag_v_rel;
@@ -444,11 +444,11 @@ static void hair_get_boundbox(ClothModifierData *clmd, float gmin[3], float gmax
 {
 	Cloth *cloth = clmd->clothObject;
 	Implicit_Data *data = cloth->implicit;
-	unsigned int looptri_num = cloth->tri_num;
+	unsigned int mvert_num = cloth->mvert_num;
 	int i;
 	
 	INIT_MINMAX(gmin, gmax);
-	for (i = 0; i < looptri_num; i++) {
+	for (i = 0; i < mvert_num; i++) {
 		float x[3];
 		BPH_mass_spring_get_motion_state(data, i, x, NULL);
 		DO_MINMAX(x, gmin, gmax);

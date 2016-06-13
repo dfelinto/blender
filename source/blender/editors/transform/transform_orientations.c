@@ -36,6 +36,7 @@
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_screen_types.h"
+#include "DNA_space_types.h"
 #include "DNA_view3d_types.h"
 
 #include "BLI_math.h"
@@ -144,7 +145,7 @@ static TransformOrientation *createBoneSpace(bContext *C, ReportList *reports,
 	float mat[3][3];
 	float normal[3], plane[3];
 
-	getTransformOrientation(C, normal, plane, 0);
+	getTransformOrientation(C, normal, plane);
 
 	if (createSpaceNormalTangent(mat, normal, plane) == 0) {
 		BKE_reports_prepend(reports, "Cannot use zero-length bone");
@@ -164,7 +165,7 @@ static TransformOrientation *createCurveSpace(bContext *C, ReportList *reports,
 	float mat[3][3];
 	float normal[3], plane[3];
 
-	getTransformOrientation(C, normal, plane, 0);
+	getTransformOrientation(C, normal, plane);
 
 	if (createSpaceNormalTangent(mat, normal, plane) == 0) {
 		BKE_reports_prepend(reports, "Cannot use zero-length curve");
@@ -186,7 +187,7 @@ static TransformOrientation *createMeshSpace(bContext *C, ReportList *reports,
 	float normal[3], plane[3];
 	int type;
 
-	type = getTransformOrientation(C, normal, plane, 0);
+	type = getTransformOrientation(C, normal, plane);
 	
 	switch (type) {
 		case ORIENTATION_VERT:
@@ -390,15 +391,12 @@ int BIF_countTransformOrientation(const bContext *C)
 	return BLI_listbase_count(transform_spaces);
 }
 
-bool applyTransformOrientation(const bContext *C, float mat[3][3], char *r_name)
+bool applyTransformOrientation(const bContext *C, float mat[3][3], char *r_name, int index)
 {
-	View3D *v3d = CTX_wm_view3d(C);
-	int selected_index = (v3d->twmode - V3D_MANIP_CUSTOM);
-
 	ListBase *transform_spaces = &CTX_data_scene(C)->transform_spaces;
-	TransformOrientation *ts = BLI_findlink(transform_spaces, selected_index);
+	TransformOrientation *ts = BLI_findlink(transform_spaces, index);
 
-	BLI_assert(selected_index >= 0);
+	BLI_assert(index >= 0);
 
 	if (ts) {
 		if (r_name) {
@@ -442,7 +440,6 @@ static int count_bone_select(bArmature *arm, ListBase *lb, const bool do_it)
 
 void initTransformOrientation(bContext *C, TransInfo *t)
 {
-	View3D *v3d = CTX_wm_view3d(C);
 	Object *ob = CTX_data_active_object(C);
 	Object *obedit = CTX_data_active_object(C);
 
@@ -462,7 +459,7 @@ void initTransformOrientation(bContext *C, TransInfo *t)
 		case V3D_MANIP_NORMAL:
 			if (obedit || (ob && ob->mode & OB_MODE_POSE)) {
 				BLI_strncpy(t->spacename, IFACE_("normal"), sizeof(t->spacename));
-				ED_getTransformOrientationMatrix(C, t->spacemtx, (v3d->around == V3D_ACTIVE));
+				ED_getTransformOrientationMatrix(C, t->spacemtx, t->around);
 				break;
 			}
 			/* fall-through */  /* we define 'normal' as 'local' in Object mode */
@@ -480,7 +477,9 @@ void initTransformOrientation(bContext *C, TransInfo *t)
 			break;
 		
 		case V3D_MANIP_VIEW:
-			if (t->ar->regiontype == RGN_TYPE_WINDOW) {
+			if ((t->spacetype == SPACE_VIEW3D) &&
+			    (t->ar->regiontype == RGN_TYPE_WINDOW))
+			{
 				RegionView3D *rv3d = t->ar->regiondata;
 				float mat[3][3];
 
@@ -494,7 +493,7 @@ void initTransformOrientation(bContext *C, TransInfo *t)
 			}
 			break;
 		default: /* V3D_MANIP_CUSTOM */
-			if (applyTransformOrientation(C, t->spacemtx, t->spacename)) {
+			if (applyTransformOrientation(C, t->spacemtx, t->spacename, t->current_orientation - V3D_MANIP_CUSTOM)) {
 				/* pass */
 			}
 			else {
@@ -545,7 +544,7 @@ static unsigned int bm_mesh_elems_select_get_n__internal(
 		if (i == 0) {
 			/* pass */
 		}
-		else {
+		else if (i == n) {
 			return i;
 		}
 	}
@@ -585,14 +584,14 @@ static unsigned int bm_mesh_faces_select_get_n(BMesh *bm, BMVert **elems, const 
 }
 #endif
 
-int getTransformOrientation(const bContext *C, float normal[3], float plane[3], const bool activeOnly)
+int getTransformOrientation_ex(const bContext *C, float normal[3], float plane[3], const short around)
 {
 	Scene *scene = CTX_data_scene(C);
-	View3D *v3d = CTX_wm_view3d(C);
 	Object *obedit = CTX_data_edit_object(C);
 	Base *base;
 	Object *ob = OBACT;
 	int result = ORIENTATION_NONE;
+	const bool activeOnly = (around == V3D_AROUND_ACTIVE);
 
 	zero_v3(normal);
 	zero_v3(plane);
@@ -637,7 +636,7 @@ int getTransformOrientation(const bContext *C, float normal[3], float plane[3], 
 
 					BM_ITER_MESH (efa, &iter, em->bm, BM_FACES_OF_MESH) {
 						if (BM_elem_flag_test(efa, BM_ELEM_SELECT)) {
-							BM_face_calc_plane(efa, vec);
+							BM_face_calc_tangent_auto(efa, vec);
 							add_v3_v3(normal, efa->no);
 							add_v3_v3(plane, vec);
 						}
@@ -691,7 +690,7 @@ int getTransformOrientation(const bContext *C, float normal[3], float plane[3], 
 							sub_v3_v3v3(plane, v_pair[0]->co, v_pair[1]->co);
 						}
 						else {
-							BM_vert_tri_calc_plane(v_tri, plane);
+							BM_vert_tri_calc_tangent_edge(v_tri, plane);
 						}
 					}
 					else {
@@ -757,10 +756,10 @@ int getTransformOrientation(const bContext *C, float normal[3], float plane[3], 
 
 					if (bm_mesh_verts_select_get_n(em->bm, &v, 1) == 1) {
 						copy_v3_v3(normal, v->no);
+						BMEdge *e_pair[2];
 
-						if (BM_vert_is_edge_pair(v)) {
+						if (BM_vert_edge_pair(v, &e_pair[0], &e_pair[1])) {
 							bool v_pair_swap = false;
-							BMEdge *e_pair[2] = {v->e, BM_DISK_EDGE_NEXT(v->e, v)};
 							BMVert *v_pair[2] = {BM_edge_other_vert(e_pair[0], v), BM_edge_other_vert(e_pair[1], v)};
 							float dir_pair[2][3];
 
@@ -855,7 +854,7 @@ int getTransformOrientation(const bContext *C, float normal[3], float plane[3], 
 							/* exception */
 							if (flag) {
 								float tvec[3];
-								if ((v3d->around == V3D_LOCAL) ||
+								if ((around == V3D_AROUND_LOCAL_ORIGINS) ||
 								    ELEM(flag, SEL_F2, SEL_F1 | SEL_F3, SEL_F1 | SEL_F2 | SEL_F3))
 								{
 									BKE_nurb_bezt_calc_normal(nu, bezt, tvec);
@@ -1017,6 +1016,7 @@ int getTransformOrientation(const bContext *C, float normal[3], float plane[3], 
 	}
 	else {
 		/* we need the one selected object, if its not active */
+		View3D *v3d = CTX_wm_view3d(C);
 		ob = OBACT;
 		if (ob && (ob->flag & SELECT)) {
 			/* pass */
@@ -1042,14 +1042,22 @@ int getTransformOrientation(const bContext *C, float normal[3], float plane[3], 
 	return result;
 }
 
-void ED_getTransformOrientationMatrix(const bContext *C, float orientation_mat[3][3], const bool activeOnly)
+int getTransformOrientation(const bContext *C, float normal[3], float plane[3])
+{
+	/* dummy value, not V3D_AROUND_ACTIVE and not V3D_AROUND_LOCAL_ORIGINS */
+	short around = V3D_AROUND_CENTER_BOUNDS;
+
+	return getTransformOrientation_ex(C, normal, plane, around);
+}
+
+void ED_getTransformOrientationMatrix(const bContext *C, float orientation_mat[3][3], const short around)
 {
 	float normal[3] = {0.0, 0.0, 0.0};
 	float plane[3] = {0.0, 0.0, 0.0};
 
 	int type;
 
-	type = getTransformOrientation(C, normal, plane, activeOnly);
+	type = getTransformOrientation_ex(C, normal, plane, around);
 
 	switch (type) {
 		case ORIENTATION_NORMAL:

@@ -287,7 +287,7 @@ static void rna_def_dopesheet(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Source",
 	                         "ID-Block representing source data, usually ID_SCE (i.e. Scene)");
 	
-	/* Show datablock filters */
+	/* Show data-block filters */
 	prop = RNA_def_property(srna, "show_datablock_filters", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "flag", ADS_FLAG_SHOW_DBFILTERS);
 	RNA_def_property_ui_text(prop, "Show Datablock Filters",
@@ -357,6 +357,14 @@ static void rna_def_dopesheet(BlenderRNA *brna)
 	RNA_def_property_flag(prop, PROP_TEXTEDIT_UPDATE);
 	RNA_def_property_update(prop, NC_ANIMATION | ND_ANIMCHAN | NA_EDITED, NULL);
 	
+	/* Multi-word fuzzy search option for name/text filters */
+	prop = RNA_def_property(srna, "use_multi_word_filter", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "flag", ADS_FLAG_FUZZY_NAMES);
+	RNA_def_property_ui_text(prop, "Multi-Word Fuzzy Filter",
+	                         "Perform fuzzy/multi-word matching (WARNING: May be slow)");
+	RNA_def_property_ui_icon(prop, ICON_SORTALPHA, 0);
+	RNA_def_property_update(prop, NC_ANIMATION | ND_ANIMCHAN | NA_EDITED, NULL);
+	
 	/* NLA Specific Settings */
 	prop = RNA_def_property(srna, "show_missing_nla", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_negative_sdna(prop, NULL, "filterflag", ADS_FILTER_NLA_NOACT);
@@ -395,7 +403,8 @@ static void rna_def_dopesheet(BlenderRNA *brna)
 	
 	prop = RNA_def_property(srna, "show_modifiers", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_negative_sdna(prop, NULL, "filterflag", ADS_FILTER_NOMODIFIERS);
-	RNA_def_property_ui_text(prop, "Display Modifier Data", "Include visualization of animation data related to datablocks linked to modifiers");
+	RNA_def_property_ui_text(prop, "Display Modifier Data",
+	                         "Include visualization of animation data related to data-blocks linked to modifiers");
 	RNA_def_property_ui_icon(prop, ICON_MODIFIER, 0);
 	RNA_def_property_update(prop, NC_ANIMATION | ND_ANIMCHAN | NA_EDITED, NULL);
 	
@@ -493,6 +502,14 @@ static void rna_def_dopesheet(BlenderRNA *brna)
 	RNA_def_property_boolean_negative_sdna(prop, NULL, "filterflag", ADS_FILTER_NOGPENCIL);
 	RNA_def_property_ui_text(prop, "Display Grease Pencil", "Include visualization of Grease Pencil related animation data and frames");
 	RNA_def_property_ui_icon(prop, ICON_GREASEPENCIL, 0);
+	RNA_def_property_update(prop, NC_ANIMATION | ND_ANIMCHAN | NA_EDITED, NULL);
+	
+	/* GPencil Mode Settings */
+	prop = RNA_def_property(srna, "show_gpencil_3d_only", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "filterflag", ADS_FILTER_GP_3DONLY);
+	RNA_def_property_ui_text(prop, "Active Scene Only", 
+	                         "Only show Grease Pencil datablocks used as part of the active scene");
+	RNA_def_property_ui_icon(prop, ICON_SCENE_DATA, 0);
 	RNA_def_property_update(prop, NC_ANIMATION | ND_ANIMCHAN | NA_EDITED, NULL);
 }
 
@@ -703,7 +720,7 @@ static void rna_def_action(BlenderRNA *brna)
 	 * but is still available/editable in 'emergencies' */
 	prop = RNA_def_property(srna, "id_root", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_sdna(prop, NULL, "idroot");
-	RNA_def_property_enum_items(prop, id_type_items);
+	RNA_def_property_enum_items(prop, rna_enum_id_type_items);
 	RNA_def_property_ui_text(prop, "ID Root Type",
 	                         "Type of ID block that action can be used on - "
 	                         "DO NOT CHANGE UNLESS YOU KNOW WHAT YOU ARE DOING");

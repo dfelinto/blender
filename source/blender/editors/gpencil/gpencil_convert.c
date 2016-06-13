@@ -77,6 +77,7 @@
 #include "RNA_access.h"
 #include "RNA_define.h"
 
+#include "UI_resources.h"
 #include "UI_view2d.h"
 
 #include "ED_gpencil.h"
@@ -106,9 +107,9 @@ enum {
 
 /* RNA enum define */
 static EnumPropertyItem prop_gpencil_convertmodes[] = {
-	{GP_STROKECONVERT_PATH, "PATH", 0, "Path", ""},
-	{GP_STROKECONVERT_CURVE, "CURVE", 0, "Bezier Curve", ""},
-	{GP_STROKECONVERT_POLY, "POLY", 0, "Polygon Curve", ""},
+	{GP_STROKECONVERT_PATH, "PATH", ICON_CURVE_PATH, "Path", "Animation path"},
+	{GP_STROKECONVERT_CURVE, "CURVE", ICON_CURVE_BEZCURVE, "Bezier Curve", "Smooth Bezier curve"},
+	{GP_STROKECONVERT_POLY, "POLY", ICON_MESH_DATA, "Polygon Curve", "Bezier curve with straight-line segments (vector handles)"},
 	{0, NULL, 0, NULL, NULL}
 };
 
@@ -397,7 +398,7 @@ static void gp_stroke_path_animation_add_keyframes(ReportList *reports, PointerR
 				if ((cfra - last_valid_time) < MIN_TIME_DELTA) {
 					cfra = last_valid_time + MIN_TIME_DELTA;
 				}
-				insert_keyframe_direct(reports, ptr, prop, fcu, cfra, INSERTKEY_FAST);
+				insert_keyframe_direct(reports, ptr, prop, fcu, cfra, BEZT_KEYTYPE_KEYFRAME, INSERTKEY_FAST);
 				last_valid_time = cfra;
 			}
 			else if (G.debug & G_DEBUG) {
@@ -409,7 +410,7 @@ static void gp_stroke_path_animation_add_keyframes(ReportList *reports, PointerR
 			if ((cfra - last_valid_time) < MIN_TIME_DELTA) {
 				cfra = last_valid_time + MIN_TIME_DELTA;
 			}
-			insert_keyframe_direct(reports, ptr, prop, fcu, cfra, INSERTKEY_FAST);
+			insert_keyframe_direct(reports, ptr, prop, fcu, cfra, BEZT_KEYTYPE_KEYFRAME, INSERTKEY_FAST);
 			last_valid_time = cfra;
 		}
 		else {
@@ -417,7 +418,7 @@ static void gp_stroke_path_animation_add_keyframes(ReportList *reports, PointerR
 			 * and also far enough from (not yet added!) end_stroke keyframe!
 			 */
 			if ((cfra - last_valid_time) > MIN_TIME_DELTA && (end_stroke_time - cfra) > MIN_TIME_DELTA) {
-				insert_keyframe_direct(reports, ptr, prop, fcu, cfra, INSERTKEY_FAST);
+				insert_keyframe_direct(reports, ptr, prop, fcu, cfra, BEZT_KEYTYPE_BREAKDOWN, INSERTKEY_FAST);
 				last_valid_time = cfra;
 			}
 			else if (G.debug & G_DEBUG) {
@@ -471,7 +472,7 @@ static void gp_stroke_path_animation(bContext *C, ReportList *reports, Curve *cu
 		
 		cu->ctime = 0.0f;
 		cfra = (float)gtd->start_frame;
-		insert_keyframe_direct(reports, ptr, prop, fcu, cfra, INSERTKEY_FAST);
+		insert_keyframe_direct(reports, ptr, prop, fcu, cfra, BEZT_KEYTYPE_KEYFRAME, INSERTKEY_FAST);
 		
 		cu->ctime = cu->pathlen;
 		if (gtd->realtime) {
@@ -480,7 +481,7 @@ static void gp_stroke_path_animation(bContext *C, ReportList *reports, Curve *cu
 		else {
 			cfra = (float)gtd->end_frame;
 		}
-		insert_keyframe_direct(reports, ptr, prop, fcu, cfra, INSERTKEY_FAST);
+		insert_keyframe_direct(reports, ptr, prop, fcu, cfra, BEZT_KEYTYPE_KEYFRAME, INSERTKEY_FAST);
 	}
 	else {
 		/* Use actual recorded timing! */

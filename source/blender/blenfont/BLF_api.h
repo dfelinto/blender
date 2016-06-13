@@ -36,6 +36,7 @@
 
 struct rctf;
 struct ColorManagedDisplay;
+struct ResultBLF;
 
 int BLF_init(int points, int dpi);
 void BLF_exit(void);
@@ -72,16 +73,18 @@ void BLF_size(int fontid, int size, int dpi);
  *  | m[3]  m[7]  m[11] m[15] |
  *
  */
-void BLF_matrix(int fontid, const double m[16]);
+void BLF_matrix(int fontid, const float m[16]);
 
 /* Draw the string using the default font, size and dpi. */
 void BLF_draw_default(float x, float y, float z, const char *str, size_t len) ATTR_NONNULL();
 void BLF_draw_default_ascii(float x, float y, float z, const char *str, size_t len) ATTR_NONNULL();
 
 /* Draw the string using the current font. */
-void BLF_draw(int fontid, const char *str, size_t len);
-void BLF_draw_ascii(int fontid, const char *str, size_t len);
-int BLF_draw_mono(int fontid, const char *str, size_t len, int cwidth);
+void BLF_draw_ex(int fontid, const char *str, size_t len, struct ResultBLF *r_info) ATTR_NONNULL(2);
+void BLF_draw(int fontid, const char *str, size_t len) ATTR_NONNULL(2);
+void BLF_draw_ascii_ex(int fontid, const char *str, size_t len, struct ResultBLF *r_info) ATTR_NONNULL(2);
+void BLF_draw_ascii(int fontid, const char *str, size_t len) ATTR_NONNULL(2);
+int BLF_draw_mono(int fontid, const char *str, size_t len, int cwidth) ATTR_NONNULL(2);
 
 /* Get the string byte offset that fits within a given width */
 size_t BLF_width_to_strlen(int fontid, const char *str, size_t len, float width, float *r_width) ATTR_NONNULL(2);
@@ -91,17 +94,20 @@ size_t BLF_width_to_rstrlen(int fontid, const char *str, size_t len, float width
 /* This function return the bounding box of the string
  * and are not multiplied by the aspect.
  */
+void BLF_boundbox_ex(int fontid, const char *str, size_t len, struct rctf *box, struct ResultBLF *r_info) ATTR_NONNULL(2);
 void BLF_boundbox(int fontid, const char *str, size_t len, struct rctf *box) ATTR_NONNULL();
 
 /* The next both function return the width and height
  * of the string, using the current font and both value 
  * are multiplied by the aspect of the font.
  */
+float BLF_width_ex(int fontid, const char *str, size_t len, struct ResultBLF *r_info) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL(2);
 float BLF_width(int fontid, const char *str, size_t len) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
+float BLF_height_ex(int fontid, const char *str, size_t len, struct ResultBLF *r_info) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL(2);
 float BLF_height(int fontid, const char *str, size_t len) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
 
 /* Return dimensions of the font without any sample text. */
-float BLF_height_max(int fontid) ATTR_WARN_UNUSED_RESULT;
+int BLF_height_max(int fontid) ATTR_WARN_UNUSED_RESULT;
 float BLF_width_max(int fontid) ATTR_WARN_UNUSED_RESULT;
 float BLF_descender(int fontid) ATTR_WARN_UNUSED_RESULT;
 float BLF_ascender(int fontid) ATTR_WARN_UNUSED_RESULT;
@@ -137,6 +143,7 @@ void BLF_disable_default(int option);
 void BLF_rotation(int fontid, float angle);
 void BLF_clipping(int fontid, float xmin, float ymin, float xmax, float ymax);
 void BLF_clipping_default(float xmin, float ymin, float xmax, float ymax);
+void BLF_wordwrap(int fontid, int wrap_width);
 void BLF_blur(int fontid, int size);
 
 void BLF_enable(int fontid, int option);
@@ -146,7 +153,7 @@ void BLF_disable(int fontid, int option);
  * the other argument are the rgba color.
  * Take care that shadow need to be enable using BLF_enable!!!
  */
-void BLF_shadow(int fontid, int level, float r, float g, float b, float a);
+void BLF_shadow(int fontid, int level, const float rgba[4]) ATTR_NONNULL(3);
 
 /* Set the offset for shadow text, this is the current cursor
  * position plus this offset, don't need call BLF_position before
@@ -167,12 +174,13 @@ void BLF_shadow_offset(int fontid, int x, int y);
 void BLF_buffer(int fontid, float *fbuf, unsigned char *cbuf, int w, int h, int nch, struct ColorManagedDisplay *display);
 
 /* Set the color to be used for text. */
-void BLF_buffer_col(int fontid, float r, float g, float b, float a);
+void BLF_buffer_col(int fontid, const float rgba[4]) ATTR_NONNULL(2);
 
 /* Draw the string into the buffer, this function draw in both buffer, float and unsigned char _BUT_
  * it's not necessary set both buffer, NULL is valid here.
  */
-void BLF_draw_buffer(int fontid, const char *str) ATTR_NONNULL();
+void BLF_draw_buffer_ex(int fontid, const char *str, size_t len, struct ResultBLF *r_info) ATTR_NONNULL(2);
+void BLF_draw_buffer(int fontid, const char *str, size_t len) ATTR_NONNULL(2);
 
 /* Add a path to the font dir paths. */
 void BLF_dir_add(const char *path) ATTR_NONNULL();
@@ -210,11 +218,26 @@ void BLF_state_print(int fontid);
 #define BLF_MATRIX           (1 << 4)
 #define BLF_ASPECT           (1 << 5)
 #define BLF_HINTING          (1 << 6)
+#define BLF_WORD_WRAP        (1 << 7)
 
 #define BLF_DRAW_STR_DUMMY_MAX 1024
 
 /* XXX, bad design */
 extern int blf_mono_font;
 extern int blf_mono_font_render; /* don't mess drawing with render threads. */
+
+/**
+ * Result of drawing/evaluating the string
+ */
+struct ResultBLF {
+	/**
+	 * Number of lines drawn when #BLF_WORD_WRAP is enabled (both wrapped and `\n` newline).
+	 */
+	int lines;
+	/**
+	 * The 'cursor' position on completion (ignoring character boundbox).
+	 */
+	int width;
+};
 
 #endif /* __BLF_API_H__ */

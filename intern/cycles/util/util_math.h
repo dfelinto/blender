@@ -24,10 +24,6 @@
 
 #ifndef __KERNEL_OPENCL__
 
-#ifdef _MSC_VER
-#  define _USE_MATH_DEFINES
-#endif
-
 #include <float.h>
 #include <math.h>
 #include <stdio.h>
@@ -100,6 +96,11 @@ ccl_device_inline float fminf(float a, float b)
 #endif
 
 #ifndef __KERNEL_GPU__
+
+ccl_device_inline int abs(int x)
+{
+	return (x > 0)? x: -x;
+}
 
 ccl_device_inline int max(int a, int b)
 {
@@ -351,7 +352,7 @@ ccl_device_inline float2 normalize_len(const float2 a, float *t)
 ccl_device_inline float2 safe_normalize(const float2 a)
 {
 	float t = len(a);
-	return (t)? a/t: a;
+	return (t != 0.0f)? a/t: a;
 }
 
 ccl_device_inline bool operator==(const float2 a, const float2 b)
@@ -553,7 +554,7 @@ ccl_device_inline float3 normalize_len(const float3 a, float *t)
 ccl_device_inline float3 safe_normalize(const float3 a)
 {
 	float t = len(a);
-	return (t)? a/t: a;
+	return (t != 0.0f)? a/t: a;
 }
 
 #ifndef __KERNEL_OPENCL__
@@ -866,7 +867,7 @@ ccl_device_inline float4 normalize(const float4 a)
 ccl_device_inline float4 safe_normalize(const float4 a)
 {
 	float t = len(a);
-	return (t)? a/t: a;
+	return (t != 0.0f)? a/t: a;
 }
 
 ccl_device_inline float4 min(float4 a, float4 b)
@@ -935,6 +936,37 @@ ccl_device_inline float4 reduce_add(const float4& a)
 ccl_device_inline void print_float4(const char *label, const float4& a)
 {
 	printf("%s: %.8f %.8f %.8f %.8f\n", label, (double)a.x, (double)a.y, (double)a.z, (double)a.w);
+}
+
+#endif
+
+/* Int2 */
+
+#ifndef __KERNEL_OPENCL__
+
+ccl_device_inline int2 operator+(const int2 &a, const int2 &b)
+{
+	return make_int2(a.x + b.x, a.y + b.y);
+}
+
+ccl_device_inline int2 operator+=(int2 &a, const int2 &b)
+{
+	return a = a + b;
+}
+
+ccl_device_inline int2 operator-(const int2 &a, const int2 &b)
+{
+	return make_int2(a.x - b.x, a.y - b.y);
+}
+
+ccl_device_inline int2 operator*(const int2 &a, const int2 &b)
+{
+	return make_int2(a.x * b.x, a.y * b.y);
+}
+
+ccl_device_inline int2 operator/(const int2 &a, const int2 &b)
+{
+	return make_int2(a.x / b.x, a.y / b.y);
 }
 
 #endif
@@ -1447,21 +1479,25 @@ ccl_device bool ray_triangle_intersect_uv(
 	return true;
 }
 
-ccl_device bool ray_quad_intersect(float3 ray_P, float3 ray_D, float ray_t,
-                                   float3 quad_P, float3 quad_u, float3 quad_v,
+ccl_device bool ray_quad_intersect(float3 ray_P, float3 ray_D, float ray_mint, float ray_maxt,
+                                   float3 quad_P, float3 quad_u, float3 quad_v, float3 quad_n,
                                    float3 *isect_P, float *isect_t)
 {
-	float3 v0 = quad_P - quad_u*0.5f - quad_v*0.5f;
-	float3 v1 = quad_P + quad_u*0.5f - quad_v*0.5f;
-	float3 v2 = quad_P + quad_u*0.5f + quad_v*0.5f;
-	float3 v3 = quad_P - quad_u*0.5f + quad_v*0.5f;
+	float t = -(dot(ray_P, quad_n) - dot(quad_P, quad_n)) / dot(ray_D, quad_n);
+	if(t < ray_mint || t > ray_maxt)
+		return false;
 
-	if(ray_triangle_intersect(ray_P, ray_D, ray_t, v0, v1, v2, isect_P, isect_t))
-		return true;
-	else if(ray_triangle_intersect(ray_P, ray_D, ray_t, v0, v2, v3, isect_P, isect_t))
-		return true;
-	
-	return false;
+	float3 hit = ray_P + t*ray_D;
+	float3 inplane = hit - quad_P;
+	if(fabsf(dot(inplane, quad_u) / dot(quad_u, quad_u)) > 0.5f)
+		return false;
+	if(fabsf(dot(inplane, quad_v) / dot(quad_v, quad_v)) > 0.5f)
+		return false;
+
+	if(isect_P) *isect_P = hit;
+	if(isect_t) *isect_t = t;
+
+	return true;
 }
 
 /* projections */

@@ -999,12 +999,14 @@ void CURVE_OT_select_less(wmOperatorType *ot)
 
 /********************** select random *********************/
 
-static void curve_select_random(ListBase *editnurb, float randfac, bool select)
+static void curve_select_random(ListBase *editnurb, float randfac, int seed, bool select)
 {
 	Nurb *nu;
 	BezTriple *bezt;
 	BPoint *bp;
 	int a;
+
+	RNG *rng = BLI_rng_new_srandom(seed);
 
 	for (nu = editnurb->first; nu; nu = nu->next) {
 		if (nu->type == CU_BEZIER) {
@@ -1012,7 +1014,7 @@ static void curve_select_random(ListBase *editnurb, float randfac, bool select)
 			a = nu->pntsu;
 			while (a--) {
 				if (!bezt->hide) {
-					if (BLI_frand() < randfac) {
+					if (BLI_rng_get_float(rng) < randfac) {
 						select_beztriple(bezt, select, SELECT, VISIBLE);
 					}
 				}
@@ -1025,7 +1027,7 @@ static void curve_select_random(ListBase *editnurb, float randfac, bool select)
 
 			while (a--) {
 				if (!bp->hide) {
-					if (BLI_frand() < randfac) {
+					if (BLI_rng_get_float(rng) < randfac) {
 						select_bpoint(bp, select, SELECT, VISIBLE);
 					}
 				}
@@ -1033,6 +1035,8 @@ static void curve_select_random(ListBase *editnurb, float randfac, bool select)
 			}
 		}
 	}
+
+	BLI_rng_free(rng);
 }
 
 static int curve_select_random_exec(bContext *C, wmOperator *op)
@@ -1041,8 +1045,9 @@ static int curve_select_random_exec(bContext *C, wmOperator *op)
 	ListBase *editnurb = object_editcurve_get(obedit);
 	const bool select = (RNA_enum_get(op->ptr, "action") == SEL_SELECT);
 	const float randfac = RNA_float_get(op->ptr, "percent") / 100.0f;
+	const int seed = WM_operator_properties_select_random_seed_increment_get(op);
 
-	curve_select_random(editnurb, randfac, select);
+	curve_select_random(editnurb, randfac, seed, select);
 	BKE_curve_nurb_vert_active_validate(obedit->data);
 
 	WM_event_add_notifier(C, NC_GEOM | ND_SELECT, obedit->data);
@@ -1065,14 +1070,12 @@ void CURVE_OT_select_random(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
 	/* properties */
-	RNA_def_float_percentage(ot->srna, "percent", 50.f, 0.0f, 100.0f,
-	                         "Percent", "Percentage of elements to select randomly", 0.0f, 100.0f);
-	WM_operator_properties_select_action_simple(ot, SEL_SELECT);
+	WM_operator_properties_select_random(ot);
 }
 
 /********************* every nth number of point *******************/
 
-static void select_nth_bezt(Nurb *nu, BezTriple *bezt, int nth, int skip, int offset)
+static void select_nth_bezt(Nurb *nu, BezTriple *bezt, const struct CheckerIntervalParams *params)
 {
 	int a, start;
 
@@ -1082,7 +1085,7 @@ static void select_nth_bezt(Nurb *nu, BezTriple *bezt, int nth, int skip, int of
 
 	while (a--) {
 		const int depth = abs(start - a);
-		if ((offset + depth) % (skip + nth) >= skip) {
+		if (WM_operator_properties_checker_interval_test(params, depth)) {
 			select_beztriple(bezt, DESELECT, SELECT, HIDDEN);
 		}
 
@@ -1090,7 +1093,7 @@ static void select_nth_bezt(Nurb *nu, BezTriple *bezt, int nth, int skip, int of
 	}
 }
 
-static void select_nth_bp(Nurb *nu, BPoint *bp, int nth, int skip, int offset)
+static void select_nth_bp(Nurb *nu, BPoint *bp, const struct CheckerIntervalParams *params)
 {
 	int a, startrow, startpnt;
 	int row, pnt;
@@ -1105,7 +1108,7 @@ static void select_nth_bp(Nurb *nu, BPoint *bp, int nth, int skip, int offset)
 
 	while (a--) {
 		const int depth = abs(pnt - startpnt) + abs(row - startrow);
-		if ((offset + depth) % (skip + nth) >= skip) {
+		if (WM_operator_properties_checker_interval_test(params, depth)) {
 			select_bpoint(bp, DESELECT, SELECT, HIDDEN);
 		}
 
@@ -1119,7 +1122,7 @@ static void select_nth_bp(Nurb *nu, BPoint *bp, int nth, int skip, int offset)
 	}
 }
 
-bool ED_curve_select_nth(Curve *cu, int nth, int skip, int offset)
+static bool ed_curve_select_nth(Curve *cu, const struct CheckerIntervalParams *params)
 {
 	Nurb *nu = NULL;
 	void *vert = NULL;
@@ -1128,10 +1131,10 @@ bool ED_curve_select_nth(Curve *cu, int nth, int skip, int offset)
 		return false;
 
 	if (nu->bezt) {
-		select_nth_bezt(nu, vert, nth, skip, offset);
+		select_nth_bezt(nu, vert, params);
 	}
 	else {
-		select_nth_bp(nu, vert, nth, skip, offset);
+		select_nth_bp(nu, vert, params);
 	}
 
 	return true;
@@ -1140,14 +1143,11 @@ bool ED_curve_select_nth(Curve *cu, int nth, int skip, int offset)
 static int select_nth_exec(bContext *C, wmOperator *op)
 {
 	Object *obedit = CTX_data_edit_object(C);
-	const int nth = RNA_int_get(op->ptr, "nth") - 1;
-	const int skip = RNA_int_get(op->ptr, "skip");
-	int offset = RNA_int_get(op->ptr, "offset");
+	struct CheckerIntervalParams op_params;
 
-	/* so input of offset zero ends up being (nth - 1) */
-	offset = mod_i(offset, nth + skip);
+	WM_operator_properties_checker_interval_from_op(op, &op_params);
 
-	if (!ED_curve_select_nth(obedit->data, nth, skip, offset)) {
+	if (!ed_curve_select_nth(obedit->data, &op_params)) {
 		if (obedit->type == OB_SURF) {
 			BKE_report(op->reports, RPT_ERROR, "Surface has not got active point");
 		}
@@ -1177,9 +1177,7 @@ void CURVE_OT_select_nth(wmOperatorType *ot)
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
-	RNA_def_int(ot->srna, "nth", 2, 2, INT_MAX, "Nth Selection", "", 2, 100);
-	RNA_def_int(ot->srna, "skip", 1, 1, INT_MAX, "Skip", "", 1, 100);
-	RNA_def_int(ot->srna, "offset", 0, INT_MIN, INT_MAX, "Offset", "", -100, 100);
+	WM_operator_properties_checker_interval(ot, false);
 }
 
 

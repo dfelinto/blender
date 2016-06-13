@@ -90,11 +90,6 @@
 #include "BKE_unit.h"
 #include "BKE_world.h"
 
-#ifdef WITH_OPENSUBDIV
-#  include "BKE_modifier.h"
-#  include "CCGSubSurf.h"
-#endif
-
 #include "DEG_depsgraph.h"
 
 #include "RE_engine.h"
@@ -105,11 +100,6 @@
 #include "IMB_imbuf.h"
 
 #include "bmesh.h"
-
-#ifdef WIN32
-#else
-#  include <sys/time.h>
-#endif
 
 const char *RE_engine_id_BLENDER_RENDER = "BLENDER_RENDER";
 const char *RE_engine_id_BLENDER_GAME = "BLENDER_GAME";
@@ -175,6 +165,7 @@ Scene *BKE_scene_copy(Scene *sce, int type)
 		
 		rl = scen->r.layers;
 		rv = scen->r.views;
+		curvemapping_free_data(&scen->r.mblur_shutter_curve);
 		scen->r = sce->r;
 		scen->r.layers = rl;
 		scen->r.actlay = 0;
@@ -188,6 +179,7 @@ Scene *BKE_scene_copy(Scene *sce, int type)
 			scen->id.properties = IDP_CopyProperty(sce->id.properties);
 
 		MEM_freeN(scen->toolsettings);
+		BKE_sound_destroy_scene(scen);
 	}
 	else {
 		scen = BKE_libblock_copy(&sce->id);
@@ -197,7 +189,7 @@ Scene *BKE_scene_copy(Scene *sce, int type)
 		
 		id_us_plus((ID *)scen->world);
 		id_us_plus((ID *)scen->set);
-		id_us_plus((ID *)scen->gm.dome.warptext);
+		/* id_us_plus((ID *)scen->gm.dome.warptext); */  /* XXX Not refcounted? see readfile.c */
 
 		scen->ed = NULL;
 		scen->theDag = NULL;
@@ -231,14 +223,6 @@ Scene *BKE_scene_copy(Scene *sce, int type)
 			base = base->next;
 		}
 
-		/* copy color management settings */
-		BKE_color_managed_display_settings_copy(&scen->display_settings, &sce->display_settings);
-		BKE_color_managed_view_settings_copy(&scen->view_settings, &sce->view_settings);
-		BKE_color_managed_view_settings_copy(&scen->r.im_format.view_settings, &sce->r.im_format.view_settings);
-
-		BLI_strncpy(scen->sequencer_colorspace_settings.name, sce->sequencer_colorspace_settings.name,
-		            sizeof(scen->sequencer_colorspace_settings.name));
-
 		/* copy action and remove animation used by sequencer */
 		BKE_animdata_copy_id_action(&scen->id);
 
@@ -260,6 +244,19 @@ Scene *BKE_scene_copy(Scene *sce, int type)
 			new_srl = new_srl->next;
 		}
 	}
+
+	/* copy color management settings */
+	BKE_color_managed_display_settings_copy(&scen->display_settings, &sce->display_settings);
+	BKE_color_managed_view_settings_copy(&scen->view_settings, &sce->view_settings);
+	BKE_color_managed_colorspace_settings_copy(&scen->sequencer_colorspace_settings, &sce->sequencer_colorspace_settings);
+
+	BKE_color_managed_display_settings_copy(&scen->r.im_format.display_settings, &sce->r.im_format.display_settings);
+	BKE_color_managed_view_settings_copy(&scen->r.im_format.view_settings, &sce->r.im_format.view_settings);
+
+	BKE_color_managed_display_settings_copy(&scen->r.bake.im_format.display_settings, &sce->r.bake.im_format.display_settings);
+	BKE_color_managed_view_settings_copy(&scen->r.bake.im_format.view_settings, &sce->r.bake.im_format.view_settings);
+
+	curvemapping_copy_data(&scen->r.mblur_shutter_curve, &sce->r.mblur_shutter_curve);
 
 	/* tool settings */
 	scen->toolsettings = MEM_dupallocN(sce->toolsettings);
@@ -371,7 +368,7 @@ void BKE_scene_free(Scene *sce)
 
 	base = sce->base.first;
 	while (base) {
-		base->object->id.us--;
+		id_us_min(&base->object->id);
 		base = base->next;
 	}
 	/* do not free objects! */
@@ -381,7 +378,7 @@ void BKE_scene_free(Scene *sce)
 		/* since the grease pencil data is freed before the scene.
 		 * since grease pencil data is not (yet?), shared between objects
 		 * its probably safe not to do this, some save and reload will free this. */
-		sce->gpd->id.us--;
+		id_us_min(&sce->gpd->id);
 #endif
 		sce->gpd = NULL;
 	}
@@ -462,17 +459,19 @@ void BKE_scene_free(Scene *sce)
 	BKE_color_managed_view_settings_free(&sce->view_settings);
 
 	BKE_previewimg_free(&sce->preview);
+	curvemapping_free_data(&sce->r.mblur_shutter_curve);
 }
 
-Scene *BKE_scene_add(Main *bmain, const char *name)
+void BKE_scene_init(Scene *sce)
 {
-	Scene *sce;
 	ParticleEditSettings *pset;
 	int a;
 	const char *colorspace_name;
 	SceneRenderView *srv;
+	CurveMapping *mblur_shutter_curve;
 
-	sce = BKE_libblock_alloc(bmain, ID_SCE, name);
+	BLI_assert(MEMCMP_STRUCT_OFS_IS_ZERO(sce, id));
+
 	sce->lay = sce->layact = 1;
 	
 	sce->r.mode = R_GAMMA | R_OSA | R_SHADOW | R_SSS | R_ENVMAP | R_RAYTRACE;
@@ -529,6 +528,7 @@ Scene *BKE_scene_add(Main *bmain, const char *name)
 	sce->r.bake_biasdist = 0.001;
 
 	sce->r.bake.flag = R_BAKE_CLEAR;
+	sce->r.bake.pass_filter = R_BAKE_PASS_FILTER_ALL;
 	sce->r.bake.width = 512;
 	sce->r.bake.height = 512;
 	sce->r.bake.margin = 16;
@@ -545,7 +545,7 @@ Scene *BKE_scene_add(Main *bmain, const char *name)
 	sce->r.bake.im_format.compress = 15;
 
 	sce->r.scemode = R_DOCOMP | R_DOSEQ | R_EXTENSION;
-	sce->r.stamp = R_STAMP_TIME | R_STAMP_FRAME | R_STAMP_DATE | R_STAMP_CAMERA | R_STAMP_SCENE | R_STAMP_FILENAME | R_STAMP_RENDERTIME;
+	sce->r.stamp = R_STAMP_TIME | R_STAMP_FRAME | R_STAMP_DATE | R_STAMP_CAMERA | R_STAMP_SCENE | R_STAMP_FILENAME | R_STAMP_RENDERTIME | R_STAMP_MEMORY;
 	sce->r.stamp_font_id = 12;
 	sce->r.fg_stamp[0] = sce->r.fg_stamp[1] = sce->r.fg_stamp[2] = 0.8f;
 	sce->r.fg_stamp[3] = 1.0f;
@@ -573,6 +573,14 @@ Scene *BKE_scene_add(Main *bmain, const char *name)
 	
 	sce->r.line_thickness_mode = R_LINE_THICKNESS_ABSOLUTE;
 	sce->r.unit_line_thickness = 1.0f;
+
+	mblur_shutter_curve = &sce->r.mblur_shutter_curve;
+	curvemapping_set_defaults(mblur_shutter_curve, 1, 0.0f, 0.0f, 1.0f, 1.0f);
+	curvemapping_initialize(mblur_shutter_curve);
+	curvemap_reset(mblur_shutter_curve->cm,
+	               &mblur_shutter_curve->clipr,
+	               CURVE_PRESET_MAX,
+	               CURVEMAP_SLOPE_POS_NEG);
 
 	sce->toolsettings = MEM_callocN(sizeof(struct ToolSettings), "Tool Settings Struct");
 	sce->toolsettings->doublimit = 0.001;
@@ -602,6 +610,12 @@ Scene *BKE_scene_add(Main *bmain, const char *name)
 	sce->toolsettings->skgen_subdivisions[0] = SKGEN_SUB_CORRELATION;
 	sce->toolsettings->skgen_subdivisions[1] = SKGEN_SUB_LENGTH;
 	sce->toolsettings->skgen_subdivisions[2] = SKGEN_SUB_ANGLE;
+
+	sce->toolsettings->curve_paint_settings.curve_type = CU_BEZIER;
+	sce->toolsettings->curve_paint_settings.flag |= CURVE_PAINT_FLAG_CORNERS_DETECT;
+	sce->toolsettings->curve_paint_settings.error_threshold = 8;
+	sce->toolsettings->curve_paint_settings.radius_max = 1.0f;
+	sce->toolsettings->curve_paint_settings.corner_angle = DEG2RADF(70.0f);
 
 	sce->toolsettings->statvis.overhang_axis = OB_NEGZ;
 	sce->toolsettings->statvis.overhang_min = 0;
@@ -637,14 +651,14 @@ Scene *BKE_scene_add(Main *bmain, const char *name)
 	pset->fade_frames = 2;
 	pset->selectmode = SCE_SELECT_PATH;
 	for (a = 0; a < PE_TOT_BRUSH; a++) {
-		pset->brush[a].strength = 0.5;
+		pset->brush[a].strength = 0.5f;
 		pset->brush[a].size = 50;
 		pset->brush[a].step = 10;
 		pset->brush[a].count = 10;
 	}
-	pset->brush[PE_BRUSH_CUT].strength = 100;
+	pset->brush[PE_BRUSH_CUT].strength = 1.0f;
 
-	sce->r.ffcodecdata.audio_mixrate = 44100;
+	sce->r.ffcodecdata.audio_mixrate = 48000;
 	sce->r.ffcodecdata.audio_volume = 1.0f;
 	sce->r.ffcodecdata.audio_bitrate = 192;
 	sce->r.ffcodecdata.audio_channels = 2;
@@ -743,6 +757,62 @@ Scene *BKE_scene_add(Main *bmain, const char *name)
 	copy_v2_fl2(sce->safe_areas.action_center, 15.0f / 100.0f, 5.0f / 100.0f);
 
 	sce->preview = NULL;
+	
+	/* GP Sculpt brushes */
+	{
+		GP_BrushEdit_Settings *gset = &sce->toolsettings->gp_sculpt;
+		GP_EditBrush_Data *gp_brush;
+		
+		gp_brush = &gset->brush[GP_EDITBRUSH_TYPE_SMOOTH];
+		gp_brush->size = 25;
+		gp_brush->strength = 0.3f;
+		gp_brush->flag = GP_EDITBRUSH_FLAG_USE_FALLOFF | GP_EDITBRUSH_FLAG_SMOOTH_PRESSURE;
+		
+		gp_brush = &gset->brush[GP_EDITBRUSH_TYPE_THICKNESS];
+		gp_brush->size = 25;
+		gp_brush->strength = 0.5f;
+		gp_brush->flag = GP_EDITBRUSH_FLAG_USE_FALLOFF;
+		
+		gp_brush = &gset->brush[GP_EDITBRUSH_TYPE_GRAB];
+		gp_brush->size = 50;
+		gp_brush->strength = 0.3f;
+		gp_brush->flag = GP_EDITBRUSH_FLAG_USE_FALLOFF;
+		
+		gp_brush = &gset->brush[GP_EDITBRUSH_TYPE_PUSH];
+		gp_brush->size = 25;
+		gp_brush->strength = 0.3f;
+		gp_brush->flag = GP_EDITBRUSH_FLAG_USE_FALLOFF;
+		
+		gp_brush = &gset->brush[GP_EDITBRUSH_TYPE_TWIST];
+		gp_brush->size = 50;
+		gp_brush->strength = 0.3f; // XXX?
+		gp_brush->flag = GP_EDITBRUSH_FLAG_USE_FALLOFF;
+		
+		gp_brush = &gset->brush[GP_EDITBRUSH_TYPE_PINCH];
+		gp_brush->size = 50;
+		gp_brush->strength = 0.5f; // XXX?
+		gp_brush->flag = GP_EDITBRUSH_FLAG_USE_FALLOFF;
+		
+		gp_brush = &gset->brush[GP_EDITBRUSH_TYPE_RANDOMIZE];
+		gp_brush->size = 25;
+		gp_brush->strength = 0.5f;
+		gp_brush->flag = GP_EDITBRUSH_FLAG_USE_FALLOFF;
+	}
+	
+	/* GP Stroke Placement */
+	sce->toolsettings->gpencil_v3d_align = GP_PROJECT_VIEWSPACE;
+	sce->toolsettings->gpencil_v2d_align = GP_PROJECT_VIEWSPACE;
+	sce->toolsettings->gpencil_seq_align = GP_PROJECT_VIEWSPACE;
+	sce->toolsettings->gpencil_ima_align = GP_PROJECT_VIEWSPACE;
+}
+
+Scene *BKE_scene_add(Main *bmain, const char *name)
+{
+	Scene *sce;
+
+	sce = BKE_libblock_alloc(bmain, ID_SCE, name);
+
+	BKE_scene_init(sce);
 
 	return sce;
 }
@@ -820,7 +890,7 @@ void BKE_scene_set_background(Main *bmain, Scene *scene)
 	/* no full animation update, this to enable render code to work (render code calls own animation updates) */
 }
 
-/* called from creator.c */
+/* called from creator_args.c */
 Scene *BKE_scene_set_name(Main *bmain, const char *name)
 {
 	Scene *sce = (Scene *)BKE_libblock_find_name_ex(bmain, ID_SCE, name);
@@ -1360,14 +1430,9 @@ static void scene_do_rb_simulation_recursive(Scene *scene, float ctime)
  *
  * Ideally Mballs shouldn't do such an iteration and use DAG
  * queries instead. For the time being we've got new DAG
- * let's keep it simple and update mballs in a ingle thread.
+ * let's keep it simple and update mballs in a single thread.
  */
 #define MBALL_SINGLETHREAD_HACK
-
-/* Need this because CCFDM holds some OpenGL resources. */
-#ifdef WITH_OPENSUBDIV
-#  define OPENSUBDIV_GL_WORKAROUND
-#endif
 
 #ifdef WITH_LEGACY_DEPSGRAPH
 typedef struct StatisicsEntry {
@@ -1414,7 +1479,7 @@ static void scene_update_all_bases(EvaluationContext *eval_ctx, Scene *scene, Sc
 	}
 }
 
-static void scene_update_object_func(TaskPool *pool, void *taskdata, int threadid)
+static void scene_update_object_func(TaskPool * __restrict pool, void *taskdata, int threadid)
 {
 /* Disable print for now in favor of summary statistics at the end of update. */
 #define PRINT if (false) printf
@@ -1570,45 +1635,6 @@ static bool scene_need_update_objects(Main *bmain)
 		DAG_id_type_tagged(bmain, ID_AR);     /* Armature */
 }
 
-#ifdef OPENSUBDIV_GL_WORKAROUND
-/* CCG DrivedMesh currently hold some OpenGL handles, which could only be
- * released from the main thread.
- *
- * Ideally we need to use gpu_buffer_free, but it's a bit tricky because
- * some buffers are only accessible from OpenSubdiv side.
- */
-static void scene_free_unused_opensubdiv_cache(Scene *scene)
-{
-	Base *base;
-	for (base = scene->base.first; base; base = base->next) {
-		Object *object = base->object;
-		if (object->type == OB_MESH && object->recalc & OB_RECALC_DATA) {
-			ModifierData *md = object->modifiers.last;
-			if (md != NULL && md->type == eModifierType_Subsurf) {
-				SubsurfModifierData *smd = (SubsurfModifierData *) md;
-				bool object_in_editmode = object->mode == OB_MODE_EDIT;
-				if (!smd->use_opensubdiv) {
-					if (smd->mCache != NULL) {
-						ccgSubSurf_free_osd_mesh(smd->mCache);
-					}
-					if (smd->emCache != NULL) {
-						ccgSubSurf_free_osd_mesh(smd->emCache);
-					}
-				}
-				if (object_in_editmode && smd->mCache != NULL) {
-					ccgSubSurf_free(smd->mCache);
-					smd->mCache = NULL;
-				}
-				if (!object_in_editmode && smd->emCache != NULL) {
-					ccgSubSurf_free(smd->emCache);
-					smd->emCache = NULL;
-				}
-			}
-		}
-	}
-}
-#endif
-
 static void scene_update_objects(EvaluationContext *eval_ctx, Main *bmain, Scene *scene, Scene *scene_parent)
 {
 	TaskScheduler *task_scheduler = BLI_task_scheduler_get();
@@ -1626,10 +1652,6 @@ static void scene_update_objects(EvaluationContext *eval_ctx, Main *bmain, Scene
 	if (!scene_need_update_objects(bmain)) {
 		return;
 	}
-
-#ifdef OPENSUBDIV_GL_WORKAROUND
-	scene_free_unused_opensubdiv_cache(scene);
-#endif
 
 	state.eval_ctx = eval_ctx;
 	state.scene = scene;
@@ -1742,12 +1764,12 @@ static void prepare_mesh_for_viewport_render(Main *bmain, Scene *scene)
 	if (obedit) {
 		Mesh *mesh = obedit->data;
 		if ((obedit->type == OB_MESH) &&
-		    ((obedit->id.flag & LIB_ID_RECALC_ALL) ||
-		     (mesh->id.flag & LIB_ID_RECALC_ALL)))
+		    ((obedit->id.tag & LIB_TAG_ID_RECALC_ALL) ||
+		     (mesh->id.tag & LIB_TAG_ID_RECALC_ALL)))
 		{
 			if (check_rendered_viewport_visible(bmain)) {
 				BMesh *bm = mesh->edit_btmesh->bm;
-				BM_mesh_bm_to_me(bm, mesh, false);
+				BM_mesh_bm_to_me(bm, mesh, (&(struct BMeshToMeshParams){0}));
 				DAG_id_tag_update(&mesh->id, 0);
 			}
 		}
@@ -1786,11 +1808,11 @@ void BKE_scene_update_tagged(EvaluationContext *eval_ctx, Main *bmain, Scene *sc
 
 	/* removed calls to quick_cache, see pointcache.c */
 	
-	/* clear "LIB_DOIT" flag from all materials, to prevent infinite recursion problems later 
+	/* clear "LIB_TAG_DOIT" flag from all materials, to prevent infinite recursion problems later
 	 * when trying to find materials with drivers that need evaluating [#32017] 
 	 */
-	BKE_main_id_tag_idcode(bmain, ID_MA, false);
-	BKE_main_id_tag_idcode(bmain, ID_LA, false);
+	BKE_main_id_tag_idcode(bmain, ID_MA, LIB_TAG_DOIT, false);
+	BKE_main_id_tag_idcode(bmain, ID_LA, LIB_TAG_DOIT, false);
 
 	/* update all objects: drivers, matrices, displists, etc. flags set
 	 * by depgraph or manual, no layer check here, gets correct flushed
@@ -1885,6 +1907,8 @@ void BKE_scene_update_for_newframe_ex(EvaluationContext *eval_ctx, Main *bmain, 
 	(void) do_invisible_flush;
 #endif
 
+	DAG_editors_update_pre(bmain, sce, true);
+
 	/* keep this first */
 	BLI_callback_exec(bmain, &sce->id, BLI_CB_EVT_FRAME_CHANGE_PRE);
 	BLI_callback_exec(bmain, &sce->id, BLI_CB_EVT_SCENE_UPDATE_PRE);
@@ -1943,11 +1967,11 @@ void BKE_scene_update_for_newframe_ex(EvaluationContext *eval_ctx, Main *bmain, 
 	}
 #endif
 
-	/* clear "LIB_DOIT" flag from all materials, to prevent infinite recursion problems later 
+	/* clear "LIB_TAG_DOIT" flag from all materials, to prevent infinite recursion problems later
 	 * when trying to find materials with drivers that need evaluating [#32017] 
 	 */
-	BKE_main_id_tag_idcode(bmain, ID_MA, false);
-	BKE_main_id_tag_idcode(bmain, ID_LA, false);
+	BKE_main_id_tag_idcode(bmain, ID_MA, LIB_TAG_DOIT, false);
+	BKE_main_id_tag_idcode(bmain, ID_LA, LIB_TAG_DOIT, false);
 
 	/* run rigidbody sim */
 	/* NOTE: current position is so that rigidbody sim affects other objects, might change in the future */
@@ -2165,8 +2189,21 @@ bool BKE_scene_use_new_shading_nodes(const Scene *scene)
 
 bool BKE_scene_use_shading_nodes_custom(Scene *scene)
 {
-	   RenderEngineType *type = RE_engines_find(scene->r.engine);
-	   return (type && type->flag & RE_USE_SHADING_NODES_CUSTOM);
+	RenderEngineType *type = RE_engines_find(scene->r.engine);
+	return (type && type->flag & RE_USE_SHADING_NODES_CUSTOM);
+}
+
+bool BKE_scene_use_world_space_shading(Scene *scene)
+{
+	const RenderEngineType *type = RE_engines_find(scene->r.engine);
+	return ((scene->r.mode & R_USE_WS_SHADING) ||
+	        (type && (type->flag & RE_USE_SHADING_NODES)));
+}
+
+bool BKE_scene_use_spherical_stereo(Scene *scene)
+{
+	RenderEngineType *type = RE_engines_find(scene->r.engine);
+	return (type && type->flag & RE_USE_SPHERICAL_STEREO);
 }
 
 bool BKE_scene_uses_blender_internal(const  Scene *scene)
@@ -2278,10 +2315,10 @@ double BKE_scene_unit_scale(const UnitSettings *unit, const int unit_type, doubl
 
 /******************** multiview *************************/
 
-size_t BKE_scene_multiview_num_views_get(const RenderData *rd)
+int BKE_scene_multiview_num_views_get(const RenderData *rd)
 {
 	SceneRenderView *srv;
-	size_t totviews	= 0;
+	int totviews = 0;
 
 	if ((rd->scemode & R_MULTIVIEW) == 0)
 		return 1;
@@ -2394,7 +2431,6 @@ SceneRenderView *BKE_scene_multiview_render_view_findindex(const RenderData *rd,
 	if ((rd->scemode & R_MULTIVIEW) == 0)
 		return NULL;
 
-	nr = 0;
 	for (srv = rd->views.first, nr = 0; srv; srv = srv->next) {
 		if (BKE_scene_multiview_is_render_view_active(rd, srv)) {
 			if (nr++ == view_id)
@@ -2414,7 +2450,7 @@ const char *BKE_scene_multiview_render_view_name_get(const RenderData *rd, const
 		return "";
 }
 
-size_t BKE_scene_multiview_view_id_get(const RenderData *rd, const char *viewname)
+int BKE_scene_multiview_view_id_get(const RenderData *rd, const char *viewname)
 {
 	SceneRenderView *srv;
 	size_t nr;
@@ -2425,7 +2461,6 @@ size_t BKE_scene_multiview_view_id_get(const RenderData *rd, const char *viewnam
 	if ((!viewname) || (!viewname[0]))
 		return 0;
 
-	nr = 0;
 	for (srv = rd->views.first, nr = 0; srv; srv = srv->next) {
 		if (BKE_scene_multiview_is_render_view_active(rd, srv)) {
 			if (STREQ(viewname, srv->name)) {
@@ -2485,7 +2520,7 @@ const char *BKE_scene_multiview_view_suffix_get(const RenderData *rd, const char
 		return viewname;
 }
 
-const char *BKE_scene_multiview_view_id_suffix_get(const RenderData *rd, const size_t view_id)
+const char *BKE_scene_multiview_view_id_suffix_get(const RenderData *rd, const int view_id)
 {
 	if ((rd->scemode & R_MULTIVIEW) == 0) {
 		return "";
@@ -2507,13 +2542,15 @@ void BKE_scene_multiview_view_prefix_get(Scene *scene, const char *name, char *r
 
 	/* begin of extension */
 	index_act = BLI_str_rpartition(name, delims, rext, &suf_act);
+	if (*rext == NULL)
+		return;
 	BLI_assert(index_act > 0);
 	UNUSED_VARS_NDEBUG(index_act);
 
 	for (srv = scene->r.views.first; srv; srv = srv->next) {
 		if (BKE_scene_multiview_is_render_view_active(&scene->r, srv)) {
 			size_t len = strlen(srv->suffix);
-			if (STREQLEN(*rext - len, srv->suffix, len)) {
+			if (strlen(*rext) >= len && STREQLEN(*rext - len, srv->suffix, len)) {
 				BLI_strncpy(rprefix, name, strlen(name) - strlen(*rext) - len + 1);
 				break;
 			}
@@ -2540,7 +2577,7 @@ void BKE_scene_multiview_videos_dimensions_get(
 	}
 }
 
-size_t BKE_scene_multiview_num_videos_get(const RenderData *rd)
+int BKE_scene_multiview_num_videos_get(const RenderData *rd)
 {
 	if (BKE_imtype_is_movie(rd->im_format.imtype) == false)
 		return 0;

@@ -133,7 +133,20 @@ bConstraintOb *BKE_constraints_make_evalob(Scene *scene, Object *ob, void *subda
 			if (ob) {
 				cob->ob = ob;
 				cob->type = datatype;
-				cob->rotOrder = EULER_ORDER_DEFAULT; // TODO: when objects have rotation order too, use that
+				
+				if (cob->ob->rotmode > 0) {
+					/* Should be some kind of Euler order, so use it */
+					/* NOTE: Versions <= 2.76 assumed that "default" order
+					 *       would always get used, so we may seem some rig
+					 *       breakage as a result. However, this change here
+					 *       is needed to fix T46599
+					 */
+					cob->rotOrder = ob->rotmode;
+				}
+				else {
+					/* Quats/Axis-Angle, so Eulers should just use default order */
+					cob->rotOrder = EULER_ORDER_DEFAULT;
+				}
 				copy_m4_m4(cob->matrix, ob->obmat);
 			}
 			else
@@ -447,7 +460,7 @@ static void contarget_get_mesh_mat(Object *ob, const char *substring, float mat[
 			copy_v3_v3(plane, tmat[1]);
 			
 			cross_v3_v3v3(mat[0], normal, plane);
-			if (len_v3(mat[0]) < 1e-3f) {
+			if (len_squared_v3(mat[0]) < SQUARE(1e-3f)) {
 				copy_v3_v3(plane, tmat[0]);
 				cross_v3_v3v3(mat[0], normal, plane);
 			}
@@ -522,10 +535,10 @@ static void contarget_get_lattice_mat(Object *ob, const char *substring, float m
 
 /* generic function to get the appropriate matrix for most target cases */
 /* The cases where the target can be object data have not been implemented */
-static void constraint_target_to_mat4(Object *ob, const char *substring, float mat[4][4], short from, short to, float headtail)
+static void constraint_target_to_mat4(Object *ob, const char *substring, float mat[4][4], short from, short to, short flag, float headtail)
 {
 	/*	Case OBJECT */
-	if (!strlen(substring)) {
+	if (substring[0] == '\0') {
 		copy_m4_m4(mat, ob->obmat);
 		BKE_constraint_mat_convertspace(ob, NULL, mat, from, to, false);
 	}
@@ -559,6 +572,58 @@ static void constraint_target_to_mat4(Object *ob, const char *substring, float m
 			if (headtail < 0.000001f) {
 				/* skip length interpolation if set to head */
 				mul_m4_m4m4(mat, ob->obmat, pchan->pose_mat);
+			}
+			else if ((pchan->bone) && (pchan->bone->segments > 1) && (flag & CONSTRAINT_BBONE_SHAPE)) {
+				/* use point along bbone */
+				Mat4 bbone[MAX_BBONE_SUBDIV];
+				float tempmat[4][4];
+				float loc[3], fac;
+				
+				/* get bbone segments */
+				b_bone_spline_setup(pchan, 0, bbone);
+				
+				/* figure out which segment(s) the headtail value falls in */
+				fac = (float)pchan->bone->segments * headtail;
+				
+				if (fac >= pchan->bone->segments - 1) {
+					/* special case: end segment doesn't get created properly... */
+					float pt[3], sfac;
+					int index;
+					
+					/* bbone points are in bonespace, so need to move to posespace first */
+					index = pchan->bone->segments - 1;
+					mul_v3_m4v3(pt, pchan->pose_mat, bbone[index].mat[3]);
+					
+					/* interpolate between last segment point and the endpoint */
+					sfac = fac - (float)(pchan->bone->segments - 1); /* fac is just the "leftover" between penultimate and last points */
+					interp_v3_v3v3(loc, pt, pchan->pose_tail, sfac);
+				}
+				else {
+					/* get indices for finding interpolating between points along the bbone */
+					float pt_a[3], pt_b[3], pt[3];
+					int   index_a, index_b;
+					
+					index_a = floorf(fac);
+					CLAMP(index_a, 0, MAX_BBONE_SUBDIV - 1);
+					
+					index_b = ceilf(fac);
+					CLAMP(index_b, 0, MAX_BBONE_SUBDIV - 1);
+					
+					/* interpolate between these points */
+					copy_v3_v3(pt_a, bbone[index_a].mat[3]);
+					copy_v3_v3(pt_b, bbone[index_b].mat[3]);
+					
+					interp_v3_v3v3(pt, pt_a, pt_b, fac - floorf(fac));
+					
+					/* move the point from bone local space to pose space... */
+					mul_v3_m4v3(loc, pchan->pose_mat, pt);
+				}
+				
+				/* use interpolated distance for subtarget */
+				copy_m4_m4(tempmat, pchan->pose_mat);
+				copy_v3_v3(tempmat[3], loc);
+				
+				mul_m4_m4m4(mat, ob->obmat, tempmat);
 			}
 			else {
 				float tempmat[4][4], loc[3];
@@ -621,7 +686,7 @@ static bConstraintTypeInfo CTI_CONSTRNAME = {
 static void default_get_tarmat(bConstraint *con, bConstraintOb *UNUSED(cob), bConstraintTarget *ct, float UNUSED(ctime))
 {
 	if (VALID_CONS_TARGET(ct))
-		constraint_target_to_mat4(ct->tar, ct->subtarget, ct->matrix, CONSTRAINT_SPACE_WORLD, ct->space, con->headtail);
+		constraint_target_to_mat4(ct->tar, ct->subtarget, ct->matrix, CONSTRAINT_SPACE_WORLD, ct->space, con->flag, con->headtail);
 	else if (ct)
 		unit_m4(ct->matrix);
 }
@@ -1089,7 +1154,7 @@ static void kinematic_get_tarmat(bConstraint *con, bConstraintOb *cob, bConstrai
 	bKinematicConstraint *data = con->data;
 	
 	if (VALID_CONS_TARGET(ct)) 
-		constraint_target_to_mat4(ct->tar, ct->subtarget, ct->matrix, CONSTRAINT_SPACE_WORLD, ct->space, con->headtail);
+		constraint_target_to_mat4(ct->tar, ct->subtarget, ct->matrix, CONSTRAINT_SPACE_WORLD, ct->space, con->flag, con->headtail);
 	else if (ct) {
 		if (data->flag & CONSTRAINT_IK_AUTO) {
 			Object *ob = cob->ob;
@@ -1972,7 +2037,7 @@ static void pycon_get_tarmat(bConstraint *con, bConstraintOb *cob, bConstraintTa
 		/* firstly calculate the matrix the normal way, then let the py-function override
 		 * this matrix if it needs to do so
 		 */
-		constraint_target_to_mat4(ct->tar, ct->subtarget, ct->matrix, CONSTRAINT_SPACE_WORLD, ct->space, con->headtail);
+		constraint_target_to_mat4(ct->tar, ct->subtarget, ct->matrix, CONSTRAINT_SPACE_WORLD, ct->space, con->flag, con->headtail);
 		
 		/* only execute target calculation if allowed */
 #ifdef WITH_PYTHON
@@ -2084,7 +2149,7 @@ static void actcon_get_tarmat(bConstraint *con, bConstraintOb *cob, bConstraintT
 		unit_m4(ct->matrix);
 		
 		/* get the transform matrix of the target */
-		constraint_target_to_mat4(ct->tar, ct->subtarget, tempmat, CONSTRAINT_SPACE_WORLD, ct->space, con->headtail);
+		constraint_target_to_mat4(ct->tar, ct->subtarget, tempmat, CONSTRAINT_SPACE_WORLD, ct->space, con->flag, con->headtail);
 		
 		/* determine where in transform range target is */
 		/* data->type is mapped as follows for backwards compatibility:
@@ -2130,29 +2195,26 @@ static void actcon_get_tarmat(bConstraint *con, bConstraintOb *cob, bConstraintT
 		}
 		else if (cob->type == CONSTRAINT_OBTYPE_BONE) {
 			Object workob;
-			bPose *pose;
+			bPose pose = {0};
 			bPoseChannel *pchan, *tchan;
-			
-			/* make a temporary pose and evaluate using that */
-			pose = MEM_callocN(sizeof(bPose), "pose");
-			
+
 			/* make a copy of the bone of interest in the temp pose before evaluating action, so that it can get set 
 			 *	- we need to manually copy over a few settings, including rotation order, otherwise this fails
 			 */
 			pchan = cob->pchan;
 			
-			tchan = BKE_pose_channel_verify(pose, pchan->name);
+			tchan = BKE_pose_channel_verify(&pose, pchan->name);
 			tchan->rotmode = pchan->rotmode;
 			
 			/* evaluate action using workob (it will only set the PoseChannel in question) */
-			what_does_obaction(cob->ob, &workob, pose, data->act, pchan->name, t);
+			what_does_obaction(cob->ob, &workob, &pose, data->act, pchan->name, t);
 			
 			/* convert animation to matrices for use here */
 			BKE_pchan_calc_mat(tchan);
 			copy_m4_m4(ct->matrix, tchan->chan_mat);
 			
 			/* Clean up */
-			BKE_pose_free(pose);
+			BKE_pose_free_data(&pose);
 		}
 		else {
 			/* behavior undefined... */
@@ -2717,8 +2779,8 @@ static void stretchto_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *t
 				float hard = min_ff(bulge, bulge_max);
 				
 				float range = bulge_max - 1.0f;
-				float scale = (range > 0.0f) ? 1.0f / range : 0.0f;
-				float soft = 1.0f + range * atanf((bulge - 1.0f) * scale) / (float)M_PI_2;
+				float scale_fac = (range > 0.0f) ? 1.0f / range : 0.0f;
+				float soft = 1.0f + range * atanf((bulge - 1.0f) * scale_fac) / (float)M_PI_2;
 				
 				bulge = interpf(soft, hard, data->bulge_smooth);
 			}
@@ -2729,8 +2791,8 @@ static void stretchto_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *t
 				float hard = max_ff(bulge, bulge_min);
 				
 				float range = 1.0f - bulge_min;
-				float scale = (range > 0.0f) ? 1.0f / range : 0.0f;
-				float soft = 1.0f - range * atanf((1.0f - bulge) * scale) / (float)M_PI_2;
+				float scale_fac = (range > 0.0f) ? 1.0f / range : 0.0f;
+				float soft = 1.0f - range * atanf((1.0f - bulge) * scale_fac) / (float)M_PI_2;
 				
 				bulge = interpf(soft, hard, data->bulge_smooth);
 			}
@@ -3465,7 +3527,7 @@ static void shrinkwrap_get_tarmat(bConstraint *con, bConstraintOb *cob, bConstra
 
 					/* TODO should use FLT_MAX.. but normal projection doenst yet supports it */
 					hit.index = -1;
-					hit.dist = (scon->projLimit == 0.0f) ? 100000.0f : scon->projLimit;
+					hit.dist = (scon->projLimit == 0.0f) ? BVH_RAYCAST_DIST_MAX : scon->projLimit;
 
 					switch (scon->projAxis) {
 						case OB_POSX: case OB_POSY: case OB_POSZ:
@@ -3509,8 +3571,6 @@ static void shrinkwrap_get_tarmat(bConstraint *con, bConstraintOb *cob, bConstra
 			}
 			
 			free_bvhtree_from_mesh(&treeData);
-			
-			target->release(target);
 			
 			if (fail == true) {
 				/* Don't move the point */
@@ -3863,7 +3923,7 @@ static void pivotcon_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *ta
 
 
 	/* correct the pivot by the rotation axis otherwise the pivot translates when it shouldnt */
-	mat3_to_axis_angle(axis, &angle, rotMat);
+	mat3_normalized_to_axis_angle(axis, &angle, rotMat);
 	if (angle) {
 		float dvec[3];
 		sub_v3_v3v3(vec, pivot, cob->matrix[3]);
@@ -4110,7 +4170,7 @@ static void followtrack_evaluate(bConstraint *con, bConstraintOb *cob, ListBase 
 
 					bvhtree_from_mesh_looptri(&treeData, target, 0.0f, 4, 6);
 
-					hit.dist = FLT_MAX;
+					hit.dist = BVH_RAYCAST_DIST_MAX;
 					hit.index = -1;
 
 					result = BLI_bvhtree_ray_cast(treeData.tree, ray_start, ray_nor, 0.0f, &hit, treeData.raycast_callback, &treeData);
@@ -4882,11 +4942,12 @@ void BKE_constraints_solve(ListBase *conlist, bConstraintOb *cob, float ctime)
 		 *    since some constraints may not convert the solution back to the input space before blending
 		 *    but all are guaranteed to end up in good "worldspace" result
 		 */
-		/* Note: all kind of stuff here before (caused trouble), much easier to just interpolate, or did I miss something? -jahka (r.32105) */
+		/* Note: all kind of stuff here before (caused trouble), much easier to just interpolate,
+		 * or did I miss something? -jahka (r.32105) */
 		if (enf < 1.0f) {
 			float solution[4][4];
 			copy_m4_m4(solution, cob->matrix);
-			blend_m4_m4m4(cob->matrix, oldmat, solution, enf);
+			interp_m4_m4m4(cob->matrix, oldmat, solution, enf);
 		}
 	}
 }

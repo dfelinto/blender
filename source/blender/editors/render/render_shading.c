@@ -481,7 +481,7 @@ static int new_material_exec(bContext *C, wmOperator *UNUSED(op))
 	if (prop) {
 		/* when creating new ID blocks, use is already 1, but RNA
 		 * pointer use also increases user, so this compensates it */
-		ma->id.us--;
+		id_us_min(&ma->id);
 
 		RNA_id_pointer_create(&ma->id, &idptr);
 		RNA_property_pointer_set(&ptr, prop, idptr);
@@ -530,7 +530,7 @@ static int new_texture_exec(bContext *C, wmOperator *UNUSED(op))
 	if (prop) {
 		/* when creating new ID blocks, use is already 1, but RNA
 		 * pointer se also increases user, so this compensates it */
-		tex->id.us--;
+		id_us_min(&tex->id);
 
 		if (ptr.id.data && GS(((ID *)ptr.id.data)->name) == ID_MA &&
 		    RNA_property_pointer_get(&ptr, prop).id.data == NULL)
@@ -593,7 +593,7 @@ static int new_world_exec(bContext *C, wmOperator *UNUSED(op))
 	if (prop) {
 		/* when creating new ID blocks, use is already 1, but RNA
 		 * pointer se also increases user, so this compensates it */
-		wo->id.us--;
+		id_us_min(&wo->id);
 
 		RNA_id_pointer_create(&wo->id, &idptr);
 		RNA_property_pointer_set(&ptr, prop, idptr);
@@ -1039,7 +1039,7 @@ static int freestyle_linestyle_new_exec(bContext *C, wmOperator *op)
 		return OPERATOR_CANCELLED;
 	}
 	if (lineset->linestyle) {
-		lineset->linestyle->id.us--;
+		id_us_min(&lineset->linestyle->id);
 		lineset->linestyle = BKE_linestyle_copy(bmain, lineset->linestyle);
 	}
 	else {
@@ -1103,7 +1103,7 @@ void SCENE_OT_freestyle_color_modifier_add(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_INTERNAL;
 
 	/* properties */
-	ot->prop = RNA_def_enum(ot->srna, "type", linestyle_color_modifier_type_items, 0, "Type", "");
+	ot->prop = RNA_def_enum(ot->srna, "type", rna_enum_linestyle_color_modifier_type_items, 0, "Type", "");
 }
 
 static int freestyle_alpha_modifier_add_exec(bContext *C, wmOperator *op)
@@ -1143,7 +1143,7 @@ void SCENE_OT_freestyle_alpha_modifier_add(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_INTERNAL;
 
 	/* properties */
-	ot->prop = RNA_def_enum(ot->srna, "type", linestyle_alpha_modifier_type_items, 0, "Type", "");
+	ot->prop = RNA_def_enum(ot->srna, "type", rna_enum_linestyle_alpha_modifier_type_items, 0, "Type", "");
 }
 
 static int freestyle_thickness_modifier_add_exec(bContext *C, wmOperator *op)
@@ -1183,7 +1183,7 @@ void SCENE_OT_freestyle_thickness_modifier_add(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_INTERNAL;
 
 	/* properties */
-	ot->prop = RNA_def_enum(ot->srna, "type", linestyle_thickness_modifier_type_items, 0, "Type", "");
+	ot->prop = RNA_def_enum(ot->srna, "type", rna_enum_linestyle_thickness_modifier_type_items, 0, "Type", "");
 }
 
 static int freestyle_geometry_modifier_add_exec(bContext *C, wmOperator *op)
@@ -1223,7 +1223,7 @@ void SCENE_OT_freestyle_geometry_modifier_add(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_INTERNAL;
 
 	/* properties */
-	ot->prop = RNA_def_enum(ot->srna, "type", linestyle_geometry_modifier_type_items, 0, "Type", "");
+	ot->prop = RNA_def_enum(ot->srna, "type", rna_enum_linestyle_geometry_modifier_type_items, 0, "Type", "");
 }
 
 static int freestyle_get_modifier_type(PointerRNA *ptr)
@@ -1619,8 +1619,9 @@ void TEXTURE_OT_envmap_save(wmOperatorType *ot)
 	                           "(use -1 to skip a face)", 0.0f, 0.0f);
 	RNA_def_property_flag(prop, PROP_HIDDEN);
 
-	WM_operator_properties_filesel(ot, FILE_TYPE_FOLDER | FILE_TYPE_IMAGE | FILE_TYPE_MOVIE, FILE_SPECIAL, FILE_SAVE,
-	                               WM_FILESEL_FILEPATH, FILE_DEFAULTDISPLAY, FILE_SORT_ALPHA);
+	WM_operator_properties_filesel(
+	        ot, FILE_TYPE_FOLDER | FILE_TYPE_IMAGE | FILE_TYPE_MOVIE, FILE_SPECIAL, FILE_SAVE,
+	        WM_FILESEL_FILEPATH, FILE_DEFAULTDISPLAY, FILE_SORT_ALPHA);
 }
 
 static int envmap_clear_exec(bContext *C, wmOperator *UNUSED(op))
@@ -1826,7 +1827,7 @@ static void paste_mtex_copybuf(ID *id)
 			*mtex = MEM_mallocN(sizeof(MTex), "mtex copy");
 		}
 		else if ((*mtex)->tex) {
-			(*mtex)->tex->id.us--;
+			id_us_min(&(*mtex)->tex->id);
 		}
 		
 		memcpy(*mtex, &mtexcopybuf, sizeof(MTex));

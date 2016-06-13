@@ -138,8 +138,8 @@ static int write_audio_frame(FFMpegContext *context)
 	context->audio_time += (double) context->audio_input_samples / (double) c->sample_rate;
 
 #ifdef FFMPEG_HAVE_ENCODE_AUDIO2
-	frame = avcodec_alloc_frame();
-	avcodec_get_frame_defaults(frame);
+	frame = av_frame_alloc();
+	av_frame_unref(frame);
 	frame->pts = context->audio_time / av_q2d(c->time_base);
 	frame->nb_samples = context->audio_input_samples;
 	frame->format = c->sample_fmt;
@@ -172,7 +172,7 @@ static int write_audio_frame(FFMpegContext *context)
 	}
 
 	if (!got_output) {
-		avcodec_free_frame(&frame);
+		av_frame_free(&frame);
 		return 0;
 	}
 #else
@@ -202,7 +202,7 @@ static int write_audio_frame(FFMpegContext *context)
 		if (av_interleaved_write_frame(context->outfile, &pkt) != 0) {
 			fprintf(stderr, "Error writing audio packet!\n");
 			if (frame)
-				avcodec_free_frame(&frame);
+				av_frame_free(&frame);
 			return -1;
 		}
 
@@ -210,7 +210,7 @@ static int write_audio_frame(FFMpegContext *context)
 	}
 
 	if (frame)
-		avcodec_free_frame(&frame);
+		av_frame_free(&frame);
 
 	return 0;
 }
@@ -224,7 +224,7 @@ static AVFrame *alloc_picture(int pix_fmt, int width, int height)
 	int size;
 	
 	/* allocate space for the struct */
-	f = avcodec_alloc_frame();
+	f = av_frame_alloc();
 	if (!f) return NULL;
 	size = avpicture_get_size(pix_fmt, width, height);
 	/* allocate the actual picture buffer */
@@ -363,8 +363,8 @@ static AVFrame *generate_video_frame(FFMpegContext *context, uint8_t *pixels, Re
 	int height = c->height;
 	AVFrame *rgb_frame;
 
-	if (c->pix_fmt != PIX_FMT_BGR32) {
-		rgb_frame = alloc_picture(PIX_FMT_BGR32, width, height);
+	if (c->pix_fmt != AV_PIX_FMT_BGR32) {
+		rgb_frame = alloc_picture(AV_PIX_FMT_BGR32, width, height);
 		if (!rgb_frame) {
 			BKE_report(reports, RPT_ERROR, "Could not allocate temporary frame");
 			return NULL;
@@ -414,14 +414,14 @@ static AVFrame *generate_video_frame(FFMpegContext *context, uint8_t *pixels, Re
 		}
 	}
 
-	if (c->pix_fmt != PIX_FMT_BGR32) {
+	if (c->pix_fmt != AV_PIX_FMT_BGR32) {
 		sws_scale(context->img_convert_ctx, (const uint8_t *const *) rgb_frame->data,
 		          rgb_frame->linesize, 0, c->height,
 		          context->current_frame->data, context->current_frame->linesize);
 		delete_picture(rgb_frame);
 	}
 
-	context->current_frame->format = PIX_FMT_BGR32;
+	context->current_frame->format = AV_PIX_FMT_BGR32;
 	context->current_frame->width = width;
 	context->current_frame->height = height;
 
@@ -586,12 +586,12 @@ static AVStream *alloc_video_stream(FFMpegContext *context, RenderData *rd, int 
 	}
 	else {
 		/* makes HuffYUV happy ... */
-		c->pix_fmt = PIX_FMT_YUV422P;
+		c->pix_fmt = AV_PIX_FMT_YUV422P;
 	}
 
 	if (context->ffmpeg_type == FFMPEG_XVID) {
 		/* arghhhh ... */
-		c->pix_fmt = PIX_FMT_YUV420P;
+		c->pix_fmt = AV_PIX_FMT_YUV420P;
 		c->codec_tag = (('D' << 24) + ('I' << 16) + ('V' << 8) + 'X');
 	}
 
@@ -604,26 +604,26 @@ static AVStream *alloc_video_stream(FFMpegContext *context, RenderData *rd, int 
 	/* Keep lossless encodes in the RGB domain. */
 	if (codec_id == AV_CODEC_ID_HUFFYUV) {
 		if (rd->im_format.planes == R_IMF_PLANES_RGBA) {
-			c->pix_fmt = PIX_FMT_BGRA;
+			c->pix_fmt = AV_PIX_FMT_BGRA;
 		}
 		else {
-			c->pix_fmt = PIX_FMT_RGB32;
+			c->pix_fmt = AV_PIX_FMT_RGB32;
 		}
 	}
 
 	if (codec_id == AV_CODEC_ID_FFV1) {
-		c->pix_fmt = PIX_FMT_RGB32;
+		c->pix_fmt = AV_PIX_FMT_RGB32;
 	}
 
 	if (codec_id == AV_CODEC_ID_QTRLE) {
 		if (rd->im_format.planes == R_IMF_PLANES_RGBA) {
-			c->pix_fmt = PIX_FMT_ARGB;
+			c->pix_fmt = AV_PIX_FMT_ARGB;
 		}
 	}
 
 	if (codec_id == AV_CODEC_ID_PNG) {
 		if (rd->im_format.planes == R_IMF_PLANES_RGBA) {
-			c->pix_fmt = PIX_FMT_RGBA;
+			c->pix_fmt = AV_PIX_FMT_RGBA;
 		}
 	}
 
@@ -661,8 +661,8 @@ static AVStream *alloc_video_stream(FFMpegContext *context, RenderData *rd, int 
 
 	context->current_frame = alloc_picture(c->pix_fmt, c->width, c->height);
 
-	context->img_convert_ctx = sws_getContext(c->width, c->height, PIX_FMT_BGR32, c->width, c->height, c->pix_fmt, SWS_BICUBIC,
-	                                 NULL, NULL, NULL);
+	context->img_convert_ctx = sws_getContext(c->width, c->height, AV_PIX_FMT_BGR32, c->width, c->height, c->pix_fmt, SWS_BICUBIC,
+	                                          NULL, NULL, NULL);
 	return st;
 }
 
@@ -746,7 +746,7 @@ static AVStream *alloc_audio_stream(FFMpegContext *context, RenderData *rd, int 
 	av_dict_free(&opts);
 
 	/* need to prevent floating point exception when using vorbis audio codec,
-	 * initialize this value in the same way as it's done in FFmpeg iteslf (sergey) */
+	 * initialize this value in the same way as it's done in FFmpeg itself (sergey) */
 	st->codec->time_base.num = 1;
 	st->codec->time_base.den = st->codec->sample_rate;
 
@@ -809,7 +809,7 @@ static int start_ffmpeg_impl(FFMpegContext *context, struct RenderData *rd, int 
 	AVFormatContext *of;
 	AVOutputFormat *fmt;
 	AVDictionary *opts = NULL;
-	char name[256], error[1024];
+	char name[FILE_MAX], error[1024];
 	const char **exts;
 
 	context->ffmpeg_type = rd->ffcodecdata.type;
@@ -847,7 +847,10 @@ static int start_ffmpeg_impl(FFMpegContext *context, struct RenderData *rd, int 
 		BKE_report(reports, RPT_ERROR, "Error opening output file");
 		return 0;
 	}
-	
+
+
+	/* Returns after this must 'goto fail;' */
+
 	of->oformat = fmt;
 	of->packet_size = rd->ffcodecdata.mux_packet_size;
 	if (context->ffmpeg_audio_codec != AV_CODEC_ID_NONE) {
@@ -894,21 +897,21 @@ static int start_ffmpeg_impl(FFMpegContext *context, struct RenderData *rd, int 
 			break;
 		case FFMPEG_MPEG4:
 		default:
-			fmt->video_codec = AV_CODEC_ID_MPEG4;
+			fmt->video_codec = context->ffmpeg_codec;
 			break;
 	}
 	if (fmt->video_codec == AV_CODEC_ID_DVVIDEO) {
 		if (rectx != 720) {
 			BKE_report(reports, RPT_ERROR, "Render width has to be 720 pixels for DV!");
-			return 0;
+			goto fail;
 		}
 		if (rd->frs_sec != 25 && recty != 480) {
 			BKE_report(reports, RPT_ERROR, "Render height has to be 480 pixels for DV-NTSC!");
-			return 0;
+			goto fail;
 		}
 		if (rd->frs_sec == 25 && recty != 576) {
 			BKE_report(reports, RPT_ERROR, "Render height has to be 576 pixels for DV-PAL!");
-			return 0;
+			goto fail;
 		}
 	}
 	
@@ -916,8 +919,7 @@ static int start_ffmpeg_impl(FFMpegContext *context, struct RenderData *rd, int 
 		fmt->audio_codec = AV_CODEC_ID_PCM_S16LE;
 		if (context->ffmpeg_audio_codec != AV_CODEC_ID_NONE && rd->ffcodecdata.audio_mixrate != 48000 && rd->ffcodecdata.audio_channels != 2) {
 			BKE_report(reports, RPT_ERROR, "FFMPEG only supports 48khz / stereo audio for DV!");
-			av_dict_free(&opts);
-			return 0;
+			goto fail;
 		}
 	}
 	
@@ -929,9 +931,7 @@ static int start_ffmpeg_impl(FFMpegContext *context, struct RenderData *rd, int 
 				BKE_report(reports, RPT_ERROR, error);
 			else
 				BKE_report(reports, RPT_ERROR, "Error initializing video stream");
-
-			av_dict_free(&opts);
-			return 0;
+			goto fail;
 		}
 	}
 
@@ -942,22 +942,18 @@ static int start_ffmpeg_impl(FFMpegContext *context, struct RenderData *rd, int 
 				BKE_report(reports, RPT_ERROR, error);
 			else
 				BKE_report(reports, RPT_ERROR, "Error initializing audio stream");
-			av_dict_free(&opts);
-			return 0;
+			goto fail;
 		}
 	}
 	if (!(fmt->flags & AVFMT_NOFILE)) {
 		if (avio_open(&of->pb, name, AVIO_FLAG_WRITE) < 0) {
 			BKE_report(reports, RPT_ERROR, "Could not open file for writing");
-			av_dict_free(&opts);
-			return 0;
+			goto fail;
 		}
 	}
 	if (avformat_write_header(of, NULL) < 0) {
 		BKE_report(reports, RPT_ERROR, "Could not initialize streams, probably unsupported codec combination");
-		av_dict_free(&opts);
-		avio_close(of->pb);
-		return 0;
+		goto fail;
 	}
 
 	context->outfile = of;
@@ -965,6 +961,26 @@ static int start_ffmpeg_impl(FFMpegContext *context, struct RenderData *rd, int 
 	av_dict_free(&opts);
 
 	return 1;
+
+
+fail:
+	if (of->pb) {
+		avio_close(of->pb);
+	}
+
+	if (context->video_stream && context->video_stream->codec) {
+		avcodec_close(context->video_stream->codec);
+		context->video_stream = NULL;
+	}
+
+	if (context->audio_stream && context->audio_stream->codec) {
+		avcodec_close(context->audio_stream->codec);
+		context->audio_stream = NULL;
+	}
+
+	av_dict_free(&opts);
+	avformat_free_context(of);
+	return 0;
 }
 
 /**
@@ -1198,8 +1214,6 @@ int BKE_ffmpeg_append(void *context_v, RenderData *rd, int start_frame, int fram
 
 static void end_ffmpeg_impl(FFMpegContext *context, int is_autosplit)
 {
-	unsigned int i;
-	
 	PRINT("Closing ffmpeg...\n");
 
 #if 0
@@ -1234,15 +1248,11 @@ static void end_ffmpeg_impl(FFMpegContext *context, int is_autosplit)
 		context->video_stream = 0;
 	}
 
-	
-	/* Close the output file */
-	if (context->outfile) {
-		for (i = 0; i < context->outfile->nb_streams; i++) {
-			if (&context->outfile->streams[i]) {
-				av_freep(&context->outfile->streams[i]);
-			}
-		}
+	if (context->audio_stream && context->audio_stream->codec) {
+		avcodec_close(context->audio_stream->codec);
+		context->audio_stream = 0;
 	}
+
 	/* free the temp buffer */
 	if (context->current_frame) {
 		delete_picture(context->current_frame);
@@ -1254,7 +1264,7 @@ static void end_ffmpeg_impl(FFMpegContext *context, int is_autosplit)
 		}
 	}
 	if (context->outfile) {
-		av_free(context->outfile);
+		avformat_free_context(context->outfile);
 		context->outfile = 0;
 	}
 	if (context->audio_input_buffer) {

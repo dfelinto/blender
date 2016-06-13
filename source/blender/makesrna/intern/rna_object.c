@@ -60,7 +60,7 @@
 #include "WM_api.h"
 #include "WM_types.h"
 
-EnumPropertyItem object_mode_items[] = {
+EnumPropertyItem rna_enum_object_mode_items[] = {
 	{OB_MODE_OBJECT, "OBJECT", ICON_OBJECT_DATAMODE, "Object Mode", ""},
 	{OB_MODE_EDIT, "EDIT", ICON_EDITMODE_HLT, "Edit Mode", ""},
 	{OB_MODE_POSE, "POSE", ICON_POSE_HLT, "Pose Mode", ""},
@@ -69,10 +69,11 @@ EnumPropertyItem object_mode_items[] = {
 	{OB_MODE_WEIGHT_PAINT, "WEIGHT_PAINT", ICON_WPAINT_HLT, "Weight Paint", ""},
 	{OB_MODE_TEXTURE_PAINT, "TEXTURE_PAINT", ICON_TPAINT_HLT, "Texture Paint", ""},
 	{OB_MODE_PARTICLE_EDIT, "PARTICLE_EDIT", ICON_PARTICLEMODE, "Particle Edit", ""},
+	{OB_MODE_GPENCIL, "GPENCIL_EDIT", ICON_GREASEPENCIL, "Edit Strokes", "Edit Grease Pencil Strokes"},
 	{0, NULL, 0, NULL, NULL}
 };
 
-EnumPropertyItem object_empty_drawtype_items[] = {
+EnumPropertyItem rna_enum_object_empty_drawtype_items[] = {
 	{OB_PLAINAXES, "PLAIN_AXES", 0, "Plain Axes", ""},
 	{OB_ARROWS, "ARROWS", 0, "Arrows", ""},
 	{OB_SINGLE_ARROW, "SINGLE_ARROW", 0, "Single Arrow", ""},
@@ -107,18 +108,18 @@ static EnumPropertyItem dupli_items[] = {
 #endif
 
 static EnumPropertyItem collision_bounds_items[] = {
-	{OB_BOUND_BOX, "BOX", 0, "Box", ""},
-	{OB_BOUND_SPHERE, "SPHERE", 0, "Sphere", ""},
-	{OB_BOUND_CYLINDER, "CYLINDER", 0, "Cylinder", ""},
-	{OB_BOUND_CONE, "CONE", 0, "Cone", ""},
-	{OB_BOUND_CONVEX_HULL, "CONVEX_HULL", 0, "Convex Hull", ""},
-	{OB_BOUND_TRIANGLE_MESH, "TRIANGLE_MESH", 0, "Triangle Mesh", ""},
-	{OB_BOUND_CAPSULE, "CAPSULE", 0, "Capsule", ""},
+	{OB_BOUND_BOX, "BOX", ICON_MESH_CUBE, "Box", ""},
+	{OB_BOUND_SPHERE, "SPHERE", ICON_MESH_UVSPHERE, "Sphere", ""},
+	{OB_BOUND_CYLINDER, "CYLINDER", ICON_MESH_CYLINDER, "Cylinder", ""},
+	{OB_BOUND_CONE, "CONE", ICON_MESH_CONE, "Cone", ""},
+	{OB_BOUND_CONVEX_HULL, "CONVEX_HULL", ICON_MESH_ICOSPHERE, "Convex Hull", ""},
+	{OB_BOUND_TRIANGLE_MESH, "TRIANGLE_MESH", ICON_MESH_MONKEY, "Triangle Mesh", ""},
+	{OB_BOUND_CAPSULE, "CAPSULE", ICON_MESH_CAPSULE, "Capsule", ""},
 	/*{OB_DYN_MESH, "DYNAMIC_MESH", 0, "Dynamic Mesh", ""}, */
 	{0, NULL, 0, NULL, NULL}
 };
 
-EnumPropertyItem metaelem_type_items[] = {
+EnumPropertyItem rna_enum_metaelem_type_items[] = {
 	{MB_BALL, "BALL", ICON_META_BALL, "Ball", ""},
 	{MB_TUBE, "CAPSULE", ICON_META_CAPSULE, "Capsule", ""},
 	{MB_PLANE, "PLANE", ICON_META_PLANE, "Plane", ""},
@@ -132,7 +133,7 @@ EnumPropertyItem metaelem_type_items[] = {
 #define OBTYPE_CU_SURF {OB_SURF, "SURFACE", 0, "Surface", ""}
 #define OBTYPE_CU_FONT {OB_FONT, "FONT", 0, "Font", ""}
 
-EnumPropertyItem object_type_items[] = {
+EnumPropertyItem rna_enum_object_type_items[] = {
 	{OB_MESH, "MESH", 0, "Mesh", ""},
 	OBTYPE_CU_CURVE,
 	OBTYPE_CU_SURF,
@@ -149,28 +150,20 @@ EnumPropertyItem object_type_items[] = {
 	{0, NULL, 0, NULL, NULL}
 };
 
-EnumPropertyItem object_type_curve_items[] = {
+EnumPropertyItem rna_enum_object_type_curve_items[] = {
 	OBTYPE_CU_CURVE,
 	OBTYPE_CU_SURF,
 	OBTYPE_CU_FONT,
 	{0, NULL, 0, NULL, NULL}
 };
 
-EnumPropertyItem object_axis_items[] = {
+EnumPropertyItem rna_enum_object_axis_items[] = {
 	{OB_POSX, "POS_X", 0, "+X", ""},
 	{OB_POSY, "POS_Y", 0, "+Y", ""},
 	{OB_POSZ, "POS_Z", 0, "+Z", ""},
 	{OB_NEGX, "NEG_X", 0, "-X", ""},
 	{OB_NEGY, "NEG_Y", 0, "-Y", ""},
 	{OB_NEGZ, "NEG_Z", 0, "-Z", ""},
-	{0, NULL, 0, NULL, NULL}
-};
-
-/* for general use (not just object) */
-EnumPropertyItem object_axis_unsigned_items[] = {
-	{0, "X", 0, "X", ""},
-	{1, "Y", 0, "Y", ""},
-	{2, "Z", 0, "Z", ""},
 	{0, NULL, 0, NULL, NULL}
 };
 
@@ -274,18 +267,21 @@ static void rna_Object_active_shape_update(Main *bmain, Scene *scene, PointerRNA
 		switch (ob->type) {
 			case OB_MESH:
 				EDBM_mesh_load(ob);
-				EDBM_mesh_make(scene->toolsettings, ob);
+				EDBM_mesh_make(scene->toolsettings, ob, true);
+
+				DAG_id_tag_update(ob->data, 0);
+
 				EDBM_mesh_normals_update(((Mesh *)ob->data)->edit_btmesh);
 				BKE_editmesh_tessface_calc(((Mesh *)ob->data)->edit_btmesh);
 				break;
 			case OB_CURVE:
 			case OB_SURF:
-				load_editNurb(ob);
-				make_editNurb(ob);
+				ED_curve_editnurb_load(ob);
+				ED_curve_editnurb_make(ob);
 				break;
 			case OB_LATTICE:
-				load_editLatt(ob);
-				make_editLatt(ob);
+				ED_lattice_editlatt_load(ob);
+				ED_lattice_editlatt_make(ob);
 				break;
 		}
 	}
@@ -305,7 +301,7 @@ static void rna_Object_select_update(Main *UNUSED(bmain), Scene *scene, PointerR
 {
 	if (scene) {
 		Object *ob = (Object *)ptr->id.data;
-		short mode = ob->flag & SELECT ? BA_SELECT : BA_DESELECT;
+		short mode = (ob->flag & SELECT) ? BA_SELECT : BA_DESELECT;
 		ED_base_object_select(BKE_scene_base_find(scene, ob), mode);
 	}
 }
@@ -313,7 +309,7 @@ static void rna_Object_select_update(Main *UNUSED(bmain), Scene *scene, PointerR
 static void rna_Base_select_update(Main *UNUSED(bmain), Scene *UNUSED(scene), PointerRNA *ptr)
 {
 	Base *base = (Base *)ptr->data;
-	short mode = base->flag & BA_SELECT ? BA_SELECT : BA_DESELECT;
+	short mode = (base->flag & BA_SELECT) ? BA_SELECT : BA_DESELECT;
 	ED_base_object_select(base, mode);
 }
 
@@ -535,11 +531,14 @@ static void rna_Object_dup_group_set(PointerRNA *ptr, PointerRNA value)
 	/* must not let this be set if the object belongs in this group already,
 	 * thus causing a cycle/infinite-recursion leading to crashes on load [#25298]
 	 */
-	if (BKE_group_object_exists(grp, ob) == 0)
+	if (BKE_group_object_exists(grp, ob) == 0) {
 		ob->dup_group = grp;
-	else
+		id_lib_extern((ID *)grp);
+	}
+	else {
 		BKE_report(NULL, RPT_ERROR,
 		           "Cannot set dupli-group as object belongs in group being instanced, thus causing a cycle");
+	}
 }
 
 static void rna_VertexGroup_name_set(PointerRNA *ptr, const char *value)
@@ -1033,6 +1032,11 @@ static void rna_GameObjectSettings_physics_type_set(PointerRNA *ptr, int value)
 			ob->gameflag |= OB_COLLISION | OB_CHARACTER;
 			ob->gameflag &= ~(OB_SENSOR | OB_OCCLUDER | OB_DYNAMIC | OB_RIGID_BODY | OB_SOFT_BODY | OB_ACTOR |
 			                  OB_ANISOTROPIC_FRICTION | OB_DO_FH | OB_ROT_FH | OB_COLLISION_RESPONSE | OB_NAVMESH);
+			/* When we switch to character physics and the collision bounds is set to triangle mesh
+			we have to change collision bounds because triangle mesh is not supported by Characters*/
+			if ((ob->gameflag & OB_BOUNDS) && ob->collision_boundtype == OB_BOUND_TRIANGLE_MESH) {
+				ob->boundtype = ob->collision_boundtype = OB_BOUND_BOX;
+			}
 			break;
 		case OB_BODY_TYPE_STATIC:
 			ob->gameflag |= OB_COLLISION;
@@ -1130,7 +1134,7 @@ static void rna_GameObjectSettings_state_get(PointerRNA *ptr, int *values)
 {
 	Object *ob = (Object *)ptr->data;
 	int i;
-	int all_states = (ob->scaflag & OB_ALLSTATE ? 1 : 0);
+	int all_states = (ob->scaflag & OB_ALLSTATE) ? 1 : 0;
 
 	memset(values, 0, sizeof(int) * OB_MAX_STATES);
 	for (i = 0; i < OB_MAX_STATES; i++) {
@@ -1598,7 +1602,7 @@ static void rna_def_material_slot(BlenderRNA *brna)
 	RNA_def_property_struct_type(prop, "Material");
 	RNA_def_property_flag(prop, PROP_EDITABLE);
 	RNA_def_property_pointer_funcs(prop, "rna_MaterialSlot_material_get", "rna_MaterialSlot_material_set", NULL, NULL);
-	RNA_def_property_ui_text(prop, "Material", "Material datablock used by this material slot");
+	RNA_def_property_ui_text(prop, "Material", "Material data-block used by this material slot");
 	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_MaterialSlot_update");
 
 	prop = RNA_def_property(srna, "link", PROP_ENUM, PROP_NONE);
@@ -1771,6 +1775,14 @@ static void rna_def_object_game_settings(BlenderRNA *brna)
 	RNA_def_property_float_default(prop, 55.0f);
 	RNA_def_property_ui_text(prop, "Fall Speed Max", "Maximum speed at which the character will fall");
 
+	prop = RNA_def_property(srna, "jump_max", PROP_INT, PROP_NONE);
+	RNA_def_property_int_sdna(prop, NULL, "max_jumps");
+	RNA_def_property_range(prop, 1, CHAR_MAX);
+	RNA_def_property_ui_range(prop, 1, 10, 1, 1);
+	RNA_def_property_int_default(prop, 1);
+	RNA_def_property_ui_text(prop, "Max Jumps",
+	                         "The maximum number of jumps the character can make before it hits the ground");
+
 	/* Collision Masks */
 	prop = RNA_def_property(srna, "collision_group", PROP_BOOLEAN, PROP_LAYER_MEMBER);
 	RNA_def_property_boolean_sdna(prop, NULL, "col_group", 1);
@@ -1942,7 +1954,7 @@ static void rna_def_object_constraints(BlenderRNA *brna, PropertyRNA *cprop)
 	func = RNA_def_function(srna, "new", "rna_Object_constraints_new");
 	RNA_def_function_ui_description(func, "Add a new constraint to this object");
 	/* object to add */
-	parm = RNA_def_enum(func, "type", constraint_type_items, 1, "", "Constraint type to add");
+	parm = RNA_def_enum(func, "type", rna_enum_constraint_type_items, 1, "", "Constraint type to add");
 	RNA_def_property_flag(parm, PROP_REQUIRED);
 	/* return type */
 	parm = RNA_def_pointer(func, "constraint", "Constraint", "", "New constraint");
@@ -1993,7 +2005,7 @@ static void rna_def_object_modifiers(BlenderRNA *brna, PropertyRNA *cprop)
 	parm = RNA_def_string(func, "name", "Name", 0, "", "New name for the modifier");
 	RNA_def_property_flag(parm, PROP_REQUIRED);
 	/* modifier to add */
-	parm = RNA_def_enum(func, "type", modifier_type_items, 1, "", "Modifier type to add");
+	parm = RNA_def_enum(func, "type", rna_enum_object_modifier_type_items, 1, "", "Modifier type to add");
 	RNA_def_property_flag(parm, PROP_REQUIRED);
 	/* return type */
 	parm = RNA_def_pointer(func, "modifier", "Modifier", "", "Newly created modifier");
@@ -2195,7 +2207,7 @@ static void rna_def_object(BlenderRNA *brna)
 	static int boundbox_dimsize[] = {8, 3};
 
 	srna = RNA_def_struct(brna, "Object", "ID");
-	RNA_def_struct_ui_text(srna, "Object", "Object datablock defining an object in a scene");
+	RNA_def_struct_ui_text(srna, "Object", "Object data-block defining an object in a scene");
 	RNA_def_struct_clear_flag(srna, STRUCT_ID_REFCOUNT);
 	RNA_def_struct_ui_icon(srna, ICON_OBJECT_DATA);
 
@@ -2208,13 +2220,13 @@ static void rna_def_object(BlenderRNA *brna)
 
 	prop = RNA_def_property(srna, "type", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_sdna(prop, NULL, "type");
-	RNA_def_property_enum_items(prop, object_type_items);
+	RNA_def_property_enum_items(prop, rna_enum_object_type_items);
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 	RNA_def_property_ui_text(prop, "Type", "Type of Object");
 
 	prop = RNA_def_property(srna, "mode", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_sdna(prop, NULL, "mode");
-	RNA_def_property_enum_items(prop, object_mode_items);
+	RNA_def_property_enum_items(prop, rna_enum_object_mode_items);
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 	RNA_def_property_ui_text(prop, "Mode", "Object interaction mode");
 
@@ -2278,7 +2290,7 @@ static void rna_def_object(BlenderRNA *brna)
 	 *      since some other tools still refer to this */
 	prop = RNA_def_property(srna, "track_axis", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_sdna(prop, NULL, "trackflag");
-	RNA_def_property_enum_items(prop, object_axis_items);
+	RNA_def_property_enum_items(prop, rna_enum_object_axis_items);
 	RNA_def_property_ui_text(prop, "Track Axis",
 	                         "Axis that points in 'forward' direction (applies to DupliFrame when "
 	                         "parent 'Follow' is enabled)");
@@ -2375,6 +2387,8 @@ static void rna_def_object(BlenderRNA *brna)
 
 	prop = RNA_def_property(srna, "dimensions", PROP_FLOAT, PROP_XYZ_LENGTH);
 	RNA_def_property_array(prop, 3);
+	/* only for the transform-panel and conflicts with animating scale */
+	RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
 	RNA_def_property_float_funcs(prop, "rna_Object_dimensions_get", "rna_Object_dimensions_set", NULL);
 	RNA_def_property_ui_range(prop, 0.0f, FLT_MAX, 1, 3);
 	RNA_def_property_ui_text(prop, "Dimensions", "Absolute bounding box dimensions of the object");
@@ -2517,7 +2531,7 @@ static void rna_def_object(BlenderRNA *brna)
 	/* empty */
 	prop = RNA_def_property(srna, "empty_draw_type", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_sdna(prop, NULL, "empty_drawtype");
-	RNA_def_property_enum_items(prop, object_empty_drawtype_items);
+	RNA_def_property_enum_items(prop, rna_enum_object_empty_drawtype_items);
 	RNA_def_property_enum_funcs(prop, NULL, "rna_Object_empty_draw_type_set", NULL);
 	RNA_def_property_ui_text(prop, "Empty Display Type", "Viewport display style for empties");
 	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, NULL);
@@ -2769,7 +2783,7 @@ static void rna_def_object(BlenderRNA *brna)
 	RNA_def_property_pointer_sdna(prop, NULL, "gpd");
 	RNA_def_property_struct_type(prop, "GreasePencil");
 	RNA_def_property_flag(prop, PROP_EDITABLE | PROP_ID_REFCOUNT);
-	RNA_def_property_ui_text(prop, "Grease Pencil Data", "Grease Pencil datablock");
+	RNA_def_property_ui_text(prop, "Grease Pencil Data", "Grease Pencil data-block");
 	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, NULL);
 	
 	/* pose */

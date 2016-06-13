@@ -75,7 +75,7 @@ public:
 	void ComputeSteerableViewMap();
 	void saveSteerableViewMapImages();
 	void toggleEdgeTesselationNature(Nature::EdgeNature iNature);
-	void DrawStrokes();
+	int DrawStrokes();
 	void ResetRenderCount();
 	Render *RenderStrokes(Render *re, bool render);
 	void SwapStyleModules(unsigned i1, unsigned i2);
@@ -209,7 +209,9 @@ private:
 
 	BBox<Vec3r> _Scene3dBBox;
 	unsigned int _SceneNumFaces;
+#if 0
 	real _minEdgeSize;
+#endif
 	real _EPSILON;
 	real _bboxDiag;
 

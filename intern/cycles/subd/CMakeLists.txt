@@ -1,10 +1,11 @@
 
 set(INC
 	.
-	../util
+	../graph
 	../kernel
 	../kernel/svm
 	../render
+	../util
 )
 
 set(INC_SYS
@@ -24,6 +25,10 @@ set(SRC_HEADERS
 	subd_patch.h
 	subd_split.h
 )
+
+if(WITH_CYCLES_OPENSUBDIV)
+	add_definitions(-DWITH_OPENSUBDIV)
+endif()
 
 include_directories(${INC})
 include_directories(SYSTEM ${INC_SYS})

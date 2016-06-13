@@ -184,7 +184,7 @@ void freeraytree(Render *re)
 #endif
 }
 
-static int is_raytraceable_vlr(Render *re, VlakRen *vlr)
+static bool is_raytraceable_vlr(Render *re, VlakRen *vlr)
 {
 	/* note: volumetric must be tracable, wire must not */
 	if ((re->flag & R_BAKE_TRACE) || (vlr->flag & R_TRACEBLE) || (vlr->mat->material_type == MA_TYPE_VOLUME))
@@ -193,7 +193,7 @@ static int is_raytraceable_vlr(Render *re, VlakRen *vlr)
 	return 0;
 }
 
-static int is_raytraceable(Render *re, ObjectInstanceRen *obi)
+static bool is_raytraceable(Render *re, ObjectInstanceRen *obi)
 {
 	int v;
 	ObjectRen *obr = obi->obr;
@@ -736,6 +736,7 @@ static void traceray(ShadeInput *origshi, ShadeResult *origshr, short depth, con
 		//shi.sample= 0; // memset above, so don't need this
 		shi.xs= origshi->xs;
 		shi.ys= origshi->ys;
+		shi.do_manage= origshi->do_manage;
 		shi.lay= origshi->lay;
 		shi.passflag= SCE_PASS_COMBINED; /* result of tracing needs no pass info */
 		shi.combinedflag= 0xFFFFFF;		 /* ray trace does all options */
@@ -749,7 +750,7 @@ static void traceray(ShadeInput *origshi, ShadeResult *origshr, short depth, con
 			d= shade_by_transmission(&isec, &shi, &shr);
 		
 		if (depth>0) {
-			float fr, fg, fb, f, f1;
+			float fr, fg, fb, f1;
 
 			if ((shi.mat->mode_l & MA_TRANSP) && shr.alpha < 1.0f && (shi.mat->mode_l & (MA_ZTRANSP | MA_RAYTRANSP))) {
 				float nf, f, refract[3], tracol[4];
@@ -809,9 +810,11 @@ static void traceray(ShadeInput *origshi, ShadeResult *origshr, short depth, con
 
 				col[3]= f1*tracol[3] + f;
 			}
-			else 
+			else {
 				col[3]= 1.0f;
+			}
 
+			float f;
 			if (shi.mat->mode_l & MA_RAYMIRROR) {
 				f= shi.ray_mirror;
 				if (f!=0.0f) f*= fresnel_fac(shi.view, shi.vn, shi.mat->fresnel_mir_i, shi.mat->fresnel_mir);
@@ -1622,6 +1625,7 @@ static void ray_trace_shadow_tra(Isect *is, ShadeInput *origshi, int depth, int 
 	
 		shi.xs= origshi->xs;
 		shi.ys= origshi->ys;
+		shi.do_manage= origshi->do_manage;
 		shi.lay= origshi->lay;
 		shi.nodes= origshi->nodes;
 		

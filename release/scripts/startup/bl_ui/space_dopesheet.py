@@ -51,11 +51,13 @@ def dopesheet_filter(layout, context, genericFiltersOnly=False):
         row.prop(dopesheet, "show_only_matching_fcurves", text="")
         if dopesheet.show_only_matching_fcurves:
             row.prop(dopesheet, "filter_fcurve_name", text="")
+            row.prop(dopesheet, "use_multi_word_filter", text="")
     else:
         row = layout.row(align=True)
         row.prop(dopesheet, "use_filter_text", text="")
         if dopesheet.use_filter_text:
             row.prop(dopesheet, "filter_text", text="")
+            row.prop(dopesheet, "use_multi_word_filter", text="")
 
     if not genericFiltersOnly:
         row = layout.row(align=True)
@@ -138,6 +140,20 @@ class DOPESHEET_HT_header(Header):
             # 'genericFiltersOnly' limits the options to only the relevant 'generic' subset of
             # filters which will work here and are useful (especially for character animation)
             dopesheet_filter(layout, context, genericFiltersOnly=True)
+        elif st.mode == 'GPENCIL':
+            row = layout.row(align=True)
+            row.prop(st.dopesheet, "show_gpencil_3d_only", text="Active Only")
+
+            if st.dopesheet.show_gpencil_3d_only:
+                row = layout.row(align=True)
+                row.prop(st.dopesheet, "show_only_selected", text="")
+                row.prop(st.dopesheet, "show_hidden", text="")
+
+            row = layout.row(align=True)
+            row.prop(st.dopesheet, "use_filter_text", text="")
+            if st.dopesheet.use_filter_text:
+                row.prop(st.dopesheet, "filter_text", text="")
+                row.prop(st.dopesheet, "use_multi_word_filter", text="")
 
         row = layout.row(align=True)
         row.prop(toolsettings, "use_proportional_action",
@@ -153,7 +169,8 @@ class DOPESHEET_HT_header(Header):
         row = layout.row(align=True)
         row.operator("action.copy", text="", icon='COPYDOWN')
         row.operator("action.paste", text="", icon='PASTEDOWN')
-        row.operator("action.paste", text="", icon='PASTEFLIPDOWN').flipped = True
+        if st.mode not in ('GPENCIL', 'MASK'):
+            row.operator("action.paste", text="", icon='PASTEFLIPDOWN').flipped = True
 
 
 class DOPESHEET_MT_editor_menus(Menu):
@@ -189,6 +206,9 @@ class DOPESHEET_MT_view(Menu):
         layout = self.layout
 
         st = context.space_data
+
+        layout.operator("action.properties", icon='MENU_PANEL')
+        layout.separator()
 
         layout.prop(st, "use_realtime_update")
         layout.prop(st, "show_frame_indicator")
@@ -338,7 +358,7 @@ class DOPESHEET_MT_key(Menu):
         layout.operator_menu_enum("action.interpolation_type", "type", text="Interpolation Mode")
 
         layout.separator()
-        layout.operator("action.clean")
+        layout.operator("action.clean").channels = False
         layout.operator("action.clean", text="Clean Channels").channels = True
         layout.operator("action.sample")
 
@@ -421,7 +441,7 @@ class DOPESHEET_MT_delete(Menu):
 
         layout.separator()
 
-        layout.operator("action.clean")
+        layout.operator("action.clean").channels = False
         layout.operator("action.clean", text="Clean Channels").channels = True
 
 

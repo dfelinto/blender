@@ -23,20 +23,13 @@
  * ***** END GPL LICENSE BLOCK *****
  */
 
-/* ***** Vertex shader ***** */
-
-#extension GL_EXT_geometry_shader4 : enable
-#extension GL_ARB_gpu_shader5 : enable
-#extension GL_ARB_explicit_attrib_location : require
-#extension GL_ARB_uniform_buffer_object : require
-
 struct VertexData {
 	vec4 position;
 	vec3 normal;
 	vec2 uv;
 };
 
-#ifdef VERTEX_SHADER
+#ifdef VERTEX_SHADER // ---------------------
 
 in vec3 normal;
 in vec4 position;
@@ -52,20 +45,33 @@ void main()
 {
 	outpt.v.position = modelViewMatrix * position;
 	outpt.v.normal = normalize(normalMatrix * normal);
+
+#if __VERSION__ < 140
+	/* Some compilers expects gl_Position to be written.
+	 * It's not needed once we explicitly switch to GLSL 1.40 or above.
+	 */
+	gl_Position = outpt.v.position;
+#endif
 }
 
-#endif  /* VERTEX_SHADER */
+#elif defined GEOMETRY_SHADER // ---------------------
 
-/* ***** geometry shader ***** */
-#ifdef GEOMETRY_SHADER
-
-#ifndef GLSL_COMPAT_WORKAROUND
-layout(lines_adjacency) in;
-#ifndef WIREFRAME
-layout(triangle_strip, max_vertices = 4) out;
+#if __VERSION__ >= 150
+  layout(lines_adjacency) in;
+  #ifdef WIREFRAME
+    layout(line_strip, max_vertices = 8) out;
+  #else
+    layout(triangle_strip, max_vertices = 4) out;
+  #endif
 #else
-layout(line_strip, max_vertices = 8) out;
+  #extension GL_EXT_geometry_shader4: require
+  /* application provides input/output layout info */
 #endif
+
+#if __VERSION__ < 140
+  #extension GL_ARB_uniform_buffer_object: require
+  #extension GL_ARB_texture_buffer_object: enable
+  #extension GL_EXT_texture_buffer_object: enable
 #endif
 
 uniform mat4 modelViewMatrix;
@@ -76,7 +82,7 @@ uniform int osd_active_uv_offset;
 
 in block {
 	VertexData v;
-} inpt[4];
+} inpt[];
 
 #define INTERP_FACE_VARYING_2(result, fvarOffset, tessCoord)  \
 	{ \
@@ -105,7 +111,7 @@ void emit(int index, vec3 normal)
 	outpt.v.normal = normal;
 
 	/* TODO(sergey): Only uniform subdivisions atm. */
-	vec2 quadst[4] = vec2[](vec2(0,0), vec2(1,0), vec2(1,1), vec2(0,1));
+	vec2 quadst[4] = vec2[](vec2(0, 0), vec2(1, 0), vec2(1, 1), vec2(0, 1));
 	vec2 st = quadst[index];
 
 	INTERP_FACE_VARYING_2(outpt.v.uv, osd_active_uv_offset, st);
@@ -129,7 +135,7 @@ void emit(int index)
 	outpt.v.normal = inpt[index].v.normal;
 
 	/* TODO(sergey): Only uniform subdivisions atm. */
-	vec2 quadst[4] = vec2[](vec2(0,0), vec2(1,0), vec2(1,1), vec2(0,1));
+	vec2 quadst[4] = vec2[](vec2(0, 0), vec2(1, 0), vec2(1, 1), vec2(0, 1));
 	vec2 st = quadst[index];
 
 	INTERP_FACE_VARYING_2(outpt.v.uv, osd_active_uv_offset, st);
@@ -184,10 +190,7 @@ void main()
 	EndPrimitive();
 }
 
-#endif  /* GEOMETRY_SHADER */
-
-/* ***** Fragment shader ***** */
-#ifdef FRAGMENT_SHADER
+#elif defined FRAGMENT_SHADER // ---------------------
 
 #define MAX_LIGHTS 8
 #define NUM_SOLID_LIGHTS 3
@@ -198,15 +201,17 @@ struct LightSource {
 	vec4 diffuse;
 	vec4 specular;
 	vec4 spotDirection;
+#ifdef SUPPORT_COLOR_MATERIAL
 	float constantAttenuation;
 	float linearAttenuation;
 	float quadraticAttenuation;
 	float spotCutoff;
 	float spotExponent;
 	float spotCosCutoff;
+#endif
 };
 
-uniform Lighting {
+layout(std140) uniform Lighting {
 	LightSource lightSource[MAX_LIGHTS];
 	int num_enabled_lights;
 };
@@ -256,7 +261,7 @@ void main()
 #else  /* USE_COLOR_MATERIAL */
 	vec3 varying_position = inpt.v.position.xyz;
 	vec3 V = (gl_ProjectionMatrix[3][3] == 0.0) ?
-		normalize(varying_position): vec3(0.0, 0.0, -1.0);
+	         normalize(varying_position) : vec3(0.0, 0.0, -1.0);
 	for (int i = 0; i < num_enabled_lights; i++) {
 		/* todo: this is a slow check for disabled lights */
 		if (lightSource[i].specular.a == 0.0)
@@ -294,7 +299,7 @@ void main()
 		/* diffuse light */
 		vec3 light_diffuse = lightSource[i].diffuse.rgb;
 		float diffuse_bsdf = max(dot(N, light_direction), 0.0);
-		L_diffuse += light_diffuse*diffuse_bsdf*intensity;
+		L_diffuse += light_diffuse * diffuse_bsdf * intensity;
 
 		/* specular light */
 		vec3 light_specular = lightSource[i].specular.rgb;
@@ -302,7 +307,7 @@ void main()
 
 		float specular_bsdf = pow(max(dot(N, H), 0.0),
 		                          gl_FrontMaterial.shininess);
-		L_specular += light_specular*specular_bsdf * intensity;
+		L_specular += light_specular * specular_bsdf * intensity;
 	}
 #endif  /* USE_COLOR_MATERIAL */
 
@@ -324,4 +329,4 @@ void main()
 #endif
 }
 
-#endif  // FRAGMENT_SHADER
+#endif // ---------------------

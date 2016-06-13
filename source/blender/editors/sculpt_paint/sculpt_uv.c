@@ -157,7 +157,7 @@ static Brush *uv_sculpt_brush(bContext *C)
 }
 
 
-static int uv_sculpt_brush_poll(bContext *C)
+static int uv_sculpt_brush_poll_do(bContext *C, const bool check_region)
 {
 	BMEditMesh *em;
 	int ret;
@@ -177,11 +177,17 @@ static int uv_sculpt_brush_poll(bContext *C)
 
 	if (ret) {
 		ARegion *ar = CTX_wm_region(C);
-		if ((toolsettings->use_uv_sculpt) && ar->regiontype == RGN_TYPE_WINDOW)
-			return 1;
+		if ((!toolsettings->use_uv_sculpt) || (check_region && ar && (ar->regiontype != RGN_TYPE_WINDOW))) {
+			ret = 0;
+		}
 	}
 
-	return 0;
+	return ret;
+}
+
+static int uv_sculpt_brush_poll(bContext *C)
+{
+	return uv_sculpt_brush_poll_do(C, true);
 }
 
 static void brush_drawcursor_uvsculpt(bContext *C, int x, int y, void *UNUSED(customdata))
@@ -224,8 +230,9 @@ static void brush_drawcursor_uvsculpt(bContext *C, int x, int y, void *UNUSED(cu
 }
 
 
-void ED_space_image_uv_sculpt_update(wmWindowManager *wm, ToolSettings *settings)
+void ED_space_image_uv_sculpt_update(wmWindowManager *wm, Scene *scene)
 {
+	ToolSettings *settings = scene->toolsettings;
 	if (settings->use_uv_sculpt) {
 		if (!settings->uvsculpt) {
 			settings->uvsculpt = MEM_callocN(sizeof(*settings->uvsculpt), "UV Smooth paint");
@@ -236,7 +243,7 @@ void ED_space_image_uv_sculpt_update(wmWindowManager *wm, ToolSettings *settings
 			settings->uvsculpt->paint.flags |= PAINT_SHOW_BRUSH;
 		}
 
-		BKE_paint_init(&settings->unified_paint_settings, &settings->uvsculpt->paint, PAINT_CURSOR_SCULPT);
+		BKE_paint_init(scene, ePaintSculptUV, PAINT_CURSOR_SCULPT);
 
 		settings->uvsculpt->paint.paint_cursor = WM_paint_cursor_activate(wm, uv_sculpt_brush_poll,
 		                                                                  brush_drawcursor_uvsculpt, NULL);
@@ -251,7 +258,12 @@ void ED_space_image_uv_sculpt_update(wmWindowManager *wm, ToolSettings *settings
 
 int uv_sculpt_poll(bContext *C)
 {
-	return uv_sculpt_brush_poll(C);
+	return uv_sculpt_brush_poll_do(C, true);
+}
+
+int uv_sculpt_keymap_poll(bContext *C)
+{
+	return uv_sculpt_brush_poll_do(C, false);
 }
 
 /*********** Improved Laplacian Relaxation Operator ************************/

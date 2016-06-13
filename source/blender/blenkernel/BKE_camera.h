@@ -50,6 +50,7 @@ struct GPUFXSettings;
 
 /* Camera Datablock */
 
+void BKE_camera_init(struct Camera *cam);
 void *BKE_camera_add(struct Main *bmain, const char *name);
 struct Camera *BKE_camera_copy(struct Camera *cam);
 void BKE_camera_make_local(struct Camera *cam);
@@ -143,6 +144,7 @@ void           BKE_camera_multiview_view_matrix(struct RenderData *rd, struct Ob
 void           BKE_camera_multiview_model_matrix(struct RenderData *rd, struct Object *camera, const char *viewname, float r_modelmat[4][4]);
 float          BKE_camera_multiview_shift_x(struct RenderData *rd, struct Object *camera, const char *viewname);
 void           BKE_camera_multiview_params(struct RenderData *rd, struct CameraParams *params, struct Object *camera, const char *viewname);
+bool           BKE_camera_multiview_spherical_stereo(struct RenderData *rd, struct Object *camera);
 
 #ifdef __cplusplus
 }

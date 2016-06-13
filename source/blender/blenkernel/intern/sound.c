@@ -71,32 +71,56 @@ static int sound_cfra;
 static char **audio_device_names = NULL;
 #endif
 
-bSound *BKE_sound_new_file(struct Main *bmain, const char *filename)
+bSound *BKE_sound_new_file(struct Main *bmain, const char *filepath)
 {
 	bSound *sound;
-
-	char str[FILE_MAX];
 	const char *path;
+	char str[FILE_MAX];
 
-	size_t len;
-
-	BLI_strncpy(str, filename, sizeof(str));
+	BLI_strncpy(str, filepath, sizeof(str));
 
 	path = /*bmain ? bmain->name :*/ G.main->name;
 
 	BLI_path_abs(str, path);
 
-	len = strlen(filename);
-	while (len > 0 && filename[len - 1] != '/' && filename[len - 1] != '\\')
-		len--;
-
-	sound = BKE_libblock_alloc(bmain, ID_SO, filename + len);
-	BLI_strncpy(sound->name, filename, FILE_MAX);
+	sound = BKE_libblock_alloc(bmain, ID_SO, BLI_path_basename(filepath));
+	BLI_strncpy(sound->name, filepath, FILE_MAX);
 	/* sound->type = SOUND_TYPE_FILE; */ /* XXX unused currently */
 
 	BKE_sound_load(bmain, sound);
 
 	return sound;
+}
+
+bSound *BKE_sound_new_file_exists_ex(struct Main *bmain, const char *filepath, bool *r_exists)
+{
+	bSound *sound;
+	char str[FILE_MAX], strtest[FILE_MAX];
+
+	BLI_strncpy(str, filepath, sizeof(str));
+	BLI_path_abs(str, bmain->name);
+
+	/* first search an identical filepath */
+	for (sound = bmain->sound.first; sound; sound = sound->id.next) {
+		BLI_strncpy(strtest, sound->name, sizeof(sound->name));
+		BLI_path_abs(strtest, ID_BLEND_PATH(bmain, &sound->id));
+
+		if (BLI_path_cmp(strtest, str) == 0) {
+			id_us_plus(&sound->id);  /* officially should not, it doesn't link here! */
+			if (r_exists)
+				*r_exists = true;
+			return sound;
+		}
+	}
+
+	if (r_exists)
+		*r_exists = false;
+	return BKE_sound_new_file(bmain, filepath);
+}
+
+bSound *BKE_sound_new_file_exists(struct Main *bmain, const char *filepath)
+{
+	return BKE_sound_new_file_exists_ex(bmain, filepath, NULL);
 }
 
 void BKE_sound_free(bSound *sound)
@@ -203,7 +227,7 @@ void BKE_sound_init(struct Main *bmain)
 		buffersize = 1024;
 
 	if (specs.rate < AUD_RATE_8000)
-		specs.rate = AUD_RATE_44100;
+		specs.rate = AUD_RATE_48000;
 
 	if (specs.format <= AUD_FORMAT_INVALID)
 		specs.format = AUD_FORMAT_S16;
@@ -538,6 +562,7 @@ void BKE_sound_set_scene_sound_pitch(void *handle, float pitch, char animated)
 
 void BKE_sound_set_scene_sound_pan(void *handle, float pan, char animated)
 {
+	printf("%s\n", __func__);
 	AUD_SequenceEntry_setAnimationData(handle, AUD_AP_PANNING, sound_cfra, &pan, animated);
 }
 

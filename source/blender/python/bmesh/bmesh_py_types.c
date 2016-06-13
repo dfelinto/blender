@@ -27,9 +27,8 @@
  *  \ingroup pybmesh
  */
 
-#include <Python.h>
-
 #include "BLI_math.h"
+#include "BLI_sort.h"
 
 #include "DNA_mesh_types.h"
 #include "DNA_object_types.h"
@@ -40,6 +39,8 @@
 #include "BKE_DerivedMesh.h"
 
 #include "bmesh.h"
+
+#include <Python.h>
 
 #include "../mathutils/mathutils.h"
 
@@ -222,7 +223,11 @@ static PyObject *bpy_bmfaceseq_get(BPy_BMesh *self, void *UNUSED(closure))
 }
 
 PyDoc_STRVAR(bpy_bmloopseq_doc,
-"This meshes face sequence (read-only).\n\n:type: :class:`BMLoopSeq`"
+"This meshes loops (read-only).\n\n:type: :class:`BMLoopSeq`\n"
+"\n"
+".. note::\n"
+"\n"
+"   Loops must be accessed via faces, this is only exposed for layer access.\n"
 );
 static PyObject *bpy_bmloopseq_get(BPy_BMesh *self, void *UNUSED(closure))
 {
@@ -911,7 +916,7 @@ static PyObject *bpy_bmesh_to_mesh(BPy_BMesh *self, PyObject *args)
 	/* python won't ensure matching uv/mtex */
 	BM_mesh_cd_validate(bm);
 
-	BM_mesh_bm_to_me(bm, me, false);
+	BM_mesh_bm_to_me(bm, me, (&(struct BMeshToMeshParams){0}));
 
 	/* we could have the user do this but if they forget blender can easy crash
 	 * since the references arrays for the objects derived meshes are now invalid */
@@ -936,8 +941,9 @@ PyDoc_STRVAR(bpy_bmesh_from_object_doc,
 "   :arg face_normals: Calculate face normals.\n"
 "   :type face_normals: boolean\n"
 );
-static PyObject *bpy_bmesh_from_object(BPy_BMesh *self, PyObject *args)
+static PyObject *bpy_bmesh_from_object(BPy_BMesh *self, PyObject *args, PyObject *kw)
 {
+	static const char *kwlist[] = {"object", "scene", "deform", "render", "cage", "face_normals", NULL};
 	PyObject *py_object;
 	PyObject *py_scene;
 	Object *ob;
@@ -952,8 +958,8 @@ static PyObject *bpy_bmesh_from_object(BPy_BMesh *self, PyObject *args)
 
 	BPY_BM_CHECK_OBJ(self);
 
-	if (!PyArg_ParseTuple(
-	        args, "OO|O&O&O&O&:from_object",
+	if (!PyArg_ParseTupleAndKeywords(
+	        args, kw, "OO|O&O&O&O&:from_object", (char **)kwlist,
 	        &py_object, &py_scene,
 	        PyC_ParseBool, &use_deform,
 	        PyC_ParseBool, &use_render,
@@ -1069,7 +1075,10 @@ static PyObject *bpy_bmesh_from_mesh(BPy_BMesh *self, PyObject *args, PyObject *
 
 	bm = self->bm;
 
-	BM_mesh_bm_from_me(bm, me, use_fnorm, use_shape_key, shape_key_index + 1);
+	BM_mesh_bm_from_me(
+	        bm, me, (&(struct BMeshFromMeshParams){
+	            .calc_face_normal = use_fnorm, .use_shapekey = use_shape_key, .active_shapekey = shape_key_index + 1,
+	        }));
 
 	Py_RETURN_NONE;
 }
@@ -1256,7 +1265,7 @@ static PyObject *bpy_bmesh_calc_tessface(BPy_BMElem *self)
 	looptris_tot = poly_to_tri_count(bm->totface, bm->totloop);
 	looptris = PyMem_MALLOC(sizeof(*looptris) * looptris_tot);
 
-	BM_bmesh_calc_tessellation(bm, looptris, &tottri);
+	BM_mesh_calc_tessellation(bm, looptris, &tottri);
 
 	ret = PyList_New(tottri);
 	for (i = 0; i < tottri; i++) {
@@ -1791,6 +1800,82 @@ static PyObject *bpy_bmface_calc_perimeter(BPy_BMFace *self)
 {
 	BPY_BM_CHECK_OBJ(self);
 	return PyFloat_FromDouble(BM_face_calc_perimeter(self->f));
+}
+
+
+PyDoc_STRVAR(bpy_bmface_calc_tangent_edge_doc,
+".. method:: calc_tangent_edge()\n"
+"\n"
+"   Return face tangent based on longest edge.\n"
+"\n"
+"   :return: a normalized vector.\n"
+"   :rtype: :class:`mathutils.Vector`\n"
+);
+static PyObject *bpy_bmface_calc_tangent_edge(BPy_BMFace *self)
+{
+	float tangent[3];
+
+	BPY_BM_CHECK_OBJ(self);
+	BM_face_calc_tangent_edge(self->f, tangent);
+	return Vector_CreatePyObject(tangent, 3, NULL);
+}
+
+
+PyDoc_STRVAR(bpy_bmface_calc_tangent_edge_pair_doc,
+".. method:: calc_tangent_edge_pair()\n"
+"\n"
+"   Return face tangent based on the two longest disconected edges.\n"
+"\n"
+"   - Tris: Use the edge pair with the most similar lengths.\n"
+"   - Quads: Use the longest edge pair.\n"
+"   - NGons: Use the two longest disconnected edges.\n"
+"\n"
+"   :return: a normalized vector.\n"
+"   :rtype: :class:`mathutils.Vector`\n"
+);
+static PyObject *bpy_bmface_calc_tangent_edge_pair(BPy_BMFace *self)
+{
+	float tangent[3];
+
+	BPY_BM_CHECK_OBJ(self);
+	BM_face_calc_tangent_edge_pair(self->f, tangent);
+	return Vector_CreatePyObject(tangent, 3, NULL);
+}
+
+
+PyDoc_STRVAR(bpy_bmface_calc_tangent_edge_diagonal_doc,
+".. method:: calc_tangent_edge_diagonal()\n"
+"\n"
+"   Return face tangent based on the edge farthest from any vertex.\n"
+"\n"
+"   :return: a normalized vector.\n"
+"   :rtype: :class:`mathutils.Vector`\n"
+);
+static PyObject *bpy_bmface_calc_tangent_edge_diagonal(BPy_BMFace *self)
+{
+	float tangent[3];
+
+	BPY_BM_CHECK_OBJ(self);
+	BM_face_calc_tangent_edge_diagonal(self->f, tangent);
+	return Vector_CreatePyObject(tangent, 3, NULL);
+}
+
+
+PyDoc_STRVAR(bpy_bmface_calc_tangent_vert_diagonal_doc,
+".. method:: calc_tangent_vert_diagonal()\n"
+"\n"
+"   Return face tangent based on the two most distent vertices.\n"
+"\n"
+"   :return: a normalized vector.\n"
+"   :rtype: :class:`mathutils.Vector`\n"
+);
+static PyObject *bpy_bmface_calc_tangent_vert_diagonal(BPy_BMFace *self)
+{
+	float tangent[3];
+
+	BPY_BM_CHECK_OBJ(self);
+	BM_face_calc_tangent_vert_diagonal(self->f, tangent);
+	return Vector_CreatePyObject(tangent, 3, NULL);
 }
 
 
@@ -2442,6 +2527,9 @@ PyDoc_STRVAR(bpy_bmelemseq_sort_doc,
 "      When the 'key' argument is not provided, the elements are reordered following their current index value.\n"
 "      In particular this can be used by setting indices manually before calling this method.\n"
 "\n"
+"   .. warning::\n"
+"\n"
+"      Existing references to the N'th element, will continue to point the data at that index.\n"
 );
 
 /* Use a static variable here because there is the need to sort some array
@@ -2455,10 +2543,10 @@ PyDoc_STRVAR(bpy_bmelemseq_sort_doc,
  * Note: the functions below assumes the keys array has been allocated and it
  * has enough elements to complete the task.
  */
-static double *keys = NULL;
 
-static int bpy_bmelemseq_sort_cmp_by_keys_ascending(const void *index1_v, const void *index2_v)
+static int bpy_bmelemseq_sort_cmp_by_keys_ascending(const void *index1_v, const void *index2_v, void *keys_v)
 {
+	const double *keys = keys_v;
 	const int *index1 = (int *)index1_v;
 	const int *index2 = (int *)index2_v;
 
@@ -2467,9 +2555,9 @@ static int bpy_bmelemseq_sort_cmp_by_keys_ascending(const void *index1_v, const 
 	else                                    return 0;
 }
 
-static int bpy_bmelemseq_sort_cmp_by_keys_descending(const void *index1_v, const void *index2_v)
+static int bpy_bmelemseq_sort_cmp_by_keys_descending(const void *index1_v, const void *index2_v, void *keys_v)
 {
-	return -bpy_bmelemseq_sort_cmp_by_keys_ascending(index1_v, index2_v);
+	return -bpy_bmelemseq_sort_cmp_by_keys_ascending(index1_v, index2_v, keys_v);
 }
 
 static PyObject *bpy_bmelemseq_sort(BPy_BMElemSeq *self, PyObject *args, PyObject *kw)
@@ -2484,9 +2572,10 @@ static PyObject *bpy_bmelemseq_sort(BPy_BMElemSeq *self, PyObject *args, PyObjec
 	BMIter iter;
 	BMElem *ele;
 
+	double *keys;
 	int *elem_idx;
 	unsigned int *elem_map_idx;
-	int (*elem_idx_compare_by_keys)(const void *, const void *);
+	int (*elem_idx_compare_by_keys)(const void *, const void *, void *);
 
 	unsigned int *vert_idx = NULL;
 	unsigned int *edge_idx = NULL;
@@ -2577,7 +2666,7 @@ static PyObject *bpy_bmelemseq_sort(BPy_BMElemSeq *self, PyObject *args, PyObjec
 	else
 		elem_idx_compare_by_keys = bpy_bmelemseq_sort_cmp_by_keys_ascending;
 
-	qsort(elem_idx, n_elem, sizeof(*elem_idx), elem_idx_compare_by_keys);
+	BLI_qsort_r(elem_idx, n_elem, sizeof(*elem_idx), elem_idx_compare_by_keys, keys);
 
 	elem_map_idx = PyMem_MALLOC(sizeof(*elem_map_idx) * n_elem);
 	if (elem_map_idx == NULL) {
@@ -2689,6 +2778,10 @@ static struct PyMethodDef bpy_bmface_methods[] = {
 
 	{"calc_area",          (PyCFunction)bpy_bmface_calc_area,          METH_NOARGS, bpy_bmface_calc_area_doc},
 	{"calc_perimeter",     (PyCFunction)bpy_bmface_calc_perimeter,     METH_NOARGS, bpy_bmface_calc_perimeter_doc},
+	{"calc_tangent_edge", (PyCFunction)bpy_bmface_calc_tangent_edge,   METH_NOARGS, bpy_bmface_calc_tangent_edge_doc},
+	{"calc_tangent_edge_pair", (PyCFunction)bpy_bmface_calc_tangent_edge_pair,   METH_NOARGS, bpy_bmface_calc_tangent_edge_pair_doc},
+	{"calc_tangent_edge_diagonal", (PyCFunction)bpy_bmface_calc_tangent_edge_diagonal,   METH_NOARGS, bpy_bmface_calc_tangent_edge_diagonal_doc},
+	{"calc_tangent_vert_diagonal", (PyCFunction)bpy_bmface_calc_tangent_vert_diagonal,   METH_NOARGS, bpy_bmface_calc_tangent_vert_diagonal_doc},
 	{"calc_center_median", (PyCFunction)bpy_bmface_calc_center_mean,   METH_NOARGS, bpy_bmface_calc_center_mean_doc},
 	{"calc_center_median_weighted", (PyCFunction)bpy_bmface_calc_center_mean_weighted, METH_NOARGS, bpy_bmface_calc_center_mean_weighted_doc},
 	{"calc_center_bounds", (PyCFunction)bpy_bmface_calc_center_bounds, METH_NOARGS, bpy_bmface_calc_center_bounds_doc},
@@ -2784,7 +2877,7 @@ static PyTypeObject *bpy_bm_itype_as_pytype(const char itype)
 		case BM_FACES_OF_VERT:
 			return &BPy_BMFace_Type;
 
-		case BM_ALL_LOOPS_OF_FACE:
+		// case BM_ALL_LOOPS_OF_FACE:
 		case BM_LOOPS_OF_FACE:
 		case BM_LOOPS_OF_EDGE:
 		case BM_LOOPS_OF_VERT:

@@ -29,12 +29,14 @@
 
 #include "DNA_dynamicpaint_types.h"
 #include "DNA_object_types.h"
+#include "DNA_object_force.h"
 #include "DNA_scene_types.h"
 
 #include "BLI_utildefines.h"
 
 #include "BKE_cdderivedmesh.h"
 #include "BKE_dynamicpaint.h"
+#include "BKE_library_query.h"
 #include "BKE_modifier.h"
 
 #include "depsgraph_private.h"
@@ -170,12 +172,15 @@ static void foreachIDLink(ModifierData *md, Object *ob,
 		DynamicPaintSurface *surface = pmd->canvas->surfaces.first;
 
 		for (; surface; surface = surface->next) {
-			walk(userData, ob, (ID **)&surface->brush_group);
-			walk(userData, ob, (ID **)&surface->init_texture);
+			walk(userData, ob, (ID **)&surface->brush_group, IDWALK_NOP);
+			walk(userData, ob, (ID **)&surface->init_texture, IDWALK_USER);
+			if (surface->effector_weights) {
+				walk(userData, ob, (ID **)&surface->effector_weights->group, IDWALK_NOP);
+			}
 		}
 	}
 	if (pmd->brush) {
-		walk(userData, ob, (ID **)&pmd->brush->mat);
+		walk(userData, ob, (ID **)&pmd->brush->mat, IDWALK_USER);
 	}
 }
 

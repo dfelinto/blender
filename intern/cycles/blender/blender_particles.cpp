@@ -27,7 +27,9 @@ CCL_NAMESPACE_BEGIN
 
 /* Utilities */
 
-bool BlenderSync::sync_dupli_particle(BL::Object b_ob, BL::DupliObject b_dup, Object *object)
+bool BlenderSync::sync_dupli_particle(BL::Object& b_ob,
+                                      BL::DupliObject& b_dup,
+                                      Object *object)
 {
 	/* test if this dupli was generated from a particle sytem */
 	BL::ParticleSystem b_psys = b_dup.particle_system();
@@ -74,7 +76,7 @@ bool BlenderSync::sync_dupli_particle(BL::Object b_ob, BL::DupliObject b_dup, Ob
 	pa.velocity = get_float3(b_pa.velocity());
 	pa.angular_velocity = get_float3(b_pa.angular_velocity());
 
-	psys->particles.push_back(pa);
+	psys->particles.push_back_slow(pa);
 
 	if(object->particle_index != psys->particles.size() - 1)
 		scene->object_manager->tag_update(scene);

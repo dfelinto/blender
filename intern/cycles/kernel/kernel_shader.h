@@ -48,8 +48,10 @@ ccl_device void shader_setup_object_transforms(KernelGlobals *kg, ShaderData *sd
 }
 #endif
 
-ccl_device void shader_setup_from_ray(KernelGlobals *kg, ShaderData *sd,
-	const Intersection *isect, const Ray *ray, int bounce, int transparent_bounce)
+ccl_device_noinline void shader_setup_from_ray(KernelGlobals *kg,
+                                               ShaderData *sd,
+                                               const Intersection *isect,
+                                               const Ray *ray)
 {
 #ifdef __INSTANCING__
 	ccl_fetch(sd, object) = (isect->object == PRIM_NONE)? kernel_tex_fetch(__prim_object, isect->prim): isect->object;
@@ -66,8 +68,6 @@ ccl_device void shader_setup_from_ray(KernelGlobals *kg, ShaderData *sd,
 
 	ccl_fetch(sd, prim) = kernel_tex_fetch(__prim_index, isect->prim);
 	ccl_fetch(sd, ray_length) = isect->t;
-	ccl_fetch(sd, ray_depth) = bounce;
-	ccl_fetch(sd, transparent_depth) = transparent_bounce;
 
 #ifdef __UV__
 	ccl_fetch(sd, u) = isect->u;
@@ -117,10 +117,10 @@ ccl_device void shader_setup_from_ray(KernelGlobals *kg, ShaderData *sd,
 		/* instance transform */
 		object_normal_transform_auto(kg, sd, &ccl_fetch(sd, N));
 		object_normal_transform_auto(kg, sd, &ccl_fetch(sd, Ng));
-#ifdef __DPDU__
+#  ifdef __DPDU__
 		object_dir_transform_auto(kg, sd, &ccl_fetch(sd, dPdu));
 		object_dir_transform_auto(kg, sd, &ccl_fetch(sd, dPdv));
-#endif
+#  endif
 	}
 #endif
 
@@ -158,10 +158,10 @@ ccl_device_inline void shader_setup_from_subsurface(KernelGlobals *kg, ShaderDat
 	sd->prim = kernel_tex_fetch(__prim_index, isect->prim);
 	sd->type = isect->type;
 
-#ifdef __UV__
+#  ifdef __UV__
 	sd->u = isect->u;
 	sd->v = isect->v;
-#endif
+#  endif
 
 	/* fetch triangle data */
 	if(sd->type == PRIMITIVE_TRIANGLE) {
@@ -176,10 +176,10 @@ ccl_device_inline void shader_setup_from_subsurface(KernelGlobals *kg, ShaderDat
 		if(sd->shader & SHADER_SMOOTH_NORMAL)
 			sd->N = triangle_smooth_normal(kg, sd->prim, sd->u, sd->v);
 
-#ifdef __DPDU__
+#  ifdef __DPDU__
 		/* dPdu/dPdv */
 		triangle_dPdudv(kg, sd->prim, &sd->dPdu, &sd->dPdv);
-#endif
+#  endif
 	}
 	else {
 		/* motion triangle */
@@ -188,46 +188,51 @@ ccl_device_inline void shader_setup_from_subsurface(KernelGlobals *kg, ShaderDat
 
 	sd->flag |= kernel_tex_fetch(__shader_flag, (sd->shader & SHADER_MASK)*2);
 
-#ifdef __INSTANCING__
+#  ifdef __INSTANCING__
 	if(isect->object != OBJECT_NONE) {
 		/* instance transform */
 		object_normal_transform(kg, sd, &sd->N);
 		object_normal_transform(kg, sd, &sd->Ng);
-#ifdef __DPDU__
+#    ifdef __DPDU__
 		object_dir_transform(kg, sd, &sd->dPdu);
 		object_dir_transform(kg, sd, &sd->dPdv);
-#endif
+#    endif
 	}
-#endif
+#  endif
 
 	/* backfacing test */
 	if(backfacing) {
 		sd->flag |= SD_BACKFACING;
 		sd->Ng = -sd->Ng;
 		sd->N = -sd->N;
-#ifdef __DPDU__
+#  ifdef __DPDU__
 		sd->dPdu = -sd->dPdu;
 		sd->dPdv = -sd->dPdv;
-#endif
+#  endif
 	}
 
 	/* should not get used in principle as the shading will only use a diffuse
 	 * BSDF, but the shader might still access it */
 	sd->I = sd->N;
 
-#ifdef __RAY_DIFFERENTIALS__
+#  ifdef __RAY_DIFFERENTIALS__
 	/* differentials */
 	differential_dudv(&sd->du, &sd->dv, sd->dPdu, sd->dPdv, sd->dP, sd->Ng);
 	/* don't modify dP and dI */
-#endif
+#  endif
 }
 #endif
 
 /* ShaderData setup from position sampled on mesh */
 
-ccl_device void shader_setup_from_sample(KernelGlobals *kg, ShaderData *sd,
-	const float3 P, const float3 Ng, const float3 I,
-	int shader, int object, int prim, float u, float v, float t, float time, int bounce, int transparent_bounce)
+ccl_device void shader_setup_from_sample(KernelGlobals *kg,
+                                         ShaderData *sd,
+                                         const float3 P,
+                                         const float3 Ng,
+                                         const float3 I,
+                                         int shader, int object, int prim,
+                                         float u, float v, float t,
+                                         float time)
 {
 	/* vectors */
 	ccl_fetch(sd, P) = P;
@@ -248,8 +253,6 @@ ccl_device void shader_setup_from_sample(KernelGlobals *kg, ShaderData *sd,
 	ccl_fetch(sd, v) = v;
 #endif
 	ccl_fetch(sd, ray_length) = t;
-	ccl_fetch(sd, ray_depth) = bounce;
-	ccl_fetch(sd, transparent_depth) = transparent_bounce;
 
 	/* detect instancing, for non-instanced the object index is -object-1 */
 #ifdef __INSTANCING__
@@ -293,12 +296,12 @@ ccl_device void shader_setup_from_sample(KernelGlobals *kg, ShaderData *sd,
 #ifdef __DPDU__
 		triangle_dPdudv(kg, ccl_fetch(sd, prim), &ccl_fetch(sd, dPdu), &ccl_fetch(sd, dPdv));
 
-#ifdef __INSTANCING__
+#  ifdef __INSTANCING__
 		if(instanced) {
 			object_dir_transform_auto(kg, sd, &ccl_fetch(sd, dPdu));
 			object_dir_transform_auto(kg, sd, &ccl_fetch(sd, dPdv));
 		}
-#endif
+#  endif
 #endif
 	}
 	else {
@@ -347,12 +350,12 @@ ccl_device void shader_setup_from_displace(KernelGlobals *kg, ShaderData *sd,
 
 	/* watch out: no instance transform currently */
 
-	shader_setup_from_sample(kg, sd, P, Ng, I, shader, object, prim, u, v, 0.0f, TIME_INVALID, 0, 0);
+	shader_setup_from_sample(kg, sd, P, Ng, I, shader, object, prim, u, v, 0.0f, TIME_INVALID);
 }
 
 /* ShaderData setup from ray into background */
 
-ccl_device_inline void shader_setup_from_background(KernelGlobals *kg, ShaderData *sd, const Ray *ray, int bounce, int transparent_bounce)
+ccl_device_inline void shader_setup_from_background(KernelGlobals *kg, ShaderData *sd, const Ray *ray)
 {
 	/* vectors */
 	ccl_fetch(sd, P) = ray->D;
@@ -365,8 +368,6 @@ ccl_device_inline void shader_setup_from_background(KernelGlobals *kg, ShaderDat
 	ccl_fetch(sd, time) = ray->time;
 #endif
 	ccl_fetch(sd, ray_length) = 0.0f;
-	ccl_fetch(sd, ray_depth) = bounce;
-	ccl_fetch(sd, transparent_depth) = transparent_bounce;
 
 #ifdef __INSTANCING__
 	ccl_fetch(sd, object) = PRIM_NONE;
@@ -395,7 +396,7 @@ ccl_device_inline void shader_setup_from_background(KernelGlobals *kg, ShaderDat
 /* ShaderData setup from point inside volume */
 
 #ifdef __VOLUME__
-ccl_device_inline void shader_setup_from_volume(KernelGlobals *kg, ShaderData *sd, const Ray *ray, int bounce, int transparent_bounce)
+ccl_device_inline void shader_setup_from_volume(KernelGlobals *kg, ShaderData *sd, const Ray *ray)
 {
 	/* vectors */
 	sd->P = ray->P;
@@ -408,8 +409,6 @@ ccl_device_inline void shader_setup_from_volume(KernelGlobals *kg, ShaderData *s
 	sd->time = ray->time;
 #endif
 	sd->ray_length = 0.0f; /* todo: can we set this to some useful value? */
-	sd->ray_depth = bounce;
-	sd->transparent_depth = transparent_bounce;
 
 #ifdef __INSTANCING__
 	sd->object = PRIM_NONE; /* todo: fill this for texture coordinates */
@@ -516,12 +515,52 @@ ccl_device_inline void _shader_bsdf_multi_eval(KernelGlobals *kg, const ShaderDa
 	*pdf = (sum_sample_weight > 0.0f)? sum_pdf/sum_sample_weight: 0.0f;
 }
 
-ccl_device void shader_bsdf_eval(KernelGlobals *kg, ShaderData *sd,
-	const float3 omega_in, BsdfEval *eval, float *pdf)
+#ifdef __BRANCHED_PATH__
+ccl_device_inline void _shader_bsdf_multi_eval_branched(KernelGlobals *kg,
+                                                        const ShaderData *sd,
+                                                        const float3 omega_in,
+                                                        BsdfEval *result_eval,
+                                                        float light_pdf,
+                                                        bool use_mis)
+{
+	for(int i = 0; i < ccl_fetch(sd, num_closure); i++) {
+		const ShaderClosure *sc = ccl_fetch_array(sd, closure, i);
+		if(CLOSURE_IS_BSDF(sc->type)) {
+			float bsdf_pdf = 0.0f;
+			float3 eval = bsdf_eval(kg, sd, sc, omega_in, &bsdf_pdf);
+			if(bsdf_pdf != 0.0f) {
+				float mis_weight = use_mis? power_heuristic(light_pdf, bsdf_pdf): 1.0f;
+				bsdf_eval_accum(result_eval,
+				                sc->type,
+				                eval * sc->weight * mis_weight);
+			}
+		}
+	}
+}
+#endif
+
+ccl_device void shader_bsdf_eval(KernelGlobals *kg,
+                                 ShaderData *sd,
+                                 const float3 omega_in,
+                                 BsdfEval *eval,
+                                 float light_pdf,
+                                 bool use_mis)
 {
 	bsdf_eval_init(eval, NBUILTIN_CLOSURES, make_float3(0.0f, 0.0f, 0.0f), kernel_data.film.use_light_pass);
 
-	_shader_bsdf_multi_eval(kg, sd, omega_in, pdf, -1, eval, 0.0f, 0.0f);
+#ifdef __BRANCHED_PATH__
+	if(kernel_data.integrator.branched)
+		_shader_bsdf_multi_eval_branched(kg, sd, omega_in, eval, light_pdf, use_mis);
+	else
+#endif
+	{
+		float pdf;
+		_shader_bsdf_multi_eval(kg, sd, omega_in, &pdf, -1, eval, 0.0f, 0.0f);
+		if(use_mis) {
+			float weight = power_heuristic(light_pdf, pdf);
+			bsdf_eval_mul(eval, make_float3(weight, weight, weight));
+		}
+	}
 }
 
 ccl_device int shader_bsdf_sample(KernelGlobals *kg, const ShaderData *sd,
@@ -786,19 +825,19 @@ ccl_device float3 shader_holdout_eval(KernelGlobals *kg, ShaderData *sd)
 /* Surface Evaluation */
 
 ccl_device void shader_eval_surface(KernelGlobals *kg, ShaderData *sd,
-	float randb, int path_flag, ShaderContext ctx)
+	ccl_addr_space PathState *state, float randb, int path_flag, ShaderContext ctx)
 {
 	ccl_fetch(sd, num_closure) = 0;
 	ccl_fetch(sd, randb_closure) = randb;
 
 #ifdef __OSL__
 	if(kg->osl)
-		OSLShader::eval_surface(kg, sd, path_flag, ctx);
+		OSLShader::eval_surface(kg, sd, state, path_flag, ctx);
 	else
 #endif
 	{
 #ifdef __SVM__
-		svm_eval_nodes(kg, sd, SHADER_TYPE_SURFACE, path_flag);
+		svm_eval_nodes(kg, sd, state, SHADER_TYPE_SURFACE, path_flag);
 #else
 		ccl_fetch_array(sd, closure, 0)->weight = make_float3(0.8f, 0.8f, 0.8f);
 		ccl_fetch_array(sd, closure, 0)->N = ccl_fetch(sd, N);
@@ -811,21 +850,22 @@ ccl_device void shader_eval_surface(KernelGlobals *kg, ShaderData *sd,
 
 /* Background Evaluation */
 
-ccl_device float3 shader_eval_background(KernelGlobals *kg, ShaderData *sd, int path_flag, ShaderContext ctx)
+ccl_device float3 shader_eval_background(KernelGlobals *kg, ShaderData *sd,
+	ccl_addr_space PathState *state, int path_flag, ShaderContext ctx)
 {
 	ccl_fetch(sd, num_closure) = 0;
 	ccl_fetch(sd, randb_closure) = 0.0f;
 
 #ifdef __OSL__
 	if(kg->osl) {
-		return OSLShader::eval_background(kg, sd, path_flag, ctx);
+		return OSLShader::eval_background(kg, sd, state, path_flag, ctx);
 	}
 	else
 #endif
 
 	{
 #ifdef __SVM__
-		svm_eval_nodes(kg, sd, SHADER_TYPE_SURFACE, path_flag);
+		svm_eval_nodes(kg, sd, state, SHADER_TYPE_SURFACE, path_flag);
 
 		float3 eval = make_float3(0.0f, 0.0f, 0.0f);
 
@@ -952,7 +992,7 @@ ccl_device int shader_phase_sample_closure(KernelGlobals *kg, const ShaderData *
 /* Volume Evaluation */
 
 ccl_device void shader_eval_volume(KernelGlobals *kg, ShaderData *sd,
-	VolumeStack *stack, int path_flag, ShaderContext ctx)
+	PathState *state, VolumeStack *stack, int path_flag, ShaderContext ctx)
 {
 	/* reset closures once at the start, we will be accumulating the closures
 	 * for all volumes in the stack into a single array of closures */
@@ -980,14 +1020,14 @@ ccl_device void shader_eval_volume(KernelGlobals *kg, ShaderData *sd,
 
 		/* evaluate shader */
 #ifdef __SVM__
-#ifdef __OSL__
+#  ifdef __OSL__
 		if(kg->osl) {
-			OSLShader::eval_volume(kg, sd, path_flag, ctx);
+			OSLShader::eval_volume(kg, sd, state, path_flag, ctx);
 		}
 		else
-#endif
+#  endif
 		{
-			svm_eval_nodes(kg, sd, SHADER_TYPE_VOLUME, path_flag);
+			svm_eval_nodes(kg, sd, state, SHADER_TYPE_VOLUME, path_flag);
 		}
 #endif
 
@@ -1001,20 +1041,20 @@ ccl_device void shader_eval_volume(KernelGlobals *kg, ShaderData *sd,
 
 /* Displacement Evaluation */
 
-ccl_device void shader_eval_displacement(KernelGlobals *kg, ShaderData *sd, ShaderContext ctx)
+ccl_device void shader_eval_displacement(KernelGlobals *kg, ShaderData *sd, ccl_addr_space PathState *state, ShaderContext ctx)
 {
 	ccl_fetch(sd, num_closure) = 0;
 	ccl_fetch(sd, randb_closure) = 0.0f;
 
 	/* this will modify sd->P */
 #ifdef __SVM__
-#ifdef __OSL__
+#  ifdef __OSL__
 	if(kg->osl)
 		OSLShader::eval_displacement(kg, sd, ctx);
 	else
-#endif
+#  endif
 	{
-		svm_eval_nodes(kg, sd, SHADER_TYPE_DISPLACEMENT, 0);
+		svm_eval_nodes(kg, sd, state, SHADER_TYPE_DISPLACEMENT, 0);
 	}
 #endif
 }

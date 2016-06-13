@@ -133,11 +133,11 @@ ccl_device_inline float3 motion_triangle_refine(KernelGlobals *kg, ShaderData *s
 		if(UNLIKELY(t == 0.0f)) {
 			return P;
 		}
-#ifdef __OBJECT_MOTION__
+#  ifdef __OBJECT_MOTION__
 		Transform tfm = ccl_fetch(sd, ob_itfm);
-#else
+#  else
 		Transform tfm = object_fetch_transform(kg, isect->object, OBJECT_INVERSE_TRANSFORM);
-#endif
+#  endif
 
 		P = transform_point(&tfm, P);
 		D = transform_direction(&tfm, D*t);
@@ -160,11 +160,11 @@ ccl_device_inline float3 motion_triangle_refine(KernelGlobals *kg, ShaderData *s
 	P = P + D*rt;
 
 	if(isect->object != OBJECT_NONE) {
-#ifdef __OBJECT_MOTION__
+#  ifdef __OBJECT_MOTION__
 		Transform tfm = ccl_fetch(sd, ob_tfm);
-#else
+#  else
 		Transform tfm = object_fetch_transform(kg, isect->object, OBJECT_TRANSFORM);
-#endif
+#  endif
 
 		P = transform_point(&tfm, P);
 	}
@@ -178,19 +178,24 @@ ccl_device_inline float3 motion_triangle_refine(KernelGlobals *kg, ShaderData *s
 /* Same as above, except that isect->t is assumed to be in object space for instancing */
 
 #ifdef __SUBSURFACE__
-ccl_device_inline float3 motion_triangle_refine_subsurface(KernelGlobals *kg, ShaderData *sd, const Intersection *isect, const Ray *ray, float3 verts[3])
+#  if defined(__KERNEL_CUDA__) && (defined(i386) || defined(_M_IX86))
+ccl_device_noinline
+#  else
+ccl_device_inline
+#  endif
+float3 motion_triangle_refine_subsurface(KernelGlobals *kg, ShaderData *sd, const Intersection *isect, const Ray *ray, float3 verts[3])
 {
 	float3 P = ray->P;
 	float3 D = ray->D;
 	float t = isect->t;
 
-#ifdef __INTERSECTION_REFINE__
+#  ifdef __INTERSECTION_REFINE__
 	if(isect->object != OBJECT_NONE) {
-#ifdef __OBJECT_MOTION__
+#    ifdef __OBJECT_MOTION__
 		Transform tfm = ccl_fetch(sd, ob_itfm);
-#else
+#    else
 		Transform tfm = object_fetch_transform(kg, isect->object, OBJECT_INVERSE_TRANSFORM);
-#endif
+#    endif
 
 		P = transform_point(&tfm, P);
 		D = transform_direction(&tfm, D);
@@ -212,19 +217,19 @@ ccl_device_inline float3 motion_triangle_refine_subsurface(KernelGlobals *kg, Sh
 	P = P + D*rt;
 
 	if(isect->object != OBJECT_NONE) {
-#ifdef __OBJECT_MOTION__
+#    ifdef __OBJECT_MOTION__
 		Transform tfm = ccl_fetch(sd, ob_tfm);
-#else
+#    else
 		Transform tfm = object_fetch_transform(kg, isect->object, OBJECT_TRANSFORM);
-#endif
+#    endif
 
 		P = transform_point(&tfm, P);
 	}
 
 	return P;
-#else
+#  else
 	return P + D*t;
-#endif
+#  endif
 }
 #endif
 
@@ -358,8 +363,17 @@ ccl_device_inline bool motion_triangle_intersect(KernelGlobals *kg, Intersection
  * multiple hits we pick a single random primitive as the intersection point. */
 
 #ifdef __SUBSURFACE__
-ccl_device_inline void motion_triangle_intersect_subsurface(KernelGlobals *kg, Intersection *isect_array,
-	float3 P, float3 dir, float time, int object, int triAddr, float tmax, uint *num_hits, uint *lcg_state, int max_hits)
+ccl_device_inline void motion_triangle_intersect_subsurface(
+        KernelGlobals *kg,
+        SubsurfaceIntersection *ss_isect,
+        float3 P,
+        float3 dir,
+        float time,
+        int object,
+        int triAddr,
+        float tmax,
+        uint *lcg_state,
+        int max_hits)
 {
 	/* primitive index for vertex location lookup */
 	int prim = kernel_tex_fetch(__prim_index, triAddr);
@@ -373,30 +387,34 @@ ccl_device_inline void motion_triangle_intersect_subsurface(KernelGlobals *kg, I
 	float t, u, v;
 
 	if(ray_triangle_intersect_uv(P, dir, tmax, verts[2], verts[0], verts[1], &u, &v, &t)) {
-		(*num_hits)++;
+		ss_isect->num_hits++;
 
 		int hit;
 
-		if(*num_hits <= max_hits) {
-			hit = *num_hits - 1;
+		if(ss_isect->num_hits <= max_hits) {
+			hit = ss_isect->num_hits - 1;
 		}
 		else {
 			/* reservoir sampling: if we are at the maximum number of
 			 * hits, randomly replace element or skip it */
-			hit = lcg_step_uint(lcg_state) % *num_hits;
+			hit = lcg_step_uint(lcg_state) % ss_isect->num_hits;
 
 			if(hit >= max_hits)
 				return;
 		}
 
 		/* record intersection */
-		Intersection *isect = &isect_array[hit];
+		Intersection *isect = &ss_isect->hits[hit];
 		isect->t = t;
 		isect->u = u;
 		isect->v = v;
 		isect->prim = triAddr;
 		isect->object = object;
 		isect->type = PRIMITIVE_MOTION_TRIANGLE;
+
+		/* Record geometric normal. */
+		ss_isect->Ng[hit] = normalize(cross(verts[1] - verts[0],
+		                                    verts[2] - verts[0]));
 	}
 }
 #endif

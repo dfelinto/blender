@@ -42,22 +42,34 @@ CCL_NAMESPACE_BEGIN
 
 /* Constructor */
 
-BlenderSync::BlenderSync(BL::RenderEngine b_engine_, BL::BlendData b_data_, BL::Scene b_scene_, Scene *scene_, bool preview_, Progress &progress_, bool is_cpu_)
-: b_engine(b_engine_),
-  b_data(b_data_), b_scene(b_scene_),
-  shader_map(&scene_->shaders),
-  object_map(&scene_->objects),
-  mesh_map(&scene_->meshes),
-  light_map(&scene_->lights),
-  particle_system_map(&scene_->particle_systems),
+BlenderSync::BlenderSync(BL::RenderEngine& b_engine,
+                         BL::BlendData& b_data,
+                         BL::Scene& b_scene,
+                         Scene *scene,
+                         bool preview,
+                         Progress &progress,
+                         bool is_cpu)
+: b_engine(b_engine),
+  b_data(b_data),
+  b_scene(b_scene),
+  shader_map(&scene->shaders),
+  object_map(&scene->objects),
+  mesh_map(&scene->meshes),
+  light_map(&scene->lights),
+  particle_system_map(&scene->particle_systems),
   world_map(NULL),
   world_recalc(false),
+  scene(scene),
+  preview(preview),
   experimental(false),
-  progress(progress_)
+  is_cpu(is_cpu),
+  dicing_rate(1.0f),
+  max_subdivisions(12),
+  progress(progress)
 {
-	scene = scene_;
-	preview = preview_;
-	is_cpu = is_cpu_;
+	PointerRNA cscene = RNA_pointer_get(&b_scene.ptr, "cycles");
+	dicing_rate = preview ? RNA_float_get(&cscene, "preview_dicing_rate") : RNA_float_get(&cscene, "dicing_rate");
+	max_subdivisions = RNA_int_get(&cscene, "max_subdivisions");
 }
 
 BlenderSync::~BlenderSync()
@@ -117,19 +129,57 @@ bool BlenderSync::sync_recalc()
 		}
 	}
 
+	bool dicing_prop_changed = false;
+
+	if(experimental) {
+		PointerRNA cscene = RNA_pointer_get(&b_scene.ptr, "cycles");
+
+		float updated_dicing_rate = preview ? RNA_float_get(&cscene, "preview_dicing_rate")
+		                                    : RNA_float_get(&cscene, "dicing_rate");
+
+		if(dicing_rate != updated_dicing_rate) {
+			dicing_rate = updated_dicing_rate;
+			dicing_prop_changed = true;
+		}
+
+		int updated_max_subdivisions = RNA_int_get(&cscene, "max_subdivisions");
+
+		if(max_subdivisions != updated_max_subdivisions) {
+			max_subdivisions = updated_max_subdivisions;
+			dicing_prop_changed = true;
+		}
+	}
+
 	BL::BlendData::meshes_iterator b_mesh;
 
-	for(b_data.meshes.begin(b_mesh); b_mesh != b_data.meshes.end(); ++b_mesh)
-		if(b_mesh->is_updated())
+	for(b_data.meshes.begin(b_mesh); b_mesh != b_data.meshes.end(); ++b_mesh) {
+		if(b_mesh->is_updated()) {
 			mesh_map.set_recalc(*b_mesh);
+		}
+		else if(dicing_prop_changed) {
+			PointerRNA cmesh = RNA_pointer_get(&b_mesh->ptr, "cycles");
+
+			if(RNA_enum_get(&cmesh, "subdivision_type"))
+				mesh_map.set_recalc(*b_mesh);
+		}
+	}
+
 
 	BL::BlendData::worlds_iterator b_world;
 
 	for(b_data.worlds.begin(b_world); b_world != b_data.worlds.end(); ++b_world) {
-		if(world_map == b_world->ptr.data &&
-		   (b_world->is_updated() || (b_world->node_tree() && b_world->node_tree().is_updated())))
-		{
-			world_recalc = true;
+		if(world_map == b_world->ptr.data) {
+			if(b_world->is_updated() ||
+			   (b_world->node_tree() && b_world->node_tree().is_updated()))
+			{
+				world_recalc = true;
+			}
+			else if(b_world->node_tree() && b_world->use_nodes()) {
+				Shader *shader = scene->default_background;
+				if(has_updated_objects && shader->has_object_dependency) {
+					world_recalc = true;
+				}
+			}
 		}
 	}
 
@@ -145,9 +195,9 @@ bool BlenderSync::sync_recalc()
 	return recalc;
 }
 
-void BlenderSync::sync_data(BL::RenderSettings b_render,
-                            BL::SpaceView3D b_v3d,
-                            BL::Object b_override,
+void BlenderSync::sync_data(BL::RenderSettings& b_render,
+                            BL::SpaceView3D& b_v3d,
+                            BL::Object& b_override,
                             int width, int height,
                             void **python_thread_state,
                             const char *layer)
@@ -161,7 +211,12 @@ void BlenderSync::sync_data(BL::RenderSettings b_render,
 
 	mesh_synced.clear(); /* use for objects and motion sync */
 
-	sync_objects(b_v3d);
+	if(scene->need_motion() == Scene::MOTION_PASS ||
+	   scene->need_motion() == Scene::MOTION_NONE ||
+	   scene->camera->motion_position == Camera::MOTION_POSITION_CENTER)
+	{
+		sync_objects(b_v3d);
+	}
 	sync_motion(b_render,
 	            b_v3d,
 	            b_override,
@@ -180,7 +235,7 @@ void BlenderSync::sync_integrator()
 #endif
 	PointerRNA cscene = RNA_pointer_get(&b_scene.ptr, "cycles");
 
-	experimental = (RNA_enum_get(&cscene, "feature_set") != 0);
+	experimental = (get_enum(cscene, "feature_set") != 0);
 
 	Integrator *integrator = scene->integrator;
 	Integrator previntegrator = *integrator;
@@ -208,9 +263,11 @@ void BlenderSync::sync_integrator()
 	if(get_boolean(cscene, "use_animated_seed"))
 		integrator->seed = hash_int_2d(b_scene.frame_current(), get_int(cscene, "seed"));
 
-	integrator->sampling_pattern = (SamplingPattern)RNA_enum_get(&cscene, "sampling_pattern");
-
-	integrator->layer_flag = render_layer.layer;
+	integrator->sampling_pattern = (SamplingPattern)get_enum(
+	        cscene,
+	        "sampling_pattern",
+	        SAMPLING_NUM_PATTERNS,
+	        SAMPLING_PATTERN_SOBOL);
 
 	integrator->sample_clamp_direct = get_float(cscene, "sample_clamp_direct");
 	integrator->sample_clamp_indirect = get_float(cscene, "sample_clamp_indirect");
@@ -225,7 +282,10 @@ void BlenderSync::sync_integrator()
 	}
 #endif
 
-	integrator->method = (Integrator::Method)get_enum(cscene, "progressive");
+	integrator->method = (Integrator::Method)get_enum(cscene,
+	                                                  "progressive",
+	                                                  Integrator::NUM_METHODS,
+	                                                  Integrator::PATH);
 
 	integrator->sample_all_lights_direct = get_boolean(cscene, "sample_all_lights_direct");
 	integrator->sample_all_lights_indirect = get_boolean(cscene, "sample_all_lights_indirect");
@@ -270,12 +330,11 @@ void BlenderSync::sync_film()
 	Film *film = scene->film;
 	Film prevfilm = *film;
 	
-	/* Clamping */
-	Integrator *integrator = scene->integrator;
-	film->use_sample_clamp = (integrator->sample_clamp_direct != 0.0f || integrator->sample_clamp_indirect != 0.0f);
-
 	film->exposure = get_float(cscene, "film_exposure");
-	film->filter_type = (FilterType)RNA_enum_get(&cscene, "filter_type");
+	film->filter_type = (FilterType)get_enum(cscene,
+	                                         "pixel_filter_type",
+	                                         FILTER_NUM_TYPES,
+	                                         FILTER_BLACKMAN_HARRIS);
 	film->filter_width = (film->filter_type == FILTER_BOX)? 1.0f: get_float(cscene, "filter_width");
 
 	if(b_scene.world()) {
@@ -303,7 +362,7 @@ void BlenderSync::sync_film()
 
 /* Render Layer */
 
-void BlenderSync::sync_render_layers(BL::SpaceView3D b_v3d, const char *layer)
+void BlenderSync::sync_render_layers(BL::SpaceView3D& b_v3d, const char *layer)
 {
 	PointerRNA cscene = RNA_pointer_get(&b_scene.ptr, "cycles");
 	string layername;
@@ -316,13 +375,13 @@ void BlenderSync::sync_render_layers(BL::SpaceView3D b_v3d, const char *layer)
 			layer = layername.c_str();
 		}
 		else {
-			render_layer.use_localview = (b_v3d.local_view() ? true : false);
-			render_layer.scene_layer = get_layer(b_v3d.layers(), b_v3d.layers_local_view(), render_layer.use_localview);
+			render_layer.scene_layer = get_layer(b_v3d.layers(), b_v3d.layers_local_view());
 			render_layer.layer = render_layer.scene_layer;
 			render_layer.exclude_layer = 0;
 			render_layer.holdout_layer = 0;
 			render_layer.material_override = PointerRNA_NULL;
-			render_layer.use_background = true;
+			render_layer.use_background_shader = true;
+			render_layer.use_background_ao = true;
 			render_layer.use_hair = true;
 			render_layer.use_surfaces = true;
 			render_layer.use_viewport_visibility = true;
@@ -335,7 +394,7 @@ void BlenderSync::sync_render_layers(BL::SpaceView3D b_v3d, const char *layer)
 	/* render layer */
 	BL::RenderSettings r = b_scene.render();
 	BL::RenderSettings::layers_iterator b_rlay;
-	int use_layer_samples = RNA_enum_get(&cscene, "use_layer_samples");
+	int use_layer_samples = get_enum(cscene, "use_layer_samples");
 	bool first_layer = true;
 	uint layer_override = get_layer(b_engine.layer_override());
 	uint scene_layers = layer_override ? layer_override : get_layer(b_scene.layers());
@@ -354,11 +413,11 @@ void BlenderSync::sync_render_layers(BL::SpaceView3D b_v3d, const char *layer)
 			render_layer.layer |= render_layer.holdout_layer;
 
 			render_layer.material_override = b_rlay->material_override();
-			render_layer.use_background = b_rlay->use_sky();
+			render_layer.use_background_shader = b_rlay->use_sky();
+			render_layer.use_background_ao = b_rlay->use_ao();
 			render_layer.use_surfaces = b_rlay->use_solid();
 			render_layer.use_hair = b_rlay->use_strand();
 			render_layer.use_viewport_visibility = false;
-			render_layer.use_localview = false;
 
 			render_layer.bound_samples = (use_layer_samples == 1);
 			if(use_layer_samples != 2) {
@@ -409,7 +468,9 @@ void BlenderSync::sync_images()
 
 /* Scene Parameters */
 
-SceneParams BlenderSync::get_scene_params(BL::Scene b_scene, bool background, bool is_cpu)
+SceneParams BlenderSync::get_scene_params(BL::Scene& b_scene,
+                                          bool background,
+                                          bool is_cpu)
 {
 	BL::RenderSettings r = b_scene.render();
 	SceneParams params;
@@ -424,10 +485,13 @@ SceneParams BlenderSync::get_scene_params(BL::Scene b_scene, bool background, bo
 	if(background)
 		params.bvh_type = SceneParams::BVH_STATIC;
 	else
-		params.bvh_type = (SceneParams::BVHType)RNA_enum_get(&cscene, "debug_bvh_type");
+		params.bvh_type = (SceneParams::BVHType)get_enum(
+		        cscene,
+		        "debug_bvh_type",
+		        SceneParams::BVH_NUM_TYPES,
+		        SceneParams::BVH_STATIC);
 
 	params.use_bvh_spatial_split = RNA_boolean_get(&cscene, "debug_use_spatial_splits");
-	params.use_bvh_cache = (background)? RNA_boolean_get(&cscene, "use_cache"): false;
 
 	if(background && params.shadingsystem != SHADINGSYSTEM_OSL)
 		params.persistent_data = r.use_persistent_data();
@@ -436,7 +500,7 @@ SceneParams BlenderSync::get_scene_params(BL::Scene b_scene, bool background, bo
 
 #if !(defined(__GNUC__) && (defined(i386) || defined(_M_IX86)))
 	if(is_cpu) {
-		params.use_qbvh = system_cpu_support_sse2();
+		params.use_qbvh = DebugFlags().cpu.qbvh && system_cpu_support_sse2();
 	}
 	else
 #endif
@@ -449,22 +513,22 @@ SceneParams BlenderSync::get_scene_params(BL::Scene b_scene, bool background, bo
 
 /* Session Parameters */
 
-bool BlenderSync::get_session_pause(BL::Scene b_scene, bool background)
+bool BlenderSync::get_session_pause(BL::Scene& b_scene, bool background)
 {
 	PointerRNA cscene = RNA_pointer_get(&b_scene.ptr, "cycles");
 	return (background)? false: get_boolean(cscene, "preview_pause");
 }
 
-SessionParams BlenderSync::get_session_params(BL::RenderEngine b_engine,
-                                              BL::UserPreferences b_userpref,
-                                              BL::Scene b_scene,
+SessionParams BlenderSync::get_session_params(BL::RenderEngine& b_engine,
+                                              BL::UserPreferences& b_userpref,
+                                              BL::Scene& b_scene,
                                               bool background)
 {
 	SessionParams params;
 	PointerRNA cscene = RNA_pointer_get(&b_scene.ptr, "cycles");
 
 	/* feature set */
-	params.experimental = (RNA_enum_get(&cscene, "feature_set") != 0);
+	params.experimental = (get_enum(cscene, "feature_set") != 0);
 
 	/* device type */
 	vector<DeviceInfo>& devices = Device::available_devices();
@@ -472,13 +536,13 @@ SessionParams BlenderSync::get_session_params(BL::RenderEngine b_engine,
 	/* device default CPU */
 	params.device = devices[0];
 
-	if(RNA_enum_get(&cscene, "device") == 2) {
+	if(get_enum(cscene, "device") == 2) {
 		/* find network device */
 		foreach(DeviceInfo& info, devices)
 			if(info.type == DEVICE_NETWORK)
 				params.device = info;
 	}
-	else if(RNA_enum_get(&cscene, "device") == 1) {
+	else if(get_enum(cscene, "device") == 1) {
 		/* find GPU device with given id */
 		PointerRNA systemptr = b_userpref.system().ptr;
 		PropertyRNA *deviceprop = RNA_struct_find_property(&systemptr, "compute_device");
@@ -517,7 +581,7 @@ SessionParams BlenderSync::get_session_params(BL::RenderEngine b_engine,
 		else {
 			params.samples = preview_aa_samples;
 			if(params.samples == 0)
-				params.samples = USHRT_MAX;
+				params.samples = INT_MAX;
 		}
 	}
 	else {
@@ -527,7 +591,7 @@ SessionParams BlenderSync::get_session_params(BL::RenderEngine b_engine,
 		else {
 			params.samples = preview_samples;
 			if(params.samples == 0)
-				params.samples = USHRT_MAX;
+				params.samples = INT_MAX;
 		}
 	}
 
@@ -548,8 +612,8 @@ SessionParams BlenderSync::get_session_params(BL::RenderEngine b_engine,
 		params.tile_size = make_int2(tile_x, tile_y);
 	}
 
-	if(BlenderSession::headless == false) {
-		params.tile_order = (TileOrder)RNA_enum_get(&cscene, "tile_order");
+	if((BlenderSession::headless == false) && background) {
+		params.tile_order = (TileOrder)get_enum(cscene, "tile_order");
 	}
 	else {
 		params.tile_order = TILE_BOTTOM_TO_TOP;
@@ -563,9 +627,9 @@ SessionParams BlenderSync::get_session_params(BL::RenderEngine b_engine,
 	else
 		params.threads = 0;
 
-	params.cancel_timeout = get_float(cscene, "debug_cancel_timeout");
-	params.reset_timeout = get_float(cscene, "debug_reset_timeout");
-	params.text_timeout = get_float(cscene, "debug_text_timeout");
+	params.cancel_timeout = (double)get_float(cscene, "debug_cancel_timeout");
+	params.reset_timeout = (double)get_float(cscene, "debug_reset_timeout");
+	params.text_timeout = (double)get_float(cscene, "debug_text_timeout");
 
 	params.progressive_refine = get_boolean(cscene, "use_progressive_refine");
 

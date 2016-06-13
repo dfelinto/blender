@@ -26,7 +26,7 @@
 #ifndef __WM_API_H__
 #define __WM_API_H__
 
-/** \file WM_api.h
+/** \file blender/windowmanager/WM_api.h
  *  \ingroup wm
  *
  *  \page wmpage windowmanager
@@ -87,18 +87,19 @@ void		WM_init_splash		(struct bContext *C);
 
 void		WM_check			(struct bContext *C);
 
-struct wmWindow	*WM_window_open	(struct bContext *C, const struct rcti *rect);
-
 int			WM_window_pixels_x		(struct wmWindow *win);
 int			WM_window_pixels_y		(struct wmWindow *win);
 bool		WM_window_is_fullscreen	(struct wmWindow *win);
 
 /* defines for 'type' WM_window_open_temp */
-#define WM_WINDOW_RENDER		0
-#define WM_WINDOW_USERPREFS		1
-// #define WM_WINDOW_FILESEL		2  // UNUSED
+enum {
+	WM_WINDOW_RENDER = 1,
+	WM_WINDOW_USERPREFS,
+	// WM_WINDOW_FILESEL // UNUSED
+};
 
-void		WM_window_open_temp	(struct bContext *C, struct rcti *position, int type);
+struct wmWindow	*WM_window_open(struct bContext *C, const struct rcti *rect);
+struct wmWindow *WM_window_open_temp(struct bContext *C, const struct rcti *rect_init, int type);
 			
 			/* returns true if draw method is triple buffer */
 bool		WM_is_draw_triple(struct wmWindow *win);
@@ -111,6 +112,7 @@ void		WM_file_autoexec_init(const char *filepath);
 bool		WM_file_read(struct bContext *C, const char *filepath, struct ReportList *reports);
 void		WM_autosave_init(struct wmWindowManager *wm);
 void		WM_recover_last_session(struct bContext *C, struct ReportList *reports);
+void		WM_file_tag_modified(const struct bContext *C);
 
 			/* mouse cursors */
 void		WM_cursor_set(struct wmWindow *win, int curs);
@@ -130,6 +132,7 @@ void		WM_paint_cursor_end(struct wmWindowManager *wm, void *handle);
 void		WM_paint_cursor_tag_redraw(struct wmWindow *win, struct ARegion *ar);
 
 void		WM_cursor_warp		(struct wmWindow *win, int x, int y);
+void		WM_cursor_compatible_xy(wmWindow *win, int *x, int *y);
 float		WM_cursor_pressure	(const struct wmWindow *win);
 
 			/* event map */
@@ -191,9 +194,9 @@ void		WM_main_remove_notifier_reference(const void *reference);
 void		WM_main_remove_editor_id_reference(const struct ID *id);
 
 			/* reports */
-void        WM_report_banner_show(const struct bContext *C);
-void        WM_report(const struct bContext *C, ReportType type, const char *message);
-void        WM_reportf(const struct bContext *C, ReportType type, const char *format, ...) ATTR_PRINTF_FORMAT(3, 4);
+void        WM_report_banner_show(void);
+void        WM_report(ReportType type, const char *message);
+void        WM_reportf(ReportType type, const char *format, ...) ATTR_PRINTF_FORMAT(2, 3);
 
 void wm_event_add_ex(
         struct wmWindow *win, const struct wmEvent *event_to_add,
@@ -217,6 +220,7 @@ void        WM_event_timer_sleep(struct wmWindowManager *wm, struct wmWindow *wi
 			/* invoke callback, uses enum property named "type" */
 void		WM_operator_view3d_unit_defaults(struct bContext *C, struct wmOperator *op);
 int			WM_operator_smooth_viewtx_get(const struct wmOperator *op);
+int			WM_menu_invoke_ex(struct bContext *C, struct wmOperator *op, int opcontext);
 int			WM_menu_invoke			(struct bContext *C, struct wmOperator *op, const struct wmEvent *event);
 int			WM_enum_search_invoke(struct bContext *C, struct wmOperator *op, const struct wmEvent *event);
 			/* invoke callback, confirm menu + exec */
@@ -278,16 +282,6 @@ void		WM_operator_properties_create(struct PointerRNA *ptr, const char *opstring
 void		WM_operator_properties_create_ptr(struct PointerRNA *ptr, struct wmOperatorType *ot);
 void        WM_operator_properties_clear(struct PointerRNA *ptr);
 void		WM_operator_properties_free(struct PointerRNA *ptr);
-void		WM_operator_properties_filesel(struct wmOperatorType *ot, int filter, short type, short action, short flag, short display, short sort);
-void        WM_operator_properties_border(struct wmOperatorType *ot);
-void        WM_operator_properties_border_to_rcti(struct wmOperator *op, struct rcti *rect);
-void        WM_operator_properties_border_to_rctf(struct wmOperator *op, rctf *rect);
-void		WM_operator_properties_gesture_border(struct wmOperatorType *ot, bool extend);
-void        WM_operator_properties_mouse_select(struct wmOperatorType *ot);
-void		WM_operator_properties_gesture_straightline(struct wmOperatorType *ot, int cursor);
-void		WM_operator_properties_select_all(struct wmOperatorType *ot);
-void		WM_operator_properties_select_action(struct wmOperatorType *ot, int default_action);
-void		WM_operator_properties_select_action_simple(struct wmOperatorType *ot, int default_action);
 
 bool        WM_operator_check_ui_enabled(const struct bContext *C, const char *idname);
 wmOperator *WM_operator_last_redo(const struct bContext *C);
@@ -295,6 +289,34 @@ ID         *WM_operator_drop_load_path(struct bContext *C, struct wmOperator *op
 
 bool        WM_operator_last_properties_init(struct wmOperator *op);
 bool        WM_operator_last_properties_store(struct wmOperator *op);
+
+
+/* wm_operator_props.c */
+void        WM_operator_properties_filesel(
+        struct wmOperatorType *ot, int filter, short type, short action,
+        short flag, short display, short sort);
+void        WM_operator_properties_border(struct wmOperatorType *ot);
+void        WM_operator_properties_border_to_rcti(struct wmOperator *op, struct rcti *rect);
+void        WM_operator_properties_border_to_rctf(struct wmOperator *op, rctf *rect);
+void        WM_operator_properties_gesture_border(struct wmOperatorType *ot, bool extend);
+void        WM_operator_properties_mouse_select(struct wmOperatorType *ot);
+void        WM_operator_properties_gesture_straightline(struct wmOperatorType *ot, int cursor);
+void        WM_operator_properties_select_all(struct wmOperatorType *ot);
+void        WM_operator_properties_select_action(struct wmOperatorType *ot, int default_action);
+void        WM_operator_properties_select_action_simple(struct wmOperatorType *ot, int default_action);
+void        WM_operator_properties_select_random(struct wmOperatorType *ot);
+int         WM_operator_properties_select_random_seed_increment_get(wmOperator *op);
+struct CheckerIntervalParams {
+	int nth;  /* bypass when set to zero */
+	int skip;
+	int offset;
+};
+void        WM_operator_properties_checker_interval(struct wmOperatorType *ot, bool nth_can_disable);
+void        WM_operator_properties_checker_interval_from_op(
+        struct wmOperator *op, struct CheckerIntervalParams *op_params);
+bool        WM_operator_properties_checker_interval_test(
+        const struct CheckerIntervalParams *op_params, int depth);
+
 
 /* MOVE THIS SOMEWHERE ELSE */
 #define	SEL_TOGGLE		0
@@ -389,7 +411,6 @@ void		wmOrtho				(float x1, float x2, float y1, float y2, float n, float f);
 void		wmOrtho2			(float x1, float x2, float y1, float y2);
 			/* use for conventions (avoid hard-coded offsets all over) */
 void		wmOrtho2_region_pixelspace(const struct ARegion *ar);
-void		wmOrtho2_region_ui(const struct ARegion *ar);
 void		wmOrtho2_pixelspace(const float x, const float y);
 
 			/* utilities */
@@ -424,6 +445,8 @@ enum {
 	WM_JOB_TYPE_CLIP_PREFETCH,
 	WM_JOB_TYPE_SEQ_BUILD_PROXY,
 	WM_JOB_TYPE_SEQ_BUILD_PREVIEW,
+	WM_JOB_TYPE_POINTCACHE,
+	WM_JOB_TYPE_DPAINT_BAKE,
 	/* add as needed, screencast, seq proxy build
 	 * if having hard coded values is a problem */
 };
@@ -433,10 +456,12 @@ struct wmJob *WM_jobs_get(struct wmWindowManager *wm, struct wmWindow *win, void
 bool        WM_jobs_test(struct wmWindowManager *wm, void *owner, int job_type);
 float		WM_jobs_progress(struct wmWindowManager *wm, void *owner);
 char       *WM_jobs_name(struct wmWindowManager *wm, void *owner);
+double      WM_jobs_starttime(struct wmWindowManager *wm, void *owner);
 void       *WM_jobs_customdata(struct wmWindowManager *wm, void *owner);
 void       *WM_jobs_customdata_from_type(struct wmWindowManager *wm, int job_type);
 
 bool        WM_jobs_is_running(struct wmJob *);
+bool		WM_jobs_is_stopped(wmWindowManager *wm, void *owner);
 void       *WM_jobs_customdata_get(struct wmJob *);
 void        WM_jobs_customdata_set(struct wmJob *, void *customdata, void (*free)(void *));
 void        WM_jobs_timer(struct wmJob *, double timestep, unsigned int note, unsigned int endnote);

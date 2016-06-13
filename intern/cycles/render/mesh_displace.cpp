@@ -32,8 +32,8 @@ bool MeshManager::displace(Device *device, DeviceScene *dscene, Scene *scene, Me
 	bool has_displacement = false;
 
 	if(mesh->displacement_method != Mesh::DISPLACE_BUMP) {
-		foreach(uint sindex, mesh->used_shaders)
-			if(scene->shaders[sindex]->has_displacement)
+		foreach(Shader *shader, mesh->used_shaders)
+			if(shader->has_displacement)
 				has_displacement = true;
 	}
 	
@@ -54,14 +54,18 @@ bool MeshManager::displace(Device *device, DeviceScene *dscene, Scene *scene, Me
 	}
 
 	/* setup input for device task */
-	vector<bool> done(mesh->verts.size(), false);
+	const size_t num_verts = mesh->verts.size();
+	vector<bool> done(num_verts, false);
 	device_vector<uint4> d_input;
-	uint4 *d_input_data = d_input.resize(mesh->verts.size());
+	uint4 *d_input_data = d_input.resize(num_verts);
 	size_t d_input_size = 0;
 
-	for(size_t i = 0; i < mesh->triangles.size(); i++) {
-		Mesh::Triangle t = mesh->triangles[i];
-		Shader *shader = scene->shaders[mesh->shader[i]];
+	size_t num_triangles = mesh->num_triangles();
+	for(size_t i = 0; i < num_triangles; i++) {
+		Mesh::Triangle t = mesh->get_triangle(i);
+		int shader_index = mesh->shader[i];
+		Shader *shader = (shader_index < mesh->used_shaders.size()) ?
+			mesh->used_shaders[shader_index] : scene->default_surface;
 
 		if(!shader->has_displacement)
 			continue;
@@ -78,7 +82,7 @@ bool MeshManager::displace(Device *device, DeviceScene *dscene, Scene *scene, Me
 			int prim = mesh->tri_offset + i;
 			float u, v;
 			
-			switch (j) {
+			switch(j) {
 				case 0:
 					u = 1.0f;
 					v = 0.0f;
@@ -137,14 +141,17 @@ bool MeshManager::displace(Device *device, DeviceScene *dscene, Scene *scene, Me
 
 	/* read result */
 	done.clear();
-	done.resize(mesh->verts.size(), false);
+	done.resize(num_verts, false);
 	int k = 0;
 
 	float4 *offset = (float4*)d_output.data_pointer;
 
-	for(size_t i = 0; i < mesh->triangles.size(); i++) {
-		Mesh::Triangle t = mesh->triangles[i];
-		Shader *shader = scene->shaders[mesh->shader[i]];
+	Attribute *attr_mP = mesh->attributes.find(ATTR_STD_MOTION_VERTEX_POSITION);
+	for(size_t i = 0; i < num_triangles; i++) {
+		Mesh::Triangle t = mesh->get_triangle(i);
+		int shader_index = mesh->shader[i];
+		Shader *shader = (shader_index < mesh->used_shaders.size()) ?
+			mesh->used_shaders[shader_index] : scene->default_surface;
 
 		if(!shader->has_displacement)
 			continue;
@@ -154,6 +161,12 @@ bool MeshManager::displace(Device *device, DeviceScene *dscene, Scene *scene, Me
 				done[t.v[j]] = true;
 				float3 off = float4_to_float3(offset[k++]);
 				mesh->verts[t.v[j]] += off;
+				if(attr_mP != NULL) {
+					for(int step = 0; step < mesh->motion_steps - 1; step++) {
+						float3 *mP = attr_mP->data_float3() + step*num_verts;
+						mP[t.v[j]] += off;
+					}
+				}
 			}
 		}
 	}

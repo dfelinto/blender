@@ -88,7 +88,7 @@ GHOST_ITimerTask *GHOST_System::installTimer(GHOST_TUns64 delay,
 		}
 		else {
 			delete timer;
-			timer = 0;
+			timer = NULL;
 		}
 	}
 	return timer;
@@ -140,7 +140,7 @@ bool GHOST_System::validWindow(GHOST_IWindow *window)
 
 
 GHOST_TSuccess GHOST_System::beginFullScreen(const GHOST_DisplaySetting& setting, GHOST_IWindow **window,
-                                             const bool stereoVisual, const GHOST_TUns16 numOfAASamples)
+                                             const bool stereoVisual, const bool alphaBackground, const GHOST_TUns16 numOfAASamples)
 {
 	GHOST_TSuccess success = GHOST_kFailure;
 	GHOST_ASSERT(m_windowManager, "GHOST_System::beginFullScreen(): invalid window manager");
@@ -152,7 +152,7 @@ GHOST_TSuccess GHOST_System::beginFullScreen(const GHOST_DisplaySetting& setting
 			success = m_displayManager->setCurrentDisplaySetting(GHOST_DisplayManager::kMainDisplay, setting);
 			if (success == GHOST_kSuccess) {
 				//GHOST_PRINT("GHOST_System::beginFullScreen(): creating full-screen window\n");
-				success = createFullScreenWindow((GHOST_Window **)window, setting, stereoVisual, numOfAASamples);
+				success = createFullScreenWindow((GHOST_Window **)window, setting, stereoVisual, alphaBackground, numOfAASamples);
 				if (success == GHOST_kSuccess) {
 					m_windowManager->beginFullScreen(*window, stereoVisual);
 				}
@@ -214,23 +214,20 @@ bool GHOST_System::getFullScreen(void)
 }
 
 
-bool GHOST_System::dispatchEvents()
+void GHOST_System::dispatchEvents()
 {
-	bool handled = false;
-
 #ifdef WITH_INPUT_NDOF
 	// NDOF Motion event is sent only once per dispatch, so do it now:
 	if (m_ndofManager) {
-		handled |= m_ndofManager->sendMotionEvent();
+		m_ndofManager->sendMotionEvent();
 	}
 #endif
 
 	if (m_eventManager) {
-		handled |= m_eventManager->dispatchEvents();
+		m_eventManager->dispatchEvents();
 	}
 
 	m_timerManager->fireTimers(getMilliSeconds());
-	return handled;
 }
 
 
@@ -331,38 +328,35 @@ GHOST_TSuccess GHOST_System::exit()
 	if (getFullScreen()) {
 		endFullScreen();
 	}
-	if (m_displayManager) {
-		delete m_displayManager;
-		m_displayManager = NULL;
-	}
-	if (m_windowManager) {
-		delete m_windowManager;
-		m_windowManager = NULL;
-	}
-	if (m_timerManager) {
-		delete m_timerManager;
-		m_timerManager = NULL;
-	}
-	if (m_eventManager) {
-		delete m_eventManager;
-		m_eventManager = NULL;
-	}
+
+	delete m_displayManager;
+	m_displayManager = NULL;
+
+	delete m_windowManager;
+	m_windowManager = NULL;
+
+	delete m_timerManager;
+	m_timerManager = NULL;
+
+	delete m_eventManager;
+	m_eventManager = NULL;
+
 #ifdef WITH_INPUT_NDOF
-	if (m_ndofManager) {
-		delete m_ndofManager;
-		m_ndofManager = 0;
-	}
+	delete m_ndofManager;
+	m_ndofManager = NULL;
 #endif
 	return GHOST_kSuccess;
 }
 
 GHOST_TSuccess GHOST_System::createFullScreenWindow(GHOST_Window **window, const GHOST_DisplaySetting &settings,
-                                                    const bool stereoVisual, const GHOST_TUns16 numOfAASamples)
+                                                    const bool stereoVisual, const bool alphaBackground, const GHOST_TUns16 numOfAASamples)
 {
 	GHOST_GLSettings glSettings = {0};
 
 	if (stereoVisual)
 		glSettings.flags |= GHOST_glStereoVisual;
+	if (alphaBackground)
+		glSettings.flags |= GHOST_glAlphaBackground;
 	glSettings.numOfAASamples = numOfAASamples;
 
 	/* note: don't use getCurrentDisplaySetting() because on X11 we may

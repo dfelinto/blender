@@ -42,6 +42,7 @@ struct bPoseChannel;
 struct IDProperty;
 struct ListBase;
 struct MeshDeformModifierData;
+struct DerivedMesh;
 struct Object;
 struct ReportList;
 struct Scene;
@@ -73,7 +74,10 @@ typedef struct EditBone {
 	float xwidth, length, zwidth;  /* put them in order! transform uses this as scale */
 	float ease1, ease2;
 	float rad_head, rad_tail;
-	
+	float roll1, roll2;
+	float curveOutX, curveOutY;
+	float curveInX, curveInY;
+	float scaleIn, scaleOut;
 	float oldlength;        /* for envelope scaling */
 	
 	short segments;
@@ -128,7 +132,7 @@ void ED_armature_deselect_all_visible(struct Object *obedit);
 
 int ED_do_pose_selectbuffer(struct Scene *scene, struct Base *base, unsigned int *buffer,
                             short hits, bool extend, bool deselect, bool toggle, bool do_nearest);
-bool mouse_armature(struct bContext *C, const int mval[2], bool extend, bool deselect, bool toggle);
+bool ED_armature_select_pick(struct bContext *C, const int mval[2], bool extend, bool deselect, bool toggle);
 int join_armature_exec(struct bContext *C, struct wmOperator *op);
 struct Bone *get_indexed_bone(struct Object *ob, int index);
 float ED_rollBoneToVector(EditBone *bone, const float new_up_axis[3], const bool axis_only);
@@ -208,6 +212,7 @@ int BDR_drawSketchNames(struct ViewContext *vc);
 /* meshlaplacian.c */
 void mesh_deform_bind(struct Scene *scene,
                       struct MeshDeformModifierData *mmd,
+                      struct DerivedMesh *cagedm,
                       float *vertexcos, int totvert, float cagemat[4][4]);
 	
 #ifdef __cplusplus

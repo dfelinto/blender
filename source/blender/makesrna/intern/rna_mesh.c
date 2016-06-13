@@ -51,7 +51,7 @@
 
 #include "WM_types.h"
 
-EnumPropertyItem mesh_delimit_mode_items[] = {
+EnumPropertyItem rna_enum_mesh_delimit_mode_items[] = {
 	{BMO_DELIM_NORMAL, "NORMAL", 0, "Normal", "Delimit by face directions"},
 	{BMO_DELIM_MATERIAL, "MATERIAL", 0, "Material", "Delimit by face material"},
 	{BMO_DELIM_SEAM, "SEAM", 0, "Seam", "Delimit by edge seams"},
@@ -416,6 +416,14 @@ static float rna_MeshPolygon_area_get(PointerRNA *ptr)
 	MPoly *mp = (MPoly *)ptr->data;
 
 	return BKE_mesh_calc_poly_area(mp, me->mloop + mp->loopstart, me->mvert);
+}
+
+static void rna_MeshPolygon_flip(ID *id, MPoly *mp)
+{
+	Mesh *me = (Mesh *)id;
+
+	BKE_mesh_polygon_flip(mp, me->mloop, &me->ldata);
+	BKE_mesh_tessface_clear(me);
 }
 
 static void rna_MeshTessFace_normal_get(PointerRNA *ptr, float *values)
@@ -1885,7 +1893,7 @@ static void rna_def_mvert(BlenderRNA *brna)
 
 	srna = RNA_def_struct(brna, "MeshVertex", NULL);
 	RNA_def_struct_sdna(srna, "MVert");
-	RNA_def_struct_ui_text(srna, "Mesh Vertex", "Vertex in a Mesh datablock");
+	RNA_def_struct_ui_text(srna, "Mesh Vertex", "Vertex in a Mesh data-block");
 	RNA_def_struct_path_func(srna, "rna_MeshVertex_path");
 	RNA_def_struct_ui_icon(srna, ICON_VERTEXSEL);
 
@@ -1942,7 +1950,7 @@ static void rna_def_medge(BlenderRNA *brna)
 
 	srna = RNA_def_struct(brna, "MeshEdge", NULL);
 	RNA_def_struct_sdna(srna, "MEdge");
-	RNA_def_struct_ui_text(srna, "Mesh Edge", "Edge in a Mesh datablock");
+	RNA_def_struct_ui_text(srna, "Mesh Edge", "Edge in a Mesh data-block");
 	RNA_def_struct_path_func(srna, "rna_MeshEdge_path");
 	RNA_def_struct_ui_icon(srna, ICON_EDGESEL);
 
@@ -2005,7 +2013,7 @@ static void rna_def_mface(BlenderRNA *brna)
 
 	srna = RNA_def_struct(brna, "MeshTessFace", NULL);
 	RNA_def_struct_sdna(srna, "MFace");
-	RNA_def_struct_ui_text(srna, "Mesh TessFace", "TessFace in a Mesh datablock");
+	RNA_def_struct_ui_text(srna, "Mesh TessFace", "TessFace in a Mesh data-block");
 	RNA_def_struct_path_func(srna, "rna_MeshTessFace_path");
 	RNA_def_struct_ui_icon(srna, ICON_FACESEL);
 
@@ -2082,7 +2090,7 @@ static void rna_def_mloop(BlenderRNA *brna)
 
 	srna = RNA_def_struct(brna, "MeshLoop", NULL);
 	RNA_def_struct_sdna(srna, "MLoop");
-	RNA_def_struct_ui_text(srna, "Mesh Loop", "Loop in a Mesh datablock");
+	RNA_def_struct_ui_text(srna, "Mesh Loop", "Loop in a Mesh data-block");
 	RNA_def_struct_path_func(srna, "rna_MeshLoop_path");
 	RNA_def_struct_ui_icon(srna, ICON_EDGESEL);
 
@@ -2138,10 +2146,11 @@ static void rna_def_mpolygon(BlenderRNA *brna)
 {
 	StructRNA *srna;
 	PropertyRNA *prop;
+	FunctionRNA *func;
 
 	srna = RNA_def_struct(brna, "MeshPolygon", NULL);
 	RNA_def_struct_sdna(srna, "MPoly");
-	RNA_def_struct_ui_text(srna, "Mesh Polygon", "Polygon in a Mesh datablock");
+	RNA_def_struct_ui_text(srna, "Mesh Polygon", "Polygon in a Mesh data-block");
 	RNA_def_struct_path_func(srna, "rna_MeshPolygon_path");
 	RNA_def_struct_ui_icon(srna, ICON_FACESEL);
 
@@ -2216,6 +2225,11 @@ static void rna_def_mpolygon(BlenderRNA *brna)
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 	RNA_def_property_int_funcs(prop, "rna_MeshPolygon_index_get", NULL, NULL);
 	RNA_def_property_ui_text(prop, "Index", "Index of this polygon");
+
+	func = RNA_def_function(srna, "flip", "rna_MeshPolygon_flip");
+	RNA_def_function_flag(func, FUNC_USE_SELF_ID);
+	RNA_def_function_ui_description(func, "Invert winding of this polygon (flip its normal)");
+
 }
 
 /* mesh.loop_uvs */
@@ -2267,7 +2281,7 @@ static void rna_def_mtface(BlenderRNA *brna)
 	const int uv_dim[] = {4, 2};
 
 	srna = RNA_def_struct(brna, "MeshTextureFaceLayer", NULL);
-	RNA_def_struct_ui_text(srna, "Mesh UV Map", "UV map with assigned image textures in a Mesh datablock");
+	RNA_def_struct_ui_text(srna, "Mesh UV Map", "UV map with assigned image textures in a Mesh data-block");
 	RNA_def_struct_sdna(srna, "CustomDataLayer");
 	RNA_def_struct_path_func(srna, "rna_MeshTextureFaceLayer_path");
 	RNA_def_struct_ui_icon(srna, ICON_GROUP_UVS);
@@ -2379,7 +2393,7 @@ static void rna_def_mtexpoly(BlenderRNA *brna)
 #endif
 
 	srna = RNA_def_struct(brna, "MeshTexturePolyLayer", NULL);
-	RNA_def_struct_ui_text(srna, "Mesh UV Map", "UV map with assigned image textures in a Mesh datablock");
+	RNA_def_struct_ui_text(srna, "Mesh UV Map", "UV map with assigned image textures in a Mesh data-block");
 	RNA_def_struct_sdna(srna, "CustomDataLayer");
 	RNA_def_struct_path_func(srna, "rna_MeshTexturePolyLayer_path");
 	RNA_def_struct_ui_icon(srna, ICON_GROUP_UVS);
@@ -2454,7 +2468,7 @@ static void rna_def_mcol(BlenderRNA *brna)
 	PropertyRNA *prop;
 
 	srna = RNA_def_struct(brna, "MeshColorLayer", NULL);
-	RNA_def_struct_ui_text(srna, "Mesh Vertex Color Layer", "Layer of vertex colors in a Mesh datablock");
+	RNA_def_struct_ui_text(srna, "Mesh Vertex Color Layer", "Layer of vertex colors in a Mesh data-block");
 	RNA_def_struct_sdna(srna, "CustomDataLayer");
 	RNA_def_struct_path_func(srna, "rna_MeshColorLayer_path");
 	RNA_def_struct_ui_icon(srna, ICON_GROUP_VCOL);
@@ -2524,7 +2538,7 @@ static void rna_def_mloopcol(BlenderRNA *brna)
 	PropertyRNA *prop;
 
 	srna = RNA_def_struct(brna, "MeshLoopColorLayer", NULL);
-	RNA_def_struct_ui_text(srna, "Mesh Vertex Color Layer", "Layer of vertex colors in a Mesh datablock");
+	RNA_def_struct_ui_text(srna, "Mesh Vertex Color Layer", "Layer of vertex colors in a Mesh data-block");
 	RNA_def_struct_sdna(srna, "CustomDataLayer");
 	RNA_def_struct_path_func(srna, "rna_MeshLoopColorLayer_path");
 	RNA_def_struct_ui_icon(srna, ICON_GROUP_VCOL);
@@ -3241,7 +3255,7 @@ static void rna_def_mesh(BlenderRNA *brna)
 	PropertyRNA *prop;
 
 	srna = RNA_def_struct(brna, "Mesh", "ID");
-	RNA_def_struct_ui_text(srna, "Mesh", "Mesh datablock defining geometric surfaces");
+	RNA_def_struct_ui_text(srna, "Mesh", "Mesh data-block defining geometric surfaces");
 	RNA_def_struct_ui_icon(srna, ICON_MESH_DATA);
 
 	prop = RNA_def_property(srna, "vertices", PROP_COLLECTION, PROP_NONE);
@@ -3460,7 +3474,6 @@ static void rna_def_mesh(BlenderRNA *brna)
 	RNA_def_property_float_sdna(prop, NULL, "smoothresh");
 	RNA_def_property_float_default(prop, DEG2RADF(180.0f));
 	RNA_def_property_range(prop, 0.0f, DEG2RADF(180.0f));
-	RNA_def_property_ui_range(prop, DEG2RADF(0.0f), DEG2RADF(180.0f), 1.0, 1);
 	RNA_def_property_ui_text(prop, "Auto Smooth Angle",
 	                         "Maximum angle between face normals that will be considered as smooth "
 	                         "(unused if custom split normals data are available)");

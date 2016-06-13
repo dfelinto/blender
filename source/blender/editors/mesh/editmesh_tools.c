@@ -68,6 +68,7 @@
 #include "ED_object.h"
 #include "ED_screen.h"
 #include "ED_transform.h"
+#include "ED_transform_snap_object_context.h"
 #include "ED_uvedit.h"
 #include "ED_view3d.h"
 
@@ -85,7 +86,7 @@ static int edbm_subdivide_exec(bContext *C, wmOperator *op)
 	Object *obedit = CTX_data_edit_object(C);
 	BMEditMesh *em = BKE_editmesh_from_object(obedit);
 	const int cuts = RNA_int_get(op->ptr, "number_cuts");
-	float smooth = 0.292f * RNA_float_get(op->ptr, "smoothness");
+	float smooth = RNA_float_get(op->ptr, "smoothness");
 	const float fractal = RNA_float_get(op->ptr, "fractal") / 2.5f;
 	const float along_normal = RNA_float_get(op->ptr, "fractal_along_normal");
 
@@ -96,7 +97,7 @@ static int edbm_subdivide_exec(bContext *C, wmOperator *op)
 	}
 	
 	BM_mesh_esubdivide(em->bm, BM_ELEM_SELECT,
-	                   smooth, SUBD_FALLOFF_INVSQUARE, false,
+	                   smooth, SUBD_FALLOFF_LIN, false,
 	                   fractal, along_normal,
 	                   cuts,
 	                   SUBDIV_SELECT_ORIG, RNA_enum_get(op->ptr, "quadcorner"),
@@ -191,7 +192,7 @@ static void mesh_operator_edgering_props(wmOperatorType *ot, const int cuts_defa
 	              "Profile Factor", "How much intermediary new edges are shrunk/expanded", -2.0f, 2.0f);
 
 	prop = RNA_def_property(ot->srna, "profile_shape", PROP_ENUM, PROP_NONE);
-	RNA_def_property_enum_items(prop, proportional_falloff_curve_only_items);
+	RNA_def_property_enum_items(prop, rna_enum_proportional_falloff_curve_only_items);
 	RNA_def_property_enum_default(prop, PROP_SMOOTH);
 	RNA_def_property_ui_text(prop, "Profile Shape", "Shape of the profile");
 	RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_ID_CURVE); /* Abusing id_curve :/ */
@@ -301,17 +302,31 @@ void EMBM_project_snap_verts(bContext *C, ARegion *ar, BMEditMesh *em)
 
 	ED_view3d_init_mats_rv3d(obedit, ar->regiondata);
 
+	struct SnapObjectContext *snap_context = ED_transform_snap_object_context_create_view3d(
+	        CTX_data_main(C), CTX_data_scene(C), SNAP_OBJECT_USE_CACHE,
+	        ar, CTX_wm_view3d(C));
+
 	BM_ITER_MESH (eve, &iter, em->bm, BM_VERTS_OF_MESH) {
 		if (BM_elem_flag_test(eve, BM_ELEM_SELECT)) {
-			float mval[2], co_proj[3], no_dummy[3];
-			float dist_px_dummy;
+			float mval[2], co_proj[3];
 			if (ED_view3d_project_float_object(ar, eve->co, mval, V3D_PROJ_TEST_NOP) == V3D_PROJ_RET_OK) {
-				if (snapObjectsContext(C, mval, &dist_px_dummy, co_proj, no_dummy, SNAP_NOT_OBEDIT)) {
+				if (ED_transform_snap_object_project_view3d_mixed(
+				        snap_context,
+				        SCE_SELECT_FACE,
+				        &(const struct SnapObjectParams){
+				            .snap_select = SNAP_NOT_ACTIVE,
+				            .use_object_edit_cage = false,
+				        },
+				        mval, NULL, true,
+				        co_proj, NULL))
+				{
 					mul_v3_m4v3(eve->co, obedit->imat, co_proj);
 				}
 			}
 		}
 	}
+
+	ED_transform_snap_object_context_destroy(snap_context);
 }
 
 
@@ -529,7 +544,7 @@ void MESH_OT_edge_collapse(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
-static int edbm_add_edge_face__smooth_get(BMesh *bm)
+static bool edbm_add_edge_face__smooth_get(BMesh *bm)
 {
 	BMEdge *e;
 	BMIter iter;
@@ -697,7 +712,7 @@ static int edbm_add_edge_face_exec(bContext *C, wmOperator *op)
 	BMOperator bmop;
 	Object *obedit = CTX_data_edit_object(C);
 	BMEditMesh *em = BKE_editmesh_from_object(obedit);
-	const short use_smooth = edbm_add_edge_face__smooth_get(em->bm);
+	const bool use_smooth = edbm_add_edge_face__smooth_get(em->bm);
 	const int totedge_orig = em->bm->totedge;
 	const int totface_orig = em->bm->totface;
 	/* when this is used to dissolve we could avoid this, but checking isnt too slow */
@@ -1062,7 +1077,8 @@ static bool bm_vert_connect_select_history(BMesh *bm)
 					else {
 						changed |= bm_vert_connect_pair(bm, (BMVert *)ese_last->ele, (BMVert *)ese->ele);
 					}
-				} while ((ese_last = ese),
+				} while ((void)
+				         (ese_last = ese),
 				         (ese = ese->next));
 
 				if (changed) {
@@ -1102,7 +1118,8 @@ static bool bm_vert_connect_select_history(BMesh *bm)
 					BM_edge_select_set(bm, e, true);
 					changed = true;
 				}
-			} while ((ese_prev = ese),
+			} while ((void)
+			         (ese_prev = ese),
 			         (ese = ese->next));
 
 			if (changed == false) {
@@ -1465,8 +1482,12 @@ static int edbm_flip_normals_exec(bContext *C, wmOperator *op)
 	Object *obedit = CTX_data_edit_object(C);
 	BMEditMesh *em = BKE_editmesh_from_object(obedit);
 	
-	if (!EDBM_op_callf(em, op, "reverse_faces faces=%hf", BM_ELEM_SELECT))
+	if (!EDBM_op_callf(
+	        em, op, "reverse_faces faces=%hf flip_multires=%b",
+	        BM_ELEM_SELECT, true))
+	{
 		return OPERATOR_CANCELLED;
+	}
 	
 	EDBM_update_generic(em, true, false);
 
@@ -1634,8 +1655,9 @@ static int edbm_normals_make_consistent_exec(bContext *C, wmOperator *op)
 	if (!EDBM_op_callf(em, op, "recalc_face_normals faces=%hf", BM_ELEM_SELECT))
 		return OPERATOR_CANCELLED;
 
-	if (RNA_boolean_get(op->ptr, "inside"))
-		EDBM_op_callf(em, op, "reverse_faces faces=%hf", BM_ELEM_SELECT);
+	if (RNA_boolean_get(op->ptr, "inside")) {
+		EDBM_op_callf(em, op, "reverse_faces faces=%hf flip_multires=%b", BM_ELEM_SELECT, true);
+	}
 
 	EDBM_update_generic(em, true, false);
 
@@ -2357,8 +2379,8 @@ void MESH_OT_remove_doubles(wmOperatorType *ot)
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
-	RNA_def_float(ot->srna, "threshold", 1e-4f, 1e-6f, 50.0f, "Merge Distance",
-	              "Minimum distance between elements to merge", 1e-5f, 10.0f);
+	RNA_def_float_distance(ot->srna, "threshold", 1e-4f, 1e-6f, 50.0f, "Merge Distance",
+	                       "Minimum distance between elements to merge", 1e-5f, 10.0f);
 	RNA_def_boolean(ot->srna, "use_unselected", false, "Unselected", "Merge selected to other unselected vertices");
 }
 
@@ -2608,7 +2630,7 @@ void MESH_OT_solidify(wmOperatorType *ot)
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
-	prop = RNA_def_float(ot->srna, "thickness", 0.01f, -1e4f, 1e4f, "Thickness", "", -10.0f, 10.0f);
+	prop = RNA_def_float_distance(ot->srna, "thickness", 0.01f, -1e4f, 1e4f, "Thickness", "", -10.0f, 10.0f);
 	RNA_def_property_ui_range(prop, -10.0, 10.0, 0.1, 4);
 }
 
@@ -2991,7 +3013,7 @@ static Base *mesh_separate_tagged(Main *bmain, Scene *scene, Base *base_old, BMe
 
 	BM_mesh_normals_update(bm_new);
 
-	BM_mesh_bm_to_me(bm_new, base_new->object->data, false);
+	BM_mesh_bm_to_me(bm_new, base_new->object->data, (&(struct BMeshToMeshParams){0}));
 
 	BM_mesh_free(bm_new);
 	((Mesh *)base_new->object->data)->edit_btmesh = NULL;
@@ -3274,7 +3296,7 @@ static int edbm_separate_exec(bContext *C, wmOperator *op)
 
 					bm_old = BM_mesh_create(&bm_mesh_allocsize_default);
 
-					BM_mesh_bm_from_me(bm_old, me, false, false, 0);
+					BM_mesh_bm_from_me(bm_old, me, (&(struct BMeshFromMeshParams){0}));
 
 					switch (type) {
 						case MESH_SEPARATE_MATERIAL:
@@ -3289,7 +3311,7 @@ static int edbm_separate_exec(bContext *C, wmOperator *op)
 					}
 
 					if (retval_iter) {
-						BM_mesh_bm_to_me(bm_old, me, false);
+						BM_mesh_bm_to_me(bm_old, me, (&(struct BMeshToMeshParams){0}));
 
 						DAG_id_tag_update(&me->id, OB_RECALC_DATA);
 						WM_event_add_notifier(C, NC_GEOM | ND_DATA, me);
@@ -3556,7 +3578,7 @@ static int edbm_fill_grid_exec(bContext *C, wmOperator *op)
 	BMOperator bmop;
 	Object *obedit = CTX_data_edit_object(C);
 	BMEditMesh *em = BKE_editmesh_from_object(obedit);
-	const short use_smooth = edbm_add_edge_face__smooth_get(em->bm);
+	const bool use_smooth = edbm_add_edge_face__smooth_get(em->bm);
 	const int totedge_orig = em->bm->totedge;
 	const int totface_orig = em->bm->totface;
 	const bool use_interp_simple = RNA_boolean_get(op->ptr, "use_interp_simple");
@@ -3783,7 +3805,6 @@ static int edbm_poke_face_exec(bContext *C, wmOperator *op)
 
 void MESH_OT_poke(wmOperatorType *ot)
 {
-
 	static EnumPropertyItem poke_center_modes[] = {
 		{BMOP_POKE_MEAN_WEIGHTED, "MEAN_WEIGHTED", 0, "Weighted Mean", "Weighted Mean Face Center"},
 		{BMOP_POKE_MEAN, "MEAN", 0, "Mean", "Mean Face Center"},
@@ -3803,7 +3824,7 @@ void MESH_OT_poke(wmOperatorType *ot)
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
-	RNA_def_float(ot->srna, "offset", 0.0f, -1e3f, 1e3f, "Poke Offset", "Poke Offset", -1.0f, 1.0f);
+	RNA_def_float_distance(ot->srna, "offset", 0.0f, -1e3f, 1e3f, "Poke Offset", "Poke Offset", -1.0f, 1.0f);
 	RNA_def_boolean(ot->srna, "use_relative_offset", false, "Offset Relative", "Scale the offset by surrounding geometry");
 	RNA_def_enum(ot->srna, "center_mode", poke_center_modes, BMOP_POKE_MEAN_WEIGHTED,
 	             "Poke Center", "Poke Face Center Calculation");
@@ -3818,12 +3839,20 @@ static int edbm_quads_convert_to_tris_exec(bContext *C, wmOperator *op)
 	BMOperator bmop;
 	const int quad_method = RNA_enum_get(op->ptr, "quad_method");
 	const int ngon_method = RNA_enum_get(op->ptr, "ngon_method");
+	BMOIter oiter;
+	BMFace *f;
 
 	EDBM_op_init(em, &bmop, op, "triangulate faces=%hf quad_method=%i ngon_method=%i", BM_ELEM_SELECT, quad_method, ngon_method);
 	BMO_op_exec(em->bm, &bmop);
 
 	/* select the output */
 	BMO_slot_buffer_hflag_enable(em->bm, bmop.slots_out, "faces.out", BM_FACE, BM_ELEM_SELECT, true);
+
+	/* remove the doubles */
+	BMO_ITER (f, &oiter, bmop.slots_out, "face_map_double.out", BM_FACE) {
+		BM_face_kill(em->bm, f);
+	}
+
 	EDBM_selectmode_flush(em);
 
 	if (!EDBM_op_finish(em, &bmop, op, true)) {
@@ -3850,9 +3879,9 @@ void MESH_OT_quads_convert_to_tris(wmOperatorType *ot)
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
-	RNA_def_enum(ot->srna, "quad_method", modifier_triangulate_quad_method_items, MOD_TRIANGULATE_QUAD_BEAUTY,
+	RNA_def_enum(ot->srna, "quad_method", rna_enum_modifier_triangulate_quad_method_items, MOD_TRIANGULATE_QUAD_BEAUTY,
 	             "Quad Method", "Method for splitting the quads into triangles");
-	RNA_def_enum(ot->srna, "ngon_method", modifier_triangulate_ngon_method_items, MOD_TRIANGULATE_NGON_BEAUTY,
+	RNA_def_enum(ot->srna, "ngon_method", rna_enum_modifier_triangulate_ngon_method_items, MOD_TRIANGULATE_NGON_BEAUTY,
 	             "Polygon Method", "Method for splitting the polygons into triangles");
 }
 
@@ -4203,7 +4232,7 @@ void MESH_OT_dissolve_limited(wmOperatorType *ot)
 	RNA_def_property_float_default(prop, DEG2RADF(5.0f));
 	RNA_def_boolean(ot->srna, "use_dissolve_boundaries", false, "All Boundaries",
 	                "Dissolve all vertices inbetween face boundaries");
-	RNA_def_enum_flag(ot->srna, "delimit", mesh_delimit_mode_items, BMO_DELIM_NORMAL, "Delimit",
+	RNA_def_enum_flag(ot->srna, "delimit", rna_enum_mesh_delimit_mode_items, BMO_DELIM_NORMAL, "Delimit",
 	                  "Delimit dissolve operation");
 }
 
@@ -4247,8 +4276,8 @@ void MESH_OT_dissolve_degenerate(wmOperatorType *ot)
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
-	RNA_def_float(ot->srna, "threshold", 1e-4f, 1e-6f, 50.0f,  "Merge Distance",
-	              "Minimum distance between elements to merge", 1e-5f, 10.0f);
+	RNA_def_float_distance(ot->srna, "threshold", 1e-4f, 1e-6f, 50.0f,  "Merge Distance",
+	                       "Minimum distance between elements to merge", 1e-5f, 10.0f);
 }
 
 
@@ -4977,7 +5006,7 @@ static int edbm_noise_exec(bContext *C, wmOperator *op)
 		BM_ITER_MESH (eve, &iter, em->bm, BM_VERTS_OF_MESH) {
 			if (BM_elem_flag_test(eve, BM_ELEM_SELECT)) {
 				float tin, dum;
-				externtex(ma->mtex[0], eve->co, &tin, &dum, &dum, &dum, &dum, 0, NULL, false);
+				externtex(ma->mtex[0], eve->co, &tin, &dum, &dum, &dum, &dum, 0, NULL, false, false);
 				eve->co[2] += fac * tin;
 			}
 		}
@@ -5097,6 +5126,17 @@ static int edbm_bridge_edge_loops_exec(bContext *C, wmOperator *op)
 	             "bridge_loops edges=%he use_pairs=%b use_cyclic=%b use_merge=%b merge_factor=%f twist_offset=%i",
 	             edge_hflag, use_pairs, use_cyclic, use_merge, merge_factor, twist_offset);
 
+	if (use_faces && totface_del) {
+		int i;
+		BM_mesh_elem_hflag_disable_all(em->bm, BM_FACE, BM_ELEM_TAG, false);
+		for (i = 0; i < totface_del; i++) {
+			BM_elem_flag_enable(totface_del_arr[i], BM_ELEM_TAG);
+		}
+		BMO_op_callf(em->bm, BMO_FLAG_DEFAULTS,
+		             "delete geom=%hf context=%i",
+		             BM_ELEM_TAG, DEL_FACES_KEEP_BOUNDARY);
+	}
+
 	BMO_op_exec(em->bm, &bmop);
 
 	if (!BMO_error_occurred(em->bm)) {
@@ -5104,17 +5144,6 @@ static int edbm_bridge_edge_loops_exec(bContext *C, wmOperator *op)
 		if (use_merge == false) {
 			EDBM_flag_disable_all(em, BM_ELEM_SELECT);
 			BMO_slot_buffer_hflag_enable(em->bm, bmop.slots_out, "faces.out", BM_FACE, BM_ELEM_SELECT, true);
-		}
-
-		if (use_faces && totface_del) {
-			int i;
-			BM_mesh_elem_hflag_disable_all(em->bm, BM_FACE, BM_ELEM_TAG, false);
-			for (i = 0; i < totface_del; i++) {
-				BM_elem_flag_enable(totface_del_arr[i], BM_ELEM_TAG);
-			}
-			BMO_op_callf(em->bm, BMO_FLAG_DEFAULTS,
-			             "delete geom=%hf context=%i",
-			             BM_ELEM_TAG, DEL_FACES);
 		}
 
 		if (use_merge == false) {
@@ -5127,7 +5156,7 @@ static int edbm_bridge_edge_loops_exec(bContext *C, wmOperator *op)
 				EDBM_mesh_normals_update(em);
 
 				BMO_op_initf(
-				        em->bm, &bmop_subd, op->flag,
+				        em->bm, &bmop_subd, 0,
 				        "subdivide_edgering edges=%S interp_mode=%i cuts=%i smooth=%f "
 				        "profile_shape=%i profile_shape_factor=%f",
 				        &bmop, "edges.out", op_props.interp_mode, op_props.cuts, op_props.smooth,
@@ -5244,10 +5273,10 @@ void MESH_OT_wireframe(wmOperatorType *ot)
 	RNA_def_boolean(ot->srna, "use_even_offset", true, "Offset Even", "Scale the offset to give more even thickness");
 	RNA_def_boolean(ot->srna, "use_relative_offset", false, "Offset Relative", "Scale the offset by surrounding geometry");
 	RNA_def_boolean(ot->srna, "use_replace", true, "Replace", "Remove original faces");
-	prop = RNA_def_float(ot->srna, "thickness", 0.01f, 0.0f, 1e4f, "Thickness", "", 0.0f, 10.0f);
+	prop = RNA_def_float_distance(ot->srna, "thickness", 0.01f, 0.0f, 1e4f, "Thickness", "", 0.0f, 10.0f);
 	/* use 1 rather then 10 for max else dragging the button moves too far */
 	RNA_def_property_ui_range(prop, 0.0, 1.0, 0.01, 4);
-	RNA_def_float(ot->srna, "offset", 0.01f, 0.0f, 1e4f, "Offset", "", 0.0f, 10.0f);
+	RNA_def_float_distance(ot->srna, "offset", 0.01f, 0.0f, 1e4f, "Offset", "", 0.0f, 10.0f);
 	RNA_def_boolean(ot->srna, "use_crease", false, "Crease", "Crease hub edges for improved subsurf");
 	prop = RNA_def_float(ot->srna, "crease_weight", 0.01f, 0.0f, 1e3f, "Crease weight", "", 0.0f, 1.0f);
 	RNA_def_property_ui_range(prop, 0.0, 1.0, 0.1, 2);
@@ -5452,7 +5481,7 @@ void MESH_OT_symmetrize(struct wmOperatorType *ot)
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
-	ot->prop = RNA_def_enum(ot->srna, "direction", symmetrize_direction_items,
+	ot->prop = RNA_def_enum(ot->srna, "direction", rna_enum_symmetrize_direction_items,
 	                        BMO_SYMMETRIZE_NEGATIVE_X,
 	                        "Direction", "Which sides to copy from and to");
 	RNA_def_float(ot->srna, "threshold", 1e-4f, 0.0f, 10.0f, "Threshold", "", 1e-5f, 0.1f);
@@ -5576,10 +5605,10 @@ void MESH_OT_symmetry_snap(struct wmOperatorType *ot)
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
-	ot->prop = RNA_def_enum(ot->srna, "direction", symmetrize_direction_items,
+	ot->prop = RNA_def_enum(ot->srna, "direction", rna_enum_symmetrize_direction_items,
 	                        BMO_SYMMETRIZE_NEGATIVE_X,
 	                        "Direction", "Which sides to copy from and to");
-	RNA_def_float(ot->srna, "threshold", 0.05f, 0.0f, 10.0f, "Threshold", "", 1e-4f, 1.0f);
+	RNA_def_float_distance(ot->srna, "threshold", 0.05f, 0.0f, 10.0f, "Threshold", "", 1e-4f, 1.0f);
 	RNA_def_float(ot->srna, "factor", 0.5f, 0.0f, 1.0f, "Factor", "", 0.0f, 1.0f);
 	RNA_def_boolean(ot->srna, "use_center", true, "Center", "Snap mid verts to the axis center");
 }

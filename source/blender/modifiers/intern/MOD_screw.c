@@ -44,6 +44,7 @@
 #include "BLI_utildefines.h"
 
 #include "BKE_cdderivedmesh.h"
+#include "BKE_library_query.h"
 
 #include "depsgraph_private.h"
 #include "DEG_depsgraph_build.h"
@@ -72,7 +73,7 @@ typedef struct ScrewVertIter {
 
 #define SV_UNUSED (UINT_MAX)
 #define SV_INVALID ((UINT_MAX) - 1)
-#define SV_IS_VALID(v) (v < SV_INVALID)
+#define SV_IS_VALID(v) ((v) < SV_INVALID)
 
 static void screwvert_iter_init(ScrewVertIter *iter, ScrewVertConnect *array, unsigned int v_init, unsigned int dir)
 {
@@ -766,7 +767,7 @@ static DerivedMesh *applyModifier(ModifierData *md, Object *ob,
 				}
 
 				/* we wont be looping on this data again so copy normals here */
-				if (angle < 0.0f)
+				if ((angle < 0.0f) != do_flip)
 					negate_v3(vc->no);
 
 				normalize_v3(vc->no);
@@ -1090,12 +1091,11 @@ static void updateDepsgraph(ModifierData *md,
 
 static void foreachObjectLink(
         ModifierData *md, Object *ob,
-        void (*walk)(void *userData, Object *ob, Object **obpoin),
-        void *userData)
+        ObjectWalkFunc walk, void *userData)
 {
 	ScrewModifierData *ltmd = (ScrewModifierData *) md;
 
-	walk(userData, ob, &ltmd->ob_axis);
+	walk(userData, ob, &ltmd->ob_axis, IDWALK_NOP);
 }
 
 ModifierTypeInfo modifierType_Screw = {

@@ -69,7 +69,7 @@ typedef struct UvElement {
 	/* general use flag */
 	unsigned char flag;
 	/* If generating element map with island sorting, this stores the island index */
-	unsigned short island;
+	unsigned int island;
 } UvElement;
 
 
@@ -90,9 +90,7 @@ typedef struct UvElementMap {
 	int *islandIndices;
 } UvElementMap;
 
-/* invalid island index is max short. If any one has the patience
- * to make that many islands, he can bite me :p */
-#define INVALID_ISLAND 0xFFFF
+#define INVALID_ISLAND ((unsigned int)-1)
 
 /* Connectivity data */
 typedef struct MeshElemMap {
@@ -116,7 +114,15 @@ void BKE_mesh_vert_loop_map_create(
         MeshElemMap **r_map, int **r_mem,
         const struct MPoly *mface, const struct MLoop *mloop,
         int totvert, int totface, int totloop);
+void BKE_mesh_vert_looptri_map_create(
+        MeshElemMap **r_map, int **r_mem,
+        const struct MVert *mvert, const int totvert,
+        const struct MLoopTri *mlooptri, const int totlooptri,
+        const struct MLoop *mloop, const int totloop);
 void BKE_mesh_vert_edge_map_create(
+        MeshElemMap **r_map, int **r_mem,
+        const struct MEdge *medge, int totvert, int totedge);
+void BKE_mesh_vert_edge_vert_map_create(
         MeshElemMap **r_map, int **r_mem,
         const struct MEdge *medge, int totvert, int totedge);
 void BKE_mesh_edge_poly_map_create(

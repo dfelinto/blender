@@ -23,17 +23,14 @@
 #
 # ***** END GPL LICENSE BLOCK *****
 
+# Libs that adhere to strict flags
+add_subdirectory(curve_fit_nd)
+
 # Otherwise we get warnings here that we cant fix in external projects
 remove_strict_flags()
 
 add_subdirectory(rangetree)
 add_subdirectory(wcwidth)
-add_subdirectory(libmv)
-add_subdirectory(Eigen3)
-
-if(WITH_OPENNL)
-	add_subdirectory(colamd)
-endif()
 
 if(WITH_BULLET)
 	if(NOT WITH_SYSTEM_BULLET)
@@ -66,10 +63,6 @@ if(WITH_IMAGE_OPENJPEG AND (NOT WITH_SYSTEM_OPENJPEG))
 	add_subdirectory(libopenjpeg)
 endif()
 
-if(WITH_IMAGE_REDCODE)
-	add_subdirectory(libredcode)
-endif()
-
 if(WITH_LZO AND NOT WITH_SYSTEM_LZO)
 	add_subdirectory(lzo)
 endif()
@@ -80,7 +73,9 @@ endif()
 
 if(WITH_CYCLES OR WITH_COMPOSITOR OR WITH_OPENSUBDIV)
 	add_subdirectory(clew)
-	add_subdirectory(cuew)
+	if(WITH_CUDA_DYNLOAD)
+		add_subdirectory(cuew)
+	endif()
 endif()
 
 if(WITH_MOD_BOOLEAN)
@@ -89,6 +84,15 @@ endif()
 
 if(WITH_X11 AND WITH_GHOST_XDND)
 	add_subdirectory(xdnd)
+endif()
+
+if(WITH_LIBMV)
+	add_subdirectory(ceres)
+endif()
+
+if(WITH_LIBMV OR WITH_GTESTS OR (WITH_CYCLES AND WITH_CYCLES_LOGGING))
+	add_subdirectory(gflags)
+	add_subdirectory(glog)
 endif()
 
 if(WITH_GTESTS)

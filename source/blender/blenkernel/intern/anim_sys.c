@@ -229,10 +229,10 @@ void BKE_animdata_free(ID *id)
 		if (adt) {
 			/* unlink action (don't free, as it's in its own list) */
 			if (adt->action)
-				adt->action->id.us--;
+				id_us_min(&adt->action->id);
 			/* same goes for the temporarily displaced action */
 			if (adt->tmpact)
-				adt->tmpact->id.us--;
+				id_us_min(&adt->tmpact->id);
 				
 			/* free nla data */
 			free_nladata(&adt->nla_tracks);
@@ -730,14 +730,10 @@ static char *rna_path_rename_fix(ID *owner_id, const char *prefix, const char *o
 			DynStr *ds = BLI_dynstr_new();
 			const char *postfixPtr = oldNamePtr + oldNameLen;
 			char *newPath = NULL;
-			char oldChar;
-			
+
 			/* add the part of the string that goes up to the start of the prefix */
 			if (prefixPtr > oldpath) {
-				oldChar = prefixPtr[0];
-				prefixPtr[0] = 0;
-				BLI_dynstr_append(ds, oldpath);
-				prefixPtr[0] = oldChar;
+				BLI_dynstr_nappend(ds, oldpath, prefixPtr - oldpath);
 			}
 			
 			/* add the prefix */
@@ -1596,8 +1592,8 @@ static bool animsys_write_rna_setting(PointerRNA *ptr, char *path, int array_ind
 
 				/* for cases like duplifarmes it's only a temporary so don't
 				 * notify anyone of updates */
-				if (!(id->flag & LIB_ANIM_NO_RECALC)) {
-					id->flag |= LIB_ID_RECALC;
+				if (!(id->tag & LIB_TAG_ANIM_NO_RECALC)) {
+					id->tag |= LIB_TAG_ID_RECALC;
 					DAG_id_type_tag(G.main, GS(id->name));
 				}
 			}
@@ -1620,7 +1616,7 @@ static bool animsys_write_rna_setting(PointerRNA *ptr, char *path, int array_ind
 }
 
 /* Simple replacement based data-setting of the FCurve using RNA */
-bool BKE_animsys_execute_fcurve(PointerRNA *ptr, AnimMapper *remap, FCurve *fcu)
+bool BKE_animsys_execute_fcurve(PointerRNA *ptr, AnimMapper *remap, FCurve *fcu, float curval)
 {
 	char *path = NULL;
 	bool free_path = false;
@@ -1631,7 +1627,7 @@ bool BKE_animsys_execute_fcurve(PointerRNA *ptr, AnimMapper *remap, FCurve *fcu)
 	
 	/* write value to setting */
 	if (path)
-		ok = animsys_write_rna_setting(ptr, path, fcu->array_index, fcu->curval);
+		ok = animsys_write_rna_setting(ptr, path, fcu->array_index, curval);
 	
 	/* free temp path-info */
 	if (free_path)
@@ -1654,8 +1650,8 @@ static void animsys_evaluate_fcurves(PointerRNA *ptr, ListBase *list, AnimMapper
 		if ((fcu->grp == NULL) || (fcu->grp->flag & AGRP_MUTED) == 0) {
 			/* check if this curve should be skipped */
 			if ((fcu->flag & (FCURVE_MUTED | FCURVE_DISABLED)) == 0) {
-				calculate_fcurve(fcu, ctime);
-				BKE_animsys_execute_fcurve(ptr, remap, fcu); 
+				const float curval = calculate_fcurve(fcu, ctime);
+				BKE_animsys_execute_fcurve(ptr, remap, fcu, curval);
 			}
 		}
 	}
@@ -1684,8 +1680,8 @@ static void animsys_evaluate_drivers(PointerRNA *ptr, AnimData *adt, float ctime
 				/* evaluate this using values set already in other places
 				 * NOTE: for 'layering' option later on, we should check if we should remove old value before adding
 				 *       new to only be done when drivers only changed */
-				calculate_fcurve(fcu, ctime);
-				ok = BKE_animsys_execute_fcurve(ptr, NULL, fcu);
+				const float curval = calculate_fcurve(fcu, ctime);
+				ok = BKE_animsys_execute_fcurve(ptr, NULL, fcu, curval);
 				
 				/* clear recalc flag */
 				driver->flag &= ~DRIVER_FLAG_RECALC;
@@ -1753,8 +1749,8 @@ void animsys_evaluate_action_group(PointerRNA *ptr, bAction *act, bActionGroup *
 	for (fcu = agrp->channels.first; (fcu) && (fcu->grp == agrp); fcu = fcu->next) {
 		/* check if this curve should be skipped */
 		if ((fcu->flag & (FCURVE_MUTED | FCURVE_DISABLED)) == 0) {
-			calculate_fcurve(fcu, ctime);
-			BKE_animsys_execute_fcurve(ptr, remap, fcu); 
+			const float curval = calculate_fcurve(fcu, ctime);
+			BKE_animsys_execute_fcurve(ptr, remap, fcu, curval);
 		}
 	}
 }
@@ -2562,8 +2558,8 @@ static void animsys_evaluate_nla(ListBase *echannels, PointerRNA *ptr, AnimData 
 	 */
 	if (ptr->id.data != NULL) {
 		ID *id = ptr->id.data;
-		if (!(id->flag & LIB_ANIM_NO_RECALC)) {
-			id->flag |= LIB_ID_RECALC;
+		if (!(id->tag & LIB_TAG_ANIM_NO_RECALC)) {
+			id->tag |= LIB_TAG_ID_RECALC;
 			DAG_id_type_tag(G.main, GS(id->name));
 		}
 	}
@@ -2888,8 +2884,8 @@ void BKE_animsys_eval_driver(EvaluationContext *eval_ctx,
 			 * NOTE: for 'layering' option later on, we should check if we should remove old value before adding
 			 *       new to only be done when drivers only changed */
 			//printf("\told val = %f\n", fcu->curval);
-			calculate_fcurve(fcu, eval_ctx->ctime);
-			ok = BKE_animsys_execute_fcurve(&id_ptr, NULL, fcu);
+			const float curval = calculate_fcurve(fcu, eval_ctx->ctime);
+			ok = BKE_animsys_execute_fcurve(&id_ptr, NULL, fcu, curval);
 			//printf("\tnew val = %f\n", fcu->curval);
 
 			/* clear recalc flag */

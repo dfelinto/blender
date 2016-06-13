@@ -25,6 +25,7 @@
  */
 
 
+#include <ctype.h>
 #include <stdlib.h>
 #include <stddef.h>
 #include <string.h>
@@ -39,12 +40,14 @@
 #include "DNA_texture_types.h"
 
 #include "BLI_utildefines.h"
+#include "BLI_alloca.h"
 #include "BLI_string.h"
 #include "BLI_ghash.h"
 #include "BLI_rect.h"
 #include "BLI_math.h"
 #include "BLI_listbase.h"
 #include "BLI_fnmatch.h"
+#include "BLI_timecode.h"
 
 #include "BLF_api.h"
 #include "BLT_translation.h"
@@ -80,6 +83,8 @@
 #include "UI_interface.h"
 #include "UI_interface_icons.h"
 #include "interface_intern.h"
+
+#include "PIL_time.h"
 
 void UI_template_fix_linking(void)
 {
@@ -148,11 +153,11 @@ static void id_search_cb(const bContext *C, void *arg_template, const char *str,
 					continue;
 
 			if (*str == '\0' || BLI_strcasestr(id->name + 2, str)) {
-				/* +1 is needed because name_uiprefix_id used 3 letter prefix
+				/* +1 is needed because BKE_id_ui_prefix used 3 letter prefix
 				 * followed by ID_NAME-2 characters from id->name
 				 */
 				char name_ui[MAX_ID_NAME + 1];
-				name_uiprefix_id(name_ui, id);
+				BKE_id_ui_prefix(name_ui, id);
 
 				iconid = ui_id_icon_get(C, id, template->preview);
 
@@ -194,7 +199,9 @@ static uiBlock *id_search_menu(bContext *C, ARegion *ar, void *arg_litem)
 		
 		but = uiDefSearchBut(block, search, 0, ICON_VIEWZOOM, sizeof(search), 10, 0, w, UI_UNIT_Y,
 		                     template.prv_rows, template.prv_cols, "");
-		UI_but_func_search_set(but, id_search_cb, &template, id_search_call_cb, idptr.data);
+		UI_but_func_search_set(
+		        but, ui_searchbox_create_generic, id_search_cb,
+		        &template, id_search_call_cb, idptr.data);
 	}
 	/* list view */
 	else {
@@ -204,7 +211,9 @@ static uiBlock *id_search_menu(bContext *C, ARegion *ar, void *arg_litem)
 		/* fake button, it holds space for search items */
 		uiDefBut(block, UI_BTYPE_LABEL, 0, "", 10, 15, searchbox_width, searchbox_height, NULL, 0, 0, 0, 0, NULL);
 		but = uiDefSearchBut(block, search, 0, ICON_VIEWZOOM, sizeof(search), 10, 0, searchbox_width, UI_UNIT_Y - 1, 0, 0, "");
-		UI_but_func_search_set(but, id_search_cb, &template, id_search_call_cb, idptr.data);
+		UI_but_func_search_set(
+		        but, ui_searchbox_create_generic, id_search_cb,
+		        &template, id_search_call_cb, idptr.data);
 	}
 		
 	
@@ -275,7 +284,7 @@ static void template_id_cb(bContext *C, void *arg_litem, void *arg_event)
 
 			if (id && CTX_wm_window(C)->eventstate->shift) {
 				/* only way to force-remove data (on save) */
-				id->flag &= ~LIB_FAKEUSER;
+				id_fake_user_clear(id);
 				id->us = 0;
 			}
 
@@ -436,7 +445,7 @@ static void template_ID(
 		if (user_alert) UI_but_flag_enable(but, UI_BUT_REDALERT);
 
 		if (id->lib) {
-			if (id->flag & LIB_INDIRECT) {
+			if (id->tag & LIB_TAG_INDIRECT) {
 				but = uiDefIconBut(block, UI_BTYPE_BUT, 0, ICON_LIBRARY_DATA_INDIRECT, 0, 0, UI_UNIT_X, UI_UNIT_Y,
 				                   NULL, 0, 0, 0, 0, TIP_("Indirect library datablock, cannot change"));
 				UI_but_flag_enable(but, UI_BUT_DISABLED);
@@ -1636,7 +1645,7 @@ static uiBlock *ui_icon_view_menu_cb(bContext *C, ARegion *ar, void *arg_litem)
 	h = UI_UNIT_X * (args.icon_scale + args.show_labels);
 
 	block = UI_block_begin(C, ar, "_popup", UI_EMBOSS_PULLDOWN);
-	UI_block_flag_enable(block, UI_BLOCK_LOOP);
+	UI_block_flag_enable(block, UI_BLOCK_LOOP | UI_BLOCK_NO_FLIP);
 
 	RNA_property_enum_items(C, &args.ptr, args.prop, &item, NULL, &free);
 
@@ -1644,7 +1653,7 @@ static uiBlock *ui_icon_view_menu_cb(bContext *C, ARegion *ar, void *arg_litem)
 		int x, y;
 
 		x = (a % 8) * w;
-		y = (a / 8) * h;
+		y = -(a / 8) * h;
 
 		icon = item[a].icon;
 		value = item[a].value;
@@ -1969,81 +1978,62 @@ static void curvemap_tools_dofunc(bContext *C, void *cumap_v, int event)
 	ED_region_tag_redraw(CTX_wm_region(C));
 }
 
-static uiBlock *curvemap_tools_posslope_func(bContext *C, ARegion *ar, void *cumap_v)
+static uiBlock *curvemap_tools_func(
+        bContext *C, ARegion *ar, CurveMapping *cumap,
+        bool show_extend, int reset_mode)
 {
 	uiBlock *block;
 	short yco = 0, menuwidth = 10 * UI_UNIT_X;
 
 	block = UI_block_begin(C, ar, __func__, UI_EMBOSS);
-	UI_block_func_butmenu_set(block, curvemap_tools_dofunc, cumap_v);
+	UI_block_func_butmenu_set(block, curvemap_tools_dofunc, cumap);
 
-	uiDefIconTextBut(block, UI_BTYPE_BUT_MENU, 1, ICON_BLANK1, IFACE_("Reset View"),          0, yco -= UI_UNIT_Y,
-	                 menuwidth, UI_UNIT_Y, NULL, 0.0, 0.0, 0, UICURVE_FUNC_RESET_VIEW, "");
-	uiDefIconTextBut(block, UI_BTYPE_BUT_MENU, 1, ICON_BLANK1, IFACE_("Vector Handle"),       0, yco -= UI_UNIT_Y,
-	                 menuwidth, UI_UNIT_Y, NULL, 0.0, 0.0, 0, UICURVE_FUNC_HANDLE_VECTOR, "");
-	uiDefIconTextBut(block, UI_BTYPE_BUT_MENU, 1, ICON_BLANK1, IFACE_("Auto Handle"),         0, yco -= UI_UNIT_Y,
-	                 menuwidth, UI_UNIT_Y, NULL, 0.0, 0.0, 0, UICURVE_FUNC_HANDLE_AUTO, "");
-	uiDefIconTextBut(block, UI_BTYPE_BUT_MENU, 1, ICON_BLANK1, IFACE_("Extend Horizontal"),   0, yco -= UI_UNIT_Y,
-	                 menuwidth, UI_UNIT_Y, NULL, 0.0, 0.0, 0, UICURVE_FUNC_EXTEND_HOZ, "");
-	uiDefIconTextBut(block, UI_BTYPE_BUT_MENU, 1, ICON_BLANK1, IFACE_("Extend Extrapolated"), 0, yco -= UI_UNIT_Y,
-	                 menuwidth, UI_UNIT_Y, NULL, 0.0, 0.0, 0, UICURVE_FUNC_EXTEND_EXP, "");
-	uiDefIconTextBut(block, UI_BTYPE_BUT_MENU, 1, ICON_BLANK1, IFACE_("Reset Curve"),         0, yco -= UI_UNIT_Y,
-	                 menuwidth, UI_UNIT_Y, NULL, 0.0, 0.0, 0, UICURVE_FUNC_RESET_POS, "");
+	{
+		uiDefIconTextBut(
+		        block, UI_BTYPE_BUT_MENU, 1, ICON_BLANK1, IFACE_("Reset View"),
+		        0, yco -= UI_UNIT_Y, menuwidth, UI_UNIT_Y, NULL, 0.0, 0.0, 0, UICURVE_FUNC_RESET_VIEW, "");
+		uiDefIconTextBut(
+		        block, UI_BTYPE_BUT_MENU, 1, ICON_BLANK1, IFACE_("Vector Handle"),
+		        0, yco -= UI_UNIT_Y, menuwidth, UI_UNIT_Y, NULL, 0.0, 0.0, 0, UICURVE_FUNC_HANDLE_VECTOR, "");
+		uiDefIconTextBut(
+		        block, UI_BTYPE_BUT_MENU, 1, ICON_BLANK1, IFACE_("Auto Handle"),
+		        0, yco -= UI_UNIT_Y, menuwidth, UI_UNIT_Y, NULL, 0.0, 0.0, 0, UICURVE_FUNC_HANDLE_AUTO, "");
+	}
+
+	if (show_extend) {
+		uiDefIconTextBut(
+		        block, UI_BTYPE_BUT_MENU, 1, ICON_BLANK1, IFACE_("Extend Horizontal"),
+		        0, yco -= UI_UNIT_Y, menuwidth, UI_UNIT_Y, NULL, 0.0, 0.0, 0, UICURVE_FUNC_EXTEND_HOZ, "");
+		uiDefIconTextBut(
+		        block, UI_BTYPE_BUT_MENU, 1, ICON_BLANK1, IFACE_("Extend Extrapolated"),
+		        0, yco -= UI_UNIT_Y, menuwidth, UI_UNIT_Y, NULL, 0.0, 0.0, 0, UICURVE_FUNC_EXTEND_EXP, "");
+	}
+
+	{
+		uiDefIconTextBut(
+		        block, UI_BTYPE_BUT_MENU, 1, ICON_BLANK1, IFACE_("Reset Curve"),
+		        0, yco -= UI_UNIT_Y, menuwidth, UI_UNIT_Y, NULL, 0.0, 0.0, 0, reset_mode, "");
+	}
 
 	UI_block_direction_set(block, UI_DIR_RIGHT);
 	UI_block_bounds_set_text(block, 50);
 
 	return block;
+}
+
+static uiBlock *curvemap_tools_posslope_func(bContext *C, ARegion *ar, void *cumap_v)
+{
+	return curvemap_tools_func(C, ar, cumap_v, true, UICURVE_FUNC_RESET_POS);
 }
 
 static uiBlock *curvemap_tools_negslope_func(bContext *C, ARegion *ar, void *cumap_v)
 {
-	uiBlock *block;
-	short yco = 0, menuwidth = 10 * UI_UNIT_X;
-
-	block = UI_block_begin(C, ar, __func__, UI_EMBOSS);
-	UI_block_func_butmenu_set(block, curvemap_tools_dofunc, cumap_v);
-
-	uiDefIconTextBut(block, UI_BTYPE_BUT_MENU, 1, ICON_BLANK1, IFACE_("Reset View"),          0, yco -= UI_UNIT_Y,
-	                 menuwidth, UI_UNIT_Y, NULL, 0.0, 0.0, 0, UICURVE_FUNC_RESET_VIEW, "");
-	uiDefIconTextBut(block, UI_BTYPE_BUT_MENU, 1, ICON_BLANK1, IFACE_("Vector Handle"),       0, yco -= UI_UNIT_Y,
-	                 menuwidth, UI_UNIT_Y, NULL, 0.0, 0.0, 0, UICURVE_FUNC_HANDLE_VECTOR, "");
-	uiDefIconTextBut(block, UI_BTYPE_BUT_MENU, 1, ICON_BLANK1, IFACE_("Auto Handle"),         0, yco -= UI_UNIT_Y,
-	                 menuwidth, UI_UNIT_Y, NULL, 0.0, 0.0, 0, UICURVE_FUNC_HANDLE_AUTO, "");
-	uiDefIconTextBut(block, UI_BTYPE_BUT_MENU, 1, ICON_BLANK1, IFACE_("Extend Horizontal"),   0, yco -= UI_UNIT_Y,
-	                 menuwidth, UI_UNIT_Y, NULL, 0.0, 0.0, 0, UICURVE_FUNC_EXTEND_HOZ, "");
-	uiDefIconTextBut(block, UI_BTYPE_BUT_MENU, 1, ICON_BLANK1, IFACE_("Extend Extrapolated"), 0, yco -= UI_UNIT_Y,
-	                 menuwidth, UI_UNIT_Y, NULL, 0.0, 0.0, 0, UICURVE_FUNC_EXTEND_EXP, "");
-	uiDefIconTextBut(block, UI_BTYPE_BUT_MENU, 1, ICON_BLANK1, IFACE_("Reset Curve"),         0, yco -= UI_UNIT_Y,
-	                 menuwidth, UI_UNIT_Y, NULL, 0.0, 0.0, 0, UICURVE_FUNC_RESET_NEG, "");
-
-	UI_block_direction_set(block, UI_DIR_RIGHT);
-	UI_block_bounds_set_text(block, 50);
-
-	return block;
+	return curvemap_tools_func(C, ar, cumap_v, true, UICURVE_FUNC_RESET_NEG);
 }
 
 static uiBlock *curvemap_brush_tools_func(bContext *C, ARegion *ar, void *cumap_v)
 {
-	uiBlock *block;
-	short yco = 0, menuwidth = 10 * UI_UNIT_X;
-
-	block = UI_block_begin(C, ar, __func__, UI_EMBOSS);
-	UI_block_func_butmenu_set(block, curvemap_tools_dofunc, cumap_v);
-
-	uiDefIconTextBut(block, UI_BTYPE_BUT_MENU, 1, ICON_BLANK1, IFACE_("Reset View"),    0, yco -= UI_UNIT_Y,
-	                 menuwidth, UI_UNIT_Y, NULL, 0.0, 0.0, 0, UICURVE_FUNC_RESET_VIEW, "");
-	uiDefIconTextBut(block, UI_BTYPE_BUT_MENU, 1, ICON_BLANK1, IFACE_("Vector Handle"), 0, yco -= UI_UNIT_Y,
-	                 menuwidth, UI_UNIT_Y, NULL, 0.0, 0.0, 0, UICURVE_FUNC_HANDLE_VECTOR, "");
-	uiDefIconTextBut(block, UI_BTYPE_BUT_MENU, 1, ICON_BLANK1, IFACE_("Auto Handle"),   0, yco -= UI_UNIT_Y,
-	                 menuwidth, UI_UNIT_Y, NULL, 0.0, 0.0, 0, UICURVE_FUNC_HANDLE_AUTO, "");
-	uiDefIconTextBut(block, UI_BTYPE_BUT_MENU, 1, ICON_BLANK1, IFACE_("Reset Curve"),   0, yco -= UI_UNIT_Y,
-	                 menuwidth, UI_UNIT_Y, NULL, 0.0, 0.0, 0, UICURVE_FUNC_RESET_NEG, "");
-
-	UI_block_direction_set(block, UI_DIR_RIGHT);
-	UI_block_bounds_set_text(block, 50);
-
-	return block;
+	return curvemap_tools_func(C, ar, cumap_v, false, UICURVE_FUNC_RESET_NEG);
 }
 
 static void curvemap_buttons_redraw(bContext *C, void *UNUSED(arg1), void *UNUSED(arg2))
@@ -2165,10 +2155,10 @@ static void curvemap_buttons_layout(
 
 	UI_block_emboss_set(block, UI_EMBOSS_NONE);
 
-	bt = uiDefIconBut(block, UI_BTYPE_BUT, 0, ICON_ZOOMIN, 0, 0, dx, dx, NULL, 0.0, 0.0, 0.0, 0.0, TIP_("Zoom in"));
+	bt = uiDefIconBut(block, UI_BTYPE_BUT, 0, ICON_ZOOM_IN, 0, 0, dx, dx, NULL, 0.0, 0.0, 0.0, 0.0, TIP_("Zoom in"));
 	UI_but_func_set(bt, curvemap_buttons_zoom_in, cumap, NULL);
 
-	bt = uiDefIconBut(block, UI_BTYPE_BUT, 0, ICON_ZOOMOUT, 0, 0, dx, dx, NULL, 0.0, 0.0, 0.0, 0.0, TIP_("Zoom out"));
+	bt = uiDefIconBut(block, UI_BTYPE_BUT, 0, ICON_ZOOM_OUT, 0, 0, dx, dx, NULL, 0.0, 0.0, 0.0, 0.0, TIP_("Zoom out"));
 	UI_but_func_set(bt, curvemap_buttons_zoom_out, cumap, NULL);
 
 	if (brush)
@@ -2418,15 +2408,15 @@ void uiTemplatePalette(uiLayout *layout, PointerRNA *ptr, const char *propname, 
 	uiLayoutRow(col, true);
 
 	for (; color; color = color->next) {
-		PointerRNA ptr;
+		PointerRNA color_ptr;
 
 		if (row_cols >= cols_per_row) {
 			uiLayoutRow(col, true);
 			row_cols = 0;
 		}
 
-		RNA_pointer_create(&palette->id, &RNA_PaletteColor, color, &ptr);
-		uiDefButR(block, UI_BTYPE_COLOR, 0, "", 0, 0, UI_UNIT_X, UI_UNIT_Y, &ptr, "color", -1, 0.0, 1.0,
+		RNA_pointer_create(&palette->id, &RNA_PaletteColor, color, &color_ptr);
+		uiDefButR(block, UI_BTYPE_COLOR, 0, "", 0, 0, UI_UNIT_X, UI_UNIT_Y, &color_ptr, "color", -1, 0.0, 1.0,
 		          UI_PALETTE_COLOR, col_id, "");
 		row_cols++;
 		col_id++;
@@ -2828,7 +2818,7 @@ static void uilist_prepare(
 	layoutdata->end_idx = min_ii(layoutdata->start_idx + rows * columns, len);
 }
 
-static void uilist_resize_update_cb(bContext *UNUSED(C), void *arg1, void *UNUSED(arg2))
+static void uilist_resize_update_cb(bContext *C, void *arg1, void *UNUSED(arg2))
 {
 	uiList *ui_list = arg1;
 	uiListDyn *dyn_data = ui_list->dyn_data;
@@ -2841,6 +2831,9 @@ static void uilist_resize_update_cb(bContext *UNUSED(C), void *arg1, void *UNUSE
 		dyn_data->resize_prev += diff * UI_UNIT_Y;
 		ui_list->flag |= UILST_SCROLL_TO_ACTIVE_ITEM;
 	}
+
+	/* In case uilist is in popup, we need special refreshing */
+	ED_region_tag_refresh_ui(CTX_wm_menu(C));
 }
 
 static void *uilist_item_use_dynamic_tooltip(PointerRNA *itemptr, const char *propname)
@@ -2957,7 +2950,11 @@ void uiTemplateList(
 	/* We tag the list id with the list type... */
 	BLI_snprintf(ui_list_id, sizeof(ui_list_id), "%s_%s", ui_list_type->idname, list_id ? list_id : "");
 
-	ar = CTX_wm_region(C);
+	/* Allows to work in popups. */
+	ar = CTX_wm_menu(C);
+	if (ar == NULL) {
+		ar = CTX_wm_region(C);
+	}
 	ui_list = BLI_findstring(&ar->ui_lists, ui_list_id, offsetof(uiList, list_id));
 
 	if (!ui_list) {
@@ -3033,7 +3030,7 @@ void uiTemplateList(
 						/* So that we do not map again activei! */
 						activei_mapping_pending = false;
 					}
-# if 0 /* For now, do not alter active element, even if it will be hidden... */
+#if 0 /* For now, do not alter active element, even if it will be hidden... */
 					else if (activei < i) {
 						/* We do not want an active but invisible item!
 						 * Only exception is when all items are filtered out...
@@ -3054,6 +3051,11 @@ void uiTemplateList(
 				i++;
 			}
 			RNA_PROP_END;
+
+			if (activei_mapping_pending) {
+				/* No active item found, set to 'invalid' -1 value... */
+				activei = -1;
+			}
 		}
 		if (dyn_data->items_shown >= 0) {
 			len = dyn_data->items_shown;
@@ -3282,18 +3284,47 @@ static void operator_call_cb(bContext *C, void *UNUSED(arg1), void *arg2)
 		WM_operator_name_call_ptr(C, ot, WM_OP_INVOKE_DEFAULT, NULL);
 }
 
+static bool has_word_prefix(const char *haystack, const char *needle, size_t needle_len)
+{
+	const char *match = BLI_strncasestr(haystack, needle, needle_len);
+	if (match) {
+		if ((match == haystack) || (*(match - 1) == ' ') || ispunct(*(match - 1))) {
+			return true;
+		}
+		else {
+			return has_word_prefix(match + 1, needle, needle_len);
+		}
+	}
+	else {
+		return false;
+	}
+}
+
 static void operator_search_cb(const bContext *C, void *UNUSED(arg), const char *str, uiSearchItems *items)
 {
 	GHashIterator iter;
+	const size_t str_len = strlen(str);
+	const int words_max = (str_len / 2) + 1;
+	int (*words)[2] = BLI_array_alloca(words, words_max);
+
+	const int words_len = BLI_string_find_split_words(str, str_len, ' ', words, words_max);
 
 	for (WM_operatortype_iter(&iter); !BLI_ghashIterator_done(&iter); BLI_ghashIterator_step(&iter)) {
 		wmOperatorType *ot = BLI_ghashIterator_getValue(&iter);
 		const char *ot_ui_name = CTX_IFACE_(ot->translation_context, ot->name);
+		int index;
 
 		if ((ot->flag & OPTYPE_INTERNAL) && (G.debug & G_DEBUG_WM) == 0)
 			continue;
 
-		if (BLI_strcasestr(ot_ui_name, str)) {
+		/* match name against all search words */
+		for (index = 0; index < words_len; index++) {
+			if (!has_word_prefix(ot_ui_name, str + words[index][0], words[index][1])) {
+				break;
+			}
+		}
+
+		if (index == words_len) {
 			if (WM_operator_poll((bContext *)C, ot)) {
 				char name[256];
 				int len = strlen(ot_ui_name);
@@ -3319,7 +3350,9 @@ static void operator_search_cb(const bContext *C, void *UNUSED(arg), const char 
 
 void UI_but_func_operator_search(uiBut *but)
 {
-	UI_but_func_search_set(but, operator_search_cb, NULL, operator_call_cb, NULL);
+	UI_but_func_search_set(
+	        but, ui_searchbox_create_operator, operator_search_cb,
+	        NULL, operator_call_cb, NULL);
 }
 
 void uiTemplateOperatorSearch(uiLayout *layout)
@@ -3376,6 +3409,36 @@ static void do_running_jobs(bContext *C, void *UNUSED(arg), int event)
 	}
 }
 
+struct ProgressTooltip_Store {
+	wmWindowManager *wm;
+	void *owner;
+};
+
+static char *progress_tooltip_func(bContext *UNUSED(C), void *argN, const char *UNUSED(tip))
+{
+	struct ProgressTooltip_Store *arg = argN;
+	wmWindowManager *wm = arg->wm;
+	void *owner = arg->owner;
+
+	const float progress = WM_jobs_progress(wm, owner);
+
+	/* create tooltip text and associate it with the job */
+	char elapsed_str[32];
+	char remaining_str[32] = "Unknown";
+	const double elapsed = PIL_check_seconds_timer() - WM_jobs_starttime(wm, owner);
+	BLI_timecode_string_from_time_simple(elapsed_str, sizeof(elapsed_str), elapsed);
+
+	if (progress) {
+		const double remaining = (elapsed / (double)progress) - elapsed;
+		BLI_timecode_string_from_time_simple(remaining_str, sizeof(remaining_str), remaining);
+	}
+
+	return BLI_sprintfN(
+	        "Time Remaining: %s\n"
+	        "Time Elapsed: %s",
+	        remaining_str, elapsed_str);
+}
+
 void uiTemplateRunningJobs(uiLayout *layout, bContext *C)
 {
 	bScreen *screen = CTX_wm_screen(C);
@@ -3383,7 +3446,7 @@ void uiTemplateRunningJobs(uiLayout *layout, bContext *C)
 	ScrArea *sa = CTX_wm_area(C);
 	uiBlock *block;
 	void *owner = NULL;
-	int handle_event;
+	int handle_event, icon = 0;
 	
 	block = uiLayoutGetBlock(layout);
 	UI_block_layout_set_current(block, layout);
@@ -3394,17 +3457,20 @@ void uiTemplateRunningJobs(uiLayout *layout, bContext *C)
 		if (WM_jobs_test(wm, sa, WM_JOB_TYPE_ANY))
 			owner = sa;
 		handle_event = B_STOPSEQ;
+		icon = ICON_SEQUENCE;
 	}
 	else if (sa->spacetype == SPACE_CLIP) {
 		if (WM_jobs_test(wm, sa, WM_JOB_TYPE_ANY))
 			owner = sa;
 		handle_event = B_STOPCLIP;
+		icon = ICON_CLIP;
 	}
 	else if (sa->spacetype == SPACE_FILE) {
 		if (WM_jobs_test(wm, sa, WM_JOB_TYPE_FILESEL_READDIR)) {
 			owner = sa;
 		}
 		handle_event = B_STOPFILE;
+		icon = ICON_FILESEL;
 	}
 	else {
 		Scene *scene;
@@ -3412,10 +3478,12 @@ void uiTemplateRunningJobs(uiLayout *layout, bContext *C)
 		for (scene = CTX_data_main(C)->scene.first; scene; scene = scene->id.next) {
 			if (WM_jobs_test(wm, scene, WM_JOB_TYPE_RENDER)) {
 				handle_event = B_STOPRENDER;
+				icon = ICON_SCENE;
 				break;
 			}
 			else if (WM_jobs_test(wm, scene, WM_JOB_TYPE_COMPOSITE)) {
 				handle_event = B_STOPCOMPO;
+				icon = ICON_RENDERLAYERS;
 				break;
 			}
 			else if (WM_jobs_test(wm, scene, WM_JOB_TYPE_OBJECT_BAKE_TEXTURE) ||
@@ -3427,11 +3495,33 @@ void uiTemplateRunningJobs(uiLayout *layout, bContext *C)
 				 */
 				if (sa->spacetype != SPACE_NODE) {
 					handle_event = B_STOPOTHER;
+					icon = ICON_IMAGE_COL;
 					break;
 				}
 			}
+			else if (WM_jobs_test(wm, scene, WM_JOB_TYPE_DPAINT_BAKE)) {
+				handle_event = B_STOPOTHER;
+				icon = ICON_MOD_DYNAMICPAINT;
+				break;
+			}
+			else if (WM_jobs_test(wm, scene, WM_JOB_TYPE_POINTCACHE)) {
+				handle_event = B_STOPOTHER;
+				icon = ICON_PHYSICS;
+				break;
+			}
+			else if (WM_jobs_test(wm, scene, WM_JOB_TYPE_OBJECT_SIM_FLUID)) {
+				handle_event = B_STOPOTHER;
+				icon = ICON_MOD_FLUIDSIM;
+				break;
+			}
+			else if (WM_jobs_test(wm, scene, WM_JOB_TYPE_OBJECT_SIM_OCEAN)) {
+				handle_event = B_STOPOTHER;
+				icon = ICON_MOD_OCEAN;
+				break;
+			}
 			else if (WM_jobs_test(wm, scene, WM_JOB_TYPE_ANY)) {
 				handle_event = B_STOPOTHER;
+				icon = ICON_NONE;
 				break;
 			}
 		}
@@ -3439,18 +3529,45 @@ void uiTemplateRunningJobs(uiLayout *layout, bContext *C)
 	}
 
 	if (owner) {
-		uiLayout *ui_abs;
+		const uiFontStyle *fstyle = UI_FSTYLE_WIDGET;
+		bool active = !(G.is_break || WM_jobs_is_stopped(wm, owner));
 		
-		ui_abs = uiLayoutAbsolute(layout, false);
-		(void)ui_abs;  /* UNUSED */
-		
-		uiDefIconBut(block, UI_BTYPE_BUT, handle_event, ICON_PANEL_CLOSE, 0, UI_UNIT_Y * 0.1, UI_UNIT_X * 0.8, UI_UNIT_Y * 0.8,
-		             NULL, 0.0f, 0.0f, 0, 0, TIP_("Stop this job"));
-		uiDefBut(block, UI_BTYPE_PROGRESS_BAR, 0, WM_jobs_name(wm, owner), 
-		         UI_UNIT_X, 0, UI_UNIT_X * 5.0f, UI_UNIT_Y, NULL, 0.0f, 0.0f, WM_jobs_progress(wm, owner), 0, TIP_("Progress"));
-		
-		uiLayoutRow(layout, false);
+		uiLayout *row = uiLayoutRow(layout, false);
+		block = uiLayoutGetBlock(row);
+
+		/* get percentage done and set it as the UI text */
+		const float progress = WM_jobs_progress(wm, owner);
+		char text[8];
+		BLI_snprintf(text, 8, "%d%%", (int)(progress * 100));
+
+		const char *name = active ? WM_jobs_name(wm, owner) : "Canceling...";
+
+		/* job name and icon */
+		const int textwidth = UI_fontstyle_string_width(fstyle, name);
+		uiDefIconTextBut(block, UI_BTYPE_LABEL, 0, icon, name, 0, 0,
+		                 textwidth + UI_UNIT_X * 1.5f, UI_UNIT_Y, NULL, 0.0f, 0.0f, 0.0f, 0.0f, "");
+
+		/* stick progress bar and cancel button together */
+		row = uiLayoutRow(layout, true);
+		uiLayoutSetActive(row, active);
+		block = uiLayoutGetBlock(row);
+
+		{
+			struct ProgressTooltip_Store *tip_arg = MEM_mallocN(sizeof(*tip_arg), __func__);
+			tip_arg->wm = wm;
+			tip_arg->owner = owner;
+			uiBut *but_progress = uiDefIconTextBut(
+			        block, UI_BTYPE_PROGRESS_BAR, 0, 0, text,
+			        UI_UNIT_X, 0, UI_UNIT_X * 6.0f, UI_UNIT_Y, NULL, 0.0f, 0.0f,
+			        progress, 0, NULL);
+			UI_but_func_tooltip_set(but_progress, progress_tooltip_func, tip_arg);
+		}
+
+		uiDefIconTextBut(block, UI_BTYPE_BUT, handle_event, ICON_PANEL_CLOSE,
+		                 "", 0, 0, UI_UNIT_X, UI_UNIT_Y,
+		                 NULL, 0.0f, 0.0f, 0, 0, TIP_("Stop this job"));
 	}
+
 	if (WM_jobs_test(wm, screen, WM_JOB_TYPE_SCREENCAST))
 		uiDefIconTextBut(block, UI_BTYPE_BUT, B_STOPCAST, ICON_CANCEL, IFACE_("Capture"), 0, 0, UI_UNIT_X * 4.25f, UI_UNIT_Y,
 		                 NULL, 0.0f, 0.0f, 0, 0, TIP_("Stop screencast"));
@@ -3484,7 +3601,8 @@ void uiTemplateReportsBanner(uiLayout *layout, bContext *C)
 	ui_abs = uiLayoutAbsolute(layout, false);
 	block = uiLayoutGetBlock(ui_abs);
 	
-	width = BLF_width(style->widget.uifont_id, report->message, report->len);
+	UI_fontstyle_set(&style->widgetlabel);
+	width = BLF_width(style->widgetlabel.uifont_id, report->message, report->len);
 	width = min_ii((int)(rti->widthfac * width), width);
 	width = max_ii(width, 10);
 	
@@ -3593,6 +3711,9 @@ void uiTemplateKeymapItemProperties(uiLayout *layout, PointerRNA *ptr)
 			/* operator buttons may store props for use (file selector, [#36492]) */
 			if (but->rnaprop) {
 				UI_but_func_set(but, keymap_item_modified, ptr->data, NULL);
+
+				/* Otherwise the keymap will be re-generated which we're trying to edit, see: T47685 */
+				UI_but_flag_enable(but, UI_BUT_UPDATE_DELAY);
 			}
 		}
 	}

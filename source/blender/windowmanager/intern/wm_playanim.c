@@ -77,10 +77,10 @@
 #  include AUD_SOUND_H
 #  include AUD_SPECIAL_H
 
-AUD_Sound *source = NULL;
-AUD_Handle *playback_handle = NULL;
-AUD_Handle *scrub_handle = NULL;
-AUD_Device *audio_device = NULL;
+static AUD_Sound *source = NULL;
+static AUD_Handle *playback_handle = NULL;
+static AUD_Handle *scrub_handle = NULL;
+static AUD_Device *audio_device = NULL;
 #endif
 
 /* simple limiter to avoid flooding memory */
@@ -383,7 +383,6 @@ static void build_pict_list_ex(PlayState *ps, const char *first, int totframes, 
 //	short val;
 	PlayAnimPict *picture = NULL;
 	struct ImBuf *ibuf = NULL;
-	char str[32 + FILE_MAX];
 	struct anim *anim;
 
 	if (IMB_isanim(first)) {
@@ -402,8 +401,7 @@ static void build_pict_list_ex(PlayState *ps, const char *first, int totframes, 
 				picture->anim = anim;
 				picture->frame = pic;
 				picture->IB_flags = IB_rect;
-				BLI_snprintf(str, sizeof(str), "%s : %4.d", first, pic + 1);
-				picture->name = strdup(str);
+				picture->name = BLI_sprintfN("%s : %4.d", first, pic + 1);
 				BLI_addtail(&picsbase, picture);
 			}
 		}
@@ -414,7 +412,14 @@ static void build_pict_list_ex(PlayState *ps, const char *first, int totframes, 
 	else {
 		int count = 0;
 
+		int fp_framenr;
+		struct {
+			char head[FILE_MAX], tail[FILE_MAX];
+			unsigned short digits;
+		} fp_decoded;
+
 		BLI_strncpy(filepath, first, sizeof(filepath));
+		fp_framenr = BLI_stringdec(filepath, fp_decoded.head, fp_decoded.tail, &fp_decoded.digits);
 
 		pupdate_time();
 		ptottime = 1.0;
@@ -480,8 +485,8 @@ static void build_pict_list_ex(PlayState *ps, const char *first, int totframes, 
 			}
 
 			picture->mem = mem;
-			picture->name = strdup(filepath);
-			picture->frame = count; /* not exact but should work for positioning */
+			picture->name = BLI_strdup(filepath);
+			picture->frame = count;
 			close(file);
 			BLI_addtail(&picsbase, picture);
 			count++;
@@ -505,7 +510,9 @@ static void build_pict_list_ex(PlayState *ps, const char *first, int totframes, 
 				ptottime = 0.0;
 			}
 
-			BLI_newname(filepath, +fstep);
+			/* create a new filepath each time */
+			fp_framenr += fstep;
+			BLI_stringenc(filepath, fp_decoded.head, fp_decoded.tail, fp_decoded.digits, fp_framenr);
 
 			while ((hasevent = GHOST_ProcessEvents(g_WS.ghost_system, 0))) {
 				if (hasevent) {
@@ -544,17 +551,16 @@ static void update_sound_fps(void)
 static void change_frame(PlayState *ps, int cx)
 {
 	int sizex, sizey;
-	int i;
+	int i, i_last;
+
+	if (BLI_listbase_is_empty(&picsbase)) {
+		return;
+	}
 
 	playanim_window_get_size(&sizex, &sizey);
-	ps->picture = picsbase.first;
-	/* TODO - store in ps direct? */
-	i = 0;
-	while (ps->picture) {
-		i++;
-		ps->picture = ps->picture->next;
-	}
-	i = (i * cx) / sizex;
+	i_last = ((struct PlayAnimPict *)picsbase.last)->frame;
+	i = (i_last * cx) / sizex;
+	CLAMP(i, 0, i_last);
 
 #ifdef WITH_AUDASPACE
 	if (scrub_handle) {
@@ -588,11 +594,8 @@ static void change_frame(PlayState *ps, int cx)
 	}
 #endif
 
-	ps->picture = picsbase.first;
-	for (; i > 0; i--) {
-		if (ps->picture->next == NULL) break;
-		ps->picture = ps->picture->next;
-	}
+	ps->picture = BLI_findlink(&picsbase, i);
+	BLI_assert(ps->picture != NULL);
 
 	ps->sstep = true;
 	ps->wait2 = false;
@@ -894,6 +897,7 @@ static int ghost_event_proc(GHOST_EventHandle evt, GHOST_TUserDataPtr ps_void)
 					}
 					break;
 				case GHOST_kKeyEqual:
+				case GHOST_kKeyPlus:
 				case GHOST_kKeyNumpadPlus:
 				{
 					if (val == 0) break;
@@ -976,6 +980,19 @@ static int ghost_event_proc(GHOST_EventHandle evt, GHOST_TUserDataPtr ps_void)
 			if (g_WS.qual & WS_QUAL_LMOUSE) {
 				GHOST_TEventCursorData *cd = GHOST_GetEventData(evt);
 				int cx, cy;
+
+				/* Ignore 'in-between' events, since they can make scrubbing lag.
+				 *
+				 * Ideally we would keep into the event queue and see if this is the last motion event.
+				 * however the API currently doesn't support this. */
+				{
+					int x_test, y_test;
+					GHOST_GetCursorPosition(g_WS.ghost_system, &x_test, &y_test);
+					if (x_test != cd->x || y_test != cd->y) {
+						/* we're not the last event... skipping */
+						break;
+					}
+				}
 
 				GHOST_ScreenToClient(g_WS.ghost_window, cd->x, cd->y, &cx, &cy);
 
@@ -1093,27 +1110,12 @@ static char *wm_main_playanim_intern(int argc, const char **argv)
 	GHOST_TUns32 maxwinx, maxwiny;
 	int i;
 	/* This was done to disambiguate the name for use under c++. */
-	struct anim *anim = NULL;
 	int start_x = 0, start_y = 0;
 	int sfra = -1;
 	int efra = -1;
 	int totblock;
 	
 	PlayState ps = {0};
-
-#ifdef WITH_AUDASPACE
-	AUD_DeviceSpecs specs;
-
-	specs.rate = AUD_RATE_44100;
-	specs.format = AUD_FORMAT_S16;
-	specs.channels = AUD_CHANNELS_STEREO;
-
-	AUD_initOnce();
-
-	if (!(audio_device = AUD_init("OpenAL", specs, 1024, "Blender")))
-		audio_device = AUD_init("Null", specs, 0, "Blender");
-
-#endif
 
 	/* ps.doubleb   = true;*/ /* UNUSED */
 	ps.go        = true;
@@ -1208,12 +1210,13 @@ static char *wm_main_playanim_intern(int argc, const char **argv)
 		BLI_strncpy(filepath, argv[1], sizeof(filepath));
 	}
 	else {
-		BLI_current_working_dir(filepath, sizeof(filepath));
-		BLI_add_slash(filepath);
+		printf("%s: no filepath argument given\n", __func__);
+		exit(1);
 	}
 
 	if (IMB_isanim(filepath)) {
 		/* OCIO_TODO: support different input color spaces */
+		struct anim *anim;
 		anim = IMB_open_anim(filepath, IB_rect, 0, NULL);
 		if (anim) {
 			ibuf = IMB_anim_absolute(anim, 0, IMB_TC_NONE, IMB_PROXY_NONE);
@@ -1235,12 +1238,6 @@ static char *wm_main_playanim_intern(int argc, const char **argv)
 		printf("%s: '%s' couldn't open\n", __func__, filepath);
 		exit(1);
 	}
-
-#if 0 //XXX25
-#if !defined(WIN32) && !defined(__APPLE__)
-	if (fork()) exit(0);
-#endif
-#endif //XXX25
 
 	{
 
@@ -1485,13 +1482,13 @@ static char *wm_main_playanim_intern(int argc, const char **argv)
 			}
 		}
 	}
-	ps.picture = picsbase.first;
-	anim = NULL;
-	while (ps.picture) {
-		if (ps.picture && ps.picture->anim && (anim != ps.picture->anim)) {
-			// to prevent divx crashes
-			anim = ps.picture->anim;
-			IMB_close_anim(anim);
+	while ((ps.picture = BLI_pophead(&picsbase))) {
+		if (ps.picture->anim) {
+			if ((ps.picture->next == NULL) ||
+			    (ps.picture->next->anim != ps.picture->anim))
+			{
+				IMB_close_anim(ps.picture->anim);
+			}
 		}
 
 		if (ps.picture->ibuf) {
@@ -1501,7 +1498,8 @@ static char *wm_main_playanim_intern(int argc, const char **argv)
 			MEM_freeN(ps.picture->mem);
 		}
 
-		ps.picture = ps.picture->next;
+		MEM_freeN((void *)ps.picture->name);
+		MEM_freeN(ps.picture);
 	}
 
 	/* cleanup */
@@ -1514,22 +1512,22 @@ static char *wm_main_playanim_intern(int argc, const char **argv)
 	added_images = 0;
 
 #ifdef WITH_AUDASPACE
-	if (playback_handle)
+	if (playback_handle) {
 		AUD_Handle_stop(playback_handle);
-	if (scrub_handle)
+		playback_handle = NULL;
+	}
+	if (scrub_handle) {
 		AUD_Handle_stop(scrub_handle);
+		scrub_handle = NULL;
+	}
 	AUD_Sound_free(source);
-	AUD_exit(audio_device);
+	source = NULL;
 #endif
-
-#if 0 // XXX25
-	free_blender();
-#else
 	/* we still miss freeing a lot!,
 	 * but many areas could skip initialization too for anim play */
 	
 	BLF_exit();
-#endif
+
 	GHOST_DisposeWindow(g_WS.ghost_system, g_WS.ghost_window);
 
 	/* early exit, IMB and BKE should be exited only in end */
@@ -1557,18 +1555,43 @@ static char *wm_main_playanim_intern(int argc, const char **argv)
 
 void WM_main_playanim(int argc, const char **argv)
 {
+	const char *argv_next[2];
 	bool looping = true;
+
+#ifdef WITH_AUDASPACE
+	{
+		AUD_DeviceSpecs specs;
+
+		specs.rate = AUD_RATE_48000;
+		specs.format = AUD_FORMAT_S16;
+		specs.channels = AUD_CHANNELS_STEREO;
+
+		AUD_initOnce();
+
+		if (!(audio_device = AUD_init("OpenAL", specs, 1024, "Blender"))) {
+			audio_device = AUD_init("Null", specs, 0, "Blender");
+		}
+	}
+#endif
 
 	while (looping) {
 		const char *filepath = wm_main_playanim_intern(argc, argv);
 
 		if (filepath) {	/* use simple args */
-			argv[1] = "-a";
-			argv[2] = filepath;
-			argc = 3;
+			argv_next[0] = argv[0];
+			argv_next[1] = filepath;
+			argc = 2;
+
+			/* continue with new args */
+			argv = argv_next;
 		}
 		else {
 			looping = false;
 		}
 	}
+
+#ifdef WITH_AUDASPACE
+	AUD_exit(audio_device);
+	AUD_exitOnce();
+#endif
 }

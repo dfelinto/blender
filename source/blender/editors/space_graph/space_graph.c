@@ -119,7 +119,7 @@ static SpaceLink *graph_new(const bContext *C)
 	ar->alignment = RGN_ALIGN_BOTTOM;
 	
 	/* channels */
-	ar = MEM_callocN(sizeof(ARegion), "channels area for graphedit");
+	ar = MEM_callocN(sizeof(ARegion), "channels region for graphedit");
 	
 	BLI_addtail(&sipo->regionbase, ar);
 	ar->regiontype = RGN_TYPE_CHANNELS;
@@ -128,15 +128,15 @@ static SpaceLink *graph_new(const bContext *C)
 	ar->v2d.scroll = (V2D_SCROLL_RIGHT | V2D_SCROLL_BOTTOM);
 	
 	/* ui buttons */
-	ar = MEM_callocN(sizeof(ARegion), "buttons area for graphedit");
+	ar = MEM_callocN(sizeof(ARegion), "buttons region for graphedit");
 	
 	BLI_addtail(&sipo->regionbase, ar);
 	ar->regiontype = RGN_TYPE_UI;
 	ar->alignment = RGN_ALIGN_RIGHT;
 	ar->flag = RGN_FLAG_HIDDEN;
 	
-	/* main area */
-	ar = MEM_callocN(sizeof(ARegion), "main area for graphedit");
+	/* main region */
+	ar = MEM_callocN(sizeof(ARegion), "main region for graphedit");
 	
 	BLI_addtail(&sipo->regionbase, ar);
 	ar->regiontype = RGN_TYPE_WINDOW;
@@ -208,7 +208,7 @@ static SpaceLink *graph_duplicate(SpaceLink *sl)
 }
 
 /* add handlers, stuff you only do once or on area/region changes */
-static void graph_main_area_init(wmWindowManager *wm, ARegion *ar)
+static void graph_main_region_init(wmWindowManager *wm, ARegion *ar)
 {
 	wmKeyMap *keymap;
 	
@@ -221,7 +221,7 @@ static void graph_main_area_init(wmWindowManager *wm, ARegion *ar)
 	WM_event_add_keymap_handler(&ar->handlers, keymap);
 }
 
-static void graph_main_area_draw(const bContext *C, ARegion *ar)
+static void graph_main_region_draw(const bContext *C, ARegion *ar)
 {
 	/* draw entirely, view changes should be handled here */
 	SpaceIpo *sipo = CTX_wm_space_graph(C);
@@ -240,7 +240,7 @@ static void graph_main_area_draw(const bContext *C, ARegion *ar)
 	UI_view2d_view_ortho(v2d);
 	
 	/* grid */
-	unitx = (sipo->flag & SIPO_DRAWTIME) ? V2D_UNIT_SECONDS : V2D_UNIT_FRAMESCALE;
+	unitx = ((sipo->mode == SIPO_MODE_ANIMATION) && (sipo->flag & SIPO_DRAWTIME)) ? V2D_UNIT_SECONDS : V2D_UNIT_FRAMESCALE;
 	grid = UI_view2d_grid_calc(CTX_data_scene(C), v2d, unitx, V2D_GRID_NOCLAMP, unity, V2D_GRID_NOCLAMP, ar->winx, ar->winy);
 	UI_view2d_grid_draw(v2d, grid, V2D_GRIDLINES_ALL);
 	
@@ -267,29 +267,45 @@ static void graph_main_area_draw(const bContext *C, ARegion *ar)
 	
 	/* horizontal component of value-cursor (value line before the current frame line) */
 	if ((sipo->flag & SIPO_NODRAWCURSOR) == 0) {
-		float vec[2];
+
+		float y = sipo->cursorVal;
 		
 		/* Draw a green line to indicate the cursor value */
-		vec[1] = sipo->cursorVal;
-		
 		UI_ThemeColorShadeAlpha(TH_CFRAME, -10, -50);
-		glLineWidth(2.0);
-		
 		glEnable(GL_BLEND);
-		glBegin(GL_LINE_STRIP);
-		vec[0] = v2d->cur.xmin;
-		glVertex2fv(vec);
-			
-		vec[0] = v2d->cur.xmax;
-		glVertex2fv(vec);
-		glEnd(); // GL_LINE_STRIP
+		glLineWidth(2.0);
+
+		glBegin(GL_LINES);
+		glVertex2f(v2d->cur.xmin, y);
+		glVertex2f(v2d->cur.xmax, y);
+		glEnd();
+
 		glDisable(GL_BLEND);
 	}
 	
-	/* current frame */
-	if (sipo->flag & SIPO_DRAWTIME) flag |= DRAWCFRA_UNIT_SECONDS;
-	if ((sipo->flag & SIPO_NODRAWCFRANUM) == 0) flag |= DRAWCFRA_SHOW_NUMBOX;
-	ANIM_draw_cfra(C, v2d, flag);
+	/* current frame or vertical component of vertical component of the cursor */
+	if (sipo->mode == SIPO_MODE_DRIVERS) {
+		/* cursor x-value */
+		float x = sipo->cursorTime;
+		
+		/* to help differentiate this from the current frame, draw slightly darker like the horizontal one */
+		UI_ThemeColorShadeAlpha(TH_CFRAME, -40, -50);
+		glEnable(GL_BLEND);
+		glLineWidth(2.0);
+		
+		glBegin(GL_LINES);
+		glVertex2f(x, v2d->cur.ymin);
+		glVertex2f(x, v2d->cur.ymax);
+		glEnd();
+
+		glDisable(GL_BLEND);
+	}
+	else {
+		/* current frame */
+		if (sipo->flag & SIPO_DRAWTIME) flag |= DRAWCFRA_UNIT_SECONDS;
+		if ((sipo->flag & SIPO_NODRAWCFRANUM) == 0) flag |= DRAWCFRA_SHOW_NUMBOX;
+		ANIM_draw_cfra(C, v2d, flag);
+	}
 	
 	/* markers */
 	UI_view2d_view_orthoSpecial(ar, v2d, 1);
@@ -313,7 +329,7 @@ static void graph_main_area_draw(const bContext *C, ARegion *ar)
 	UI_view2d_scrollers_free(scrollers);
 }
 
-static void graph_channel_area_init(wmWindowManager *wm, ARegion *ar)
+static void graph_channel_region_init(wmWindowManager *wm, ARegion *ar)
 {
 	wmKeyMap *keymap;
 	
@@ -332,7 +348,7 @@ static void graph_channel_area_init(wmWindowManager *wm, ARegion *ar)
 	WM_event_add_keymap_handler(&ar->handlers, keymap);
 }
 
-static void graph_channel_area_draw(const bContext *C, ARegion *ar)
+static void graph_channel_region_draw(const bContext *C, ARegion *ar)
 {
 	bAnimContext ac;
 	View2D *v2d = &ar->v2d;
@@ -361,18 +377,18 @@ static void graph_channel_area_draw(const bContext *C, ARegion *ar)
 }
 
 /* add handlers, stuff you only do once or on area/region changes */
-static void graph_header_area_init(wmWindowManager *UNUSED(wm), ARegion *ar)
+static void graph_header_region_init(wmWindowManager *UNUSED(wm), ARegion *ar)
 {
 	ED_region_header_init(ar);
 }
 
-static void graph_header_area_draw(const bContext *C, ARegion *ar)
+static void graph_header_region_draw(const bContext *C, ARegion *ar)
 {
 	ED_region_header(C, ar);
 }
 
 /* add handlers, stuff you only do once or on area/region changes */
-static void graph_buttons_area_init(wmWindowManager *wm, ARegion *ar)
+static void graph_buttons_region_init(wmWindowManager *wm, ARegion *ar)
 {
 	wmKeyMap *keymap;
 	
@@ -382,7 +398,7 @@ static void graph_buttons_area_init(wmWindowManager *wm, ARegion *ar)
 	WM_event_add_keymap_handler_bb(&ar->handlers, keymap, &ar->v2d.mask, &ar->winrct);
 }
 
-static void graph_buttons_area_draw(const bContext *C, ARegion *ar)
+static void graph_buttons_region_draw(const bContext *C, ARegion *ar)
 {
 	ED_region_panels(C, ar, NULL, -1, true);
 }
@@ -632,8 +648,8 @@ void ED_spacetype_ipo(void)
 	/* regions: main window */
 	art = MEM_callocN(sizeof(ARegionType), "spacetype graphedit region");
 	art->regionid = RGN_TYPE_WINDOW;
-	art->init = graph_main_area_init;
-	art->draw = graph_main_area_draw;
+	art->init = graph_main_region_init;
+	art->draw = graph_main_region_draw;
 	art->listener = graph_region_listener;
 	art->keymapflag = ED_KEYMAP_VIEW2D | ED_KEYMAP_MARKERS | ED_KEYMAP_ANIMATION | ED_KEYMAP_FRAMES;
 
@@ -645,8 +661,8 @@ void ED_spacetype_ipo(void)
 	art->prefsizey = HEADERY;
 	art->keymapflag = ED_KEYMAP_UI | ED_KEYMAP_VIEW2D | ED_KEYMAP_FRAMES | ED_KEYMAP_HEADER;
 	art->listener = graph_region_listener;
-	art->init = graph_header_area_init;
-	art->draw = graph_header_area_draw;
+	art->init = graph_header_region_init;
+	art->draw = graph_header_region_draw;
 	
 	BLI_addhead(&st->regiontypes, art);
 	
@@ -656,8 +672,8 @@ void ED_spacetype_ipo(void)
 	art->prefsizex = 200 + V2D_SCROLL_WIDTH; /* 200 is the 'standard', but due to scrollers, we want a bit more to fit the lock icons in */
 	art->keymapflag = ED_KEYMAP_UI | ED_KEYMAP_VIEW2D | ED_KEYMAP_FRAMES;
 	art->listener = graph_region_listener;
-	art->init = graph_channel_area_init;
-	art->draw = graph_channel_area_draw;
+	art->init = graph_channel_region_init;
+	art->draw = graph_channel_region_draw;
 	
 	BLI_addhead(&st->regiontypes, art);
 	
@@ -665,10 +681,10 @@ void ED_spacetype_ipo(void)
 	art = MEM_callocN(sizeof(ARegionType), "spacetype graphedit region");
 	art->regionid = RGN_TYPE_UI;
 	art->prefsizex = 200;
-	art->keymapflag = ED_KEYMAP_UI;
+	art->keymapflag = ED_KEYMAP_UI | ED_KEYMAP_FRAMES;
 	art->listener = graph_region_listener;
-	art->init = graph_buttons_area_init;
-	art->draw = graph_buttons_area_draw;
+	art->init = graph_buttons_region_init;
+	art->draw = graph_buttons_region_draw;
 	
 	BLI_addhead(&st->regiontypes, art);
 

@@ -103,6 +103,23 @@ macro(file_list_suffix
 
 endmacro()
 
+if(UNIX AND NOT APPLE)
+	macro(find_package_static)
+		set(_cmake_find_library_suffixes_back ${CMAKE_FIND_LIBRARY_SUFFIXES})
+		set(CMAKE_FIND_LIBRARY_SUFFIXES .a ${CMAKE_FIND_LIBRARY_SUFFIXES})
+		find_package(${ARGV})
+		set(CMAKE_FIND_LIBRARY_SUFFIXES ${_cmake_find_library_suffixes_back})
+		unset(_cmake_find_library_suffixes_back)
+	endmacro()
+
+	macro(find_library_static)
+		set(_cmake_find_library_suffixes_back ${CMAKE_FIND_LIBRARY_SUFFIXES})
+		set(CMAKE_FIND_LIBRARY_SUFFIXES .a ${CMAKE_FIND_LIBRARY_SUFFIXES})
+		find_library(${ARGV})
+		set(CMAKE_FIND_LIBRARY_SUFFIXES ${_cmake_find_library_suffixes_back})
+		unset(_cmake_find_library_suffixes_back)
+	endmacro()
+endif()
 
 function(target_link_libraries_optimized
 	TARGET
@@ -122,22 +139,6 @@ function(target_link_libraries_debug
 	foreach(_LIB ${LIBS})
 		target_link_libraries(${TARGET} debug "${_LIB}")
 	endforeach()
-endfunction()
-
-function(target_link_libraries_decoupled
-	target
-	libraries_var
-	)
-
-	if(NOT MSVC)
-		target_link_libraries(${target} ${${libraries_var}})
-	else()
-		# For MSVC we link to different libraries depending whether
-		# release or debug target is being built.
-		file_list_suffix(_libraries_debug "${${libraries_var}}" "_d")
-		target_link_libraries_debug(${target} "${_libraries_debug}")
-		target_link_libraries_optimized(${target} "${${libraries_var}}")
-	endif()
 endfunction()
 
 # Nicer makefiles with -I/1/foo/ instead of -I/1/2/3/../../foo/
@@ -239,6 +240,9 @@ endfunction()
 
 function(SETUP_LIBDIRS)
 
+	# NOTE: For all new libraries, use absolute library paths.
+	# This should eventually be phased out.
+
 	link_directories(${JPEG_LIBPATH} ${PNG_LIBPATH} ${ZLIB_LIBPATH} ${FREETYPE_LIBPATH})
 
 	if(WITH_PYTHON)  #  AND NOT WITH_PYTHON_MODULE  # WIN32 needs
@@ -265,11 +269,8 @@ function(SETUP_LIBDIRS)
 	if(WITH_OPENCOLORIO)
 		link_directories(${OPENCOLORIO_LIBPATH})
 	endif()
-	if(WITH_IMAGE_OPENJPEG AND WITH_SYSTEM_OPENJPEG)
-		link_directories(${OPENJPEG_LIBPATH})
-	endif()
-	if(WITH_CODEC_QUICKTIME)
-		link_directories(${QUICKTIME_LIBPATH})
+	if(WITH_OPENVDB)
+		link_directories(${OPENVDB_LIBPATH})
 	endif()
 	if(WITH_OPENAL)
 		link_directories(${OPENAL_LIBPATH})
@@ -285,14 +286,12 @@ function(SETUP_LIBDIRS)
 	endif()
 	if(WITH_OPENCOLLADA)
 		link_directories(${OPENCOLLADA_LIBPATH})
-		link_directories(${PCRE_LIBPATH})
-		link_directories(${EXPAT_LIBPATH})
+		## Never set
+		# link_directories(${PCRE_LIBPATH})
+		# link_directories(${EXPAT_LIBPATH})
 	endif()
 	if(WITH_LLVM)
 		link_directories(${LLVM_LIBPATH})
-	endif()
-	if(WITH_MEM_JEMALLOC)
-		link_directories(${JEMALLOC_LIBPATH})
 	endif()
 
 	if(WIN32 AND NOT UNIX)
@@ -383,6 +382,9 @@ function(setup_liblinks
 			target_link_libraries(${target} ${OPENSUBDIV_LIBRARIES})
 		endif()
 	endif()
+	if(WITH_OPENVDB)
+		target_link_libraries(${target} ${OPENVDB_LIBRARIES} ${TBB_LIBRARIES})
+	endif()
 	if(WITH_CYCLES_OSL)
 		target_link_libraries(${target} ${OSL_LIBRARIES})
 	endif()
@@ -394,14 +396,7 @@ function(setup_liblinks
 	endif()
 	target_link_libraries(${target} ${JPEG_LIBRARIES})
 	if(WITH_IMAGE_OPENEXR)
-		if(WIN32 AND NOT UNIX AND NOT CMAKE_COMPILER_IS_GNUCC)
-			file_list_suffix(OPENEXR_LIBRARIES_DEBUG "${OPENEXR_LIBRARIES}" "_d")
-			target_link_libraries_debug(${target} "${OPENEXR_LIBRARIES_DEBUG}")
-			target_link_libraries_optimized(${target} "${OPENEXR_LIBRARIES}")
-			unset(OPENEXR_LIBRARIES_DEBUG)
-		else()
-			target_link_libraries(${target} ${OPENEXR_LIBRARIES})
-		endif()
+		target_link_libraries(${target} ${OPENEXR_LIBRARIES})
 	endif()
 	if(WITH_IMAGE_OPENJPEG AND WITH_SYSTEM_OPENJPEG)
 		target_link_libraries(${target} ${OPENJPEG_LIBRARIES})
@@ -440,9 +435,6 @@ function(setup_liblinks
 	if(WITH_MEM_JEMALLOC)
 		target_link_libraries(${target} ${JEMALLOC_LIBRARIES})
 	endif()
-	if(WITH_INPUT_NDOF)
-		target_link_libraries(${target} ${NDOF_LIBRARIES})
-	endif()
 	if(WITH_MOD_CLOTH_ELTOPO)
 		target_link_libraries(${target} ${LAPACK_LIBRARIES})
 	endif()
@@ -452,11 +444,23 @@ function(setup_liblinks
 	if(WIN32 AND NOT UNIX)
 		target_link_libraries(${target} ${PTHREADS_LIBRARIES})
 	endif()
+	if(UNIX AND NOT APPLE)
+		if(WITH_OPENMP_STATIC)
+			target_link_libraries(${target} ${OpenMP_LIBRARIES})
+		endif()
+		if(WITH_INPUT_NDOF)
+			target_link_libraries(${target} ${NDOF_LIBRARIES})
+		endif()
+	endif()
 
 	# We put CLEW and CUEW here because OPENSUBDIV_LIBRARIES dpeends on them..
 	if(WITH_CYCLES OR WITH_COMPOSITOR OR WITH_OPENSUBDIV)
 		target_link_libraries(${target} "extern_clew")
-		target_link_libraries(${target} "extern_cuew")
+		if(WITH_CUDA_DYNLOAD)
+			target_link_libraries(${target} "extern_cuew")
+		else()
+			target_link_libraries(${target} ${CUDA_CUDA_LIBRARY})
+		endif()
 	endif()
 
 	#system libraries with no dependencies such as platform link libs or opengl should go last
@@ -483,6 +487,7 @@ function(SETUP_BLENDER_SORTED_LIBS)
 	if(WITH_CYCLES)
 		list(APPEND BLENDER_LINK_LIBS
 			cycles_render
+			cycles_graph
 			cycles_bvh
 			cycles_device
 			cycles_kernel
@@ -547,11 +552,11 @@ function(SETUP_BLENDER_SORTED_LIBS)
 		bf_modifiers
 		bf_bmesh
 		bf_gpu
+		bf_blenloader
 		bf_blenkernel
 		bf_physics
 		bf_nodes
 		bf_rna
-		bf_blenloader
 		bf_imbuf
 		bf_blenlib
 		bf_depsgraph
@@ -574,7 +579,7 @@ function(SETUP_BLENDER_SORTED_LIBS)
 		ge_phys_bullet
 		bf_intern_smoke
 		extern_lzma
-		extern_colamd
+		extern_curve_fit_nd
 		ge_logic_ketsji
 		extern_recastnavigation
 		ge_logic
@@ -587,7 +592,6 @@ function(SETUP_BLENDER_SORTED_LIBS)
 		ge_logic_loopbacknetwork
 		bf_intern_moto
 		extern_openjpeg
-		extern_redcode
 		ge_videotex
 		bf_dna
 		bf_blenfont
@@ -597,19 +601,20 @@ function(SETUP_BLENDER_SORTED_LIBS)
 		bf_intern_dualcon
 		bf_intern_cycles
 		cycles_render
+		cycles_graph
 		cycles_bvh
 		cycles_device
 		cycles_kernel
 		cycles_util
 		cycles_subd
-		bf_intern_raskter
 		bf_intern_opencolorio
+		bf_intern_eigen
 		extern_rangetree
 		extern_wcwidth
-		extern_libmv
+		bf_intern_libmv
 		extern_glog
+		extern_gflags
 		extern_sdlew
-		extern_eigen3
 
 		bf_intern_glew_mx
 	)
@@ -656,10 +661,6 @@ function(SETUP_BLENDER_SORTED_LIBS)
 		list(APPEND BLENDER_SORTED_LIBS bf_quicktime)
 	endif()
 
-	if(WITH_INPUT_NDOF)
-		list(APPEND BLENDER_SORTED_LIBS bf_intern_ghostndof3dconnexion)
-	endif()
-	
 	if(WITH_MOD_BOOLEAN)
 		list(APPEND BLENDER_SORTED_LIBS extern_carve)
 	endif()
@@ -676,10 +677,6 @@ function(SETUP_BLENDER_SORTED_LIBS)
 		list(APPEND BLENDER_SORTED_LIBS bf_intern_locale)
 	endif()
 
-	if(WITH_OPENNL)
-		list_insert_after(BLENDER_SORTED_LIBS "bf_render" "bf_intern_opennl")
-	endif()
-
 	if(WITH_BULLET)
 		list_insert_after(BLENDER_SORTED_LIBS "bf_blenkernel" "bf_intern_rigidbody")
 	endif()
@@ -688,8 +685,20 @@ function(SETUP_BLENDER_SORTED_LIBS)
 		list_insert_after(BLENDER_SORTED_LIBS "ge_logic_ngnetwork" "extern_bullet")
 	endif()
 
+	if(WITH_GAMEENGINE_DECKLINK)
+		list(APPEND BLENDER_SORTED_LIBS bf_intern_decklink)
+	endif()
+
+	if(WIN32)
+		list(APPEND BLENDER_SORTED_LIBS bf_intern_gpudirect)
+	endif()
+
 	if(WITH_OPENSUBDIV)
 		list(APPEND BLENDER_SORTED_LIBS bf_intern_opensubdiv)
+	endif()
+
+	if(WITH_OPENVDB)
+		list(APPEND BLENDER_SORTED_LIBS bf_intern_openvdb)
 	endif()
 
 	foreach(SORTLIB ${BLENDER_SORTED_LIBS})
@@ -778,15 +787,11 @@ macro(TEST_SSE_SUPPORT
 	unset(CMAKE_REQUIRED_FLAGS)
 endmacro()
 
-macro(TEST_STDBOOL_SUPPORT)
-	include(CheckCSourceRuns)
-
-	# This program will compile correctly if and only if
-	# this C compiler supports C99 stdbool.
-	check_c_source_runs("
-		#include <stdbool.h>
-		int main(void) { return (int)false; }"
-	HAVE_STDBOOL_H)
+# Only print message if running CMake first time
+macro(message_first_run)
+	if(FIRST_RUN)
+		message(${ARGV})
+	endif()
 endmacro()
 
 macro(TEST_UNORDERED_MAP_SUPPORT)
@@ -795,16 +800,24 @@ macro(TEST_UNORDERED_MAP_SUPPORT)
 	# and define the include path
 	# This module defines
 	#  HAVE_UNORDERED_MAP, whether unordered_map implementation was found
-	#  
+	#
 	#  HAVE_STD_UNORDERED_MAP_HEADER, <unordered_map.h> was found
 	#  HAVE_UNORDERED_MAP_IN_STD_NAMESPACE, unordered_map is in namespace std
 	#  HAVE_UNORDERED_MAP_IN_TR1_NAMESPACE, unordered_map is in namespace std::tr1
-	#  
+	#
 	#  UNORDERED_MAP_INCLUDE_PREFIX, include path prefix for unordered_map, if found
 	#  UNORDERED_MAP_NAMESPACE, namespace for unordered_map, if found
 
 	include(CheckIncludeFileCXX)
-	CHECK_INCLUDE_FILE_CXX("unordered_map" HAVE_STD_UNORDERED_MAP_HEADER)
+
+	# Workaround for newer GCC (6.x+) where C++11 was enabled by default, which lead us
+	# to a situation when there is <unordered_map> include but which can't be used uless
+	# C++11 is enabled.
+	if(CMAKE_COMPILER_IS_GNUCC AND (NOT "${CMAKE_C_COMPILER_VERSION}" VERSION_LESS "6.0") AND (NOT WITH_CXX11))
+		set(HAVE_STD_UNORDERED_MAP_HEADER False)
+	else()
+		CHECK_INCLUDE_FILE_CXX("unordered_map" HAVE_STD_UNORDERED_MAP_HEADER)
+	endif()
 	if(HAVE_STD_UNORDERED_MAP_HEADER)
 		# Even so we've found unordered_map header file it doesn't
 		# mean unordered_map and unordered_set will be declared in
@@ -823,7 +836,7 @@ macro(TEST_UNORDERED_MAP_SUPPORT)
 		                          }"
 		                          HAVE_UNORDERED_MAP_IN_STD_NAMESPACE)
 		if(HAVE_UNORDERED_MAP_IN_STD_NAMESPACE)
-			message(STATUS "Found unordered_map/set in std namespace.")
+			message_first_run(STATUS "Found unordered_map/set in std namespace.")
 
 			set(HAVE_UNORDERED_MAP "TRUE")
 			set(UNORDERED_MAP_INCLUDE_PREFIX "")
@@ -836,26 +849,26 @@ macro(TEST_UNORDERED_MAP_SUPPORT)
 			                          }"
 			                          HAVE_UNORDERED_MAP_IN_TR1_NAMESPACE)
 			if(HAVE_UNORDERED_MAP_IN_TR1_NAMESPACE)
-				message(STATUS "Found unordered_map/set in std::tr1 namespace.")
+				message_first_run(STATUS "Found unordered_map/set in std::tr1 namespace.")
 
 				set(HAVE_UNORDERED_MAP "TRUE")
 				set(UNORDERED_MAP_INCLUDE_PREFIX "")
 				set(UNORDERED_MAP_NAMESPACE "std::tr1")
 			else()
-				message(STATUS "Found <unordered_map> but cannot find either std::unordered_map "
-				        "or std::tr1::unordered_map.")
+				message_first_run(STATUS "Found <unordered_map> but cannot find either std::unordered_map "
+				                  "or std::tr1::unordered_map.")
 			endif()
 		endif()
 	else()
 		CHECK_INCLUDE_FILE_CXX("tr1/unordered_map" HAVE_UNORDERED_MAP_IN_TR1_NAMESPACE)
 		if(HAVE_UNORDERED_MAP_IN_TR1_NAMESPACE)
-			message(STATUS "Found unordered_map/set in std::tr1 namespace.")
+			message_first_run(STATUS "Found unordered_map/set in std::tr1 namespace.")
 
 			set(HAVE_UNORDERED_MAP "TRUE")
 			set(UNORDERED_MAP_INCLUDE_PREFIX "tr1")
 			set(UNORDERED_MAP_NAMESPACE "std::tr1")
 		else()
-			message(STATUS "Unable to find <unordered_map> or <tr1/unordered_map>. ")
+			message_first_run(STATUS "Unable to find <unordered_map> or <tr1/unordered_map>. ")
 		endif()
 	endif()
 endmacro()
@@ -874,8 +887,16 @@ macro(TEST_SHARED_PTR_SUPPORT)
 	# otherwise it's assumed to be defined in std namespace.
 
 	include(CheckIncludeFileCXX)
+	include(CheckCXXSourceCompiles)
 	set(SHARED_PTR_FOUND FALSE)
-	CHECK_INCLUDE_FILE_CXX(memory HAVE_STD_MEMORY_HEADER)
+	# Workaround for newer GCC (6.x+) where C++11 was enabled by default, which lead us
+	# to a situation when there is <unordered_map> include but which can't be used uless
+	# C++11 is enabled.
+	if(CMAKE_COMPILER_IS_GNUCC AND (NOT "${CMAKE_C_COMPILER_VERSION}" VERSION_LESS "6.0") AND (NOT WITH_CXX11))
+		set(HAVE_STD_MEMORY_HEADER False)
+	else()
+		CHECK_INCLUDE_FILE_CXX(memory HAVE_STD_MEMORY_HEADER)
+	endif()
 	if(HAVE_STD_MEMORY_HEADER)
 		# Finding the memory header doesn't mean that shared_ptr is in std
 		# namespace.
@@ -883,7 +904,6 @@ macro(TEST_SHARED_PTR_SUPPORT)
 		# In particular, MSVC 2008 has shared_ptr declared in std::tr1.  In
 		# order to support this, we do an extra check to see which namespace
 		# should be used.
-		include(CheckCXXSourceCompiles)
 		CHECK_CXX_SOURCE_COMPILES("#include <memory>
 		                           int main() {
 		                             std::shared_ptr<int> int_ptr;
@@ -892,7 +912,7 @@ macro(TEST_SHARED_PTR_SUPPORT)
 		                          HAVE_SHARED_PTR_IN_STD_NAMESPACE)
 
 		if(HAVE_SHARED_PTR_IN_STD_NAMESPACE)
-			message("-- Found shared_ptr in std namespace using <memory> header.")
+			message_first_run("-- Found shared_ptr in std namespace using <memory> header.")
 			set(SHARED_PTR_FOUND TRUE)
 		else()
 			CHECK_CXX_SOURCE_COMPILES("#include <memory>
@@ -902,7 +922,7 @@ macro(TEST_SHARED_PTR_SUPPORT)
 			                           }"
 			                          HAVE_SHARED_PTR_IN_TR1_NAMESPACE)
 			if(HAVE_SHARED_PTR_IN_TR1_NAMESPACE)
-				message("-- Found shared_ptr in std::tr1 namespace using <memory> header.")
+				message_first_run("-- Found shared_ptr in std::tr1 namespace using <memory> header.")
 				set(SHARED_PTR_TR1_NAMESPACE TRUE)
 				set(SHARED_PTR_FOUND TRUE)
 			endif()
@@ -923,7 +943,7 @@ macro(TEST_SHARED_PTR_SUPPORT)
 			                           }"
 			                           HAVE_SHARED_PTR_IN_TR1_NAMESPACE_FROM_TR1_MEMORY_HEADER)
 			if(HAVE_SHARED_PTR_IN_TR1_NAMESPACE_FROM_TR1_MEMORY_HEADER)
-				message("-- Found shared_ptr in std::tr1 namespace using <tr1/memory> header.")
+				message_first_run("-- Found shared_ptr in std::tr1 namespace using <tr1/memory> header.")
 				set(SHARED_PTR_TR1_MEMORY_HEADER TRUE)
 				set(SHARED_PTR_TR1_NAMESPACE TRUE)
 				set(SHARED_PTR_FOUND TRUE)
@@ -969,6 +989,7 @@ macro(remove_strict_flags)
 		remove_cc_flag(
 			"-Wstrict-prototypes"
 			"-Wmissing-prototypes"
+			"-Wmissing-declarations"
 			"-Wmissing-format-attribute"
 			"-Wunused-local-typedefs"
 			"-Wunused-macros"
@@ -1050,6 +1071,19 @@ macro(remove_strict_flags_file
 
 endmacro()
 
+# External libs may need 'signed char' to be default.
+macro(remove_cc_flag_unsigned_char)
+	if(CMAKE_C_COMPILER_ID MATCHES "^(GNU|Clang|Intel)$")
+		remove_cc_flag("-funsigned-char")
+	elseif(MSVC)
+		remove_cc_flag("/J")
+	else()
+		message(WARNING
+			"Compiler '${CMAKE_C_COMPILER_ID}' failed to disable 'unsigned char' flag."
+			"Build files need updating."
+		)
+	endif()
+endmacro()
 
 function(ADD_CHECK_C_COMPILER_FLAG
 	_CFLAGS
@@ -1096,10 +1130,10 @@ function(get_blender_version)
 	# - BLENDER_VERSION_CYCLE (alpha, beta, rc, release)
 
 	# So cmake depends on BKE_blender.h, beware of inf-loops!
-	CONFIGURE_FILE(${CMAKE_SOURCE_DIR}/source/blender/blenkernel/BKE_blender.h
-	               ${CMAKE_BINARY_DIR}/source/blender/blenkernel/BKE_blender.h.done)
+	CONFIGURE_FILE(${CMAKE_SOURCE_DIR}/source/blender/blenkernel/BKE_blender_version.h
+	               ${CMAKE_BINARY_DIR}/source/blender/blenkernel/BKE_blender_version.h.done)
 
-	file(STRINGS ${CMAKE_SOURCE_DIR}/source/blender/blenkernel/BKE_blender.h _contents REGEX "^#define[ \t]+BLENDER_.*$")
+	file(STRINGS ${CMAKE_SOURCE_DIR}/source/blender/blenkernel/BKE_blender_version.h _contents REGEX "^#define[ \t]+BLENDER_.*$")
 
 	string(REGEX REPLACE ".*#define[ \t]+BLENDER_VERSION[ \t]+([0-9]+).*" "\\1" _out_version "${_contents}")
 	string(REGEX REPLACE ".*#define[ \t]+BLENDER_SUBVERSION[ \t]+([0-9]+).*" "\\1" _out_subversion "${_contents}")
@@ -1192,7 +1226,7 @@ macro(blender_project_hack_post)
 		# MINGW workaround for -ladvapi32 being included which surprisingly causes
 		# string formatting of floats, eg: printf("%.*f", 3, value). to crash blender
 		# with a meaningless stack trace. by overriding this flag we ensure we only
-		# have libs we define and that cmake & scons builds match.
+		# have libs we define.
 		set(CMAKE_C_STANDARD_LIBRARIES "" CACHE STRING "" FORCE)
 		set(CMAKE_CXX_STANDARD_LIBRARIES "" CACHE STRING "" FORCE)
 		mark_as_advanced(
@@ -1282,7 +1316,7 @@ function(data_to_c
 	add_custom_command(
 		OUTPUT ${file_to}
 		COMMAND ${CMAKE_COMMAND} -E make_directory ${_file_to_path}
-		COMMAND ${CMAKE_BINARY_DIR}/bin/${CMAKE_CFG_INTDIR}/datatoc ${file_from} ${file_to}
+		COMMAND "$<TARGET_FILE:datatoc>" ${file_from} ${file_to}
 		DEPENDS ${file_from} datatoc)
 
 	set_source_files_properties(${file_to} PROPERTIES GENERATED TRUE)
@@ -1307,7 +1341,7 @@ function(data_to_c_simple
 	add_custom_command(
 		OUTPUT  ${_file_to}
 		COMMAND ${CMAKE_COMMAND} -E make_directory ${_file_to_path}
-		COMMAND ${CMAKE_BINARY_DIR}/bin/${CMAKE_CFG_INTDIR}/datatoc ${_file_from} ${_file_to}
+		COMMAND "$<TARGET_FILE:datatoc>" ${_file_from} ${_file_to}
 		DEPENDS ${_file_from} datatoc)
 
 	set_source_files_properties(${_file_to} PROPERTIES GENERATED TRUE)
@@ -1340,8 +1374,8 @@ function(data_to_c_simple_icons
 		OUTPUT  ${_file_from} ${_file_to}
 		COMMAND ${CMAKE_COMMAND} -E make_directory ${_file_to_path}
 		#COMMAND python3 ${CMAKE_SOURCE_DIR}/source/blender/datatoc/datatoc_icon.py ${_path_from_abs} ${_file_from}
-		COMMAND ${CMAKE_BINARY_DIR}/bin/${CMAKE_CFG_INTDIR}/datatoc_icon ${_path_from_abs} ${_file_from}
-		COMMAND ${CMAKE_BINARY_DIR}/bin/${CMAKE_CFG_INTDIR}/datatoc ${_file_from} ${_file_to}
+		COMMAND "$<TARGET_FILE:datatoc_icon>" ${_path_from_abs} ${_file_from}
+		COMMAND "$<TARGET_FILE:datatoc>" ${_file_from} ${_file_to}
 		DEPENDS
 			${_icon_files}
 			datatoc_icon
@@ -1410,7 +1444,7 @@ function(msgfmt_simple
 	add_custom_command(
 		OUTPUT  ${_file_to}
 		COMMAND ${CMAKE_COMMAND} -E make_directory ${_file_to_path}
-		COMMAND ${CMAKE_BINARY_DIR}/bin/${CMAKE_CFG_INTDIR}/msgfmt ${_file_from} ${_file_to}
+		COMMAND "$<TARGET_FILE:msgfmt>" ${_file_from} ${_file_to}
 		DEPENDS msgfmt ${_file_from})
 
 	set_source_files_properties(${_file_to} PROPERTIES GENERATED TRUE)
@@ -1450,17 +1484,21 @@ function(find_python_package
 		)
 
 		 if(NOT EXISTS "${PYTHON_${_upper_package}_PATH}")
-			message(WARNING "'${package}' path could not be found in:\n"
-			                "'${PYTHON_LIBPATH}/python${PYTHON_VERSION}/site-packages/${package}', "
-			                "'${PYTHON_LIBPATH}/python${_PY_VER_MAJOR}/site-packages/${package}', "
-			                "'${PYTHON_LIBPATH}/python${PYTHON_VERSION}/dist-packages/${package}', "
-			                "'${PYTHON_LIBPATH}/python${_PY_VER_MAJOR}/dist-packages/${package}', "
-			                "WITH_PYTHON_INSTALL_${_upper_package} option will be ignored when installing python")
+			message(WARNING
+				"Python package '${package}' path could not be found in:\n"
+				"'${PYTHON_LIBPATH}/python${PYTHON_VERSION}/site-packages/${package}', "
+				"'${PYTHON_LIBPATH}/python${_PY_VER_MAJOR}/site-packages/${package}', "
+				"'${PYTHON_LIBPATH}/python${PYTHON_VERSION}/dist-packages/${package}', "
+				"'${PYTHON_LIBPATH}/python${_PY_VER_MAJOR}/dist-packages/${package}', "
+				"\n"
+				"The 'WITH_PYTHON_INSTALL_${_upper_package}' option will be ignored when installing Python.\n"
+				"The build will be usable, only add-ons that depend on this package won't be functional."
+			)
 			set(WITH_PYTHON_INSTALL_${_upper_package} OFF PARENT_SCOPE)
 		else()
 			message(STATUS "${package} found at '${PYTHON_${_upper_package}_PATH}'")
 		endif()
-	  endif()
+	endif()
 endfunction()
 
 # like Python's 'print(dir())'

@@ -217,7 +217,7 @@ typedef struct BMesh {
 	/* operator api stuff (must be all NULL or all alloc'd) */
 	struct BLI_mempool *vtoolflagpool, *etoolflagpool, *ftoolflagpool;
 
-	int stackdepth;
+	int toolflag_index;
 	struct BMOperator *currentop;
 	
 	CustomData vdata, edata, ldata, pdata;
@@ -276,8 +276,16 @@ enum {
 #define BM_CHECK_TYPE_ELEM(ele) \
 	CHECK_TYPE_ANY(ele, _BM_GENERIC_TYPE_ELEM_NONCONST, _BM_GENERIC_TYPE_ELEM_CONST)
 
+/* Assignment from a void* to a typed pointer is not allowed in C++,
+ * casting the LHS to void works fine though.
+ */
+#ifdef __cplusplus
+#define BM_CHECK_TYPE_ELEM_ASSIGN(ele) \
+	(BM_CHECK_TYPE_ELEM(ele)), *((void **)&ele)
+#else
 #define BM_CHECK_TYPE_ELEM_ASSIGN(ele) \
 	(BM_CHECK_TYPE_ELEM(ele)), ele
+#endif
 
 /* BMHeader->hflag (char) */
 enum {
@@ -309,7 +317,11 @@ enum {
 struct BPy_BMGeneric;
 extern void bpy_bm_generic_invalidate(struct BPy_BMGeneric *self);
 
-typedef bool (*BMElemFilterFunc)(BMElem *, void *user_data);
+typedef bool (*BMElemFilterFunc)(const BMElem *, void *user_data);
+typedef bool (*BMVertFilterFunc)(const BMVert *, void *user_data);
+typedef bool (*BMEdgeFilterFunc)(const BMEdge *, void *user_data);
+typedef bool (*BMFaceFilterFunc)(const BMFace *, void *user_data);
+typedef bool (*BMLoopFilterFunc)(const BMLoop *, void *user_data);
 
 /* defines */
 #define BM_ELEM_CD_SET_INT(ele, offset, f) { CHECK_TYPE_NONCONST(ele); \

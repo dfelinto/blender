@@ -22,7 +22,7 @@
 /* Release kernel has too much false-positive maybe-uninitialized warnings,
  * which makes it possible to miss actual warnings.
  */
-#if defined(__GNUC__) && defined(NDEBUG)
+#if (defined(__GNUC__) && !defined(__clang__)) && defined(NDEBUG)
 #  pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
 #  pragma GCC diagnostic ignored "-Wuninitialized"
 #endif
@@ -40,6 +40,7 @@
 #include "util_simd.h"
 #include "util_half.h"
 #include "util_types.h"
+#include "util_texture.h"
 
 #define ccl_addr_space
 
@@ -108,6 +109,19 @@ template<typename T> struct texture_image  {
 		return make_float4(r.x*f, r.y*f, r.z*f, r.w*f);
 	}
 
+	ccl_always_inline float4 read(uchar r)
+	{
+		float f = r*(1.0f/255.0f);
+		return make_float4(f, f, f, 1.0);
+	}
+
+	ccl_always_inline float4 read(float r)
+	{
+		/* TODO(dingto): Optimize this, so interpolation
+		 * happens on float instead of float4 */
+		return make_float4(r, r, r, 1.0f);
+	}
+
 	ccl_always_inline int wrap_periodic(int x, int width)
 	{
 		x %= width;
@@ -144,7 +158,7 @@ template<typename T> struct texture_image  {
 					iy = wrap_periodic(iy, height);
 					break;
 				case EXTENSION_CLIP:
-					if (x < 0.0f || y < 0.0f || x > 1.0f || y > 1.0f) {
+					if(x < 0.0f || y < 0.0f || x > 1.0f || y > 1.0f) {
 						return make_float4(0.0f, 0.0f, 0.0f, 0.0f);
 					}
 					/* Fall through. */
@@ -152,6 +166,9 @@ template<typename T> struct texture_image  {
 					ix = wrap_clamp(ix, width);
 					iy = wrap_clamp(iy, height);
 					break;
+				default:
+					kernel_assert(0);
+					return make_float4(0.0f, 0.0f, 0.0f, 0.0f);
 			}
 			return read(data[ix + iy*width]);
 		}
@@ -168,22 +185,20 @@ template<typename T> struct texture_image  {
 					niy = wrap_periodic(iy+1, height);
 					break;
 				case EXTENSION_CLIP:
-					if (x < 0.0f || y < 0.0f || x > 1.0f || y > 1.0f) {
+					if(x < 0.0f || y < 0.0f || x > 1.0f || y > 1.0f) {
 						return make_float4(0.0f, 0.0f, 0.0f, 0.0f);
 					}
 					/* Fall through. */
 				case EXTENSION_EXTEND:
+					nix = wrap_clamp(ix+1, width);
+					niy = wrap_clamp(iy+1, height);
+
 					ix = wrap_clamp(ix, width);
 					iy = wrap_clamp(iy, height);
-
-					if (x >= 0.0f && y >= 0.0f && x <= 1.0f && y <= 1.0f) {
-						nix = wrap_clamp(ix+1, width);
-						niy = wrap_clamp(iy+1, height);
-					}
-					else {
-						return read(data[ix + iy*width]);
-					}
 					break;
+				default:
+					kernel_assert(0);
+					return make_float4(0.0f, 0.0f, 0.0f, 0.0f);
 			}
 
 			float4 r = (1.0f - ty)*(1.0f - tx)*read(data[ix + iy*width]);
@@ -195,8 +210,8 @@ template<typename T> struct texture_image  {
 		}
 		else {
 			/* Bicubic b-spline interpolation. */
-			const float tx = frac(x*(float)width - 0.5f, &ix);
-			const float ty = frac(y*(float)height - 0.5f, &iy);
+			float tx = frac(x*(float)width - 0.5f, &ix);
+			float ty = frac(y*(float)height - 0.5f, &iy);
 			int pix, piy, nnix, nniy;
 			switch(extension) {
 				case EXTENSION_REPEAT:
@@ -213,28 +228,26 @@ template<typename T> struct texture_image  {
 					nniy = wrap_periodic(iy+2, height);
 					break;
 				case EXTENSION_CLIP:
-					if (x < 0.0f || y < 0.0f || x > 1.0f || y > 1.0f) {
+					if(x < 0.0f || y < 0.0f || x > 1.0f || y > 1.0f) {
 						return make_float4(0.0f, 0.0f, 0.0f, 0.0f);
 					}
 					/* Fall through. */
 				case EXTENSION_EXTEND:
+					pix = wrap_clamp(ix-1, width);
+					piy = wrap_clamp(iy-1, height);
+
+					nix = wrap_clamp(ix+1, width);
+					niy = wrap_clamp(iy+1, height);
+
+					nnix = wrap_clamp(ix+2, width);
+					nniy = wrap_clamp(iy+2, height);
+
 					ix = wrap_clamp(ix, width);
 					iy = wrap_clamp(iy, height);
-
-					if (x >= 0.0f && y >= 0.0f && x <= 1.0f && y <= 1.0f) {
-						pix = wrap_clamp(ix-1, width);
-						piy = wrap_clamp(iy-1, height);
-
-						nix = wrap_clamp(ix+1, width);
-						niy = wrap_clamp(iy+1, height);
-
-						nnix = wrap_clamp(ix+2, width);
-						nniy = wrap_clamp(iy+2, height);
-					}
-					else {
-						return read(data[ix + iy*width]);
-					}
 					break;
+				default:
+					kernel_assert(0);
+					return make_float4(0.0f, 0.0f, 0.0f, 0.0f);
 			}
 
 			const int xc[4] = {pix, ix, nix, nnix};
@@ -289,7 +302,9 @@ template<typename T> struct texture_image  {
 					iz = wrap_periodic(iz, depth);
 					break;
 				case EXTENSION_CLIP:
-					if (x < 0.0f || y < 0.0f || x > 1.0f || y > 1.0f) {
+					if(x < 0.0f || y < 0.0f || z < 0.0f ||
+					   x > 1.0f || y > 1.0f || z > 1.0f)
+					{
 						return make_float4(0.0f, 0.0f, 0.0f, 0.0f);
 					}
 					/* Fall through. */
@@ -298,6 +313,9 @@ template<typename T> struct texture_image  {
 					iy = wrap_clamp(iy, height);
 					iz = wrap_clamp(iz, depth);
 					break;
+				default:
+					kernel_assert(0);
+					return make_float4(0.0f, 0.0f, 0.0f, 0.0f);
 			}
 
 			return read(data[ix + iy*width + iz*width*height]);
@@ -318,24 +336,24 @@ template<typename T> struct texture_image  {
 					niz = wrap_periodic(iz+1, depth);
 					break;
 				case EXTENSION_CLIP:
-					if (x < 0.0f || y < 0.0f || x > 1.0f || y > 1.0f) {
+					if(x < 0.0f || y < 0.0f || z < 0.0f ||
+					   x > 1.0f || y > 1.0f || z > 1.0f)
+					{
 						return make_float4(0.0f, 0.0f, 0.0f, 0.0f);
 					}
 					/* Fall through. */
 				case EXTENSION_EXTEND:
+					nix = wrap_clamp(ix+1, width);
+					niy = wrap_clamp(iy+1, height);
+					niz = wrap_clamp(iz+1, depth);
+
 					ix = wrap_clamp(ix, width);
 					iy = wrap_clamp(iy, height);
 					iz = wrap_clamp(iz, depth);
-
-					if (x >= 0.0f && y >= 0.0f && x <= 1.0f && y <= 1.0f) {
-						nix = wrap_clamp(ix+1, width);
-						niy = wrap_clamp(iy+1, height);
-						niz = wrap_clamp(iz+1, depth);
-					}
-					else {
-						return read(data[ix + iy*width + iz*width*height]);
-					}
 					break;
+				default:
+					kernel_assert(0);
+					return make_float4(0.0f, 0.0f, 0.0f, 0.0f);
 			}
 
 			float4 r;
@@ -378,32 +396,32 @@ template<typename T> struct texture_image  {
 					nniz = wrap_periodic(iz+2, depth);
 					break;
 				case EXTENSION_CLIP:
-					if (x < 0.0f || y < 0.0f || x > 1.0f || y > 1.0f) {
+					if(x < 0.0f || y < 0.0f || z < 0.0f ||
+					   x > 1.0f || y > 1.0f || z > 1.0f)
+					{
 						return make_float4(0.0f, 0.0f, 0.0f, 0.0f);
 					}
 					/* Fall through. */
 				case EXTENSION_EXTEND:
+					pix = wrap_clamp(ix-1, width);
+					piy = wrap_clamp(iy-1, height);
+					piz = wrap_clamp(iz-1, depth);
+
+					nix = wrap_clamp(ix+1, width);
+					niy = wrap_clamp(iy+1, height);
+					niz = wrap_clamp(iz+1, depth);
+
+					nnix = wrap_clamp(ix+2, width);
+					nniy = wrap_clamp(iy+2, height);
+					nniz = wrap_clamp(iz+2, depth);
+
 					ix = wrap_clamp(ix, width);
 					iy = wrap_clamp(iy, height);
 					iz = wrap_clamp(iz, depth);
-
-					if (x >= 0.0f && y >= 0.0f && x <= 1.0f && y <= 1.0f) {
-						pix = wrap_clamp(ix-1, width);
-						piy = wrap_clamp(iy-1, height);
-						piz = wrap_clamp(iz-1, depth);
-
-						nix = wrap_clamp(ix+1, width);
-						niy = wrap_clamp(iy+1, height);
-						niz = wrap_clamp(iz+1, depth);
-
-						nnix = wrap_clamp(ix+2, width);
-						nniy = wrap_clamp(iy+2, height);
-						nniz = wrap_clamp(iz+2, depth);
-					}
-					else {
-						return read(data[ix + iy*width + iz*width*height]);
-					}
 					break;
+				default:
+					kernel_assert(0);
+					return make_float4(0.0f, 0.0f, 0.0f, 0.0f);
 			}
 
 			const int xc[4] = {pix, ix, nix, nnix};
@@ -466,6 +484,8 @@ typedef texture<uint> texture_uint;
 typedef texture<int> texture_int;
 typedef texture<uint4> texture_uint4;
 typedef texture<uchar4> texture_uchar4;
+typedef texture_image<float> texture_image_float;
+typedef texture_image<uchar> texture_image_uchar;
 typedef texture_image<float4> texture_image_float4;
 typedef texture_image<uchar4> texture_image_uchar4;
 
@@ -475,9 +495,10 @@ typedef texture_image<uchar4> texture_image_uchar4;
 #define kernel_tex_fetch_ssef(tex, index) (kg->tex.fetch_ssef(index))
 #define kernel_tex_fetch_ssei(tex, index) (kg->tex.fetch_ssei(index))
 #define kernel_tex_lookup(tex, t, offset, size) (kg->tex.lookup(t, offset, size))
-#define kernel_tex_image_interp(tex, x, y) ((tex < MAX_FLOAT_IMAGES) ? kg->texture_float_images[tex].interp(x, y) : kg->texture_byte_images[tex - MAX_FLOAT_IMAGES].interp(x, y))
-#define kernel_tex_image_interp_3d(tex, x, y, z) ((tex < MAX_FLOAT_IMAGES) ? kg->texture_float_images[tex].interp_3d(x, y, z) : kg->texture_byte_images[tex - MAX_FLOAT_IMAGES].interp_3d(x, y, z))
-#define kernel_tex_image_interp_3d_ex(tex, x, y, z, interpolation) ((tex < MAX_FLOAT_IMAGES) ? kg->texture_float_images[tex].interp_3d_ex(x, y, z, interpolation) : kg->texture_byte_images[tex - MAX_FLOAT_IMAGES].interp_3d_ex(x, y, z, interpolation))
+
+#define kernel_tex_image_interp(tex,x,y) kernel_tex_image_interp_impl(kg,tex,x,y)
+#define kernel_tex_image_interp_3d(tex, x, y, z) kernel_tex_image_interp_3d_impl(kg,tex,x,y,z)
+#define kernel_tex_image_interp_3d_ex(tex, x, y, z, interpolation) kernel_tex_image_interp_3d_ex_impl(kg,tex, x, y, z, interpolation)
 
 #define kernel_data (kg->__data)
 

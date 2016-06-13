@@ -37,7 +37,7 @@ endif()
 ###########################################################################
 # CUDA
 
-if(WITH_CYCLES_CUDA_BINARIES)
+if(WITH_CYCLES_CUDA_BINARIES OR NOT WITH_CUDA_DYNLOAD)
 	find_package(CUDA) # Try to auto locate CUDA toolkit
 	if(CUDA_FOUND)
 		message(STATUS "CUDA nvcc = ${CUDA_NVCC_EXECUTABLE}")
@@ -87,6 +87,13 @@ if(CYCLES_STANDALONE_REPOSITORY)
 	find_package(OpenEXR)
 
 	####
+	# OpenShadingLanguage
+	if(WITH_CYCLES_OSL)
+		find_package(OpenShadingLanguage REQUIRED)
+		find_package(LLVM REQUIRED)
+	endif()
+
+	####
 	# Boost
 	set(__boost_packages filesystem regex system thread date_time)
 	if(WITH_CYCLES_NETWORK)
@@ -96,6 +103,8 @@ if(CYCLES_STANDALONE_REPOSITORY)
 		# TODO(sergey): This is because of the way how our precompiled
 		# libraries works, could be different for someone's else libs..
 		if(APPLE OR MSVC)
+			list(APPEND __boost_packages wave)
+		elseif(NOT (${OSL_LIBRARY_VERSION_MAJOR} EQUAL "1" AND ${OSL_LIBRARY_VERSION_MINOR} LESS "6"))
 			list(APPEND __boost_packages wave)
 		endif()
 	endif()
@@ -114,13 +123,6 @@ if(CYCLES_STANDALONE_REPOSITORY)
 	set(BOOST_DEFINITIONS "-DBOOST_ALL_NO_LIB")
 
 	####
-	# OpenShadingLanguage
-	if(WITH_CYCLES_OSL)
-		find_package(OpenShadingLanguage REQUIRED)
-		find_package(LLVM REQUIRED)
-	endif()
-
-	####
 	# Logging
 	if(WITH_CYCLES_LOGGING)
 		find_package(Glog REQUIRED)
@@ -130,11 +132,11 @@ if(CYCLES_STANDALONE_REPOSITORY)
 	unset(_lib_DIR)
 else()
 	if(WIN32)
-		set(GLOG_INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/extern/libmv/third_party/glog/src/windows)
-		set(GFLAGS_INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/extern/libmv/third_party/gflags)
+		set(GLOG_INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/extern/glog/src/windows)
+		set(GFLAGS_INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/extern/gflags/src)
 	else()
-		set(GLOG_INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/extern/libmv/third_party/glog/src)
-		set(GFLAGS_INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/extern/libmv/third_party/gflags)
+		set(GLOG_INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/extern/glog/src)
+		set(GFLAGS_INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/extern/gflags/src)
 	endif()
 	set(GFLAGS_NAMESPACE "gflags")
 	set(LLVM_LIBRARIES ${LLVM_LIBRARY})

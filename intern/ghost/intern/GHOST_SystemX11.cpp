@@ -48,7 +48,7 @@
 #include "GHOST_DisplayManagerX11.h"
 #include "GHOST_EventDragnDrop.h"
 #ifdef WITH_INPUT_NDOF
-#  include "GHOST_NDOFManagerX11.h"
+#  include "GHOST_NDOFManagerUnix.h"
 #endif
 
 #ifdef WITH_XDND
@@ -75,6 +75,10 @@
 
 /* see [#34039] Fix Alt key glitch on Unity desktop */
 #define USE_UNITY_WORKAROUND
+
+/* Fix 'shortcut' part of keyboard reading code only ever using first defined keymap instead of active one.
+ * See T47228 and D1746 */
+#define USE_NON_LATIN_KB_WORKAROUND
 
 static GHOST_TKey convertXKey(KeySym key);
 
@@ -202,7 +206,7 @@ init()
 
 	if (success) {
 #ifdef WITH_INPUT_NDOF
-		m_ndofManager = new GHOST_NDOFManagerX11(*this);
+		m_ndofManager = new GHOST_NDOFManagerUnix(*this);
 #endif
 		m_displayManager = new GHOST_DisplayManagerX11(this);
 
@@ -298,7 +302,7 @@ createWindow(const STR_String& title,
 		const bool exclusive,
 		const GHOST_TEmbedderWindowID parentWindow)
 {
-	GHOST_WindowX11 *window = 0;
+	GHOST_WindowX11 *window = NULL;
 	
 	if (!m_display) return 0;
 	
@@ -306,6 +310,7 @@ createWindow(const STR_String& title,
 	                             left, top, width, height,
 	                             state, parentWindow, type,
 	                             ((glSettings.flags & GHOST_glStereoVisual) != 0), exclusive,
+	                             ((glSettings.flags & GHOST_glAlphaBackground) != 0),
 	                             glSettings.numOfAASamples, (glSettings.flags & GHOST_glDebugContext) != 0);
 
 	if (window) {
@@ -320,7 +325,7 @@ createWindow(const STR_String& title,
 		}
 		else {
 			delete window;
-			window = 0;
+			window = NULL;
 		}
 	}
 	return window;
@@ -415,8 +420,7 @@ static Bool init_timestamp_scanner(Display *, XEvent *event, XPointer arg)
 {
 	init_timestamp_data *data =
 	    reinterpret_cast<init_timestamp_data *>(arg);
-	switch (event->type)
-	{
+	switch (event->type) {
 		case ButtonPress:
 		case ButtonRelease:
 			data->timestamp = event->xbutton.time;
@@ -589,7 +593,7 @@ processEvents(
 		}
 
 #ifdef WITH_INPUT_NDOF
-		if (static_cast<GHOST_NDOFManagerX11 *>(m_ndofManager)->processEvents()) {
+		if (static_cast<GHOST_NDOFManagerUnix *>(m_ndofManager)->processEvents()) {
 			anyProcessed = true;
 		}
 #endif
@@ -762,6 +766,7 @@ GHOST_SystemX11::processEvent(XEvent *xe)
 		{
 			XKeyEvent *xke = &(xe->xkey);
 			KeySym key_sym;
+			KeySym key_sym_str;
 			char ascii;
 #if defined(WITH_X11_XINPUT) && defined(X_HAVE_UTF8_STRING)
 			/* utf8_array[] is initial buffer used for Xutf8LookupString().
@@ -777,8 +782,50 @@ GHOST_SystemX11::processEvent(XEvent *xe)
 			char *utf8_buf = NULL;
 #endif
 			
+			GHOST_TEventType type = (xke->type == KeyPress) ?  GHOST_kEventKeyDown : GHOST_kEventKeyUp;
+
 			GHOST_TKey gkey;
 
+#ifdef USE_NON_LATIN_KB_WORKAROUND
+			/* XXX Code below is kinda awfully convoluted... Issues are:
+			 *
+			 *     - In keyboards like latin ones, numbers need a 'Shift' to be accessed but key_sym
+			 *       is unmodified (or anyone swapping the keys with xmodmap).
+			 *
+			 *     - XLookupKeysym seems to always use first defined keymap (see T47228), which generates
+			 *       keycodes unusable by convertXKey for non-latin-compatible keymaps.
+			 *
+			 * To address this, we:
+			 *
+			 *     - Try to get a 'number' key_sym using XLookupKeysym (with or without shift modifier).
+			 *     - Fallback to XLookupString to get a key_sym from active user-defined keymap.
+			 *
+			 * Note that this enforces users to use an ascii-compatible keymap with Blender - but at least it gives
+			 * predictable and consistent results.
+			 *
+			 * Also, note that nothing in XLib sources [1] makes it obvious why those two functions give different
+			 * key_sym results...
+			 *
+			 * [1] http://cgit.freedesktop.org/xorg/lib/libX11/tree/src/KeyBind.c
+			 */
+			if ((xke->keycode >= 10 && xke->keycode < 20)) {
+				key_sym = XLookupKeysym(xke, ShiftMask);
+				if (!((key_sym >= XK_0) && (key_sym <= XK_9))) {
+					key_sym = XLookupKeysym(xke, 0);
+				}
+			}
+			else {
+				key_sym = XLookupKeysym(xke, 0);
+			}
+
+			if (!XLookupString(xke, &ascii, 1, &key_sym_str, NULL)) {
+				ascii = '\0';
+			}
+
+			if ((gkey = convertXKey(key_sym)) == GHOST_kKeyUnknown) {
+				gkey = convertXKey(key_sym_str);
+			}
+#else
 			/* In keyboards like latin ones,
 			 * numbers needs a 'Shift' to be accessed but key_sym
 			 * is unmodified (or anyone swapping the keys with xmodmap).
@@ -799,14 +846,12 @@ GHOST_SystemX11::processEvent(XEvent *xe)
 			}
 
 			gkey = convertXKey(key_sym);
-
-			GHOST_TEventType type = (xke->type == KeyPress) ? 
-			                        GHOST_kEventKeyDown : GHOST_kEventKeyUp;
 			
 			if (!XLookupString(xke, &ascii, 1, NULL, NULL)) {
 				ascii = '\0';
 			}
-			
+#endif
+
 #if defined(WITH_X11_XINPUT) && defined(X_HAVE_UTF8_STRING)
 			/* getting unicode on key-up events gives XLookupNone status */
 			XIC xic = window->getX11_XIC();
@@ -1194,7 +1239,8 @@ GHOST_SystemX11::processEvent(XEvent *xe)
 				 *       events). So we have to check which values this event actually contains!
 				 */
 
-#define AXIS_VALUE_GET(axis, val)  ((axis_first <= axis && axes_end > axis) && ((void)(val = data->axis_data[axis]), true))
+#define AXIS_VALUE_GET(axis, val) \
+	((axis_first <= axis && axes_end > axis) && ((void)(val = data->axis_data[axis - axis_first]), true))
 
 				if (AXIS_VALUE_GET(2, axis_value)) {
 					window->GetTabletData()->Pressure = axis_value / ((float)m_xtablet.PressureLevels);
@@ -1340,8 +1386,8 @@ GHOST_TSuccess
 GHOST_SystemX11::
 setCursorPosition(
 		GHOST_TInt32 x,
-		GHOST_TInt32 y
-        ) {
+		GHOST_TInt32 y)
+{
 
 	/* This is a brute force move in screen coordinates
 	 * XWarpPointer does relative moves so first determine the
@@ -1455,6 +1501,7 @@ convertXKey(KeySym key)
 			GXMAP(type, XK_quoteright,   GHOST_kKeyQuote);
 			GXMAP(type, XK_quoteleft,    GHOST_kKeyAccentGrave);
 			GXMAP(type, XK_minus,        GHOST_kKeyMinus);
+			GXMAP(type, XK_plus,         GHOST_kKeyPlus);
 			GXMAP(type, XK_slash,        GHOST_kKeySlash);
 			GXMAP(type, XK_backslash,    GHOST_kKeyBackslash);
 			GXMAP(type, XK_equal,        GHOST_kKeyEqual);
@@ -1880,10 +1927,19 @@ GHOST_TSuccess GHOST_SystemX11::pushDragDropEvent(GHOST_TEventType eventType,
  * Basically it will not crash blender now if you have a X device that
  * is configured but not plugged in.
  */
-int GHOST_X11_ApplicationErrorHandler(Display * /*display*/, XErrorEvent *theEvent)
+int GHOST_X11_ApplicationErrorHandler(Display *display, XErrorEvent *event)
 {
-	fprintf(stderr, "Ignoring Xlib error: error code %d request code %d\n",
-	        theEvent->error_code, theEvent->request_code);
+	char error_code_str[512];
+
+	XGetErrorText(display, event->error_code, error_code_str, sizeof(error_code_str));
+
+	fprintf(stderr,
+	        "Received X11 Error:\n"
+	        "\terror code:   %d\n"
+	        "\trequest code: %d\n"
+	        "\tminor code:   %d\n"
+	        "\terror text:   %s\n",
+	        event->error_code, event->request_code, event->minor_code, error_code_str);
 
 	/* No exit! - but keep lint happy */
 	return 0;
@@ -1907,8 +1963,7 @@ int GHOST_X11_ApplicationIOErrorHandler(Display * /*display*/)
 static bool match_token(const char *haystack, const char *needle)
 {
 	const char *p, *q;
-	for (p = haystack; *p; )
-	{
+	for (p = haystack; *p; ) {
 		while (*p && isspace(*p))
 			p++;
 		if (!*p)

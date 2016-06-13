@@ -26,14 +26,14 @@
  * versions for each case without new features slowing things down.
  *
  * BVH_INSTANCING: object instancing
- * BVH_HAIR: hair curve rendering
  * BVH_MOTION: motion blur rendering
  *
  */
 
 ccl_device bool BVH_FUNCTION_FULL_NAME(BVH)(KernelGlobals *kg,
                                             const Ray *ray,
-                                            Intersection *isect)
+                                            Intersection *isect,
+                                            const uint visibility)
 {
 	/* todo:
 	 * - test if pushing distance on the stack helps (for non shadow rays)
@@ -56,10 +56,8 @@ ccl_device bool BVH_FUNCTION_FULL_NAME(BVH)(KernelGlobals *kg,
 	float3 idir = bvh_inverse_direction(dir);
 	int object = OBJECT_NONE;
 
-	const uint visibility = PATH_RAY_ALL_VISIBILITY;
-
 #if BVH_FEATURE(BVH_MOTION)
-	Transform ob_tfm;
+	Transform ob_itfm;
 #endif
 
 	isect->t = ray->t;
@@ -233,26 +231,6 @@ ccl_device bool BVH_FUNCTION_FULL_NAME(BVH)(KernelGlobals *kg,
 							break;
 						}
 #endif
-#if BVH_FEATURE(BVH_HAIR)
-						case PRIMITIVE_CURVE:
-						case PRIMITIVE_MOTION_CURVE: {
-							/* intersect ray against primitive */
-							for(; primAddr < primAddr2; primAddr++) {
-								kernel_assert(kernel_tex_fetch(__prim_type, primAddr) == type);
-								/* only primitives from volume object */
-								uint tri_object = (object == OBJECT_NONE)? kernel_tex_fetch(__prim_object, primAddr): object;
-								int object_flag = kernel_tex_fetch(__object_flag, tri_object);
-								if((object_flag & SD_OBJECT_HAS_VOLUME) == 0) {
-									continue;
-								}
-								if(kernel_data.curve.curveflags & CURVE_KN_INTERPOLATE)
-									bvh_cardinal_curve_intersect(kg, isect, P, dir, visibility, object, primAddr, ray->time, type, NULL, 0, 0);
-								else
-									bvh_curve_intersect(kg, isect, P, dir, visibility, object, primAddr, ray->time, type, NULL, 0, 0);
-							}
-							break;
-						}
-#endif
 						default: {
 							break;
 						}
@@ -266,15 +244,15 @@ ccl_device bool BVH_FUNCTION_FULL_NAME(BVH)(KernelGlobals *kg,
 
 					if(object_flag & SD_OBJECT_HAS_VOLUME) {
 
-#if BVH_FEATURE(BVH_MOTION)
-						bvh_instance_motion_push(kg, object, ray, &P, &dir, &idir, &isect->t, &ob_tfm);
-#else
+#  if BVH_FEATURE(BVH_MOTION)
+						bvh_instance_motion_push(kg, object, ray, &P, &dir, &idir, &isect->t, &ob_itfm);
+#  else
 						bvh_instance_push(kg, object, ray, &P, &dir, &idir, &isect->t);
-#endif
+#  endif
 
 						triangle_intersect_precalc(dir, &isect_precalc);
 
-#if defined(__KERNEL_SSE2__)
+#  if defined(__KERNEL_SSE2__)
 						Psplat[0] = ssef(P.x);
 						Psplat[1] = ssef(P.y);
 						Psplat[2] = ssef(P.z);
@@ -282,7 +260,7 @@ ccl_device bool BVH_FUNCTION_FULL_NAME(BVH)(KernelGlobals *kg,
 						tsplat = ssef(0.0f, 0.0f, -isect->t, -isect->t);
 
 						gen_idirsplat_swap(pn, shuf_identity, shuf_swap, idir, idirsplat, shufflexyz);
-#endif
+#  endif
 
 						++stackPtr;
 						kernel_assert(stackPtr < BVH_STACK_SIZE);
@@ -306,15 +284,15 @@ ccl_device bool BVH_FUNCTION_FULL_NAME(BVH)(KernelGlobals *kg,
 			kernel_assert(object != OBJECT_NONE);
 
 			/* instance pop */
-#if BVH_FEATURE(BVH_MOTION)
-			bvh_instance_motion_pop(kg, object, ray, &P, &dir, &idir, &isect->t, &ob_tfm);
-#else
+#  if BVH_FEATURE(BVH_MOTION)
+			bvh_instance_motion_pop(kg, object, ray, &P, &dir, &idir, &isect->t, &ob_itfm);
+#  else
 			bvh_instance_pop(kg, object, ray, &P, &dir, &idir, &isect->t);
-#endif
+#  endif
 
 			triangle_intersect_precalc(dir, &isect_precalc);
 
-#if defined(__KERNEL_SSE2__)
+#  if defined(__KERNEL_SSE2__)
 			Psplat[0] = ssef(P.x);
 			Psplat[1] = ssef(P.y);
 			Psplat[2] = ssef(P.z);
@@ -322,7 +300,7 @@ ccl_device bool BVH_FUNCTION_FULL_NAME(BVH)(KernelGlobals *kg,
 			tsplat = ssef(0.0f, 0.0f, -isect->t, -isect->t);
 
 			gen_idirsplat_swap(pn, shuf_identity, shuf_swap, idir, idirsplat, shufflexyz);
-#endif
+#  endif
 
 			object = OBJECT_NONE;
 			nodeAddr = traversalStack[stackPtr];
@@ -336,13 +314,15 @@ ccl_device bool BVH_FUNCTION_FULL_NAME(BVH)(KernelGlobals *kg,
 
 ccl_device_inline bool BVH_FUNCTION_NAME(KernelGlobals *kg,
                                          const Ray *ray,
-                                         Intersection *isect)
+                                         Intersection *isect,
+                                         const uint visibility)
 {
 #ifdef __QBVH__
 	if(kernel_data.bvh.use_qbvh) {
 		return BVH_FUNCTION_FULL_NAME(QBVH)(kg,
 		                                    ray,
-		                                    isect);
+		                                    isect,
+		                                    visibility);
 	}
 	else
 #endif
@@ -350,7 +330,8 @@ ccl_device_inline bool BVH_FUNCTION_NAME(KernelGlobals *kg,
 		kernel_assert(kernel_data.bvh.use_qbvh == false);
 		return BVH_FUNCTION_FULL_NAME(BVH)(kg,
 		                                   ray,
-		                                   isect);
+		                                   isect,
+		                                   visibility);
 	}
 }
 

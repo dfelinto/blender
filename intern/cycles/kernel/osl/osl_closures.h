@@ -50,6 +50,7 @@ OSL::ClosureParam *closure_bsdf_diffuse_ramp_params();
 OSL::ClosureParam *closure_bsdf_phong_ramp_params();
 OSL::ClosureParam *closure_bssrdf_cubic_params();
 OSL::ClosureParam *closure_bssrdf_gaussian_params();
+OSL::ClosureParam *closure_bssrdf_burley_params();
 OSL::ClosureParam *closure_henyey_greenstein_volume_params();
 
 void closure_emission_prepare(OSL::RendererServices *, int id, void *data);
@@ -60,6 +61,7 @@ void closure_bsdf_diffuse_ramp_prepare(OSL::RendererServices *, int id, void *da
 void closure_bsdf_phong_ramp_prepare(OSL::RendererServices *, int id, void *data);
 void closure_bssrdf_cubic_prepare(OSL::RendererServices *, int id, void *data);
 void closure_bssrdf_gaussian_prepare(OSL::RendererServices *, int id, void *data);
+void closure_bssrdf_burley_prepare(OSL::RendererServices *, int id, void *data);
 void closure_henyey_greenstein_volume_prepare(OSL::RendererServices *, int id, void *data);
 
 #define CCLOSURE_PREPARE(name, classname)          \
@@ -72,7 +74,7 @@ void name(RendererServices *, int id, void *data) \
 #define CCLOSURE_PREPARE_STATIC(name, classname) static CCLOSURE_PREPARE(name, classname)
 
 #define CLOSURE_FLOAT3_PARAM(st, fld) \
-	{ TypeDesc::TypeVector, reckless_offsetof(st, fld), NULL, sizeof(OSL::Vec3) }
+	{ TypeDesc::TypeVector, (int)reckless_offsetof(st, fld), NULL, sizeof(OSL::Vec3) }
 
 #define TO_VEC3(v) OSL::Vec3(v.x, v.y, v.z)
 #define TO_COLOR3(v) OSL::Color3(v.x, v.y, v.z)
@@ -97,6 +99,8 @@ public:
 	virtual void setup() {}
 
 	Category category;
+
+	OSL::ustring label;
 };
 
 /* BSDF */
@@ -175,8 +179,8 @@ static ClosureParam *bsdf_##lower##_params() \
 /* parameters */
 
 #define BSDF_CLOSURE_CLASS_END(Upper, lower) \
-		CLOSURE_STRING_KEYPARAM("label"), \
-	    CLOSURE_FINISH_PARAM(Upper##Closure) \
+		CLOSURE_STRING_KEYPARAM(Upper##Closure, label, "label"), \
+		CLOSURE_FINISH_PARAM(Upper##Closure) \
 	}; \
 	return params; \
 } \
@@ -223,8 +227,8 @@ static ClosureParam *volume_##lower##_params() \
 /* parameters */
 
 #define VOLUME_CLOSURE_CLASS_END(Upper, lower) \
-		CLOSURE_STRING_KEYPARAM("label"), \
-	    CLOSURE_FINISH_PARAM(Upper##Closure) \
+		CLOSURE_STRING_KEYPARAM(Upper##Closure, label, "label"), \
+		CLOSURE_FINISH_PARAM(Upper##Closure) \
 	}; \
 	return params; \
 } \

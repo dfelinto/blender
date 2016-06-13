@@ -262,7 +262,7 @@ ccl_device_inline bool background_portal_data_fetch_and_check_side(KernelGlobals
 	*dir = make_float3(data3.y, data3.z, data3.w);
 
 	/* Check whether portal is on the right side. */
-	if(dot(*dir, P - *lightpos) > 1e-5f)
+	if(dot(*dir, P - *lightpos) > 1e-4f)
 		return true;
 
 	return false;
@@ -276,6 +276,7 @@ ccl_device float background_portal_pdf(KernelGlobals *kg,
 {
 	float portal_pdf = 0.0f;
 
+	int num_possible = 0;
 	for(int p = 0; p < kernel_data.integrator.num_portals; p++) {
 		if(p == ignore_portal)
 			continue;
@@ -284,16 +285,11 @@ ccl_device float background_portal_pdf(KernelGlobals *kg,
 		if(!background_portal_data_fetch_and_check_side(kg, P, p, &lightpos, &dir))
 			continue;
 
+		/* There's a portal that could be sampled from this position. */
 		if(is_possible) {
-			/* There's a portal that could be sampled from this position. */
 			*is_possible = true;
 		}
-
-		float t = -(dot(P, dir) - dot(lightpos, dir)) / dot(direction, dir);
-		if(t <= 1e-5f) {
-			/* Either behind the portal or too close. */
-			continue;
-		}
+		num_possible++;
 
 		float4 data1 = kernel_tex_fetch(__light_data, (p + kernel_data.integrator.portal_offset)*LIGHT_SIZE + 1);
 		float4 data2 = kernel_tex_fetch(__light_data, (p + kernel_data.integrator.portal_offset)*LIGHT_SIZE + 2);
@@ -301,18 +297,18 @@ ccl_device float background_portal_pdf(KernelGlobals *kg,
 		float3 axisu = make_float3(data1.y, data1.z, data1.w);
 		float3 axisv = make_float3(data2.y, data2.z, data2.w);
 
-		float3 hit = P + t*direction;
-		float3 inplane = hit - lightpos;
-		/* Skip if the the ray doesn't pass through portal. */
-		if(fabsf(dot(inplane, axisu) / dot(axisu, axisu)) > 0.5f)
-			continue;
-		if(fabsf(dot(inplane, axisv) / dot(axisv, axisv)) > 0.5f)
+		if(!ray_quad_intersect(P, direction, 1e-4f, FLT_MAX, lightpos, axisu, axisv, dir, NULL, NULL))
 			continue;
 
 		portal_pdf += area_light_sample(P, &lightpos, axisu, axisv, 0.0f, 0.0f, false);
 	}
 
-	return kernel_data.integrator.num_portals? portal_pdf / kernel_data.integrator.num_portals: 0.0f;
+	if(ignore_portal >= 0) {
+		/* We have skipped a portal that could be sampled as well. */
+		num_possible++;
+	}
+
+	return (num_possible > 0)? portal_pdf / num_possible: 0.0f;
 }
 
 ccl_device int background_num_possible_portals(KernelGlobals *kg, float3 P)
@@ -431,38 +427,28 @@ ccl_device float background_light_pdf(KernelGlobals *kg, float3 P, float3 direct
 	/* Probability of sampling portals instead of the map. */
 	float portal_sampling_pdf = kernel_data.integrator.portal_pdf;
 
+	float portal_pdf = 0.0f, map_pdf = 0.0f;
 	if(portal_sampling_pdf > 0.0f) {
+		/* Evaluate PDF of sampling this direction by portal sampling. */
 		bool is_possible = false;
-		float portal_pdf = background_portal_pdf(kg, P, direction, -1, &is_possible);
-		if(portal_pdf == 0.0f) {
+		portal_pdf = background_portal_pdf(kg, P, direction, -1, &is_possible) * portal_sampling_pdf;
+		if(!is_possible) {
+			/* Portal sampling is not possible here because all portals point to the wrong side.
+			 * If map sampling is possible, it would be used instead, otherwise fallback sampling is used. */
 			if(portal_sampling_pdf == 1.0f) {
-				/* If there are no possible portals at this point,
-				 * the fallback sampling would have been used.
-				 * Otherwise, the direction would not be sampled at all => pdf = 0
-				 */
-				return is_possible? 0.0f: kernel_data.integrator.pdf_lights / M_4PI_F;
+				return kernel_data.integrator.pdf_lights / M_4PI_F;
 			}
 			else {
-				/* We can only sample the map. */
-				return background_map_pdf(kg, direction) * kernel_data.integrator.pdf_lights;
-			}
-		} else {
-			if(portal_sampling_pdf == 1.0f) {
-				/* We can only sample portals. */
-				return portal_pdf * kernel_data.integrator.pdf_lights;
-			}
-			else {
-				/* We can sample both, so combine with MIS. */
-				return (background_map_pdf(kg, direction) * (1.0f - portal_sampling_pdf)
-				      + portal_pdf * portal_sampling_pdf) * kernel_data.integrator.pdf_lights;
+				/* Force map sampling. */
+				portal_sampling_pdf = 0.0f;
 			}
 		}
 	}
-
-	/* No portals in the scene, so must sample the map.
-	 * At least one of them is always possible if we have a LIGHT_BACKGROUND.
-	 */
-	return background_map_pdf(kg, direction) * kernel_data.integrator.pdf_lights;
+	if(portal_sampling_pdf < 1.0f) {
+		/* Evaluate PDF of sampling this direction by map sampling. */
+		map_pdf = background_map_pdf(kg, direction) * (1.0f - portal_sampling_pdf);
+	}
+	return (portal_pdf + map_pdf) * kernel_data.integrator.pdf_lights;
 }
 #endif
 
@@ -688,8 +674,10 @@ ccl_device bool lamp_light_eval(KernelGlobals *kg, int lamp, float3 P, float3 D,
 			return false;
 
 		if(!ray_aligned_disk_intersect(P, D, t,
-			lightP, radius, &ls->P, &ls->t))
+		                               lightP, radius, &ls->P, &ls->t))
+		{
 			return false;
+		}
 
 		ls->Ng = -D;
 		ls->D = D;
@@ -730,9 +718,11 @@ ccl_device bool lamp_light_eval(KernelGlobals *kg, int lamp, float3 P, float3 D,
 
 		float3 light_P = make_float3(data0.y, data0.z, data0.w);
 
-		if(!ray_quad_intersect(P, D, t,
-			light_P, axisu, axisv, &ls->P, &ls->t))
+		if(!ray_quad_intersect(P, D, 0.0f, t,
+		                       light_P, axisu, axisv, Ng, &ls->P, &ls->t))
+		{
 			return false;
+		}
 
 		ls->D = D;
 		ls->Ng = Ng;
@@ -752,12 +742,12 @@ ccl_device void object_transform_light_sample(KernelGlobals *kg, LightSample *ls
 #ifdef __INSTANCING__
 	/* instance transform */
 	if(object >= 0) {
-#ifdef __OBJECT_MOTION__
+#  ifdef __OBJECT_MOTION__
 		Transform itfm;
 		Transform tfm = object_fetch_transform_motion_test(kg, object, time, &itfm);
-#else
+#  else
 		Transform tfm = object_fetch_transform(kg, object, OBJECT_TRANSFORM);
-#endif
+#  endif
 
 		ls->P = transform_point(&tfm, ls->P);
 		ls->Ng = normalize(transform_direction(&tfm, ls->Ng));
@@ -840,7 +830,14 @@ ccl_device bool light_select_reached_max_bounces(KernelGlobals *kg, int index, i
 	return (bounce > __float_as_int(data4.x));
 }
 
-ccl_device void light_sample(KernelGlobals *kg, float randt, float randu, float randv, float time, float3 P, int bounce, LightSample *ls)
+ccl_device_noinline void light_sample(KernelGlobals *kg,
+                                      float randt,
+                                      float randu,
+                                      float randv,
+                                      float time,
+                                      float3 P,
+                                      int bounce,
+                                      LightSample *ls)
 {
 	/* sample index */
 	int index = light_distribution_sample(kg, randt);

@@ -482,7 +482,18 @@ MovieTrackingMarker *tracking_get_keyframed_marker(MovieTrackingTrack *track,
 			 * fallback to the first marker in current tracked segment
 			 * as a keyframe.
 			 */
-			if (next_marker && next_marker->flag & MARKER_DISABLED) {
+			if (next_marker == NULL) {
+				/* Could happen when trying to get reference marker for the fist
+				 * one on the segment which isn't surrounded by disabled markers.
+				 *
+				 * There's no really good choice here, just use the reference
+				 * marker which looks correct..
+				 */
+				if (marker_keyed_fallback == NULL) {
+					marker_keyed_fallback = cur_marker;
+				}
+			}
+			else if (next_marker->flag & MARKER_DISABLED) {
 				if (marker_keyed_fallback == NULL)
 					marker_keyed_fallback = cur_marker;
 			}
@@ -518,7 +529,7 @@ typedef struct AccessCacheKey {
 static unsigned int accesscache_hashhash(const void *key_v)
 {
 	const AccessCacheKey *key = (const AccessCacheKey *) key_v;
-	/* TODP(sergey): Need better hasing here for faster frame access. */
+	/* TODP(sergey): Need better hashing here for faster frame access. */
 	return key->clip_index << 16 | key->frame;
 }
 

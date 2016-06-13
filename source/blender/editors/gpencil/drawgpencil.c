@@ -35,10 +35,13 @@
 #include <math.h>
 #include <float.h>
 
+#include "MEM_guardedalloc.h"
+
 #include "BLI_sys_types.h"
 
 #include "BLI_math.h"
 #include "BLI_utildefines.h"
+#include "BLI_polyfill2d.h"
 
 #include "BLF_api.h"
 #include "BLT_translation.h"
@@ -82,6 +85,7 @@ typedef enum eDrawStrokeFlags {
 	GP_DRAWDATA_NO_ONIONS   = (1 << 6),	  /* no onionskins should be drawn (for animation playback) */
 	GP_DRAWDATA_VOLUMETRIC	= (1 << 7),   /* draw strokes as "volumetric" circular billboards */
 	GP_DRAWDATA_FILL        = (1 << 8),   /* fill insides/bounded-regions of strokes */
+	GP_DRAWDATA_HQ_FILL     = (1 << 9)    /* Use high quality fill */
 } eDrawStrokeFlags;
 
 
@@ -105,9 +109,9 @@ static void gp_draw_stroke_buffer(tGPspoint *points, int totpoints, short thickn
 	if (dflag & (GP_DRAWDATA_ONLY3D | GP_DRAWDATA_ONLYV2D))
 		return;
 	
-	/* if drawing a single point, draw it larger */
 	if (totpoints == 1) {
-		/* draw point */
+		/* if drawing a single point, draw it larger */
+		glPointSize((float)(thickness + 2) * points->pressure);
 		glBegin(GL_POINTS);
 		glVertex2iv(&points->x);
 		glEnd();
@@ -145,9 +149,6 @@ static void gp_draw_stroke_buffer(tGPspoint *points, int totpoints, short thickn
 				glVertex2iv(&pt->x);
 		}
 		glEnd();
-		
-		/* reset for predictable OpenGL context */
-		glLineWidth(1.0f);
 
 		if (G.debug & G_DEBUG) setlinestyle(0);
 	}
@@ -328,36 +329,186 @@ static void gp_draw_stroke_volumetric_3d(bGPDspoint *points, int totpoints, shor
 
 /* --------------- Stroke Fills ----------------- */
 
-/* draw fills for shapes */
-static void gp_draw_stroke_fill(bGPDspoint *points, int totpoints, short UNUSED(thickness),
-                                short UNUSED(dflag), short sflag,
-                                int offsx, int offsy, int winx, int winy)
+/* Get points of stroke always flat to view not affected by camera view or view position */
+static void gp_stroke_2d_flat(bGPDspoint *points, int totpoints, float(*points2d)[2], int *r_direction)
 {
-	bGPDspoint *pt;
-	int i;
+	bGPDspoint *pt0 = &points[0];
+	bGPDspoint *pt1 = &points[1];
+	bGPDspoint *pt3 = &points[(int)(totpoints * 0.75)];
 	
-	BLI_assert(totpoints >= 3);
+	float locx[3];
+	float locy[3];
+	float loc3[3];
+	float normal[3];
 	
-	/* As an initial implementation, we use the OpenGL filled polygon drawing
-	 * here since it's the easiest option to implement for this case. It does
-	 * come with limitations (notably for concave shapes), though it shouldn't
-	 * be much of an issue in most cases.
-	 */
-	glBegin(GL_POLYGON);
+	/* local X axis (p0 -> p1) */
+	sub_v3_v3v3(locx, &pt1->x, &pt0->x);
 	
-	for (i = 0, pt = points; i < totpoints; i++, pt++) {
-		if (sflag & GP_STROKE_3DSPACE) {
-			glVertex3fv(&pt->x);
-		}
-		else {
-			float co[2];
-			
-			gp_calc_2d_stroke_xy(pt, sflag, offsx, offsy, winx, winy, co);
-			glVertex2fv(co);
-		}
+	/* point vector at 3/4 */
+	sub_v3_v3v3(loc3, &pt3->x, &pt0->x);
+	
+	/* vector orthogonal to polygon plane */
+	cross_v3_v3v3(normal, locx, loc3);
+	
+	/* local Y axis (cross to normal/x axis) */
+	cross_v3_v3v3(locy, normal, locx);
+	
+	/* Normalize vectors */
+	normalize_v3(locx);
+	normalize_v3(locy);
+	
+	/* Get all points in local space */
+	for (int i = 0; i < totpoints; i++) {
+		bGPDspoint *pt = &points[i];
+		float loc[3];
+		
+		/* Get local space using first point as origin */
+		sub_v3_v3v3(loc, &pt->x, &pt0->x);
+		
+		points2d[i][0] = dot_v3v3(loc, locx);
+		points2d[i][1] = dot_v3v3(loc, locy);
 	}
 	
-	glEnd();
+	/* Concave (-1), Convex (1), or Autodetect (0)? */
+	*r_direction = (int)locy[2];
+}
+
+
+/* Triangulate stroke for high quality fill (this is done only if cache is null or stroke was modified) */
+static void gp_triangulate_stroke_fill(bGPDstroke *gps)
+{
+	BLI_assert(gps->totpoints >= 3);
+	gps->tot_triangles = gps->totpoints - 2;
+
+	/* allocate memory for temporary areas */
+	unsigned int (*tmp_triangles)[3] = MEM_mallocN(sizeof(*tmp_triangles) * gps->tot_triangles, "GP Stroke temp triangulation");
+	float (*points2d)[2] = MEM_mallocN(sizeof(*points2d) * gps->totpoints, "GP Stroke temp 2d points");
+	
+	int direction = 0;
+	
+	/* convert to 2d and triangulate */
+	gp_stroke_2d_flat(gps->points, gps->totpoints, points2d, &direction);
+	BLI_polyfill_calc((const float(*)[2])points2d, (unsigned int)gps->totpoints, direction, (unsigned int(*)[3])tmp_triangles);
+
+	/* save triangulation data in stroke cache */
+	if (gps->tot_triangles > 0) {
+		if (gps->triangles == NULL) {
+			gps->triangles = MEM_callocN(sizeof(*gps->triangles) * gps->tot_triangles, "GP Stroke triangulation");
+		}
+		else {
+			gps->triangles = MEM_recallocN(gps->triangles, sizeof(*gps->triangles) * gps->tot_triangles);
+		}
+		
+		int i;
+		
+		for (i = 0; i < gps->tot_triangles; i++) {
+			bGPDtriangle *stroke_triangle = &gps->triangles[i];
+			stroke_triangle->v1 = tmp_triangles[i][0];
+			stroke_triangle->v2 = tmp_triangles[i][1];
+			stroke_triangle->v3 = tmp_triangles[i][2];
+		}
+	}
+	else {
+		/* No triangles needed - Free anything allocated previously */
+		if (gps->triangles)
+			MEM_freeN(gps->triangles);
+			
+		gps->triangles = NULL;
+	}
+	
+	/* disable recalculation flag */
+	if (gps->flag & GP_STROKE_RECALC_CACHES) {
+		gps->flag &= ~GP_STROKE_RECALC_CACHES;
+	}
+	
+	/* clear memory */
+	if (tmp_triangles) MEM_freeN(tmp_triangles);
+	if (points2d) MEM_freeN(points2d);
+}
+
+
+/* draw fills for shapes */
+static void gp_draw_stroke_fill(bGPDstroke *gps, short UNUSED(thickness), short dflag, int offsx, int offsy, int winx, int winy)
+{
+	BLI_assert(gps->totpoints >= 3);
+	
+	/* Triangulation fill if high quality flag is enabled */
+	if (dflag & GP_DRAWDATA_HQ_FILL) {
+		bGPDtriangle *stroke_triangle;
+		bGPDspoint *pt;
+		int i;
+		
+		/* Calculate triangles cache for filling area (must be done only after changes) */
+		if ((gps->flag & GP_STROKE_RECALC_CACHES) || (gps->tot_triangles == 0) || (gps->triangles == NULL)) {
+			gp_triangulate_stroke_fill(gps);
+		}
+		
+		/* Draw all triangles for filling the polygon (cache must be calculated before) */
+		BLI_assert(gps->tot_triangles >= 1);
+		glBegin(GL_TRIANGLES);
+		for (i = 0, stroke_triangle = gps->triangles; i < gps->tot_triangles; i++, stroke_triangle++) {
+			if (gps->flag & GP_STROKE_3DSPACE) {
+				/* vertex 1 */
+				pt = &gps->points[stroke_triangle->v1];
+				glVertex3fv(&pt->x);
+				
+				/* vertex 2 */
+				pt = &gps->points[stroke_triangle->v2];
+				glVertex3fv(&pt->x);
+				
+				/* vertex 3 */
+				pt = &gps->points[stroke_triangle->v3];
+				glVertex3fv(&pt->x);
+			}
+			else {
+				float co[2];
+				
+				/* vertex 1 */
+				pt = &gps->points[stroke_triangle->v1];
+				gp_calc_2d_stroke_xy(pt, gps->flag, offsx, offsy, winx, winy, co);
+				glVertex2fv(co);
+				
+				/* vertex 2 */
+				pt = &gps->points[stroke_triangle->v2];
+				gp_calc_2d_stroke_xy(pt, gps->flag, offsx, offsy, winx, winy, co);
+				glVertex2fv(co);
+				
+				/* vertex 3 */
+				pt = &gps->points[stroke_triangle->v3];
+				gp_calc_2d_stroke_xy(pt, gps->flag, offsx, offsy, winx, winy, co);
+				glVertex2fv(co);
+			}
+		}
+		glEnd();
+	}
+	else {
+		/* As an initial implementation, we use the OpenGL filled polygon drawing
+		 * here since it's the easiest option to implement for this case. It does
+		 * come with limitations (notably for concave shapes), though it works well
+		 * enough for many simple situations.
+		 *
+		 * We keep this legacy implementation around despite now having the high quality
+		 * fills, as this is necessary for keeping everything working nicely for files
+		 * created using old versions of Blender which may have depended on the artifacts
+		 * the old fills created.
+		 */
+		bGPDspoint *pt;
+		int i;
+		
+		glBegin(GL_POLYGON);
+		for (i = 0, pt = gps->points; i < gps->totpoints; i++, pt++) {
+			if (gps->flag & GP_STROKE_3DSPACE) {
+				glVertex3fv(&pt->x);
+			}
+			else {
+				float co[2];
+				
+				gp_calc_2d_stroke_xy(pt, gps->flag, offsx, offsy, winx, winy, co);
+				glVertex2fv(co);
+			}
+		}
+		glEnd();
+	}
 }
 
 /* ----- Existing Strokes Drawing (3D and Point) ------ */
@@ -398,7 +549,7 @@ static void gp_draw_stroke_point(bGPDspoint *points, short thickness, short dfla
 			gluQuadricDrawStyle(qobj, GLU_FILL);
 			
 			/* need to translate drawing position, but must reset after too! */
-			glTranslatef(co[0], co[1], 0.0);
+			glTranslate2fv(co);
 			gluDisk(qobj, 0.0,  thickness, 32, 1);
 			glTranslatef(-co[0], -co[1], 0.0);
 			
@@ -612,6 +763,7 @@ static void gp_draw_stroke_2d(bGPDspoint *points, int totpoints, short thickness
 		}
 		
 		glEnd();
+		glShadeModel(GL_SMOOTH);
 	}
 	
 	/* draw debug points of curve on top? (original stroke points) */
@@ -698,7 +850,7 @@ static void gp_draw_strokes(bGPDframe *gpf, int offsx, int offsy, int winx, int 
 			/* 3D Fill */
 			if ((dflag & GP_DRAWDATA_FILL) && (gps->totpoints >= 3)) {
 				glColor4fv(fill_color);
-				gp_draw_stroke_fill(gps->points, gps->totpoints, lthick, dflag, gps->flag, offsx, offsy, winx, winy);
+				gp_draw_stroke_fill(gps, lthick, dflag, offsx, offsy, winx, winy);
 			}
 			
 			/* 3D Stroke */
@@ -733,7 +885,7 @@ static void gp_draw_strokes(bGPDframe *gpf, int offsx, int offsy, int winx, int 
 			/* 2D - Fill */
 			if ((dflag & GP_DRAWDATA_FILL) && (gps->totpoints >= 3)) {
 				glColor4fv(fill_color);
-				gp_draw_stroke_fill(gps->points, gps->totpoints, lthick, dflag, gps->flag, offsx, offsy, winx, winy);
+				gp_draw_stroke_fill(gps, lthick, dflag, offsx, offsy, winx, winy);
 			}
 			
 			/* 2D Strokes... */
@@ -893,7 +1045,7 @@ static void gp_draw_onionskins(bGPDlayer *gpl, bGPDframe *gpf, int offsx, int of
 		copy_v3_v3(color, gpl->color);
 	}
 	
-	if (gpl->gstep) {
+	if (gpl->gstep > 0) {
 		bGPDframe *gf;
 		float fac;
 		
@@ -910,12 +1062,15 @@ static void gp_draw_onionskins(bGPDlayer *gpl, bGPDframe *gpf, int offsx, int of
 				break;
 		}
 	}
-	else {
+	else if (gpl->gstep == 0) {
 		/* draw the strokes for the ghost frames (at half of the alpha set by user) */
 		if (gpf->prev) {
 			color[3] = (alpha / 7);
 			gp_draw_strokes(gpf->prev, offsx, offsy, winx, winy, dflag, debug, lthick, color, color);
 		}
+	}
+	else {
+		/* don't draw - disabled */
 	}
 	
 	
@@ -927,7 +1082,7 @@ static void gp_draw_onionskins(bGPDlayer *gpl, bGPDframe *gpf, int offsx, int of
 		copy_v3_v3(color, gpl->color);
 	}
 	
-	if (gpl->gstep_next) {
+	if (gpl->gstep_next > 0) {
 		bGPDframe *gf;
 		float fac;
 		
@@ -944,12 +1099,15 @@ static void gp_draw_onionskins(bGPDlayer *gpl, bGPDframe *gpf, int offsx, int of
 				break;
 		}
 	}
-	else {
+	else if (gpl->gstep_next == 0) {
 		/* draw the strokes for the ghost frames (at half of the alpha set by user) */
 		if (gpf->next) {
 			color[3] = (alpha / 4);
 			gp_draw_strokes(gpf->next, offsx, offsy, winx, winy, dflag, debug, lthick, color, color);
 		}
+	}
+	else {
+		/* don't draw - disabled */
 	}
 	
 	/* 3) restore alpha */
@@ -993,10 +1151,13 @@ static void gp_draw_data_layers(bGPdata *gpd, int offsx, int offsy, int winx, in
 		
 		/* volumetric strokes... */
 		GP_DRAWFLAG_APPLY((gpl->flag & GP_LAYER_VOLUMETRIC), GP_DRAWDATA_VOLUMETRIC);
-		
+
+		/* HQ fills... */
+		GP_DRAWFLAG_APPLY((gpl->flag & GP_LAYER_HQ_FILL), GP_DRAWDATA_HQ_FILL);
+
 		/* fill strokes... */
 		// XXX: this is not a very good limit
-		GP_DRAWFLAG_APPLY((gpl->fill[3] > 0.001f), GP_DRAWDATA_FILL);
+		GP_DRAWFLAG_APPLY((gpl->fill[3] > GPENCIL_ALPHA_OPACITY_THRESH), GP_DRAWDATA_FILL);
 #undef GP_DRAWFLAG_APPLY
 		
 		/* draw 'onionskins' (frame left + right) */
@@ -1111,13 +1272,7 @@ static void gp_draw_data(bGPdata *gpd, int offsx, int offsy, int winx, int winy,
 	 */
 	
 	/* turn on alpha-blending */
-	if (GLEW_VERSION_1_4) {
-		glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-	}
-	else {
-		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-	}
-
+	glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 	glEnable(GL_BLEND);
 	
 	/* draw! */
@@ -1128,8 +1283,6 @@ static void gp_draw_data(bGPdata *gpd, int offsx, int offsy, int winx, int winy,
 	glDisable(GL_LINE_SMOOTH); // smooth lines
 	
 	/* restore initial gl conditions */
-	glLineWidth(1.0);
-	glPointSize(1.0);
 	glColor4f(0, 0, 0, 1);
 }
 
@@ -1172,6 +1325,7 @@ static void gp_draw_data_all(Scene *scene, bGPdata *gpd, int offsx, int offsy, i
 /* draw grease-pencil sketches to specified 2d-view that uses ibuf corrections */
 void ED_gpencil_draw_2dimage(const bContext *C)
 {
+	wmWindowManager *wm = CTX_wm_manager(C);
 	ScrArea *sa = CTX_wm_area(C);
 	ARegion *ar = CTX_wm_region(C);
 	Scene *scene = CTX_data_scene(C);
@@ -1224,6 +1378,13 @@ void ED_gpencil_draw_2dimage(const bContext *C)
 			break;
 	}
 	
+	if (ED_screen_animation_playing(wm)) {
+		/* don't show onionskins during animation playback/scrub (i.e. it obscures the poses)
+		 * OpenGL Renders (i.e. final output), or depth buffer (i.e. not real strokes)
+		 */
+		dflag |= GP_DRAWDATA_NO_ONIONS;
+	}
+	
 	
 	/* draw it! */
 	gp_draw_data_all(scene, gpd, offsx, offsy, sizex, sizey, CFRA, dflag, sa->spacetype);
@@ -1234,6 +1395,7 @@ void ED_gpencil_draw_2dimage(const bContext *C)
  * second time with onlyv2d=0 for screen-aligned strokes */
 void ED_gpencil_draw_view2d(const bContext *C, bool onlyv2d)
 {
+	wmWindowManager *wm = CTX_wm_manager(C);
 	ScrArea *sa = CTX_wm_area(C);
 	ARegion *ar = CTX_wm_region(C);
 	Scene *scene = CTX_data_scene(C);
@@ -1252,6 +1414,8 @@ void ED_gpencil_draw_view2d(const bContext *C, bool onlyv2d)
 	
 	/* draw it! */
 	if (onlyv2d) dflag |= (GP_DRAWDATA_ONLYV2D | GP_DRAWDATA_NOSTATUS);
+	if (ED_screen_animation_playing(wm)) dflag |= GP_DRAWDATA_NO_ONIONS;
+	
 	gp_draw_data_all(scene, gpd, 0, 0, ar->winx, ar->winy, CFRA, dflag, sa->spacetype);
 	
 	/* draw status text (if in screen/pixel-space) */
@@ -1263,7 +1427,7 @@ void ED_gpencil_draw_view2d(const bContext *C, bool onlyv2d)
 /* draw grease-pencil sketches to specified 3d-view assuming that matrices are already set correctly
  * Note: this gets called twice - first time with only3d=1 to draw 3d-strokes,
  * second time with only3d=0 for screen-aligned strokes */
-void ED_gpencil_draw_view3d(Scene *scene, View3D *v3d, ARegion *ar, bool only3d)
+void ED_gpencil_draw_view3d(wmWindowManager *wm, Scene *scene, View3D *v3d, ARegion *ar, bool only3d)
 {
 	bGPdata *gpd;
 	int dflag = 0;
@@ -1306,13 +1470,15 @@ void ED_gpencil_draw_view3d(Scene *scene, View3D *v3d, ARegion *ar, bool only3d)
 		dflag |= GP_DRAWDATA_NOSTATUS;
 	}
 	
+	if ((wm == NULL) || ED_screen_animation_playing(wm)) {
+		/* don't show onionskins during animation playback/scrub (i.e. it obscures the poses)
+		 * OpenGL Renders (i.e. final output), or depth buffer (i.e. not real strokes)
+		 */
+		dflag |= GP_DRAWDATA_NO_ONIONS;
+	}
+	
 	/* draw it! */
 	gp_draw_data_all(scene, gpd, offsx, offsy, winx, winy, CFRA, dflag, v3d->spacetype);
-	
-	/* draw status text (if in screen/pixel-space) */
-	if (only3d == false) {
-		gp_draw_status_text(gpd, ar);
-	}
 }
 
 void ED_gpencil_draw_ex(Scene *scene, bGPdata *gpd, int winx, int winy, const int cfra, const char spacetype)

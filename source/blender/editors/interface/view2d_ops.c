@@ -572,7 +572,7 @@ static void view_zoom_axis_lock_defaults(bContext *C, bool r_do_zoom_xy[2])
 	if (sa && sa->spacetype == SPACE_SEQ) {
 		ARegion *ar = CTX_wm_region(C);
 
-		if (ar && ar->regiontype != RGN_TYPE_PREVIEW)
+		if (ar && ar->regiontype == RGN_TYPE_WINDOW)
 			r_do_zoom_xy[1] = false;
 	}
 }
@@ -612,15 +612,20 @@ static int view_zoom_poll(bContext *C)
 	
 	/* check if there's a region in context to work with */
 	if (ar == NULL)
-		return 0;
+		return false;
+
+	/* Do not show that in 3DView context. */
+	if (CTX_wm_region_view3d(C))
+		return false;
+
 	v2d = &ar->v2d;
 	
 	/* check that 2d-view is zoomable */
 	if ((v2d->keepzoom & V2D_LOCKZOOM_X) && (v2d->keepzoom & V2D_LOCKZOOM_Y))
-		return 0;
+		return false;
 		
 	/* view is zoomable */
-	return 1;
+	return true;
 }
  
 /* apply transform to view (i.e. adjust 'cur' rect) */

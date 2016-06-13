@@ -21,6 +21,10 @@
 
 remove_extra_strict_flags()
 
+if(CMAKE_COMPILER_IS_GNUCC)
+	remove_cc_flag("-Wunused-macros")
+endif()
+
 if(WITH_SYSTEM_AUDASPACE)
 
 	set(INC
@@ -164,6 +168,8 @@ set(SRC
 	intern/AUD_SequencerHandle.h
 	intern/AUD_SequencerReader.cpp
 	intern/AUD_SequencerReader.h
+	intern/AUD_Set.cpp
+	intern/AUD_Set.h
 	intern/AUD_SilenceFactory.cpp
 	intern/AUD_SilenceFactory.h
 	intern/AUD_SilenceReader.cpp

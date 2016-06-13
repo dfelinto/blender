@@ -43,9 +43,6 @@ public:
 	/* object or mesh level bvh */
 	bool top_level;
 
-	/* disk cache */
-	bool use_cache;
-
 	/* QBVH */
 	bool use_qbvh;
 
@@ -71,7 +68,6 @@ public:
 		max_curve_leaf_size = 2;
 
 		top_level = false;
-		use_cache = false;
 		use_qbvh = false;
 	}
 
@@ -177,6 +173,26 @@ struct BVHSpatialBin
 	__forceinline BVHSpatialBin()
 	{
 	}
+};
+
+/* BVH Spatial Storage
+ *
+ * The idea of this storage is have thread-specific storage for the spatial
+ * splitters. We can pre-allocate this storage in advance and avoid heavy memory
+ * operations during split process.
+ */
+
+struct BVHSpatialStorage {
+	/* Accumulated bounds when sweeping from right to left.  */
+	vector<BoundBox> right_bounds;
+
+	/* Bins used for histogram when selecting best split plane. */
+	BVHSpatialBin bins[3][BVHParams::NUM_SPATIAL_BINS];
+
+	/* Temporary storage for the new references. Used by spatial split to store
+	 * new references in before they're getting inserted into actual array,
+	 */
+	vector<BVHReference> new_references;
 };
 
 CCL_NAMESPACE_END

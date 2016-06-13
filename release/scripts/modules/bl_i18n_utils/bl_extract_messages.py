@@ -304,7 +304,8 @@ def dump_rna_messages(msgs, reports, settings, verbose=False):
         else:
             bl_rna_base_props = set()
 
-        for prop in bl_rna.properties:
+        props = sorted(bl_rna.properties, key=lambda p: p.identifier)
+        for prop in props:
             # Only write this property if our parent hasn't got it.
             if prop in bl_rna_base_props:
                 continue
@@ -321,8 +322,20 @@ def dump_rna_messages(msgs, reports, settings, verbose=False):
                 process_msg(msgs, default_context, prop.description, msgsrc, reports, check_ctxt_rna_tip, settings)
 
             if isinstance(prop, bpy.types.EnumProperty):
+                done_items = set()
                 for item in prop.enum_items:
                     msgsrc = "bpy.types.{}.{}:'{}'".format(bl_rna.identifier, prop.identifier, item.identifier)
+                    done_items.add(item.identifier)
+                    if item.name and item.name != item.identifier:
+                        process_msg(msgs, msgctxt, item.name, msgsrc, reports, check_ctxt_rna, settings)
+                    if item.description:
+                        process_msg(msgs, default_context, item.description, msgsrc, reports, check_ctxt_rna_tip,
+                                    settings)
+                for item in prop.enum_items_static:
+                    if item.identifier in done_items:
+                        continue
+                    msgsrc = "bpy.types.{}.{}:'{}'".format(bl_rna.identifier, prop.identifier, item.identifier)
+                    done_items.add(item.identifier)
                     if item.name and item.name != item.identifier:
                         process_msg(msgs, msgctxt, item.name, msgsrc, reports, check_ctxt_rna, settings)
                     if item.description:
@@ -456,7 +469,7 @@ def dump_py_messages_from_files(msgs, reports, files, settings):
 
     def extract_strings_split(node):
         """
-        Returns a list args as returned by 'extract_strings()', But split into groups based on separate_nodes, this way
+        Returns a list args as returned by 'extract_strings()', but split into groups based on separate_nodes, this way
         expressions like ("A" if test else "B") wont be merged but "A" + "B" will.
         """
         estr_ls = []
@@ -492,7 +505,11 @@ def dump_py_messages_from_files(msgs, reports, files, settings):
         return i18n_contexts.default
 
     def _op_to_ctxt(node):
-        opname, _ = extract_strings(node)
+        # Some smart coders like things like:
+        #    >>> row.operator("wm.addon_disable" if is_enabled else "wm.addon_enable", ...)
+        # We only take first arg into account here!
+        bag = extract_strings_split(node)
+        opname, _ = bag[0]
         if not opname:
             return i18n_contexts.default
         op = bpy.ops

@@ -326,7 +326,7 @@ void MESH_OT_extrude_repeat(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 	
 	/* props */
-	RNA_def_float(ot->srna, "offset", 2.0f, 0.0f, 1e12f, "Offset", "", 0.0f, 100.0f);
+	RNA_def_float_distance(ot->srna, "offset", 2.0f, 0.0f, 1e12f, "Offset", "", 0.0f, 100.0f);
 	RNA_def_int(ot->srna, "steps", 10, 0, 1000000, "Steps", "", 0, 180);
 }
 
@@ -673,7 +673,7 @@ void MESH_OT_dupli_extrude_cursor(wmOperatorType *ot)
 	
 	/* api callbacks */
 	ot->invoke = edbm_dupli_extrude_cursor_invoke;
-	ot->poll = ED_operator_editmesh;
+	ot->poll = ED_operator_editmesh_region_view3d;
 	
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
@@ -732,8 +732,17 @@ static int edbm_spin_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(e
 	View3D *v3d = CTX_wm_view3d(C);
 	RegionView3D *rv3d = ED_view3d_context_rv3d(C);
 
-	RNA_float_set_array(op->ptr, "center", ED_view3d_cursor3d_get(scene, v3d));
-	RNA_float_set_array(op->ptr, "axis", rv3d->viewinv[2]);
+	PropertyRNA *prop;
+	prop = RNA_struct_find_property(op->ptr, "center");
+	if (!RNA_property_is_set(op->ptr, prop)) {
+		RNA_property_float_set_array(op->ptr, prop, ED_view3d_cursor3d_get(scene, v3d));
+	}
+	if (rv3d) {
+		prop = RNA_struct_find_property(op->ptr, "axis");
+		if (!RNA_property_is_set(op->ptr, prop)) {
+			RNA_property_float_set_array(op->ptr, prop, rv3d->viewinv[2]);
+		}
+	}
 
 	return edbm_spin_exec(C, op);
 }
@@ -859,8 +868,17 @@ static int edbm_screw_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(
 	View3D *v3d = CTX_wm_view3d(C);
 	RegionView3D *rv3d = ED_view3d_context_rv3d(C);
 
-	RNA_float_set_array(op->ptr, "center", ED_view3d_cursor3d_get(scene, v3d));
-	RNA_float_set_array(op->ptr, "axis", rv3d->viewinv[1]);
+	PropertyRNA *prop;
+	prop = RNA_struct_find_property(op->ptr, "center");
+	if (!RNA_property_is_set(op->ptr, prop)) {
+		RNA_property_float_set_array(op->ptr, prop, ED_view3d_cursor3d_get(scene, v3d));
+	}
+	if (rv3d) {
+		prop = RNA_struct_find_property(op->ptr, "axis");
+		if (!RNA_property_is_set(op->ptr, prop)) {
+			RNA_property_float_set_array(op->ptr, prop, rv3d->viewinv[1]);
+		}
+	}
 
 	return edbm_screw_exec(C, op);
 }

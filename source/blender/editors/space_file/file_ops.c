@@ -69,6 +69,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <ctype.h>
+#include <errno.h>
 
 /* ---------- FILE SELECTION ------------ */
 static FileSelection find_file_mouse_rect(SpaceFile *sfile, ARegion *ar, const rcti *rect_region)
@@ -237,6 +238,49 @@ static bool file_is_any_selected(struct FileList *files)
 	return false;
 }
 
+/**
+ * If \a file is outside viewbounds, this adjusts view to make sure it's inside
+ */
+static void file_ensure_inside_viewbounds(ARegion *ar, SpaceFile *sfile, const int file)
+{
+	FileLayout *layout = ED_fileselect_get_layout(sfile, ar);
+	rctf *cur = &ar->v2d.cur;
+	rcti rect;
+	bool changed = true;
+
+	file_tile_boundbox(ar, layout, file, &rect);
+
+	/* down - also use if tile is higher than viewbounds so view is aligned to file name */
+	if (cur->ymin > rect.ymin || layout->tile_h > ar->winy) {
+		cur->ymin = rect.ymin - (2 * layout->tile_border_y);
+		cur->ymax = cur->ymin + ar->winy;
+	}
+	/* up */
+	else if (cur->ymax < rect.ymax) {
+		cur->ymax = rect.ymax + layout->tile_border_y;
+		cur->ymin = cur->ymax - ar->winy;
+	}
+	/* left - also use if tile is wider than viewbounds so view is aligned to file name */
+	else if (cur->xmin > rect.xmin || layout->tile_w > ar->winx) {
+		cur->xmin = rect.xmin - layout->tile_border_x;
+		cur->xmax = cur->xmin + ar->winx;
+	}
+	/* right */
+	else if (cur->xmax < rect.xmax) {
+		cur->xmax = rect.xmax + (2 * layout->tile_border_x);
+		cur->xmin = cur->xmax - ar->winx;
+	}
+	else {
+		BLI_assert(cur->xmin <= rect.xmin && cur->xmax >= rect.xmax &&
+		           cur->ymin <= rect.ymin && cur->ymax >= rect.ymax);
+		changed = false;
+	}
+
+	if (changed) {
+		UI_view2d_curRect_validate(&ar->v2d);
+	}
+}
+
 
 static FileSelect file_select(bContext *C, const rcti *rect, FileSelType select, bool fill, bool do_diropen)
 {
@@ -262,6 +306,20 @@ static FileSelect file_select(bContext *C, const rcti *rect, FileSelType select,
 	if (select != FILE_SEL_ADD && !file_is_any_selected(sfile->files)) {
 		sfile->params->active_file = -1;
 	}
+	else {
+		ARegion *ar = CTX_wm_region(C);
+		const FileLayout *layout = ED_fileselect_get_layout(sfile, ar);
+
+		/* Adjust view to display selection. Doing iterations for first and last
+		 * selected item makes view showing as much of the selection possible.
+		 * Not really useful if tiles are (almost) bigger than viewbounds though. */
+		if (((layout->flag & FILE_LAYOUT_HOR) && ar->winx > (1.2f * layout->tile_w)) ||
+		    ((layout->flag & FILE_LAYOUT_VER) && ar->winy > (2.0f * layout->tile_h)))
+		{
+			file_ensure_inside_viewbounds(ar, sfile, sel.last);
+			file_ensure_inside_viewbounds(ar, sfile, sel.first);
+		}
+	}
 
 	/* update operator for name change event */
 	file_draw_check(C);
@@ -276,6 +334,9 @@ static int file_border_select_find_last_selected(
 	FileLayout *layout = ED_fileselect_get_layout(sfile, ar);
 	rcti bounds_first, bounds_last;
 	int dist_first, dist_last;
+	float mouseco_view[2];
+
+	UI_view2d_region_to_view(&ar->v2d, UNPACK2(mouse_xy), &mouseco_view[0], &mouseco_view[1]);
 
 	file_tile_boundbox(ar, layout, sel->first, &bounds_first);
 	file_tile_boundbox(ar, layout, sel->last, &bounds_last);
@@ -285,18 +346,18 @@ static int file_border_select_find_last_selected(
 	    (layout->flag & FILE_LAYOUT_VER && bounds_first.ymin != bounds_last.ymin))
 	{
 		/* use vertical distance */
-		const int my_loc = mouse_xy[1] - ar->winrct.ymin;
+		const int my_loc = (int)mouseco_view[1];
 		dist_first = BLI_rcti_length_y(&bounds_first, my_loc);
 		dist_last = BLI_rcti_length_y(&bounds_last, my_loc);
 	}
 	else {
 		/* use horizontal distance */
-		const int mx_loc = mouse_xy[0] - ar->winrct.xmin;
+		const int mx_loc = (int)mouseco_view[0];
 		dist_first = BLI_rcti_length_x(&bounds_first, mx_loc);
 		dist_last = BLI_rcti_length_x(&bounds_last, mx_loc);
 	}
 
-	return dist_first < dist_last ? sel->first : sel->last;
+	return (dist_first < dist_last) ? sel->first : sel->last;
 }
 
 static int file_border_select_modal(bContext *C, wmOperator *op, const wmEvent *event)
@@ -339,7 +400,7 @@ static int file_border_select_modal(bContext *C, wmOperator *op, const wmEvent *
 			}
 		}
 		params->sel_first = sel.first; params->sel_last = sel.last;
-		params->active_file = file_border_select_find_last_selected(sfile, ar, &sel, &event->x);
+		params->active_file = file_border_select_find_last_selected(sfile, ar, &sel, event->mval);
 	}
 	else {
 		params->highlight_file = -1;
@@ -491,13 +552,13 @@ static bool file_walk_select_selection_set(
 
 	if (has_selection) {
 		if (extend &&
-		    filelist_entry_select_index_get(files, active_old, FILE_SEL_SELECTED) &&
-		    filelist_entry_select_index_get(files, active_new, FILE_SEL_SELECTED))
+		    filelist_entry_select_index_get(files, active_old, CHECK_ALL) &&
+		    filelist_entry_select_index_get(files, active_new, CHECK_ALL))
 		{
 			/* conditions for deselecting: initial file is selected, new file is
 			 * selected and either other_side isn't selected/found or we use fill */
 			deselect = (fill || other_site == -1 ||
-			            !filelist_entry_select_index_get(files, other_site, FILE_SEL_SELECTED));
+			            !filelist_entry_select_index_get(files, other_site, CHECK_ALL));
 
 			/* don't change highlight_file here since we either want to deselect active or we want to
 			 * walk through a block of selected files without selecting/deselecting anything */
@@ -570,6 +631,9 @@ static bool file_walk_select_selection_set(
 
 	BLI_assert(IN_RANGE(active, -1, numfiles));
 	fileselect_file_set(sfile, params->active_file);
+
+	/* ensure newly selected file is inside viewbounds */
+	file_ensure_inside_viewbounds(CTX_wm_region(C), sfile, params->active_file);
 
 	/* selection changed */
 	return true;
@@ -978,7 +1042,7 @@ static int bookmark_move_exec(bContext *C, wmOperator *op)
 void FILE_OT_bookmark_move(wmOperatorType *ot)
 {
 	static EnumPropertyItem slot_move[] = {
-	    {FILE_BOOKMARK_MOVE_TOP, "TOP", 0, "Top", "Top of the list"},
+		{FILE_BOOKMARK_MOVE_TOP, "TOP", 0, "Top", "Top of the list"},
 		{FILE_BOOKMARK_MOVE_UP, "UP", 0, "Up", ""},
 		{FILE_BOOKMARK_MOVE_DOWN, "DOWN", 0, "Down", ""},
 		{FILE_BOOKMARK_MOVE_BOTTOM, "BOTTOM", 0, "Bottom", "Bottom of the list"},
@@ -1125,7 +1189,7 @@ void FILE_OT_cancel(struct wmOperatorType *ot)
 }
 
 
-void file_sfile_to_operator(wmOperator *op, SpaceFile *sfile, char *filepath)
+void file_sfile_to_operator_ex(wmOperator *op, SpaceFile *sfile, char *filepath)
 {
 	PropertyRNA *prop;
 
@@ -1195,6 +1259,12 @@ void file_sfile_to_operator(wmOperator *op, SpaceFile *sfile, char *filepath)
 
 	}
 }
+void file_sfile_to_operator(wmOperator *op, SpaceFile *sfile)
+{
+	char filepath[FILE_MAX];
+
+	file_sfile_to_operator_ex(op, sfile, filepath);
+}
 
 void file_operator_to_sfile(SpaceFile *sfile, wmOperator *op)
 {
@@ -1222,14 +1292,35 @@ void file_operator_to_sfile(SpaceFile *sfile, wmOperator *op)
 	/* XXX, files and dirs updates missing, not really so important though */
 }
 
+/**
+ * Use to set the file selector path from some arbitrary source.
+ */
+void file_sfile_filepath_set(SpaceFile *sfile, const char *filepath)
+{
+	BLI_assert(BLI_exists(filepath));
+
+	if (BLI_is_dir(filepath)) {
+		BLI_strncpy(sfile->params->dir, filepath, sizeof(sfile->params->dir));
+		sfile->params->file[0] = '\0';
+	}
+	else {
+		if ((sfile->params->flag & FILE_DIRSEL_ONLY) == 0) {
+			BLI_split_dirfile(filepath, sfile->params->dir, sfile->params->file,
+			                  sizeof(sfile->params->dir), sizeof(sfile->params->file));
+		}
+		else {
+			BLI_split_dir_part(filepath, sfile->params->dir, sizeof(sfile->params->dir));
+		}
+	}
+}
+
 void file_draw_check(bContext *C)
 {
 	SpaceFile *sfile = CTX_wm_space_file(C);
 	wmOperator *op = sfile->op;
 	if (op) { /* fail on reload */
 		if (op->type->check) {
-			char filepath[FILE_MAX];
-			file_sfile_to_operator(op, sfile, filepath);
+			file_sfile_to_operator(op, sfile);
 			
 			/* redraw */
 			if (op->type->check(C, op)) {
@@ -1283,8 +1374,8 @@ int file_exec(bContext *C, wmOperator *exec_op)
 			BLI_parent_dir(sfile->params->dir);
 		}
 		else {
-			BLI_cleanup_dir(G.main->name, sfile->params->dir);
-			strcat(sfile->params->dir, file->relpath);
+			BLI_cleanup_path(G.main->name, sfile->params->dir);
+			BLI_path_append(sfile->params->dir, sizeof(sfile->params->dir) - 1, file->relpath);
 			BLI_add_slash(sfile->params->dir);
 		}
 
@@ -1312,7 +1403,7 @@ int file_exec(bContext *C, wmOperator *exec_op)
 		
 		sfile->op = NULL;
 
-		file_sfile_to_operator(op, sfile, filepath);
+		file_sfile_to_operator_ex(op, sfile, filepath);
 
 		if (BLI_exists(sfile->params->dir)) {
 			fsmenu_insert_entry(ED_fsmenu_get(), FS_CATEGORY_RECENT, sfile->params->dir, NULL,
@@ -1589,6 +1680,45 @@ void FILE_OT_smoothscroll(wmOperatorType *ot)
 }
 
 
+static int filepath_drop_exec(bContext *C, wmOperator *op)
+{
+	SpaceFile *sfile = CTX_wm_space_file(C);
+
+	if (sfile) {
+		char filepath[FILE_MAX];
+
+		RNA_string_get(op->ptr, "filepath", filepath);
+		if (!BLI_exists(filepath)) {
+			BKE_report(op->reports, RPT_ERROR, "File does not exist");
+			return OPERATOR_CANCELLED;
+		}
+
+		file_sfile_filepath_set(sfile, filepath);
+
+		if (sfile->op) {
+			file_sfile_to_operator(sfile->op, sfile);
+			file_draw_check(C);
+		}
+
+		WM_event_add_notifier(C, NC_SPACE | ND_SPACE_FILE_PARAMS, NULL);
+		return OPERATOR_FINISHED;
+	}
+
+	return OPERATOR_CANCELLED;
+}
+
+void FILE_OT_filepath_drop(wmOperatorType *ot)
+{
+	ot->name = "File Selector Drop";
+	ot->description = "";
+	ot->idname = "FILE_OT_filepath_drop";
+
+	ot->exec = filepath_drop_exec;
+	ot->poll = WM_operator_winactive;
+
+	RNA_def_string_file_path(ot->srna, "filepath", "Path", FILE_MAX, "", "");
+}
+
 /* create a new, non-existing folder name, returns 1 if successful, 0 if name couldn't be created.
  * The actual name is returned in 'name', 'folder' contains the complete path, including the new folder name.
  */
@@ -1654,16 +1784,18 @@ int file_directory_new_exec(bContext *C, wmOperator *op)
 	}
 
 	/* create the file */
-	if (!BLI_dir_create_recursive(path)) {
-		BKE_report(op->reports, RPT_ERROR, "Could not create new folder");
+	errno = 0;
+	if (!BLI_dir_create_recursive(path) ||
+	    /* Should no more be needed,
+	     * now that BLI_dir_create_recursive returns a success state - but kept just in case. */
+	    !BLI_exists(path))
+	{
+		BKE_reportf(op->reports, RPT_ERROR,
+		            "Could not create new folder: %s",
+		            errno ? strerror(errno) : "unknown error");
 		return OPERATOR_CANCELLED;
 	}
 
-	/* Should no more be needed, now that BLI_dir_create_recursive returns a success state - but kept just in case. */
-	if (!BLI_exists(path)) {
-		BKE_report(op->reports, RPT_ERROR, "Could not create new folder");
-		return OPERATOR_CANCELLED;
-	}
 
 	/* now remember file to jump into editing */
 	BLI_strncpy(sfile->params->renamefile, name, FILE_MAXFILE);
@@ -1831,11 +1963,12 @@ void file_filename_enter_handle(bContext *C, void *UNUSED(arg_unused), void *arg
 		matched_file[0] = '\0';
 		filepath[0] = '\0';
 
-		BLI_filename_make_safe(sfile->params->file);
-
 		file_expand_directory(C);
 
 		matches = file_select_match(sfile, sfile->params->file, matched_file);
+
+		/* *After* file_select_match! */
+		BLI_filename_make_safe(sfile->params->file);
 
 		if (matches) {
 			/* int i, numfiles = filelist_numfiles(sfile->files); */ /* XXX UNUSED */
@@ -1969,6 +2102,37 @@ void FILE_OT_bookmark_toggle(struct wmOperatorType *ot)
 }
 
 
+/**
+ * Looks for a string of digits within name (using BLI_stringdec) and adjusts it by add.
+ */
+static void filenum_newname(char *name, size_t name_size, int add)
+{
+	char head[FILE_MAXFILE], tail[FILE_MAXFILE];
+	char name_temp[FILE_MAXFILE];
+	int pic;
+	unsigned short digits;
+
+	pic = BLI_stringdec(name, head, tail, &digits);
+
+	/* are we going from 100 -> 99 or from 10 -> 9 */
+	if (add < 0 && digits > 0) {
+		int i, exp;
+		exp = 1;
+		for (i = digits; i > 1; i--) {
+			exp *= 10;
+		}
+		if (pic >= exp && (pic + add) < exp) {
+			digits--;
+		}
+	}
+
+	pic += add;
+	if (pic < 0)
+		pic = 0;
+	BLI_stringenc(name_temp, head, tail, digits, pic);
+	BLI_strncpy(name, name_temp, name_size);
+}
+
 static int file_filenum_exec(bContext *C, wmOperator *op)
 {
 	SpaceFile *sfile = CTX_wm_space_file(C);
@@ -1976,7 +2140,7 @@ static int file_filenum_exec(bContext *C, wmOperator *op)
 	
 	int inc = RNA_int_get(op->ptr, "increment");
 	if (sfile->params && (inc != 0)) {
-		BLI_newname(sfile->params->file, inc);
+		filenum_newname(sfile->params->file, sizeof(sfile->params->file), inc);
 		ED_area_tag_redraw(sa);
 		file_draw_check(C);
 		// WM_event_add_notifier(C, NC_WINDOW, NULL);
@@ -2095,7 +2259,7 @@ static int file_delete_poll(bContext *C)
 	return poll;
 }
 
-int file_delete_exec(bContext *C, wmOperator *UNUSED(op))
+int file_delete_exec(bContext *C, wmOperator *op)
 {
 	char str[FILE_MAX];
 	wmWindowManager *wm = CTX_wm_manager(C);
@@ -2105,14 +2269,26 @@ int file_delete_exec(bContext *C, wmOperator *UNUSED(op))
 	int numfiles = filelist_files_ensure(sfile->files);
 	int i;
 
+	bool report_error = false;
+	errno = 0;
 	for (i = 0; i < numfiles; i++) {
 		if (filelist_entry_select_index_get(sfile->files, i, CHECK_FILES)) {
 			file = filelist_file(sfile->files, i);
 			BLI_make_file_string(G.main->name, str, sfile->params->dir, file->relpath);
-			BLI_delete(str, false, false);
+			if (BLI_delete(str, false, false) != 0 ||
+			    BLI_exists(str))
+			{
+				report_error = true;
+			}
 		}
 	}
 	
+	if (report_error) {
+		BKE_reportf(op->reports, RPT_ERROR,
+		            "Could not delete file: %s",
+		            errno ? strerror(errno) : "unknown error");
+	}
+
 	ED_fileselect_clear(wm, sa, sfile);
 	WM_event_add_notifier(C, NC_SPACE | ND_SPACE_FILE_LIST, NULL);
 	

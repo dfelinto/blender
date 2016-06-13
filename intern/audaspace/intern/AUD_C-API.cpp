@@ -41,7 +41,6 @@
 #  include "AUD_PyAPI.h"
 #endif
 
-#include <set>
 #include <cstdlib>
 #include <cstring>
 #include <cmath>
@@ -76,7 +75,6 @@
 #include "AUD_MutexLock.h"
 
 #ifdef WITH_SDL
-#include <SDL.h>
 #include "AUD_SDLDevice.h"
 #endif
 
@@ -919,7 +917,7 @@ AUD_Sound *AUD_Sequence_create(float fps, int muted)
 	// specs are changed at a later point!
 	AUD_Specs specs;
 	specs.channels = AUD_CHANNELS_STEREO;
-	specs.rate = AUD_RATE_44100;
+	specs.rate = AUD_RATE_48000;
 	AUD_Sound *sequencer = new AUD_Sound(boost::shared_ptr<AUD_SequencerFactory>(new AUD_SequencerFactory(specs, fps, muted)));
 	return sequencer;
 }
@@ -1224,44 +1222,6 @@ void AUD_Handle_free(AUD_Handle *handle)
 	delete handle;
 }
 
-void *AUD_createSet()
-{
-	return new std::set<void *>();
-}
-
-void AUD_destroySet(void *set)
-{
-	delete reinterpret_cast<std::set<void *>*>(set);
-}
-
-char AUD_removeSet(void *set, void *entry)
-{
-	if (set)
-		return reinterpret_cast<std::set<void *>*>(set)->erase(entry);
-	return 0;
-}
-
-void AUD_addSet(void *set, void *entry)
-{
-	if (entry)
-		reinterpret_cast<std::set<void *>*>(set)->insert(entry);
-}
-
-void *AUD_getSet(void *set)
-{
-	if (set) {
-		std::set<void *>* rset = reinterpret_cast<std::set<void *>*>(set);
-		if (!rset->empty()) {
-			std::set<void *>::iterator it = rset->begin();
-			void *result = *it;
-			rset->erase(it);
-			return result;
-		}
-	}
-
-	return NULL;
-}
-
 const char *AUD_mixdown(AUD_Sound *sound, unsigned int start, unsigned int length, unsigned int buffersize, const char *filename, AUD_DeviceSpecs specs, AUD_Container format, AUD_Codec codec, unsigned int bitrate)
 {
 	try {
@@ -1331,9 +1291,11 @@ AUD_Device *AUD_openMixdownDevice(AUD_DeviceSpecs specs, AUD_Sound *sequencer, f
 		device->setQuality(true);
 		device->setVolume(volume);
 
-		dynamic_cast<AUD_SequencerFactory *>(sequencer->get())->setSpecs(specs.specs);
+		AUD_SequencerFactory *f = dynamic_cast<AUD_SequencerFactory *>(sequencer->get());
 
-		AUD_Handle handle = device->play(*sequencer);
+		f->setSpecs(specs.specs);
+
+		AUD_Handle handle = device->play(f->createQualityReader());
 		if (handle.get()) {
 			handle->seek(start);
 		}

@@ -47,7 +47,7 @@
 /* enum of ID-block types
  * NOTE: need to keep this in line with the other defines for these
  */
-EnumPropertyItem id_type_items[] = {
+EnumPropertyItem rna_enum_id_type_items[] = {
 	{ID_AC, "ACTION", ICON_ACTION, "Action", ""},
 	{ID_AR, "ARMATURE", ICON_ARMATURE_DATA, "Armature", ""},
 	{ID_BR, "BRUSH", ICON_BRUSH_DATA, "Brush", ""},
@@ -90,9 +90,11 @@ EnumPropertyItem id_type_items[] = {
 #include "BKE_font.h"
 #include "BKE_idprop.h"
 #include "BKE_library.h"
+#include "BKE_library_query.h"
 #include "BKE_animsys.h"
 #include "BKE_material.h"
 #include "BKE_depsgraph.h"
+#include "BKE_global.h"  /* XXX, remove me */
 
 #include "WM_api.h"
 
@@ -113,7 +115,7 @@ void rna_ID_name_set(PointerRNA *ptr, const char *value)
 {
 	ID *id = (ID *)ptr->data;
 	BLI_strncpy_utf8(id->name + 2, value, sizeof(id->name) - 2);
-	test_idbutton(id->name);
+	BLI_libblock_ensure_unique_name(G.main, id->name);
 }
 
 static int rna_ID_name_editable(PointerRNA *ptr)
@@ -126,7 +128,7 @@ static int rna_ID_name_editable(PointerRNA *ptr)
 			return false;
 	}
 	
-	return true;
+	return PROP_EDITABLE;
 }
 
 short RNA_type_to_ID_code(StructRNA *type)
@@ -223,13 +225,11 @@ void rna_ID_fake_user_set(PointerRNA *ptr, int value)
 {
 	ID *id = (ID *)ptr->data;
 
-	if (value && !(id->flag & LIB_FAKEUSER)) {
-		id->flag |= LIB_FAKEUSER;
-		id_us_plus(id);
+	if (value) {
+		id_fake_user_set(id);
 	}
-	else if (!value && (id->flag & LIB_FAKEUSER)) {
-		id->flag &= ~LIB_FAKEUSER;
-		id_us_min(id);
+	else {
+		id_fake_user_clear(id);
 	}
 }
 
@@ -329,8 +329,8 @@ static void rna_ID_update_tag(ID *id, ReportList *reports, int flag)
 
 static void rna_ID_user_clear(ID *id)
 {
+	id_fake_user_clear(id);
 	id->us = 0; /* don't save */
-	id->flag &= ~LIB_FAKEUSER;
 }
 
 static AnimData * rna_ID_animation_data_create(ID *id, Main *bmain)
@@ -484,6 +484,7 @@ static void rna_ImagePreview_size_set(PointerRNA *ptr, const int *values, enum e
 	prv_img->flag[size] |= (PRV_CHANGED | PRV_USER_EDITED);
 }
 
+
 static int rna_ImagePreview_pixels_get_length(PointerRNA *ptr, int length[RNA_MAX_ARRAY_DIMENSION], enum eIconSizes size)
 {
 	ID *id = ptr->id.data;
@@ -527,6 +528,70 @@ static void rna_ImagePreview_pixels_set(PointerRNA *ptr, const int *values, enum
 	prv_img->flag[size] |= PRV_USER_EDITED;
 }
 
+
+static int rna_ImagePreview_pixels_float_get_length(
+        PointerRNA *ptr, int length[RNA_MAX_ARRAY_DIMENSION], enum eIconSizes size)
+{
+	ID *id = ptr->id.data;
+	PreviewImage *prv_img = (PreviewImage *)ptr->data;
+
+	BLI_assert(sizeof(unsigned int) == 4);
+
+	if (id != NULL) {
+		BLI_assert(prv_img == BKE_previewimg_id_ensure(id));
+	}
+
+	BKE_previewimg_ensure(prv_img, size);
+
+	length[0] = prv_img->w[size] * prv_img->h[size] * 4;
+
+	return length[0];
+}
+
+static void rna_ImagePreview_pixels_float_get(PointerRNA *ptr, float *values, enum eIconSizes size)
+{
+	ID *id = ptr->id.data;
+	PreviewImage *prv_img = (PreviewImage *)ptr->data;
+
+	unsigned char *data = (unsigned char *)prv_img->rect[size];
+	const size_t len = prv_img->w[size] * prv_img->h[size] * 4;
+	size_t i;
+
+	BLI_assert(sizeof(unsigned int) == 4);
+
+	if (id != NULL) {
+		BLI_assert(prv_img == BKE_previewimg_id_ensure(id));
+	}
+
+	BKE_previewimg_ensure(prv_img, size);
+
+	for (i = 0; i < len; i++) {
+		values[i] = data[i] * (1.0f / 255.0f);
+	}
+}
+
+static void rna_ImagePreview_pixels_float_set(PointerRNA *ptr, const float *values, enum eIconSizes size)
+{
+	ID *id = ptr->id.data;
+	PreviewImage *prv_img = (PreviewImage *)ptr->data;
+
+	unsigned char *data = (unsigned char *)prv_img->rect[size];
+	const size_t len = prv_img->w[size] * prv_img->h[size] * 4;
+	size_t i;
+
+	BLI_assert(sizeof(unsigned int) == 4);
+
+	if (id != NULL) {
+		BLI_assert(prv_img == BKE_previewimg_id_ensure(id));
+	}
+
+	for (i = 0; i < len; i++) {
+		data[i] = FTOCHAR(values[i]);
+	}
+	prv_img->flag[size] |= PRV_USER_EDITED;
+}
+
+
 static void rna_ImagePreview_is_image_custom_set(PointerRNA *ptr, int value)
 {
 	rna_ImagePreview_is_custom_set(ptr, value, ICON_SIZE_PREVIEW);
@@ -557,6 +622,22 @@ static void rna_ImagePreview_image_pixels_set(PointerRNA *ptr, const int *values
 	rna_ImagePreview_pixels_set(ptr, values, ICON_SIZE_PREVIEW);
 }
 
+static int rna_ImagePreview_image_pixels_float_get_length(PointerRNA *ptr, int length[RNA_MAX_ARRAY_DIMENSION])
+{
+	return rna_ImagePreview_pixels_float_get_length(ptr, length, ICON_SIZE_PREVIEW);
+}
+
+static void rna_ImagePreview_image_pixels_float_get(PointerRNA *ptr, float *values)
+{
+	rna_ImagePreview_pixels_float_get(ptr, values, ICON_SIZE_PREVIEW);
+}
+
+static void rna_ImagePreview_image_pixels_float_set(PointerRNA *ptr, const float *values)
+{
+	rna_ImagePreview_pixels_float_set(ptr, values, ICON_SIZE_PREVIEW);
+}
+
+
 static void rna_ImagePreview_is_icon_custom_set(PointerRNA *ptr, int value)
 {
 	rna_ImagePreview_is_custom_set(ptr, value, ICON_SIZE_ICON);
@@ -586,6 +667,22 @@ static void rna_ImagePreview_icon_pixels_set(PointerRNA *ptr, const int *values)
 {
 	rna_ImagePreview_pixels_set(ptr, values, ICON_SIZE_ICON);
 }
+
+static int rna_ImagePreview_icon_pixels_float_get_length(PointerRNA *ptr, int length[RNA_MAX_ARRAY_DIMENSION])
+{
+	return rna_ImagePreview_pixels_float_get_length(ptr, length, ICON_SIZE_ICON);
+}
+
+static void rna_ImagePreview_icon_pixels_float_get(PointerRNA *ptr, float *values)
+{
+	rna_ImagePreview_pixels_float_get(ptr, values, ICON_SIZE_ICON);
+}
+
+static void rna_ImagePreview_icon_pixels_float_set(PointerRNA *ptr, const float *values)
+{
+	rna_ImagePreview_pixels_float_set(ptr, values, ICON_SIZE_ICON);
+}
+
 
 static int rna_ImagePreview_icon_id_get(PointerRNA *ptr)
 {
@@ -754,6 +851,15 @@ static void rna_def_image_preview(BlenderRNA *brna)
 	RNA_def_property_dynamic_array_funcs(prop, "rna_ImagePreview_image_pixels_get_length");
 	RNA_def_property_int_funcs(prop, "rna_ImagePreview_image_pixels_get", "rna_ImagePreview_image_pixels_set", NULL);
 
+	prop = RNA_def_property(srna, "image_pixels_float", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_flag(prop, PROP_DYNAMIC);
+	RNA_def_property_multi_array(prop, 1, NULL);
+	RNA_def_property_ui_text(prop, "Float Image Pixels",
+	                         "Image pixels components, as floats (RGBA concatenated values)");
+	RNA_def_property_dynamic_array_funcs(prop, "rna_ImagePreview_image_pixels_float_get_length");
+	RNA_def_property_float_funcs(prop, "rna_ImagePreview_image_pixels_float_get",
+	                             "rna_ImagePreview_image_pixels_float_set", NULL);
+
 
 	prop = RNA_def_property(srna, "is_icon_custom", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "flag[ICON_SIZE_ICON]", PRV_USER_EDITED);
@@ -772,6 +878,14 @@ static void rna_def_image_preview(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Icon Pixels", "Icon pixels, as bytes (always RGBA 32bits)");
 	RNA_def_property_dynamic_array_funcs(prop, "rna_ImagePreview_icon_pixels_get_length");
 	RNA_def_property_int_funcs(prop, "rna_ImagePreview_icon_pixels_get", "rna_ImagePreview_icon_pixels_set", NULL);
+
+	prop = RNA_def_property(srna, "icon_pixels_float", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_flag(prop, PROP_DYNAMIC);
+	RNA_def_property_multi_array(prop, 1, NULL);
+	RNA_def_property_ui_text(prop, "Float Icon Pixels", "Icon pixels components, as floats (RGBA concatenated values)");
+	RNA_def_property_dynamic_array_funcs(prop, "rna_ImagePreview_icon_pixels_float_get_length");
+	RNA_def_property_float_funcs(prop, "rna_ImagePreview_icon_pixels_float_get",
+	                             "rna_ImagePreview_icon_pixels_float_set", NULL);
 
 	prop = RNA_def_int(srna, "icon_id", 0, INT_MIN, INT_MAX, "Icon ID",
 	                   "Unique integer identifying this preview as an icon (zero means invalid)", INT_MIN, INT_MAX);
@@ -797,14 +911,14 @@ static void rna_def_ID(BlenderRNA *brna)
 
 	srna = RNA_def_struct(brna, "ID", NULL);
 	RNA_def_struct_ui_text(srna, "ID",
-	                       "Base type for datablocks, defining a unique name, linking from other libraries "
+	                       "Base type for data-blocks, defining a unique name, linking from other libraries "
 	                       "and garbage collection");
 	RNA_def_struct_flag(srna, STRUCT_ID | STRUCT_ID_REFCOUNT);
 	RNA_def_struct_refine_func(srna, "rna_ID_refine");
 	RNA_def_struct_idprops_func(srna, "rna_ID_idprops");
 
 	prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
-	RNA_def_property_ui_text(prop, "Name", "Unique datablock ID name");
+	RNA_def_property_ui_text(prop, "Name", "Unique data-block ID name");
 	RNA_def_property_string_funcs(prop, "rna_ID_name_get", "rna_ID_name_length", "rna_ID_name_set");
 	RNA_def_property_string_maxlength(prop, MAX_ID_NAME - 2);
 	RNA_def_property_editable_func(prop, "rna_ID_name_editable");
@@ -814,54 +928,62 @@ static void rna_def_ID(BlenderRNA *brna)
 	prop = RNA_def_property(srna, "users", PROP_INT, PROP_UNSIGNED);
 	RNA_def_property_int_sdna(prop, NULL, "us");
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
-	RNA_def_property_ui_text(prop, "Users", "Number of times this datablock is referenced");
+	RNA_def_property_ui_text(prop, "Users", "Number of times this data-block is referenced");
 
 	prop = RNA_def_property(srna, "use_fake_user", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "flag", LIB_FAKEUSER);
-	RNA_def_property_ui_text(prop, "Fake User", "Save this datablock even if it has no users");
+	RNA_def_property_ui_text(prop, "Fake User", "Save this data-block even if it has no users");
 	RNA_def_property_boolean_funcs(prop, NULL, "rna_ID_fake_user_set");
 
 	prop = RNA_def_property(srna, "tag", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_sdna(prop, NULL, "flag", LIB_DOIT);
+	RNA_def_property_boolean_sdna(prop, NULL, "tag", LIB_TAG_DOIT);
 	RNA_def_property_flag(prop, PROP_LIB_EXCEPTION);
 	RNA_def_property_ui_text(prop, "Tag",
 	                         "Tools can use this to tag data for their own purposes "
 	                         "(initial state is undefined)");
 
 	prop = RNA_def_property(srna, "is_updated", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_sdna(prop, NULL, "flag", LIB_ID_RECALC);
+	RNA_def_property_boolean_sdna(prop, NULL, "tag", LIB_TAG_ID_RECALC);
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 	RNA_def_property_ui_text(prop, "Is Updated", "Datablock is tagged for recalculation");
 
 	prop = RNA_def_property(srna, "is_updated_data", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_sdna(prop, NULL, "flag", LIB_ID_RECALC_DATA);
+	RNA_def_property_boolean_sdna(prop, NULL, "tag", LIB_TAG_ID_RECALC_DATA);
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 	RNA_def_property_ui_text(prop, "Is Updated Data", "Datablock data is tagged for recalculation");
 
 	prop = RNA_def_property(srna, "is_library_indirect", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_sdna(prop, NULL, "flag", LIB_INDIRECT);
+	RNA_def_property_boolean_sdna(prop, NULL, "tag", LIB_TAG_INDIRECT);
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 	RNA_def_property_ui_text(prop, "Is Indirect", "Is this ID block linked indirectly");
 
 	prop = RNA_def_property(srna, "library", PROP_POINTER, PROP_NONE);
 	RNA_def_property_pointer_sdna(prop, NULL, "lib");
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
-	RNA_def_property_ui_text(prop, "Library", "Library file the datablock is linked from");
+	RNA_def_property_ui_text(prop, "Library", "Library file the data-block is linked from");
 
 	prop = RNA_def_pointer(srna, "preview", "ImagePreview", "Preview",
-	                       "Preview image and icon of this datablock (None if not supported for this type of data)");
+	                       "Preview image and icon of this data-block (None if not supported for this type of data)");
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 	RNA_def_property_pointer_funcs(prop, "rna_IDPreview_get", NULL, NULL, NULL);
 
 	/* functions */
 	func = RNA_def_function(srna, "copy", "rna_ID_copy");
-	RNA_def_function_ui_description(func, "Create a copy of this datablock (not supported for all datablocks)");
+	RNA_def_function_ui_description(func, "Create a copy of this data-block (not supported for all data-blocks)");
 	parm = RNA_def_pointer(func, "id", "ID", "", "New copy of the ID");
 	RNA_def_function_return(func, parm);
 
 	func = RNA_def_function(srna, "user_clear", "rna_ID_user_clear");
-	RNA_def_function_ui_description(func, "Clear the user count of a datablock so its not saved, "
+	RNA_def_function_ui_description(func, "Clear the user count of a data-block so its not saved, "
 	                                "on reload the data will be removed");
+
+	func = RNA_def_function(srna, "user_of_id", "BKE_library_ID_use_ID");
+	RNA_def_function_ui_description(func, "Count the number of times that ID uses/references given one");
+	parm = RNA_def_pointer(func, "id", "ID", "", "ID to count usages");
+	RNA_def_property_flag(parm, PROP_NEVER_NULL);
+	parm = RNA_def_int(func, "count", 0, 0, INT_MAX,
+	                   "", "Number of usages/references of given id by current datablock", 0, INT_MAX);
+	RNA_def_function_return(func, parm);
 
 	func = RNA_def_function(srna, "animation_data_create", "rna_ID_animation_data_create");
 	RNA_def_function_flag(func, FUNC_USE_MAIN);

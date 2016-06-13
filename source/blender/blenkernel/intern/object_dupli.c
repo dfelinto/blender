@@ -354,7 +354,7 @@ static void make_duplis_frames(const DupliContext *ctx)
 
 	/* special flag to avoid setting recalc flags to notify the depsgraph of
 	 * updates, as this is not a permanent change to the object */
-	ob->id.flag |= LIB_ANIM_NO_RECALC;
+	ob->id.tag |= LIB_TAG_ANIM_NO_RECALC;
 
 	for (scene->r.cfra = ob->dupsta; scene->r.cfra <= dupend; scene->r.cfra++) {
 		int ok = 1;
@@ -792,8 +792,10 @@ static void make_duplis_faces(const DupliContext *ctx)
 			fdd.dm = mesh_get_derived_final(scene, parent, dm_mask);
 
 		if (use_texcoords) {
+			CustomData *ml_data = fdd.dm->getLoopDataLayout(fdd.dm);
+			const int uv_idx = CustomData_get_render_layer(ml_data, CD_MLOOPUV);
 			fdd.orco = fdd.dm->getVertDataArray(fdd.dm, CD_ORCO);
-			fdd.mloopuv = fdd.dm->getLoopDataArray(fdd.dm, CD_MLOOPUV);
+			fdd.mloopuv = CustomData_get_layer_n(ml_data, CD_MLOOPUV, uv_idx);
 		}
 		else {
 			fdd.orco = NULL;
@@ -1251,15 +1253,16 @@ DupliApplyData *duplilist_apply(Object *ob, Scene *scene, ListBase *duplilist)
 		                                "DupliObject apply extra data");
 
 		for (dob = duplilist->first, i = 0; dob; dob = dob->next, ++i) {
-			/* copy obmat from duplis */
-			copy_m4_m4(apply_data->extra[i].obmat, dob->ob->obmat);
-
 			/* make sure derivedmesh is calculated once, before drawing */
 			if (scene && !(dob->ob->transflag & OB_DUPLICALCDERIVED) && dob->ob->type == OB_MESH) {
 				mesh_get_derived_final(scene, dob->ob, scene->customdata_mask);
 				dob->ob->transflag |= OB_DUPLICALCDERIVED;
 			}
+		}
 
+		for (dob = duplilist->first, i = 0; dob; dob = dob->next, ++i) {
+			/* copy obmat from duplis */
+			copy_m4_m4(apply_data->extra[i].obmat, dob->ob->obmat);
 			copy_m4_m4(dob->ob->obmat, dob->mat);
 			
 			/* copy layers from the main duplicator object */

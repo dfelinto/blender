@@ -415,7 +415,9 @@ static PyObject *M_Geometry_volume_tetrahedron(PyObject *UNUSED(self), PyObject 
 PyDoc_STRVAR(M_Geometry_intersect_line_line_2d_doc,
 ".. function:: intersect_line_line_2d(lineA_p1, lineA_p2, lineB_p1, lineB_p2)\n"
 "\n"
-"   Takes 2 lines (as 4 vectors) and returns a vector for their point of intersection or None.\n"
+"   Takes 2 segments (defined by 4 vectors) and returns a vector for their point of intersection or None.\n"
+"\n"
+"   .. warning:: Despite its name, this function works on segments, and not on lines.\n"
 "\n"
 "   :arg lineA_p1: First point of the first line\n"
 "   :type lineA_p1: :class:`mathutils.Vector`\n"
@@ -530,6 +532,7 @@ static PyObject *M_Geometry_intersect_plane_plane(PyObject *UNUSED(self), PyObje
 	PyObject *ret, *ret_co, *ret_no;
 	PyObject *py_plane_a_co, *py_plane_a_no, *py_plane_b_co, *py_plane_b_no;
 	float plane_a_co[3], plane_a_no[3], plane_b_co[3], plane_b_no[3];
+	float plane_a[4], plane_b[4];
 
 	float isect_co[3];
 	float isect_no[3];
@@ -549,9 +552,12 @@ static PyObject *M_Geometry_intersect_plane_plane(PyObject *UNUSED(self), PyObje
 		return NULL;
 	}
 
-	if (isect_plane_plane_v3(isect_co, isect_no,
-	                         plane_a_co, plane_a_no,
-	                         plane_b_co, plane_b_no))
+	plane_from_point_normal_v3(plane_a, plane_a_co, plane_a_no);
+	plane_from_point_normal_v3(plane_b, plane_b_co, plane_b_no);
+
+	if (isect_plane_plane_v3(
+	        plane_a, plane_b,
+	        isect_co, isect_no))
 	{
 		normalize_v3(isect_no);
 
@@ -866,7 +872,7 @@ PyDoc_STRVAR(M_Geometry_intersect_point_quad_2d_doc,
 "   :type quad_p2: :class:`mathutils.Vector`\n"
 "   :arg quad_p3: Third point of the quad\n"
 "   :type quad_p3: :class:`mathutils.Vector`\n"
-"   :arg quad_p4: Forth point of the quad\n"
+"   :arg quad_p4: Fourth point of the quad\n"
 "   :type quad_p4: :class:`mathutils.Vector`\n"
 "   :rtype: int\n"
 );

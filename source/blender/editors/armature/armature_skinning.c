@@ -51,12 +51,10 @@
 #include "ED_armature.h"
 #include "ED_mesh.h"
 
+#include "eigen_capi.h"
 
 #include "armature_intern.h"
-
-#ifdef WITH_OPENNL
-#  include "meshlaplacian.h"
-#endif
+#include "meshlaplacian.h"
 
 #if 0
 #include "reeb.h"
@@ -216,7 +214,7 @@ static void envelope_bone_weighting(Object *ob, Mesh *mesh, float (*verts)[3], i
 			continue;
 		}
 
-		iflip = (dgroupflip) ? mesh_get_x_mirror_vert(ob, i, use_topology) : -1;
+		iflip = (dgroupflip) ? mesh_get_x_mirror_vert(ob, NULL, i, use_topology) : -1;
 		
 		/* for each skinnable bone */
 		for (j = 0; j < numbones; ++j) {
@@ -401,12 +399,8 @@ static void add_verts_to_dgroups(ReportList *reports, Scene *scene, Object *ob, 
 	if (heat) {
 		const char *error = NULL;
 
-#ifdef WITH_OPENNL
 		heat_bone_weighting(ob, mesh, verts, numbones, dgrouplist, dgroupflip,
 		                    root, tip, selected, &error);
-#else
-		error = "Built without OpenNL";
-#endif
 		if (error) {
 			BKE_report(reports, RPT_WARNING, error);
 		}
@@ -417,7 +411,7 @@ static void add_verts_to_dgroups(ReportList *reports, Scene *scene, Object *ob, 
 	}
 
 	/* only generated in some cases but can call anyway */
-	ED_mesh_mirror_spatial_table(ob, NULL, NULL, 'e');
+	ED_mesh_mirror_spatial_table(ob, NULL, NULL, NULL, 'e');
 
 	/* free the memory allocated */
 	MEM_freeN(bonelist);

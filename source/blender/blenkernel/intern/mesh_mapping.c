@@ -65,7 +65,7 @@ UvVertMap *BKE_mesh_uv_vert_map_create(
 	unsigned int a;
 	int i, totuv, nverts;
 
-	bool *winding;
+	bool *winding = NULL;
 	BLI_buffer_declare_static(vec2f, tf_uv_buf, BLI_BUFFER_NOP, 32);
 
 	totuv = 0;
@@ -94,10 +94,10 @@ UvVertMap *BKE_mesh_uv_vert_map_create(
 	mp = mpoly;
 	for (a = 0; a < totpoly; a++, mp++) {
 		if (!selected || (!(mp->flag & ME_HIDE) && (mp->flag & ME_FACE_SEL))) {
-			float (*tf_uv)[2];
+			float (*tf_uv)[2] = NULL;
 
 			if (use_winding) {
-				tf_uv = (float (*)[2])BLI_buffer_resize_data(&tf_uv_buf, vec2f, mp->totloop);
+				tf_uv = (float (*)[2])BLI_buffer_reinit_data(&tf_uv_buf, vec2f, (size_t)mp->totloop);
 			}
 
 			nverts = mp->totloop;
@@ -262,6 +262,51 @@ void BKE_mesh_vert_loop_map_create(MeshElemMap **r_map, int **r_mem,
 }
 
 /**
+ * Generates a map where the key is the edge and the value is a list of looptris that use that edge.
+ * The lists are allocated from one memory pool.
+ */
+void BKE_mesh_vert_looptri_map_create(
+        MeshElemMap **r_map, int **r_mem,
+        const MVert *UNUSED(mvert), const int totvert,
+        const MLoopTri *mlooptri, const int totlooptri,
+        const MLoop *mloop, const int UNUSED(totloop))
+{
+	MeshElemMap *map = MEM_callocN(sizeof(MeshElemMap) * (size_t)totvert, __func__);
+	int *indices = MEM_mallocN(sizeof(int) * (size_t)totlooptri * 3, __func__);
+	int *index_step;
+	const MLoopTri *mlt;
+	int i;
+
+	/* count face users */
+	for (i = 0, mlt = mlooptri; i < totlooptri; mlt++, i++) {
+		for (int j = 3; j--;) {
+			map[mloop[mlt->tri[j]].v].count++;
+		}
+	}
+
+	/* create offsets */
+	index_step = indices;
+	for (i = 0; i < totvert; i++) {
+		map[i].indices = index_step;
+		index_step += map[i].count;
+
+		/* re-count, using this as an index below */
+		map[i].count = 0;
+	}
+
+	/* assign looptri-edge users */
+	for (i = 0, mlt = mlooptri; i < totlooptri; mlt++, i++) {
+		for (int j = 3; j--;) {
+			MeshElemMap *map_ele = &map[mloop[mlt->tri[j]].v];
+			map_ele->indices[map_ele->count++] = i;
+		}
+	}
+
+	*r_map = map;
+	*r_mem = indices;
+}
+
+/**
  * Generates a map where the key is the vertex and the value is a list of edges that use that vertex as an endpoint.
  * The lists are allocated from one memory pool.
  */
@@ -295,6 +340,49 @@ void BKE_mesh_vert_edge_map_create(MeshElemMap **r_map, int **r_mem,
 
 		map[v[0]].indices[map[v[0]].count] = i;
 		map[v[1]].indices[map[v[1]].count] = i;
+
+		map[v[0]].count++;
+		map[v[1]].count++;
+	}
+
+	*r_map = map;
+	*r_mem = indices;
+}
+
+/**
+ * A version of #BKE_mesh_vert_edge_map_create that references connected vertices directly (not their edges).
+ */
+void BKE_mesh_vert_edge_vert_map_create(
+        MeshElemMap **r_map, int **r_mem,
+        const MEdge *medge, int totvert, int totedge)
+{
+	MeshElemMap *map = MEM_callocN(sizeof(MeshElemMap) * (size_t)totvert, "vert-edge map");
+	int *indices = MEM_mallocN(sizeof(int[2]) * (size_t)totedge, "vert-edge map mem");
+	int *i_pt = indices;
+
+	int i;
+
+	/* Count number of edges for each vertex */
+	for (i = 0; i < totedge; i++) {
+		map[medge[i].v1].count++;
+		map[medge[i].v2].count++;
+	}
+
+	/* Assign indices mem */
+	for (i = 0; i < totvert; i++) {
+		map[i].indices = i_pt;
+		i_pt += map[i].count;
+
+		/* Reset 'count' for use as index in last loop */
+		map[i].count = 0;
+	}
+
+	/* Find the users */
+	for (i = 0; i < totedge; i++) {
+		const unsigned int v[2] = {medge[i].v1, medge[i].v2};
+
+		map[v[0]].indices[map[v[0]].count] = (int)v[1];
+		map[v[1]].indices[map[v[1]].count] = (int)v[0];
 
 		map[v[0]].count++;
 		map[v[1]].count++;

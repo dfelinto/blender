@@ -41,6 +41,7 @@
 #include "BLI_math_vector.h"
 
 #include "DNA_gpencil_types.h"
+#include "DNA_scene_types.h"
 #include "DNA_screen_types.h"
 
 #include "BKE_context.h"
@@ -67,10 +68,15 @@
 static int gpencil_select_poll(bContext *C)
 {
 	bGPdata *gpd = ED_gpencil_data_get_active(C);
-	bGPDlayer *gpl = gpencil_layer_getactive(gpd);
 	
-	/* only if there's an active layer with an active frame */
-	return (gpl && gpl->actframe);
+	/* we just need some visible strokes, and to be in editmode */
+	if ((gpd) && (gpd->flag & GP_DATA_STROKE_EDITMODE)) {
+		/* TODO: include a check for visible strokes? */
+		if (gpd->layers.first)
+			return true;
+	}
+	
+	return false;
 }
 
 /* ********************************************** */
@@ -237,6 +243,229 @@ void GPENCIL_OT_select_linked(wmOperatorType *ot)
 	
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+}
+
+/* ********************************************** */
+/* Select Grouped */
+
+typedef enum eGP_SelectGrouped {
+	/* Select strokes in the same layer */
+	GP_SEL_SAME_LAYER     = 0,
+	
+	/* TODO: All with same prefix - Useful for isolating all layers for a particular character for instance */
+	/* TODO: All with same appearance - colour/opacity/volumetric/fills ? */
+} eGP_SelectGrouped;
+
+/* ----------------------------------- */
+
+/* On each visible layer, check for selected strokes - if found, select all others */
+static void gp_select_same_layer(bContext *C)
+{
+	Scene *scene = CTX_data_scene(C);
+	
+	CTX_DATA_BEGIN(C, bGPDlayer *, gpl, editable_gpencil_layers)
+	{
+		bGPDframe *gpf = gpencil_layer_getframe(gpl, CFRA, 0);
+		bGPDstroke *gps;
+		bool found = false;
+		
+		if (gpf == NULL)
+			continue;
+		
+		/* Search for a selected stroke */
+		for (gps = gpf->strokes.first; gps; gps = gps->next) {
+			if (ED_gpencil_stroke_can_use(C, gps)) {
+				if (gps->flag & GP_STROKE_SELECT) {
+					found = true;
+					break;
+				}
+			}
+		}
+		
+		/* Select all if found */
+		if (found) {
+			for (gps = gpf->strokes.first; gps; gps = gps->next) {
+				if (ED_gpencil_stroke_can_use(C, gps)) {
+					bGPDspoint *pt;
+					int i;
+					
+					for (i = 0, pt = gps->points; i < gps->totpoints; i++, pt++) {
+						pt->flag |= GP_SPOINT_SELECT;
+					}
+					
+					gps->flag |= GP_STROKE_SELECT;
+				}
+			}
+		}
+	}
+	CTX_DATA_END;
+}
+
+
+
+/* ----------------------------------- */
+
+static int gpencil_select_grouped_exec(bContext *C, wmOperator *op)
+{
+	eGP_SelectGrouped mode = RNA_enum_get(op->ptr, "type");
+	
+	switch (mode) {
+		case GP_SEL_SAME_LAYER:
+			gp_select_same_layer(C);
+			break;
+			
+		default:
+			BLI_assert(!"unhandled select grouped gpencil mode");
+			break;
+	}
+	
+	/* updates */
+	WM_event_add_notifier(C, NC_GPENCIL | NA_SELECTED, NULL);
+	return OPERATOR_FINISHED;
+}
+
+void GPENCIL_OT_select_grouped(wmOperatorType *ot)
+{
+	static EnumPropertyItem prop_select_grouped_types[] = {
+		{GP_SEL_SAME_LAYER, "LAYER", 0, "Layer", "Shared layers"},
+		{0, NULL, 0, NULL, NULL}
+	};
+	
+	/* identifiers */
+	ot->name = "Select Grouped";
+	ot->idname = "GPENCIL_OT_select_grouped";
+	ot->description = "Select all strokes with similar characteristics";
+	
+	/* callbacks */
+	//ot->invoke = WM_menu_invoke;
+	ot->exec = gpencil_select_grouped_exec;
+	ot->poll = gpencil_select_poll;
+	
+	/* flags */
+	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+	
+	/* props */
+	ot->prop = RNA_def_enum(ot->srna, "type", prop_select_grouped_types, GP_SEL_SAME_LAYER, "Type", "");
+}
+
+/* ********************************************** */
+/* Select First */
+
+static int gpencil_select_first_exec(bContext *C, wmOperator *op)
+{
+	const bool only_selected = RNA_boolean_get(op->ptr, "only_selected_strokes");
+	const bool extend = RNA_boolean_get(op->ptr, "extend");
+	
+	CTX_DATA_BEGIN(C, bGPDstroke *, gps, editable_gpencil_strokes)
+	{
+		/* skip stroke if we're only manipulating selected strokes */
+		if (only_selected && !(gps->flag & GP_STROKE_SELECT)) {
+			continue;
+		}
+		
+		/* select first point */
+		BLI_assert(gps->totpoints >= 1);
+		
+		gps->points->flag |= GP_SPOINT_SELECT;
+		gps->flag |= GP_STROKE_SELECT;
+		
+		/* deselect rest? */
+		if ((extend == false) && (gps->totpoints > 1)) {
+			/* start from index 1, to skip the first point that we'd just selected... */
+			bGPDspoint *pt = &gps->points[1];
+			int i = 1;
+			
+			for (; i < gps->totpoints; i++, pt++) {
+				pt->flag &= ~GP_SPOINT_SELECT;
+			}
+		}
+	}
+	CTX_DATA_END;
+	
+	/* updates */
+	WM_event_add_notifier(C, NC_GPENCIL | NA_SELECTED, NULL);
+	return OPERATOR_FINISHED;
+}
+
+void GPENCIL_OT_select_first(wmOperatorType *ot)
+{
+	/* identifiers */
+	ot->name = "Select First";
+	ot->idname = "GPENCIL_OT_select_first";
+	ot->description = "Select first point in Grease Pencil strokes";
+	
+	/* callbacks */
+	ot->exec = gpencil_select_first_exec;
+	ot->poll = gpencil_select_poll;
+	
+	/* flags */
+	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+	
+	/* properties */
+	RNA_def_boolean(ot->srna, "only_selected_strokes", false, "Selected Strokes Only",
+	                "Only select the first point of strokes that already have points selected");
+	
+	RNA_def_boolean(ot->srna, "extend", false, "Extend", "Extend selection instead of deselecting all other selected points");
+}
+
+/* ********************************************** */
+/* Select First */
+
+static int gpencil_select_last_exec(bContext *C, wmOperator *op)
+{
+	const bool only_selected = RNA_boolean_get(op->ptr, "only_selected_strokes");
+	const bool extend = RNA_boolean_get(op->ptr, "extend");
+	
+	CTX_DATA_BEGIN(C, bGPDstroke *, gps, editable_gpencil_strokes)
+	{
+		/* skip stroke if we're only manipulating selected strokes */
+		if (only_selected && !(gps->flag & GP_STROKE_SELECT)) {
+			continue;
+		}
+		
+		/* select last point */
+		BLI_assert(gps->totpoints >= 1);
+		
+		gps->points[gps->totpoints - 1].flag |= GP_SPOINT_SELECT;
+		gps->flag |= GP_STROKE_SELECT;
+		
+		/* deselect rest? */
+		if ((extend == false) && (gps->totpoints > 1)) {
+			/* don't include the last point... */
+			bGPDspoint *pt = gps->points;
+			int i = 1;
+			
+			for (; i < gps->totpoints - 1; i++, pt++) {
+				pt->flag &= ~GP_SPOINT_SELECT;
+			}
+		}
+	}
+	CTX_DATA_END;
+	
+	/* updates */
+	WM_event_add_notifier(C, NC_GPENCIL | NA_SELECTED, NULL);
+	return OPERATOR_FINISHED;
+}
+
+void GPENCIL_OT_select_last(wmOperatorType *ot)
+{
+	/* identifiers */
+	ot->name = "Select Last";
+	ot->idname = "GPENCIL_OT_select_last";
+	ot->description = "Select last point in Grease Pencil strokes";
+	
+	/* callbacks */
+	ot->exec = gpencil_select_last_exec;
+	ot->poll = gpencil_select_poll;
+	
+	/* flags */
+	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+	
+	/* properties */
+	RNA_def_boolean(ot->srna, "only_selected_strokes", false, "Selected Strokes Only",
+	                "Only select the last point of strokes that already have points selected");
+	
+	RNA_def_boolean(ot->srna, "extend", false, "Extend", "Extend selection instead of deselecting all other selected points");
 }
 
 /* ********************************************** */

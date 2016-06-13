@@ -58,8 +58,10 @@ int    BLI_exists(const char *path) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
 int    BLI_copy(const char *path, const char *to) ATTR_NONNULL();
 int    BLI_rename(const char *from, const char *to) ATTR_NONNULL();
 int    BLI_delete(const char *path, bool dir, bool recursive) ATTR_NONNULL();
+#if 0  /* Unused */
 int    BLI_move(const char *path, const char *to) ATTR_NONNULL();
 int    BLI_create_symlink(const char *path, const char *to) ATTR_NONNULL();
+#endif
 
 /* keep in sync with the definition of struct direntry in BLI_fileops_types.h */
 #ifdef WIN32
@@ -87,7 +89,7 @@ bool   BLI_is_dir(const char *path) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
 bool   BLI_is_file(const char *path) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
 bool   BLI_dir_create_recursive(const char *dir) ATTR_NONNULL();
 double BLI_dir_free_space(const char *dir) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
-char  *BLI_current_working_dir(char *dir, const size_t maxlen) ATTR_NONNULL();
+char  *BLI_current_working_dir(char *dir, const size_t maxlen) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
 
 /* Filelist */
 
@@ -128,6 +130,8 @@ bool   BLI_file_older(const char *file1, const char *file2) ATTR_WARN_UNUSED_RES
 
 /* read ascii file as lines, empty list if reading fails */
 struct LinkNode *BLI_file_read_as_lines(const char *file) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
+void  *BLI_file_read_text_as_mem(const char *filepath, size_t pad_bytes, size_t *r_size);
+void  *BLI_file_read_binary_as_mem(const char *filepath, size_t pad_bytes, size_t *r_size);
 void   BLI_file_free_lines(struct LinkNode *lines);
 
 /* this weirdo pops up in two places ... */

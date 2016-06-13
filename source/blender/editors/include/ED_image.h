@@ -59,13 +59,14 @@ void ED_space_image_get_uv_aspect(struct SpaceImage *sima, float *aspx, float *a
 
 void ED_space_image_scopes_update(const struct bContext *C, struct SpaceImage *sima, struct ImBuf *ibuf, bool use_view_settings);
 
-void ED_space_image_paint_update(struct wmWindowManager *wm, struct ToolSettings *settings);
-void ED_space_image_uv_sculpt_update(struct wmWindowManager *wm, struct ToolSettings *settings);
+void ED_space_image_paint_update(struct wmWindowManager *wm, struct Scene *scene);
+void ED_space_image_uv_sculpt_update(struct wmWindowManager *wm, struct Scene *scene);
 
 void ED_image_get_uv_aspect(struct Image *ima, struct ImageUser *iuser, float *aspx, float *aspy);
 void ED_image_mouse_pos(struct SpaceImage *sima, struct ARegion *ar, const int mval[2], float co[2]);
 void ED_image_point_pos(struct SpaceImage *sima, struct ARegion *ar, float x, float y, float *xr, float *yr);
 void ED_image_point_pos__reverse(struct SpaceImage *sima, struct ARegion *ar, const float co[2], float r_co[2]);
+bool ED_image_slot_cycle(struct Image *image, int direction);
 
 bool ED_space_image_show_render(struct SpaceImage *sima);
 bool ED_space_image_show_paint(struct SpaceImage *sima);

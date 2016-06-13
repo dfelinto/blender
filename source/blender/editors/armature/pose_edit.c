@@ -255,12 +255,22 @@ void POSE_OT_paths_calculate(wmOperatorType *ot)
 	RNA_def_int(ot->srna, "end_frame", 250, MINAFRAME, MAXFRAME, "End", 
 	            "Last frame to calculate bone paths on", MINFRAME, MAXFRAME / 2.0);
 	
-	RNA_def_enum(ot->srna, "bake_location", motionpath_bake_location_items, 0, 
+	RNA_def_enum(ot->srna, "bake_location", rna_enum_motionpath_bake_location_items, 0, 
 	             "Bake Location", 
 	             "Which point on the bones is used when calculating paths");
 }
 
 /* --------- */
+
+static int pose_update_paths_poll(bContext *C)
+{
+	if (ED_operator_posemode_exclusive(C)) {
+		bPoseChannel *pchan = CTX_data_active_pose_bone(C);
+		return (pchan && pchan->mpath);
+	}
+	
+	return false;
+}
 
 static int pose_update_paths_exec(bContext *C, wmOperator *UNUSED(op))
 {
@@ -289,7 +299,7 @@ void POSE_OT_paths_update(wmOperatorType *ot)
 	
 	/* api callbakcs */
 	ot->exec = pose_update_paths_exec;
-	ot->poll = ED_operator_posemode_exclusive; /* TODO: this should probably check for active bone and/or existing paths */
+	ot->poll = pose_update_paths_poll;
 	
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
@@ -298,42 +308,44 @@ void POSE_OT_paths_update(wmOperatorType *ot)
 /* --------- */
 
 /* for the object with pose/action: clear path curves for selected bones only */
-static void ED_pose_clear_paths(Object *ob)
+static void ED_pose_clear_paths(Object *ob, bool only_selected)
 {
 	bPoseChannel *pchan;
-	short skipped = 0;
+	bool skipped = false;
 	
 	if (ELEM(NULL, ob, ob->pose))
 		return;
 	
-	/* free the motionpath blocks, but also take note of whether we skipped some... */
+	/* free the motionpath blocks for all bones - This is easier for users to quickly clear all */
 	for (pchan = ob->pose->chanbase.first; pchan; pchan = pchan->next) {
 		if (pchan->mpath) {
-			if ((pchan->bone) && (pchan->bone->flag & BONE_SELECTED)) {
+			if ((only_selected == false) || ((pchan->bone) && (pchan->bone->flag & BONE_SELECTED))) {
 				animviz_free_motionpath(pchan->mpath);
 				pchan->mpath = NULL;
 			}
-			else 
-				skipped = 1;
+			else {
+				skipped = true;
+			}
 		}
 	}
 	
-	/* if we didn't skip any, we shouldn't have any paths left */
-	if (skipped == 0)
+	/* if nothing was skipped, there should be no paths left! */
+	if (skipped == false)
 		ob->pose->avs.path_bakeflag &= ~MOTIONPATH_BAKE_HAS_PATHS;
 }
 
-/* operator callback for this */
-static int pose_clear_paths_exec(bContext *C, wmOperator *UNUSED(op))
+/* operator callback - wrapper for the backend function  */
+static int pose_clear_paths_exec(bContext *C, wmOperator *op)
 {
 	Object *ob = BKE_object_pose_armature_get(CTX_data_active_object(C));
-		
+	bool only_selected = RNA_boolean_get(op->ptr, "only_selected");
+	
 	/* only continue if there's an object */
 	if (ELEM(NULL, ob, ob->pose))
 		return OPERATOR_CANCELLED;
 	
 	/* use the backend function for this */
-	ED_pose_clear_paths(ob);
+	ED_pose_clear_paths(ob, only_selected);
 	
 	/* notifiers for updates */
 	WM_event_add_notifier(C, NC_OBJECT | ND_POSE, ob);
@@ -341,19 +353,34 @@ static int pose_clear_paths_exec(bContext *C, wmOperator *UNUSED(op))
 	return OPERATOR_FINISHED; 
 }
 
+/* operator callback/wrapper */
+static int pose_clear_paths_invoke(bContext *C, wmOperator *op, const wmEvent *evt)
+{
+	if ((evt->shift) && !RNA_struct_property_is_set(op->ptr, "only_selected")) {
+		RNA_boolean_set(op->ptr, "only_selected", true);
+	}
+	return pose_clear_paths_exec(C, op);
+}
+
 void POSE_OT_paths_clear(wmOperatorType *ot)
 {
 	/* identifiers */
 	ot->name = "Clear Bone Paths";
 	ot->idname = "POSE_OT_paths_clear";
-	ot->description = "Clear path caches for selected bones";
+	ot->description = "Clear path caches for all bones, hold Shift key for selected bones only";
 	
 	/* api callbacks */
+	ot->invoke = pose_clear_paths_invoke;
 	ot->exec = pose_clear_paths_exec;
 	ot->poll = ED_operator_posemode_exclusive;
 	
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+	
+	/* properties */
+	ot->prop = RNA_def_boolean(ot->srna, "only_selected", false, "Only Selected", 
+	                           "Only clear paths from selected bones");
+	RNA_def_property_flag(ot->prop, PROP_SKIP_SAVE);
 }
 
 /* ********************************************** */
@@ -700,7 +727,7 @@ void POSE_OT_rotation_mode_set(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 	
 	/* properties */
-	ot->prop = RNA_def_enum(ot->srna, "type", posebone_rotmode_items, 0, "Rotation Mode", "");
+	ot->prop = RNA_def_enum(ot->srna, "type", rna_enum_posebone_rotmode_items, 0, "Rotation Mode", "");
 }
 
 /* ********************************************** */

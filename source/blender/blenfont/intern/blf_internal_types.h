@@ -152,7 +152,11 @@ typedef struct FontBufInfoBLF {
 
 	/* and the color, the alphas is get from the glyph!
 	 * color is srgb space */
-	float col[4];
+	float col_init[4];
+	/* cached conversion from 'col_init' */
+	unsigned char col_char[4];
+	float col_float[4];
+
 } FontBufInfoBLF;
 
 typedef struct FontBLF {
@@ -190,10 +194,13 @@ typedef struct FontBLF {
 	/* Multiplied this matrix with the current one before
 	 * draw the text! see blf_draw__start.
 	 */
-	double m[16];
+	float m[16];
 
 	/* clipping rectangle. */
 	rctf clip_rec;
+
+	/* the width to wrap the text, see BLF_WORD_WRAP */
+	int wrap_width;
 
 	/* font dpi (default 72). */
 	unsigned int dpi;

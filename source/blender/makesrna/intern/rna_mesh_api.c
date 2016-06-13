@@ -136,8 +136,9 @@ static void rna_Mesh_normals_split_custom_do(Mesh *mesh, float (*custom_loopnors
 	}
 	else {
 		polynors = MEM_mallocN(sizeof(float[3]) * mesh->totpoly, __func__);
-		BKE_mesh_calc_normals_poly(mesh->mvert, mesh->totvert, mesh->mloop, mesh->mpoly, mesh->totloop, mesh->totpoly,
-		                           polynors, false);
+		BKE_mesh_calc_normals_poly(
+		            mesh->mvert, NULL, mesh->totvert,
+		            mesh->mloop, mesh->mpoly, mesh->totloop, mesh->totpoly, polynors, false);
 		free_polynors = true;
 	}
 
@@ -199,6 +200,15 @@ static void rna_Mesh_transform(Mesh *mesh, float *mat, int shape_keys)
 	DAG_id_tag_update(&mesh->id, 0);
 }
 
+static void rna_Mesh_flip_normals(Mesh *mesh)
+{
+	BKE_mesh_polygons_flip(mesh->mpoly, mesh->mloop, &mesh->ldata, mesh->totpoly);
+	BKE_mesh_tessface_clear(mesh);
+	BKE_mesh_calc_normals(mesh);
+
+	DAG_id_tag_update(&mesh->id, 0);
+}
+
 #else
 
 void RNA_api_mesh(StructRNA *srna)
@@ -208,10 +218,15 @@ void RNA_api_mesh(StructRNA *srna)
 	const int normals_array_dim[] = {1, 3};
 
 	func = RNA_def_function(srna, "transform", "rna_Mesh_transform");
-	RNA_def_function_ui_description(func, "Transform mesh vertices by a matrix");
+	RNA_def_function_ui_description(func, "Transform mesh vertices by a matrix "
+	                                      "(Warning: inverts normals if matrix is negative)");
 	parm = RNA_def_float_matrix(func, "matrix", 4, 4, NULL, 0.0f, 0.0f, "", "Matrix", 0.0f, 0.0f);
 	RNA_def_property_flag(parm, PROP_REQUIRED);
 	RNA_def_boolean(func, "shape_keys", 0, "", "Transform Shape Keys");
+
+	func = RNA_def_function(srna, "flip_normals", "rna_Mesh_flip_normals");
+	RNA_def_function_ui_description(func, "Invert winding of all polygons "
+	                                      "(clears tessellation, does not handle custom normals)");
 
 	func = RNA_def_function(srna, "calc_normals", "BKE_mesh_calc_normals");
 	RNA_def_function_ui_description(func, "Calculate vertex normals");

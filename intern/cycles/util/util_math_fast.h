@@ -47,7 +47,6 @@
 
 CCL_NAMESPACE_BEGIN
 
-/* TODO(sergey): Make sure it does not conflict with SSE intrinsics. */
 ccl_device_inline float madd(const float a, const float b, const float c)
 {
 	/* NOTE: In the future we may want to explicitly ask for a fused
@@ -248,7 +247,7 @@ ccl_device float fast_sinpif(float x)
 	 * The basic idea of this approximation starts with the coarse approximation:
 	 *      sin(pi*x) ~= f(x) =  4 * (x - x * abs(x))
 	 *
-	 * This approximation always _over_ estimates the target. On the otherhand,
+	 * This approximation always _over_ estimates the target. On the other hand,
 	 * the curve:
 	 *      sin(pi*x) ~= f(x) * abs(f(x)) / 4
 	 *
@@ -314,8 +313,7 @@ ccl_device float fast_atanf(float x)
 	float r = s * madd(0.43157974f, t, 1.0f) /
 	              madd(madd(0.05831938f, t, 0.76443945f), t, 1.0f);
 	if(a > 1.0f) {
-		/* TODO(sergey): Is it M_PI_2_F? */
-		r = 1.570796326794896557998982f - r;
+		r = M_PI_2_F - r;
 	}
 	return copysignf(r, x);
 }
@@ -341,8 +339,7 @@ ccl_device float fast_atan2f(float y, float x)
 
 	if(b > a) {
 		/* Account for arg reduction. */
-		/* TODO(sergey): Is it M_PI_2_F? */
-		r = 1.570796326794896557998982f - r;
+		r = M_PI_2_F - r;
 	}
 	/* Test sign bit of x. */
 	if(__float_as_uint(x) & 0x80000000u) {
@@ -536,7 +533,7 @@ ccl_device float fast_safe_powf(float x, float y)
 }
 
 /* TODO(sergey): Check speed  with our erf functions implementation from
- * bsdf_microfaset.h.
+ * bsdf_microfacet.h.
  */
 
 ccl_device_inline float fast_erff(float x)

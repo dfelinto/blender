@@ -311,6 +311,14 @@ if(WITH_OPENSUBDIV)
 	add_definitions(-DWITH_OPENSUBDIV)
 endif()
 
+if(WITH_OPENVDB)
+	add_definitions(-DWITH_OPENVDB)
+
+	if(WITH_OPENVDB_BLOSC)
+		add_definitions(-DWITH_OPENVDB_BLOSC)
+	endif()
+endif()
+
 # Build makesrna executable
 blender_include_dirs(
 	.
@@ -350,7 +358,7 @@ target_link_libraries(makesrna bf_dna_blenlib)
 # note (linux only): with crashes try add this after COMMAND: valgrind --leak-check=full --track-origins=yes
 add_custom_command(
 	OUTPUT ${GENSRC}
-	COMMAND ${CMAKE_BINARY_DIR}/bin/${CMAKE_CFG_INTDIR}/makesrna ${CMAKE_CURRENT_BINARY_DIR}/
+	COMMAND "$<TARGET_FILE:makesrna>" ${CMAKE_CURRENT_BINARY_DIR}/
 	DEPENDS makesrna
 )
 

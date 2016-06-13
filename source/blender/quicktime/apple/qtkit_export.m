@@ -62,10 +62,6 @@
 #import <QTKit/QTKit.h>
 #include <AudioToolbox/AudioToolbox.h>
 
-#if MAC_OS_X_VERSION_MIN_REQUIRED <= 1040
-#error OSX 10.5 minimum is needed for QTKit
-#endif
-
 #include "quicktime_import.h"
 #include "quicktime_export.h"
 
@@ -378,8 +374,7 @@ int start_qt(
 	}
 	else {
 		makeqtstring(rd, name, preview);
-		qtexport->filename = [[NSString alloc] initWithCString:name
-		                                                       encoding:[NSString defaultCStringEncoding]];
+		qtexport->filename = [[NSString alloc] initWithUTF8String:name];
 		qtexport->movie = nil;
 		qtexport->audioFile = NULL;
 

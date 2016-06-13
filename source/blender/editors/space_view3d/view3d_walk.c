@@ -33,6 +33,7 @@
 
 #include "BLI_math.h"
 #include "BLI_blenlib.h"
+#include "BLI_kdopbvh.h"
 #include "BLI_utildefines.h"
 
 #include "BKE_context.h"
@@ -52,6 +53,7 @@
 #include "ED_screen.h"
 #include "ED_space_api.h"
 #include "ED_transform.h"
+#include "ED_transform_snap_object_context.h"
 
 #include "PIL_time.h" /* smoothview */
 
@@ -64,6 +66,9 @@
 //#define NDOF_WALK_DRAW_TOOMUCH  /* is this needed for ndof? - commented so redraw doesnt thrash - campbell */
 
 #define USE_TABLET_SUPPORT
+
+/* ensure the target position is one we can reach, see: T45771 */
+#define USE_PIXELSIZE_NATIVE_SUPPORT
 
 /* prototypes */
 static float getVelocityZeroTime(const float gravity, const float velocity);
@@ -317,6 +322,8 @@ typedef struct WalkInfo {
 	float jump_height; /* maximum jump height */
 	float speed_factor; /* to use for fast/slow speeds */
 
+	struct SnapObjectContext *snap_context;
+
 	struct View3DCameraControl *v3d_camera_control;
 
 } WalkInfo;
@@ -415,27 +422,31 @@ static void walk_navigation_mode_set(bContext *C, wmOperator *op, WalkInfo *walk
 /**
  * \param r_distance  Distance to the hit point
  */
-static bool walk_floor_distance_get(bContext *C, RegionView3D *rv3d, WalkInfo *walk, const float dvec[3], float *r_distance)
+static bool walk_floor_distance_get(
+        RegionView3D *rv3d, WalkInfo *walk, const float dvec[3],
+        float *r_distance)
 {
-	float dummy_dist_px = 0;
 	float ray_normal[3] = {0, 0, -1}; /* down */
 	float ray_start[3];
 	float r_location[3];
-	float r_normal[3];
+	float r_normal_dummy[3];
 	float dvec_tmp[3];
 	bool ret;
 
-	*r_distance = TRANSFORM_DIST_MAX_RAY;
+	*r_distance = BVH_RAYCAST_DIST_MAX;
 
 	copy_v3_v3(ray_start, rv3d->viewinv[3]);
 
 	mul_v3_v3fl(dvec_tmp, dvec, walk->grid);
 	add_v3_v3(ray_start, dvec_tmp);
 
-	ret = snapObjectsRayEx(CTX_data_scene(C), NULL, NULL, NULL, NULL, SCE_SNAP_MODE_FACE,
-	                       NULL, NULL,
-	                       ray_start, ray_normal, r_distance,
-	                       NULL, &dummy_dist_px, r_location, r_normal, SNAP_ALL);
+	ret = ED_transform_snap_object_project_ray(
+	        walk->snap_context,
+	        &(const struct SnapObjectParams){
+	            .snap_select = SNAP_ALL,
+	        },
+	        ray_start, ray_normal, r_distance,
+	        r_location, r_normal_dummy);
 
 	/* artifically scale the distance to the scene size */
 	*r_distance /= walk->grid;
@@ -447,33 +458,33 @@ static bool walk_floor_distance_get(bContext *C, RegionView3D *rv3d, WalkInfo *w
  * \param r_location  Location of the hit point
  * \param r_normal  Normal of the hit surface, transformed to always face the camera
  */
-static bool walk_ray_cast(bContext *C, RegionView3D *rv3d, WalkInfo *walk, float r_location[3], float r_normal[3], float *ray_distance)
+static bool walk_ray_cast(
+        RegionView3D *rv3d, WalkInfo *walk,
+        float r_location[3], float r_normal[3], float *ray_distance)
 {
-	float dummy_dist_px = 0;
-	float ray_normal[3] = {0, 0, 1}; /* forward */
+	float ray_normal[3] = {0, 0, -1}; /* forward */
 	float ray_start[3];
-	float mat[3][3]; /* 3x3 copy of the view matrix so we can move along the view axis */
 	bool ret;
 
-	*ray_distance = TRANSFORM_DIST_MAX_RAY;
+	*ray_distance = BVH_RAYCAST_DIST_MAX;
 
 	copy_v3_v3(ray_start, rv3d->viewinv[3]);
-	copy_m3_m4(mat, rv3d->viewinv);
 
-	mul_m3_v3(mat, ray_normal);
+	mul_mat3_m4_v3(rv3d->viewinv, ray_normal);
 
-	mul_v3_fl(ray_normal, -1);
 	normalize_v3(ray_normal);
 
-	ret = snapObjectsRayEx(CTX_data_scene(C), NULL, NULL, NULL, NULL, SCE_SNAP_MODE_FACE,
-	                       NULL, NULL,
-	                       ray_start, ray_normal, ray_distance,
-	                       NULL, &dummy_dist_px, r_location, r_normal, SNAP_ALL);
-
+	ret = ED_transform_snap_object_project_ray(
+	        walk->snap_context,
+	        &(const struct SnapObjectParams){
+	            .snap_select = SNAP_ALL,
+	        },
+	        ray_start, ray_normal, NULL,
+	        r_location, r_normal);
 
 	/* dot is positive if both rays are facing the same direction */
 	if (dot_v3v3(ray_normal, r_normal) > 0) {
-		copy_v3_fl3(r_normal, -r_normal[0], -r_normal[1], -r_normal[2]);
+		negate_v3(r_normal);
 	}
 
 	/* artifically scale the distance to the scene size */
@@ -536,7 +547,7 @@ static bool initWalkInfo(bContext *C, WalkInfo *walk, wmOperator *op, const wmEv
 	walk->speed = 0.0f;
 	walk->is_fast = false;
 	walk->is_slow = false;
-	walk->grid = 1.f / walk->scene->unit.scale_length;
+	walk->grid = (walk->scene->unit.system == USER_UNIT_NONE) ? 1.f : 1.f / walk->scene->unit.scale_length;
 
 	walk->mouse_mode = RNA_enum_get(op->ptr, "mouse_mode");
 	walk->use_mouse = walk->mouse_mode != WALK_MOUSE_NULL;
@@ -589,6 +600,9 @@ static bool initWalkInfo(bContext *C, WalkInfo *walk, wmOperator *op, const wmEv
 
 	walk->rv3d->rflag |= RV3D_NAVIGATING;
 
+	walk->snap_context = ED_transform_snap_object_context_create_view3d(
+	        CTX_data_main(C), walk->scene, SNAP_OBJECT_USE_CACHE,
+	        walk->ar, walk->v3d);
 
 	walk->v3d_camera_control = ED_view3d_cameracontrol_acquire(
 	        walk->scene, walk->v3d, walk->rv3d,
@@ -597,6 +611,16 @@ static bool initWalkInfo(bContext *C, WalkInfo *walk, wmOperator *op, const wmEv
 	/* center the mouse */
 	walk->center_mval[0] = walk->ar->winx * 0.5f;
 	walk->center_mval[1] = walk->ar->winy * 0.5f;
+
+#ifdef USE_PIXELSIZE_NATIVE_SUPPORT
+	walk->center_mval[0] += walk->ar->winrct.xmin;
+	walk->center_mval[1] += walk->ar->winrct.ymin;
+
+	WM_cursor_compatible_xy(win, &walk->center_mval[0], &walk->center_mval[1]);
+
+	walk->center_mval[0] -= walk->ar->winrct.xmin;
+	walk->center_mval[1] -= walk->ar->winrct.ymin;
+#endif
 
 	copy_v2_v2_int(walk->prev_mval, walk->center_mval);
 
@@ -636,6 +660,8 @@ static int walkEnd(bContext *C, WalkInfo *walk)
 
 	win = CTX_wm_window(C);
 	rv3d = walk->rv3d;
+
+	ED_transform_snap_object_context_destroy(walk->snap_context);
 
 	ED_view3d_cameracontrol_release(walk->v3d_camera_control, walk->state == WALK_CANCEL);
 
@@ -802,7 +828,7 @@ static void walkEvent(bContext *C, wmOperator *op, WalkInfo *walk, const wmEvent
 			{
 				float loc[3], nor[3];
 				float distance;
-				bool ret = walk_ray_cast(C, walk->rv3d, walk, loc, nor, &distance);
+				bool ret = walk_ray_cast(walk->rv3d, walk, loc, nor, &distance);
 
 				/* in case we are teleporting middle way from a jump */
 				walk->speed_jump = 0.0f;
@@ -990,16 +1016,17 @@ static float getVelocityZeroTime(const float gravity, const float velocity)
 #define WALK_BOOST_FACTOR ((void)0, walk->speed_factor)
 
 /* rotate about the Y axis- look left/right */
-static void walk_mouse_rotate_horizontal(ARegion *ar, RegionView3D *rv3d, const float mouse_speed, int moffset[2], float r_mat[3][3], float r_upvec[3])
+static void walk_mouse_rotate_horizontal(ARegion *ar, RegionView3D *rv3d, const float mouse_speed, int moffset[2], float r_mat[3][3])
 {
 	float x;
 	float tmp_quat[4];
+	float upvec[3];
 
 	/* if we're upside down invert the moffset */
-	copy_v3_fl3(r_upvec, 0.0f, 1.0f, 0.0f);
-	mul_m3_v3(r_mat, r_upvec);
+	copy_v3_fl3(upvec, 0.0f, 1.0f, 0.0f);
+	mul_m3_v3(r_mat, upvec);
 
-	if (r_upvec[2] < 0.0f)
+	if (upvec[2] < 0.0f)
 		moffset[0] = -moffset[0];
 
 	/* relative offset */
@@ -1011,18 +1038,17 @@ static void walk_mouse_rotate_horizontal(ARegion *ar, RegionView3D *rv3d, const 
 	/* user adjustement factor */
 	x *= mouse_speed;
 
-	copy_v3_fl3(r_upvec, 0.0f, 0.0f, 1.0f);
-
 	/* Rotate about the relative up vec */
-	axis_angle_normalized_to_quat(tmp_quat, r_upvec, x);
+	axis_angle_to_quat_single(tmp_quat, 'Z', x);
 	mul_qt_qtqt(rv3d->viewquat, rv3d->viewquat, tmp_quat);
 }
 
 /* rotate about the X axis- look up/down */
-static void walk_mouse_rotate_vertical(ARegion *ar, RegionView3D *rv3d, const float mouse_speed, int moffset[2], float r_mat[3][3], float r_upvec[3])
+static void walk_mouse_rotate_vertical(ARegion *ar, RegionView3D *rv3d, const float mouse_speed, int moffset[2], float r_mat[3][3])
 {
 	float angle, y;
 	float tmp_quat[4];
+	float upvec[3];
 
 	/* relative offset */
 	y = (float) moffset[1] / ar->winy;
@@ -1043,10 +1069,10 @@ static void walk_mouse_rotate_vertical(ARegion *ar, RegionView3D *rv3d, const fl
 	else if (angle < WALK_BOTTOM_LIMIT && y < 0.0f)
 		y = 0.0f;
 
-	copy_v3_fl3(r_upvec, 1.0f, 0.0f, 0.0f);
-	mul_m3_v3(r_mat, r_upvec);
+	copy_v3_fl3(upvec, 1.0f, 0.0f, 0.0f);
+	mul_m3_v3(r_mat, upvec);
 	/* Rotate about the relative up vec */
-	axis_angle_to_quat(tmp_quat, r_upvec, -y);
+	axis_angle_to_quat(tmp_quat, upvec, -y);
 	mul_qt_qtqt(rv3d->viewquat, rv3d->viewquat, tmp_quat);
 }
 
@@ -1120,9 +1146,6 @@ static int walkApply(bContext *C, wmOperator *op, WalkInfo *walk)
 	float mat[3][3]; /* 3x3 copy of the view matrix so we can move along the view axis */
 	float dvec[3] = {0.0f, 0.0f, 0.0f}; /* this is the direction that's added to the view offset per redraw */
 
-	/* Camera Uprighting variables */
-	float upvec[3] = {0.0f, 0.0f, 0.0f}; /* stores the view's up vector */
-
 	int moffset[2]; /* mouse offset from the views center */
 
 #ifdef NDOF_WALK_DEBUG
@@ -1186,7 +1209,7 @@ static int walkApply(bContext *C, wmOperator *op, WalkInfo *walk)
 				case WALK_MOUSE_MOVEHORIZONTAL:
 				{
 					if (moffset[0])
-						walk_mouse_rotate_horizontal(ar, rv3d, walk->mouse_speed, moffset, mat, upvec);
+						walk_mouse_rotate_horizontal(ar, rv3d, walk->mouse_speed, moffset, mat);
 
 					if (moffset[1] > 0)
 						walk_mouse_move(walk, mat, WALK_BIT_FORWARD, time_redraw, dvec);
@@ -1219,10 +1242,10 @@ static int walkApply(bContext *C, wmOperator *op, WalkInfo *walk)
 				default:
 				{
 					if (moffset[1])
-						walk_mouse_rotate_vertical(ar, rv3d, walk->mouse_speed, moffset, mat, upvec);
+						walk_mouse_rotate_vertical(ar, rv3d, walk->mouse_speed, moffset, mat);
 
 					if (moffset[0])
-						walk_mouse_rotate_horizontal(ar, rv3d, walk->mouse_speed, moffset, mat, upvec);
+						walk_mouse_rotate_horizontal(ar, rv3d, walk->mouse_speed, moffset, mat);
 
 					break;
 				}
@@ -1300,7 +1323,7 @@ static int walkApply(bContext *C, wmOperator *op, WalkInfo *walk)
 				float difference = -100.0f;
 				float fall_distance;
 
-				ret = walk_floor_distance_get(C, rv3d, walk, dvec, &ray_distance);
+				ret = walk_floor_distance_get(rv3d, walk, dvec, &ray_distance);
 
 				if (ret) {
 					difference = walk->view_height - ray_distance;
@@ -1353,7 +1376,7 @@ static int walkApply(bContext *C, wmOperator *op, WalkInfo *walk)
 				if (t > walk->teleport.duration) {
 
 					/* check to see if we are landing */
-					ret = walk_floor_distance_get(C, rv3d, walk, dvec, &ray_distance);
+					ret = walk_floor_distance_get(rv3d, walk, dvec, &ray_distance);
 
 					if (ret) {
 						difference = walk->view_height - ray_distance;
@@ -1568,7 +1591,7 @@ void VIEW3D_OT_walk(wmOperatorType *ot)
 	ot->invoke = walk_invoke;
 	ot->cancel = walk_cancel;
 	ot->modal = walk_modal;
-	ot->poll = ED_operator_view3d_active;
+	ot->poll = ED_operator_region_view3d_active;
 
 	/* flags */
 	ot->flag = OPTYPE_BLOCKING;

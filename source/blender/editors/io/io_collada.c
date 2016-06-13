@@ -94,6 +94,7 @@ static int wm_collada_export_exec(bContext *C, wmOperator *op)
 
 	int triangulate;
 	int use_object_instantiation;
+	int use_blender_profile;
 	int sort_by_name;
 	int export_transformation_type;
 	int open_sim;
@@ -142,6 +143,7 @@ static int wm_collada_export_exec(bContext *C, wmOperator *op)
 
 	triangulate                = RNA_boolean_get(op->ptr, "triangulate");
 	use_object_instantiation   = RNA_boolean_get(op->ptr, "use_object_instantiation");
+	use_blender_profile        = RNA_boolean_get(op->ptr, "use_blender_profile");
 	sort_by_name               = RNA_boolean_get(op->ptr, "sort_by_name");
 	export_transformation_type = RNA_enum_get(op->ptr,    "export_transformation_type_selection");
 	open_sim                   = RNA_boolean_get(op->ptr, "open_sim");
@@ -167,12 +169,17 @@ static int wm_collada_export_exec(bContext *C, wmOperator *op)
 
 		triangulate,
 		use_object_instantiation,
+		use_blender_profile,
 		sort_by_name,
 		export_transformation_type,
 		open_sim);
 
 	if (export_count == 0) {
 		BKE_report(op->reports, RPT_WARNING, "Export file is empty");
+		return OPERATOR_CANCELLED;
+	}
+	else if (export_count < 0) {
+		BKE_report(op->reports, RPT_WARNING, "Error during export (see Console)");
 		return OPERATOR_CANCELLED;
 	}
 	else {
@@ -252,6 +259,8 @@ static void uiCollada_exportSettings(uiLayout *layout, PointerRNA *imfptr)
 	uiItemR(row, imfptr, "triangulate", 0, NULL, ICON_NONE);
 	row = uiLayoutRow(box, false);
 	uiItemR(row, imfptr, "use_object_instantiation", 0, NULL, ICON_NONE);
+	row = uiLayoutRow(box, false);
+	uiItemR(row, imfptr, "use_blender_profile", 0, NULL, ICON_NONE);
 
 	row = uiLayoutRow(box, false);
 	split = uiLayoutSplit(row, 0.6f, UI_LAYOUT_ALIGN_RIGHT);
@@ -298,8 +307,9 @@ void WM_OT_collada_export(wmOperatorType *ot)
 
 	ot->ui = wm_collada_export_draw;
 
-	WM_operator_properties_filesel(ot, FILE_TYPE_FOLDER | FILE_TYPE_COLLADA, FILE_BLENDER, FILE_SAVE,
-	                               WM_FILESEL_FILEPATH, FILE_DEFAULTDISPLAY, FILE_SORT_ALPHA);
+	WM_operator_properties_filesel(
+	        ot, FILE_TYPE_FOLDER | FILE_TYPE_COLLADA, FILE_BLENDER, FILE_SAVE,
+	        WM_FILESEL_FILEPATH, FILE_DEFAULTDISPLAY, FILE_SORT_ALPHA);
 
 	RNA_def_boolean(ot->srna,
 	                "apply_modifiers", 0, "Apply Modifiers",
@@ -344,7 +354,10 @@ void WM_OT_collada_export(wmOperatorType *ot)
 	                "Export Polygons (Quads & NGons) as Triangles");
 
 	RNA_def_boolean(ot->srna, "use_object_instantiation", 1, "Use Object Instances",
-	                "Instantiate multiple Objects from same Data");
+		"Instantiate multiple Objects from same Data");
+
+	RNA_def_boolean(ot->srna, "use_blender_profile", 1, "Use Blender Profile",
+		"Export additional Blender specific information (for material, shaders, bones, etc.)");
 
 	RNA_def_boolean(ot->srna, "sort_by_name", 0, "Sort by Object name",
 	                "Sort exported data by Object name");
@@ -366,6 +379,7 @@ static int wm_collada_import_exec(bContext *C, wmOperator *op)
 	char filename[FILE_MAX];
 	int import_units;
 	int find_chains;
+	int auto_connect;
 	int fix_orientation;
 	int  min_chain_length;
 
@@ -377,6 +391,7 @@ static int wm_collada_import_exec(bContext *C, wmOperator *op)
 	/* Options panel */
 	import_units     = RNA_boolean_get(op->ptr, "import_units");
 	find_chains      = RNA_boolean_get(op->ptr, "find_chains");
+	auto_connect     = RNA_boolean_get(op->ptr, "auto_connect");
 	fix_orientation  = RNA_boolean_get(op->ptr, "fix_orientation");
 	min_chain_length = RNA_int_get(op->ptr, "min_chain_length");
 
@@ -385,6 +400,7 @@ static int wm_collada_import_exec(bContext *C, wmOperator *op)
 	        C, filename,
 	        import_units,
 	        find_chains,
+			auto_connect,
 	        fix_orientation,
 	        min_chain_length))
 	{
@@ -419,6 +435,9 @@ static void uiCollada_importSettings(uiLayout *layout, PointerRNA *imfptr)
 	uiItemR(row, imfptr, "find_chains", 0, NULL, ICON_NONE);
 
 	row = uiLayoutRow(box, false);
+	uiItemR(row, imfptr, "auto_connect", 0, NULL, ICON_NONE);
+
+	row = uiLayoutRow(box, false);
 	uiItemR(row, imfptr, "min_chain_length", 0, NULL, ICON_NONE);
 }
 
@@ -444,8 +463,9 @@ void WM_OT_collada_import(wmOperatorType *ot)
 
 	ot->ui = wm_collada_import_draw;
 
-	WM_operator_properties_filesel(ot, FILE_TYPE_FOLDER | FILE_TYPE_COLLADA, FILE_BLENDER, FILE_OPENFILE,
-	                               WM_FILESEL_FILEPATH, FILE_DEFAULTDISPLAY, FILE_SORT_ALPHA);
+	WM_operator_properties_filesel(
+	        ot, FILE_TYPE_FOLDER | FILE_TYPE_COLLADA, FILE_BLENDER, FILE_OPENFILE,
+	        WM_FILESEL_FILEPATH, FILE_DEFAULTDISPLAY, FILE_SORT_ALPHA);
 
 	RNA_def_boolean(ot->srna,
 		"import_units", 0, "Import Units",
@@ -459,6 +479,10 @@ void WM_OT_collada_import(wmOperatorType *ot)
 	RNA_def_boolean(ot->srna,
 		"find_chains", 0, "Find Bone Chains",
 		"Find best matching Bone Chains and ensure bones in chain are connected");
+
+	RNA_def_boolean(ot->srna,
+		"auto_connect", 0, "Auto Connect",
+		"set use_connect for parent bones which have exactly one child bone");
 
 	RNA_def_int(ot->srna,
 		"min_chain_length",

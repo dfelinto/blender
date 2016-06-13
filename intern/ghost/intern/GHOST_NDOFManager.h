@@ -40,6 +40,7 @@ typedef enum {
 	NDOF_SpaceMousePro,
 	NDOF_SpaceMouseWireless,
 	NDOF_SpaceMouseProWireless,
+	NDOF_SpaceMouseEnterprise,
 
 	// older devices
 	NDOF_SpacePilot,
@@ -107,9 +108,12 @@ typedef enum {
 class GHOST_NDOFManager
 {
 public:
-	GHOST_NDOFManager(GHOST_System &);
-
+	GHOST_NDOFManager(GHOST_System&);
 	virtual ~GHOST_NDOFManager() {}
+
+	// whether multi-axis functionality is available (via the OS or driver)
+	// does not imply that a device is plugged in or being used
+	virtual bool available() = 0;
 
 	// each platform's device detection should call this
 	// use standard USB/HID identifiers

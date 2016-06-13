@@ -107,6 +107,8 @@
 
 #include "paint_intern.h"
 
+static void partial_redraw_array_init(ImagePaintPartialRedraw *pr);
+
 /* Defines and Structs */
 /* FTOCHAR as inline function */
 BLI_INLINE unsigned char f_to_char(const float val)
@@ -200,7 +202,7 @@ typedef struct ProjPaintImage {
  */
 typedef struct ProjStrokeHandle {
 	/* Support for painting from multiple views at once,
-	 * currently used to impliment summetry painting,
+	 * currently used to impliment symmetry painting,
 	 * we can assume at least the first is set while painting. */
 	struct ProjPaintState *ps_views[8];
 	int ps_views_tot;
@@ -298,6 +300,7 @@ typedef struct ProjPaintState {
 	float cloneOffset[2];
 
 	float projectMat[4][4];     /* Projection matrix, use for getting screen coords */
+	float projectMatInv[4][4];  /* inverse of projectMat */
 	float viewDir[3];           /* View vector, use for do_backfacecull and for ray casting with an ortho viewport  */
 	float viewPos[3];           /* View location in object relative 3D space, so can compare to verts  */
 	float clipsta, clipend;
@@ -305,6 +308,8 @@ typedef struct ProjPaintState {
 	/* reproject vars */
 	Image *reproject_image;
 	ImBuf *reproject_ibuf;
+	bool   reproject_ibuf_free_float;
+	bool   reproject_ibuf_free_uchar;
 
 	/* threads */
 	int thread_tot;
@@ -712,7 +717,7 @@ static bool project_paint_PickColor(
 }
 
 /**
- * Check if 'pt' is infront of the 3 verts on the Z axis (used for screenspace occlusuion test)
+ * Check if 'pt' is infront of the 3 verts on the Z axis (used for screenspace occlusion test)
  * \return
  * -  `0`:   no occlusion
  * - `-1`: no occlusion but 2D intersection is true
@@ -1097,6 +1102,10 @@ static void uv_image_outset(
         float (*orig_uv)[2], float (*outset_uv)[2], const float scaler,
         const int ibuf_x, const int ibuf_y, const bool cw)
 {
+	/* disallow shell-thickness to outset extreme values,
+	 * otherwise near zero area UV's may extend thousands of pixels. */
+	const float scale_clamp = 5.0f;
+
 	float a1, a2, a3;
 	float puv[3][2]; /* pixelspace uv's */
 	float no1[2], no2[2], no3[2]; /* normals */
@@ -1146,6 +1155,10 @@ static void uv_image_outset(
 	a1 = shell_v2v2_normal_dir_to_dist(no1, dir3);
 	a2 = shell_v2v2_normal_dir_to_dist(no2, dir1);
 	a3 = shell_v2v2_normal_dir_to_dist(no3, dir2);
+
+	CLAMP_MAX(a1, scale_clamp);
+	CLAMP_MAX(a2, scale_clamp);
+	CLAMP_MAX(a3, scale_clamp);
 
 	mul_v2_fl(no1, a1 * scaler);
 	mul_v2_fl(no2, a2 * scaler);
@@ -1244,6 +1257,55 @@ static void screen_px_from_persp(
 
 	/* do interpolation based on projected weight */
 	interp_v3_v3v3v3(pixelScreenCo, v1co, v2co, v3co, w_int);
+}
+
+
+/**
+ * Set a direction vector based on a screen location.
+ * (use for perspective view, else we can simply use `ps->viewDir`)
+ *
+ * Similar functionality to #ED_view3d_win_to_vector
+ *
+ * \param r_dir: Resulting direction (length is undefined).
+ */
+static void screen_px_to_vector_persp(
+        int winx, int winy, const float projmat_inv[4][4], const float view_pos[3],
+        const float co_px[2],
+        float r_dir[3])
+{
+	r_dir[0] = 2.0f * (co_px[0] / winx) - 1.0f;
+	r_dir[1] = 2.0f * (co_px[1] / winy) - 1.0f;
+	r_dir[2] = -0.5f;
+	mul_project_m4_v3((float(*)[4])projmat_inv, r_dir);
+	sub_v3_v3(r_dir, view_pos);
+}
+
+/**
+ * Special function to return the factor to a point along a line in pixel space.
+ *
+ * This is needed since we can't use #line_point_factor_v2 for perspective screen-space coords.
+ *
+ * \param p: 2D screen-space location.
+ * \param v1, v2: 3D object-space locations.
+ */
+static float screen_px_line_point_factor_v2_persp(
+        const ProjPaintState *ps,
+        const float p[2],
+        const float v1[3], const float v2[3])
+{
+	const float zero[3] = {0};
+	float v1_proj[3], v2_proj[3];
+	float dir[3];
+
+	screen_px_to_vector_persp(ps->winx, ps->winy, ps->projectMatInv, ps->viewPos, p, dir);
+
+	sub_v3_v3v3(v1_proj, v1, ps->viewPos);
+	sub_v3_v3v3(v2_proj, v2, ps->viewPos);
+
+	project_plane_v3_v3v3(v1_proj, v1_proj, dir);
+	project_plane_v3_v3v3(v2_proj, v2_proj, dir);
+
+	return line_point_factor_v2(zero, v1_proj, v2_proj);
 }
 
 
@@ -2044,8 +2106,9 @@ static void project_bucket_clip_face(
 
 	/* detect pathological case where face the three vertices are almost collinear in screen space.
 	 * mostly those will be culled but when flood filling or with smooth shading it's a possibility */
-	if (dist_squared_to_line_v2(v1coSS, v2coSS, v3coSS) < 0.5f ||
-	    dist_squared_to_line_v2(v2coSS, v3coSS, v1coSS) < 0.5f)
+	if (min_fff(dist_squared_to_line_v2(v1coSS, v2coSS, v3coSS),
+	            dist_squared_to_line_v2(v2coSS, v3coSS, v1coSS),
+	            dist_squared_to_line_v2(v3coSS, v1coSS, v2coSS)) < PROJ_PIXEL_TOLERANCE)
 	{
 		collinear = true;
 	}
@@ -2680,8 +2743,15 @@ static void project_paint_face_init(
 				    line_clip_rect2f(clip_rect, bucket_bounds, vCoSS[fidx1], vCoSS[fidx2], bucket_clip_edges[0], bucket_clip_edges[1]))
 				{
 					if (len_squared_v2v2(vCoSS[fidx1], vCoSS[fidx2]) > FLT_EPSILON) { /* avoid div by zero */
-						fac1 = line_point_factor_v2(bucket_clip_edges[0], vCoSS[fidx1], vCoSS[fidx2]);
-						fac2 = line_point_factor_v2(bucket_clip_edges[1], vCoSS[fidx1], vCoSS[fidx2]);
+
+						if (is_ortho) {
+							fac1 = line_point_factor_v2(bucket_clip_edges[0], vCoSS[fidx1], vCoSS[fidx2]);
+							fac2 = line_point_factor_v2(bucket_clip_edges[1], vCoSS[fidx1], vCoSS[fidx2]);
+						}
+						else {
+							fac1 = screen_px_line_point_factor_v2_persp(ps, bucket_clip_edges[0], vCo[fidx1], vCo[fidx2]);
+							fac2 = screen_px_line_point_factor_v2_persp(ps, bucket_clip_edges[1], vCo[fidx1], vCo[fidx2]);
+						}
 
 						interp_v2_v2v2(seam_subsection[0], lt_uv_pxoffset[fidx1], lt_uv_pxoffset[fidx2], fac1);
 						interp_v2_v2v2(seam_subsection[1], lt_uv_pxoffset[fidx1], lt_uv_pxoffset[fidx2], fac2);
@@ -2695,7 +2765,7 @@ static void project_paint_face_init(
 						interp_v3_v3v3(edge_verts_inset_clip[1], insetCos[fidx1], insetCos[fidx2], fac2);
 
 
-						if (pixel_bounds_uv(seam_subsection, &bounds_px, ibuf->x, ibuf->y)) {
+						if (pixel_bounds_uv((const float (*)[2])seam_subsection, &bounds_px, ibuf->x, ibuf->y)) {
 							/* bounds between the seam rect and the uvspace bucket pixels */
 
 							has_isect = 0;
@@ -2932,10 +3002,10 @@ static bool project_bucket_face_isect(ProjPaintState *ps, int bucket_x, int buck
 	    isect_point_tri_v2(p3, v1, v2, v3) ||
 	    isect_point_tri_v2(p4, v1, v2, v3) ||
 	    /* we can avoid testing v3,v1 because another intersection MUST exist if this intersects */
-	    (isect_line_line_v2(p1, p2, v1, v2) || isect_line_line_v2(p1, p2, v2, v3)) ||
-	    (isect_line_line_v2(p2, p3, v1, v2) || isect_line_line_v2(p2, p3, v2, v3)) ||
-	    (isect_line_line_v2(p3, p4, v1, v2) || isect_line_line_v2(p3, p4, v2, v3)) ||
-	    (isect_line_line_v2(p4, p1, v1, v2) || isect_line_line_v2(p4, p1, v2, v3)))
+	    (isect_seg_seg_v2(p1, p2, v1, v2) || isect_seg_seg_v2(p1, p2, v2, v3)) ||
+	    (isect_seg_seg_v2(p2, p3, v1, v2) || isect_seg_seg_v2(p2, p3, v2, v3)) ||
+	    (isect_seg_seg_v2(p3, p4, v1, v2) || isect_seg_seg_v2(p3, p4, v2, v3)) ||
+	    (isect_seg_seg_v2(p4, p1, v1, v2) || isect_seg_seg_v2(p4, p1, v2, v3)))
 	{
 		return 1;
 	}
@@ -3104,6 +3174,7 @@ static void proj_paint_state_viewport_init(
 		mul_m4_m4m4(ps->projectMat, winmat, vmat);
 	}
 
+	invert_m4_m4(ps->projectMatInv, ps->projectMat);
 
 	/* viewDir - object relative */
 	copy_m3_m4(mat, viewinv);
@@ -3559,34 +3630,6 @@ static bool project_paint_winclip(
 }
 #endif //PROJ_DEBUG_WINCLIP
 
-/* Return true if face should be culled, false otherwise */
-static bool project_paint_backface_cull(
-        const ProjPaintState *ps, const MLoopTri *lt,
-        const ProjPaintFaceCoSS *coSS)
-{
-	if (ps->do_backfacecull) {
-		if (ps->do_mask_normal) {
-			const int lt_vtri[3] = { PS_LOOPTRI_AS_VERT_INDEX_3(ps, lt) };
-			/* Since we are interpolating the normals of faces, we want to make
-			 * sure all the verts are pointing away from the view,
-			 * not just the face */
-			if ((ps->vertFlags[lt_vtri[0]] & PROJ_VERT_CULL) &&
-			    (ps->vertFlags[lt_vtri[1]] & PROJ_VERT_CULL) &&
-			    (ps->vertFlags[lt_vtri[2]] & PROJ_VERT_CULL))
-			{
-				return true;
-			}
-		}
-		else {
-			if ((line_point_side_v2(coSS->v1, coSS->v2, coSS->v3) < 0.0f) != ps->is_flip_object) {
-				return true;
-			}
-
-		}
-	}
-
-	return false;
-}
 
 static void project_paint_build_proj_ima(
         ProjPaintState *ps, MemArena *arena,
@@ -3606,9 +3649,9 @@ static void project_paint_build_proj_ima(
 		projIma->ibuf = BKE_image_acquire_ibuf(projIma->ima, NULL, NULL);
 		size = sizeof(void **) * IMAPAINT_TILE_NUMBER(projIma->ibuf->x) * IMAPAINT_TILE_NUMBER(projIma->ibuf->y);
 		projIma->partRedrawRect =  BLI_memarena_alloc(arena, sizeof(ImagePaintPartialRedraw) * PROJ_BOUNDBOX_SQUARED);
-		memset(projIma->partRedrawRect, 0, sizeof(ImagePaintPartialRedraw) * PROJ_BOUNDBOX_SQUARED);
+		partial_redraw_array_init(projIma->partRedrawRect);
 		projIma->undoRect = (volatile void **) BLI_memarena_alloc(arena, size);
-		memset(projIma->undoRect, 0, size);
+		memset((void *)projIma->undoRect, 0, size);
 		projIma->maskRect = BLI_memarena_alloc(arena, size);
 		memset(projIma->maskRect, 0, size);
 		projIma->valid = BLI_memarena_alloc(arena, size);
@@ -3631,6 +3674,7 @@ static void project_paint_prepare_all_faces(
 	TexPaintSlot *slot = NULL;
 	const MLoopTri *lt;
 	int image_index = -1, tri_index;
+	int prev_poly = -1;
 
 	for (tri_index = 0, lt = ps->dm_mlooptri; tri_index < ps->dm_totlooptri; tri_index++, lt++) {
 		bool is_face_sel;
@@ -3691,8 +3735,37 @@ static void project_paint_prepare_all_faces(
 
 #endif //PROJ_DEBUG_WINCLIP
 
-				if (project_paint_backface_cull(ps, lt, &coSS)) {
-					continue;
+				/* backface culls individual triangles but mask normal will use polygon */
+				if (ps->do_backfacecull) {
+					if (ps->do_mask_normal) {
+						if (prev_poly != lt->poly) {
+							int iloop;
+							bool culled = true;
+							const MPoly *poly = ps->dm_mpoly + lt->poly;
+							int poly_loops = poly->totloop;
+							prev_poly = lt->poly;
+							for (iloop = 0; iloop < poly_loops; iloop++) {
+								if (!(ps->vertFlags[ps->dm_mloop[poly->loopstart + iloop].v] & PROJ_VERT_CULL)) {
+									culled = false;
+									break;
+								}
+							}
+
+							if (culled) {
+								/* poly loops - 2 is number of triangles for poly,
+								 * but counter gets incremented when continuing, so decrease by 3 */
+								int poly_tri = poly_loops - 3;
+								tri_index += poly_tri;
+								lt += poly_tri;
+								continue;
+							}
+						}
+					}
+					else {
+						if ((line_point_side_v2(coSS.v1, coSS.v2, coSS.v3) < 0.0f) != ps->is_flip_object) {
+							continue;
+						}
+					}
 				}
 			}
 
@@ -3853,6 +3926,12 @@ static void project_paint_end(ProjPaintState *ps)
 		}
 	}
 
+	if (ps->reproject_ibuf_free_float) {
+		imb_freerectfloatImBuf(ps->reproject_ibuf);
+	}
+	if (ps->reproject_ibuf_free_uchar) {
+		imb_freerectImBuf(ps->reproject_ibuf);
+	}
 	BKE_image_release_ibuf(ps->reproject_image, ps->reproject_ibuf, NULL);
 
 	MEM_freeN(ps->screenCoords);
@@ -3865,10 +3944,10 @@ static void project_paint_end(ProjPaintState *ps)
 		/* must be set for non-shared */
 		BLI_assert(ps->dm_mloopuv || ps->is_shared_user);
 		if (ps->dm_mloopuv)
-			MEM_freeN(ps->dm_mloopuv);
+			MEM_freeN((void *)ps->dm_mloopuv);
 
 		if (ps->do_layer_clone)
-			MEM_freeN(ps->dm_mloopuv_clone);
+			MEM_freeN((void *)ps->dm_mloopuv_clone);
 		if (ps->thread_tot > 1) {
 			BLI_spin_end(ps->tile_lock);
 			MEM_freeN((void *)ps->tile_lock);
@@ -3921,8 +4000,8 @@ static void project_paint_end(ProjPaintState *ps)
 /* 1 = an undo, -1 is a redo. */
 static void partial_redraw_single_init(ImagePaintPartialRedraw *pr)
 {
-	pr->x1 = 10000000;
-	pr->y1 = 10000000;
+	pr->x1 = INT_MAX;
+	pr->y1 = INT_MAX;
 
 	pr->x2 = -1;
 	pr->y2 = -1;
@@ -4264,7 +4343,7 @@ static void do_projectpaint_soften(ProjPaintState *ps, ProjPixel *projPixel, flo
 		}
 		else {
 			premul_float_to_straight_uchar(rgba_ub, rgba);
-			blend_color_interpolate_byte(rgba_ub, rgba_ub, projPixel->pixel.ch_pt, mask);
+			blend_color_interpolate_byte(rgba_ub, projPixel->pixel.ch_pt, rgba_ub, mask);
 		}
 		BLI_linklist_prepend_arena(softenPixels, (void *)projPixel, softenArena);
 	}
@@ -4472,6 +4551,7 @@ static void *do_projectpaint_thread(void *ph_v)
 								break;
 							}
 							case BRUSH_GRADIENT_RADIAL:
+							default:
 							{
 								f = len_v2(p) / line_len;
 								break;
@@ -4538,23 +4618,28 @@ static void *do_projectpaint_thread(void *ph_v)
 				}
 				else {
 					if (is_floatbuf) {
-						/* re-project buffer is assumed byte - TODO, allow float */
-						bicubic_interpolation_color(ps->reproject_ibuf, projPixel->newColor.ch, NULL,
+						if (UNLIKELY(ps->reproject_ibuf->rect_float == NULL)) {
+							IMB_float_from_rect(ps->reproject_ibuf);
+							ps->reproject_ibuf_free_float = true;
+						}
+
+						bicubic_interpolation_color(ps->reproject_ibuf, NULL, projPixel->newColor.f,
 						                            projPixel->projCoSS[0], projPixel->projCoSS[1]);
-						if (projPixel->newColor.ch[3]) {
-							float newColor_f[4];
+						if (projPixel->newColor.f[3]) {
 							float mask = ((float)projPixel->mask) * (1.0f / 65535.0f);
 
-							straight_uchar_to_premul_float(newColor_f, projPixel->newColor.ch);
-							IMB_colormanagement_colorspace_to_scene_linear_v4(newColor_f, true, ps->reproject_ibuf->rect_colorspace);
-							mul_v4_v4fl(newColor_f, newColor_f, mask);
+							mul_v4_v4fl(projPixel->newColor.f, projPixel->newColor.f, mask);
 
 							blend_color_mix_float(projPixel->pixel.f_pt,  projPixel->origColor.f_pt,
-							                      newColor_f);
+							                      projPixel->newColor.f);
 						}
 					}
 					else {
-						/* re-project buffer is assumed byte - TODO, allow float */
+						if (UNLIKELY(ps->reproject_ibuf->rect == NULL)) {
+							IMB_rect_from_float(ps->reproject_ibuf);
+							ps->reproject_ibuf_free_uchar = true;
+						}
+
 						bicubic_interpolation_color(ps->reproject_ibuf, projPixel->newColor.ch, NULL,
 						                            projPixel->projCoSS[0], projPixel->projCoSS[1]);
 						if (projPixel->newColor.ch[3]) {
@@ -5219,7 +5304,9 @@ static int texture_paint_camera_project_exec(bContext *C, wmOperator *op)
 	ps.reproject_image = image;
 	ps.reproject_ibuf = BKE_image_acquire_ibuf(image, NULL, NULL);
 
-	if (ps.reproject_ibuf == NULL || ps.reproject_ibuf->rect == NULL) {
+	if ((ps.reproject_ibuf == NULL) ||
+	    ((ps.reproject_ibuf->rect || ps.reproject_ibuf->rect_float) == false))
+	{
 		BKE_report(op->reports, RPT_ERROR, "Image data could not be found");
 		return OPERATOR_CANCELLED;
 	}
@@ -5274,9 +5361,6 @@ static int texture_paint_camera_project_exec(bContext *C, wmOperator *op)
 		float pos[2] = {0.0, 0.0};
 		float lastpos[2] = {0.0, 0.0};
 		int a;
-
-		for (a = 0; a < ps.image_tot; a++)
-			partial_redraw_array_init(ps.projImages[a].partRedrawRect);
 
 		project_paint_op(&ps, lastpos, pos);
 
@@ -5338,7 +5422,10 @@ static int texture_paint_image_from_view_exec(bContext *C, wmOperator *op)
 	if (w > maxsize) w = maxsize;
 	if (h > maxsize) h = maxsize;
 
-	ibuf = ED_view3d_draw_offscreen_imbuf(scene, CTX_wm_view3d(C), CTX_wm_region(C), w, h, IB_rect, false, R_ALPHAPREMUL, NULL, err_out);
+	ibuf = ED_view3d_draw_offscreen_imbuf(
+	        scene, CTX_wm_view3d(C), CTX_wm_region(C),
+	        w, h, IB_rect, false, R_ALPHAPREMUL, 0, false, NULL,
+	        NULL, NULL, err_out);
 	if (!ibuf) {
 		/* Mostly happens when OpenGL offscreen buffer was failed to create, */
 		/* but could be other reasons. Should be handled in the future. nazgul */
@@ -5352,7 +5439,7 @@ static int texture_paint_image_from_view_exec(bContext *C, wmOperator *op)
 	IMB_freeImBuf(ibuf);
 
 	if (image) {
-		/* now for the trickyness. store the view projection here!
+		/* now for the trickiness. store the view projection here!
 		 * re-projection will reuse this */
 		View3D *v3d = CTX_wm_view3d(C);
 		RegionView3D *rv3d = CTX_wm_region_view3d(C);
@@ -5666,7 +5753,7 @@ static int texture_paint_add_texture_paint_slot_invoke(bContext *C, wmOperator *
 	BLI_assert(type != -1);
 
 	/* take the second letter to avoid the ID identifier */
-	BLI_snprintf(imagename, FILE_MAX, "%s %s", &ma->id.name[2], layer_type_items[type].name);
+	BLI_snprintf(imagename, sizeof(imagename), "%s %s", &ma->id.name[2], layer_type_items[type].name);
 
 	RNA_string_set(op->ptr, "name", imagename);
 	return WM_operator_props_dialog_popup(C, op, 15 * UI_UNIT_X, 5 * UI_UNIT_Y);
@@ -5705,7 +5792,7 @@ void PAINT_OT_add_texture_paint_slot(wmOperatorType *ot)
 	RNA_def_property_subtype(prop, PROP_COLOR_GAMMA);
 	RNA_def_property_float_array_default(prop, default_color);
 	RNA_def_boolean(ot->srna, "alpha", 1, "Alpha", "Create an image with an alpha channel");
-	RNA_def_enum(ot->srna, "generated_type", image_generated_type_items, IMA_GENTYPE_BLANK,
+	RNA_def_enum(ot->srna, "generated_type", rna_enum_image_generated_type_items, IMA_GENTYPE_BLANK,
 	             "Generated Type", "Fill the image with a grid for UV map testing");
 	RNA_def_boolean(ot->srna, "float", 0, "32 bit Float", "Create image with 32 bit floating point bit depth");
 }
@@ -5778,15 +5865,17 @@ static int add_simple_uvs_exec(bContext *C, wmOperator *UNUSED(op))
 
 	ED_mesh_uv_texture_ensure(me, NULL);
 
-	BM_mesh_bm_from_me(bm, me, true, false, 0);
-
+	BM_mesh_bm_from_me(
+	        bm, me, (&(struct BMeshFromMeshParams){
+	            .calc_face_normal = true,
+	        }));
 	/* select all uv loops first - pack parameters needs this to make sure charts are registered */
 	ED_uvedit_select_all(bm);
 	ED_uvedit_unwrap_cube_project(ob, bm, 1.0, false);
 	/* set the margin really quickly before the packing operation*/
 	scene->toolsettings->uvcalc_margin = 0.001f;
 	ED_uvedit_pack_islands(scene, ob, bm, false, false, true);
-	BM_mesh_bm_to_me(bm, me, false);
+	BM_mesh_bm_to_me(bm, me, (&(struct BMeshToMeshParams){0}));
 	BM_mesh_free(bm);
 
 	if (synch_selection)

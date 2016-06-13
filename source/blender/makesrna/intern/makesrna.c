@@ -1079,11 +1079,18 @@ static char *rna_def_property_length_func(FILE *f, StructRNA *srna, PropertyRNA 
 			fprintf(f, "	return %s(ptr);\n", manualfunc);
 		}
 		else {
-			rna_print_data_get(f, dp);
-			if (dp->dnalengthname)
-				fprintf(f, "	return (data->%s == NULL) ? 0 : data->%s;\n", dp->dnaname, dp->dnalengthname);
+			if (dp->dnaarraylength <= 1 || dp->dnalengthname)
+				rna_print_data_get(f, dp);
+
+			if (dp->dnaarraylength > 1)
+				fprintf(f, "	return ");
 			else
-				fprintf(f, "	return (data->%s == NULL) ? 0 : %d;\n", dp->dnaname, dp->dnalengthfixed);
+				fprintf(f, "	return (data->%s == NULL) ? 0 : ", dp->dnaname);
+
+			if (dp->dnalengthname)
+				fprintf(f, "data->%s;\n", dp->dnalengthname);
+			else
+				fprintf(f, "%d;\n", dp->dnalengthfixed);
 		}
 		fprintf(f, "}\n\n");
 	}
@@ -1788,7 +1795,7 @@ static void rna_def_property_funcs_header_cpp(FILE *f, StructRNA *srna, Property
 		}
 		case PROP_STRING:
 		{
-			fprintf(f, "\tinline std::string %s(void);", rna_safe_id(prop->identifier));
+			fprintf(f, "\tinline std::string %s(void);\n", rna_safe_id(prop->identifier));
 			fprintf(f, "\tinline void %s(const std::string& value);", rna_safe_id(prop->identifier));
 			break;
 		}
@@ -1893,9 +1900,13 @@ static void rna_def_struct_function_prototype_cpp(FILE *f, StructRNA *UNUSED(srn
 		if (!(flag & PROP_DYNAMIC) && dp->prop->arraydimension)
 			fprintf(f, "%s %s[%u]", rna_parameter_type_cpp_name(dp->prop),
 			        rna_safe_id(dp->prop->identifier), dp->prop->totarraylength);
-		else
-			fprintf(f, "%s %s%s", rna_parameter_type_cpp_name(dp->prop),
-			        ptrstr, rna_safe_id(dp->prop->identifier));
+		else {
+			fprintf(f, "%s%s%s%s",
+			        rna_parameter_type_cpp_name(dp->prop),
+			        (dp->prop->type == PROP_POINTER && ptrstr[0] == '\0') ? "& " : " ",
+			        ptrstr,
+			        rna_safe_id(dp->prop->identifier));
+		}
 	}
 
 	fprintf(f, ")");
@@ -3681,6 +3692,7 @@ static const char *cpp_classes = ""
 "return *this; }\n"
 "\n"
 "	operator T*() { return data; }\n"
+"	operator const T*() const { return data; }\n"
 "};\n"
 "\n"
 "template<typename T>\n"

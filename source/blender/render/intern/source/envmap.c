@@ -56,7 +56,8 @@
 /* this module */
 #include "render_types.h"
 #include "envmap.h"
-#include "renderdatabase.h" 
+#include "renderdatabase.h"
+#include "renderpipeline.h"
 #include "texture.h"
 #include "zbuf.h"
 
@@ -138,7 +139,7 @@ static Render *envmap_render_copy(Render *re, EnvMap *env)
 	envre->flag = re->flag;
 	
 	/* set up renderdata */
-	envre->r = re->r;
+	render_copy_renderdata(&envre->r, &re->r);
 	envre->r.mode &= ~(R_BORDER | R_PANORAMA | R_ORTHO | R_MBLUR);
 	BLI_listbase_clear(&envre->r.layers);
 	BLI_listbase_clear(&envre->r.views);
@@ -262,7 +263,6 @@ static void env_set_imats(Render *re)
 
 void env_rotate_scene(Render *re, float mat[4][4], int do_rotate)
 {
-	GroupObject *go;
 	ObjectRen *obr;
 	ObjectInstanceRen *obi;
 	LampRen *lar = NULL;
@@ -321,19 +321,18 @@ void env_rotate_scene(Render *re, float mat[4][4], int do_rotate)
 		invert_m4(obr->ob->imat_ren);
 	}
 	
-	for (go = re->lights.first; go; go = go->next) {
-		lar = go->lampren;
-		
+	for (lar = re->lampren.first; lar; lar = lar->next) {
+		float lamp_imat[4][4];
+
 		/* copy from add_render_lamp */
 		if (do_rotate == 1)
 			mul_m4_m4m4(tmpmat, re->viewmat, lar->lampmat);
 		else
 			mul_m4_m4m4(tmpmat, re->viewmat_orig, lar->lampmat);
-		invert_m4_m4(go->ob->imat, tmpmat);
-		
+
+		invert_m4_m4(lamp_imat, tmpmat);
 		copy_m3_m4(lar->mat, tmpmat);
-		
-		copy_m3_m4(lar->imat, go->ob->imat);
+		copy_m3_m4(lar->imat, lamp_imat);
 
 		lar->vec[0]= -tmpmat[2][0];
 		lar->vec[1]= -tmpmat[2][1];

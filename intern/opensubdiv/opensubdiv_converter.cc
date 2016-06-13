@@ -467,6 +467,14 @@ inline bool TopologyRefinerFactory<OpenSubdiv_Converter>::assignComponentTags(
 				break;
 			}
 		}
+		if (vert_edges.size() == 2) {
+			int edge0 = vert_edges[0],
+			    edge1 = vert_edges[1];
+			float sharpness0 = conv.get_edge_sharpness(&conv, edge0),
+			      sharpness1 = conv.get_edge_sharpness(&conv, edge1);
+			float sharpness = std::min(sharpness0,  sharpness1);
+			setBaseVertexSharpness(refiner, vert, sharpness);
+		}
 	}
 
 	return true;
@@ -572,6 +580,17 @@ int openSubdiv_topologyRefinerGetNumFaces(
 	const TopologyRefiner *refiner = (const TopologyRefiner *)topology_refiner;
 	const TopologyLevel &base_level = refiner->GetLevel(0);
 	return base_level.GetNumFaces();
+}
+
+int openSubdiv_topologyRefinerGetNumFaceVerts(
+        const OpenSubdiv_TopologyRefinerDescr *topology_refiner,
+        int face)
+{
+	using OpenSubdiv::Far::TopologyLevel;
+	using OpenSubdiv::Far::TopologyRefiner;
+	const TopologyRefiner *refiner = (const TopologyRefiner *)topology_refiner;
+	const TopologyLevel &base_level = refiner->GetLevel(0);
+	return base_level.GetFaceVertices(face).size();
 }
 
 int openSubdiv_topologyRefnerCompareConverter(

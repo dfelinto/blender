@@ -203,7 +203,27 @@ static VFontData *vfont_get_data(Main *bmain, VFont *vfont)
 	return vfont->data;
 }
 
-VFont *BKE_vfont_load(Main *bmain, const char *name)
+/* Bad naming actually in this case... */
+void BKE_vfont_init(VFont *vfont)
+{
+	PackedFile *pf = get_builtin_packedfile();
+
+	if (pf) {
+		VFontData *vfd;
+
+		vfd = BLI_vfontdata_from_freetypefont(pf);
+		if (vfd) {
+			vfont->data = vfd;
+
+			BLI_strncpy(vfont->name, FO_BUILTIN_NAME, sizeof(vfont->name));
+		}
+
+		/* Free the packed file */
+		freePackedFile(pf);
+	}
+}
+
+VFont *BKE_vfont_load(Main *bmain, const char *filepath)
 {
 	char filename[FILE_MAXFILE];
 	VFont *vfont = NULL;
@@ -211,16 +231,16 @@ VFont *BKE_vfont_load(Main *bmain, const char *name)
 	PackedFile *temp_pf = NULL;
 	bool is_builtin;
 	
-	if (STREQ(name, FO_BUILTIN_NAME)) {
-		BLI_strncpy(filename, name, sizeof(filename));
+	if (STREQ(filepath, FO_BUILTIN_NAME)) {
+		BLI_strncpy(filename, filepath, sizeof(filename));
 		
 		pf = get_builtin_packedfile();
 		is_builtin = true;
 	}
 	else {
-		BLI_split_file_part(name, filename, sizeof(filename));
-		pf = newPackedFile(NULL, name, bmain->name);
-		temp_pf = newPackedFile(NULL, name, bmain->name);
+		BLI_split_file_part(filepath, filename, sizeof(filename));
+		pf = newPackedFile(NULL, filepath, bmain->name);
+		temp_pf = newPackedFile(NULL, filepath, bmain->name);
 		
 		is_builtin = false;
 	}
@@ -237,7 +257,7 @@ VFont *BKE_vfont_load(Main *bmain, const char *name)
 			if (vfd->name[0] != '\0') {
 				BLI_strncpy(vfont->id.name + 2, vfd->name, sizeof(vfont->id.name) - 2);
 			}
-			BLI_strncpy(vfont->name, name, sizeof(vfont->name));
+			BLI_strncpy(vfont->name, filepath, sizeof(vfont->name));
 
 			/* if autopack is on store the packedfile in de font structure */
 			if (!is_builtin && (G.fileflags & G_AUTOPACK)) {
@@ -257,6 +277,37 @@ VFont *BKE_vfont_load(Main *bmain, const char *name)
 	}
 	
 	return vfont;
+}
+
+VFont *BKE_vfont_load_exists_ex(struct Main *bmain, const char *filepath, bool *r_exists)
+{
+	VFont *vfont;
+	char str[FILE_MAX], strtest[FILE_MAX];
+
+	BLI_strncpy(str, filepath, sizeof(str));
+	BLI_path_abs(str, bmain->name);
+
+	/* first search an identical filepath */
+	for (vfont = bmain->vfont.first; vfont; vfont = vfont->id.next) {
+		BLI_strncpy(strtest, vfont->name, sizeof(vfont->name));
+		BLI_path_abs(strtest, ID_BLEND_PATH(bmain, &vfont->id));
+
+		if (BLI_path_cmp(strtest, str) == 0) {
+			id_us_plus(&vfont->id);  /* officially should not, it doesn't link here! */
+			if (r_exists)
+				*r_exists = true;
+			return vfont;
+		}
+	}
+
+	if (r_exists)
+		*r_exists = false;
+	return BKE_vfont_load(bmain, filepath);
+}
+
+VFont *BKE_vfont_load_exists(struct Main *bmain, const char *filepath)
+{
+	return BKE_vfont_load_exists_ex(bmain, filepath, NULL);
 }
 
 static VFont *which_vfont(Curve *cu, CharInfo *info)
@@ -490,7 +541,7 @@ int BKE_vfont_select_get(Object *ob, int *r_start, int *r_end)
 
 	BLI_assert(ef->len >= 0);
 	BLI_assert(ef->selstart >= 0 && ef->selstart <= ef->len + 1);
-	BLI_assert(ef->selend   >= 0 && ef->selend   <= ef->len);
+	BLI_assert(ef->selend   >= 0 && ef->selend   <= ef->len + 1);
 	BLI_assert(ef->pos      >= 0 && ef->pos      <= ef->len);
 
 	if (ef->selstart == 0) {
@@ -777,7 +828,7 @@ makebreak:
 
 			if ((tb_scale.h != 0.0f) &&
 			    (cu->totbox > (curbox + 1)) &&
-			    ((-(yof - tb_scale.y)) > (tb_scale.h - (linedist * cu->fsize)) - yof_scale))
+			    ((-(yof - tb_scale.y)) > (tb_scale.h - linedist) - yof_scale))
 			{
 				maxlen = 0;
 				curbox++;
@@ -989,7 +1040,7 @@ makebreak:
 			timeofs += distfac * cu->xof;  /* not cyclic */
 			
 			ct = chartransdata;
-			for (i = 0; i <= slen; i++, ct++) {
+			for (i = 0; i < slen; i++, ct++) {
 				float ctime, dtime, vec[4], tvec[4], rotvec[3];
 				float si, co;
 				
@@ -1031,8 +1082,9 @@ makebreak:
 					sb = &selboxes[i - selstart];
 					sb->rot = -ct->rot;
 				}
-				
 			}
+			/* null character is always zero width, no need to iterate over it */
+			chartransdata[slen] = chartransdata[slen - 1];
 		}
 	}
 
@@ -1210,3 +1262,77 @@ bool BKE_vfont_to_curve(Main *bmain, Object *ob, int mode)
 
 	return BKE_vfont_to_curve_ex(bmain, ob, mode, &cu->nurb, NULL, NULL, NULL, NULL);
 }
+
+
+/* -------------------------------------------------------------------- */
+
+/** \name VFont Clipboard
+ * \{ */
+
+static struct {
+	wchar_t *text_buffer;
+	CharInfo *info_buffer;
+	size_t len_wchar;
+	size_t len_utf8;
+} g_vfont_clipboard = {NULL};
+
+void BKE_vfont_clipboard_free(void)
+{
+	MEM_SAFE_FREE(g_vfont_clipboard.text_buffer);
+	MEM_SAFE_FREE(g_vfont_clipboard.info_buffer);
+	g_vfont_clipboard.len_wchar = 0;
+	g_vfont_clipboard.len_utf8 = 0;
+}
+
+void BKE_vfont_clipboard_set(const wchar_t *text_buf, const CharInfo *info_buf, const size_t len)
+{
+	wchar_t *text;
+	CharInfo *info;
+
+	/* clean previous buffers*/
+	BKE_vfont_clipboard_free();
+
+	text = MEM_mallocN((len + 1) * sizeof(wchar_t), __func__);
+	if (text == NULL) {
+		return;
+	}
+
+	info = MEM_mallocN(len * sizeof(CharInfo), __func__);
+	if (info == NULL) {
+		MEM_freeN(text);
+		return;
+	}
+
+	memcpy(text, text_buf, len * sizeof(wchar_t));
+	text[len] = '\0';
+	memcpy(info, info_buf, len * sizeof(CharInfo));
+
+	/* store new buffers */
+	g_vfont_clipboard.text_buffer = text;
+	g_vfont_clipboard.info_buffer = info;
+	g_vfont_clipboard.len_utf8 = BLI_wstrlen_utf8(text);
+	g_vfont_clipboard.len_wchar = len;
+}
+
+void BKE_vfont_clipboard_get(
+        wchar_t **r_text_buf, CharInfo **r_info_buf,
+        size_t *r_len_utf8, size_t *r_len_wchar)
+{
+	if (r_text_buf) {
+		*r_text_buf = g_vfont_clipboard.text_buffer;
+	}
+
+	if (r_info_buf) {
+		*r_info_buf = g_vfont_clipboard.info_buffer;
+	}
+
+	if (r_len_wchar) {
+		*r_len_wchar = g_vfont_clipboard.len_wchar;
+	}
+
+	if (r_len_utf8) {
+		*r_len_utf8 = g_vfont_clipboard.len_utf8;
+	}
+}
+
+/** \} */

@@ -19,8 +19,9 @@ CCL_NAMESPACE_BEGIN
 #if defined(__BRANCHED_PATH__) || defined(__SUBSURFACE__)
 
 /* branched path tracing: connect path directly to position on one or more lights and add it to L */
-ccl_device void kernel_branched_path_surface_connect_light(KernelGlobals *kg, RNG *rng,
-	ShaderData *sd, PathState *state, float3 throughput, float num_samples_adjust, PathRadiance *L, bool sample_all_lights)
+ccl_device_noinline void kernel_branched_path_surface_connect_light(KernelGlobals *kg, RNG *rng,
+	ShaderData *sd, ShaderData *emission_sd, PathState *state, float3 throughput,
+	float num_samples_adjust, PathRadiance *L, int sample_all_lights)
 {
 #ifdef __EMISSION__
 	/* sample illumination from lights to find path contribution */
@@ -31,15 +32,15 @@ ccl_device void kernel_branched_path_surface_connect_light(KernelGlobals *kg, RN
 	BsdfEval L_light;
 	bool is_lamp;
 
-#ifdef __OBJECT_MOTION__
+#  ifdef __OBJECT_MOTION__
 	light_ray.time = ccl_fetch(sd, time);
-#endif
+#  endif
 
 	if(sample_all_lights) {
 		/* lamp sampling */
 		for(int i = 0; i < kernel_data.integrator.num_all_lights; i++) {
 			if(UNLIKELY(light_select_reached_max_bounces(kg, i, state->bounce)))
-			   continue;
+				continue;
 
 			int num_samples = ceil_to_int(num_samples_adjust*light_select_num_samples(kg, i));
 			float num_samples_inv = num_samples_adjust/(num_samples*kernel_data.integrator.num_all_lights);
@@ -55,11 +56,11 @@ ccl_device void kernel_branched_path_surface_connect_light(KernelGlobals *kg, RN
 				LightSample ls;
 				lamp_light_sample(kg, i, light_u, light_v, ccl_fetch(sd, P), &ls);
 
-				if(direct_emission(kg, sd, &ls, &light_ray, &L_light, &is_lamp, state->bounce, state->transparent_bounce)) {
+				if(direct_emission(kg, sd, emission_sd, &ls, state, &light_ray, &L_light, &is_lamp)) {
 					/* trace shadow ray */
 					float3 shadow;
 
-					if(!shadow_blocked(kg, state, &light_ray, &shadow)) {
+					if(!shadow_blocked(kg, emission_sd, state, &light_ray, &shadow)) {
 						/* accumulate */
 						path_radiance_accum_light(L, throughput*num_samples_inv, &L_light, shadow, num_samples_inv, state->bounce, is_lamp);
 					}
@@ -87,11 +88,11 @@ ccl_device void kernel_branched_path_surface_connect_light(KernelGlobals *kg, RN
 				LightSample ls;
 				light_sample(kg, light_t, light_u, light_v, ccl_fetch(sd, time), ccl_fetch(sd, P), state->bounce, &ls);
 
-				if(direct_emission(kg, sd, &ls, &light_ray, &L_light, &is_lamp, state->bounce, state->transparent_bounce)) {
+				if(direct_emission(kg, sd, emission_sd, &ls, state, &light_ray, &L_light, &is_lamp)) {
 					/* trace shadow ray */
 					float3 shadow;
 
-					if(!shadow_blocked(kg, state, &light_ray, &shadow)) {
+					if(!shadow_blocked(kg, emission_sd, state, &light_ray, &shadow)) {
 						/* accumulate */
 						path_radiance_accum_light(L, throughput*num_samples_inv, &L_light, shadow, num_samples_inv, state->bounce, is_lamp);
 					}
@@ -109,11 +110,11 @@ ccl_device void kernel_branched_path_surface_connect_light(KernelGlobals *kg, RN
 		light_sample(kg, light_t, light_u, light_v, ccl_fetch(sd, time), ccl_fetch(sd, P), state->bounce, &ls);
 
 		/* sample random light */
-		if(direct_emission(kg, sd, &ls, &light_ray, &L_light, &is_lamp, state->bounce, state->transparent_bounce)) {
+		if(direct_emission(kg, sd, emission_sd, &ls, state, &light_ray, &L_light, &is_lamp)) {
 			/* trace shadow ray */
 			float3 shadow;
 
-			if(!shadow_blocked(kg, state, &light_ray, &shadow)) {
+			if(!shadow_blocked(kg, emission_sd, state, &light_ray, &shadow)) {
 				/* accumulate */
 				path_radiance_accum_light(L, throughput*num_samples_adjust, &L_light, shadow, num_samples_adjust, state->bounce, is_lamp);
 			}
@@ -150,7 +151,7 @@ ccl_device bool kernel_branched_path_surface_bounce(KernelGlobals *kg, RNG *rng,
 
 	/* setup ray */
 	ray->P = ray_offset(ccl_fetch(sd, P), (label & LABEL_TRANSMIT)? -ccl_fetch(sd, Ng): ccl_fetch(sd, Ng));
-	ray->D = bsdf_omega_in;
+	ray->D = normalize(bsdf_omega_in);
 	ray->t = FLT_MAX;
 #ifdef __RAY_DIFFERENTIALS__
 	ray->dP = ccl_fetch(sd, dP);
@@ -184,7 +185,8 @@ ccl_device bool kernel_branched_path_surface_bounce(KernelGlobals *kg, RNG *rng,
 #ifndef __SPLIT_KERNEL__
 /* path tracing: connect path directly to position on a light and add it to L */
 ccl_device_inline void kernel_path_surface_connect_light(KernelGlobals *kg, ccl_addr_space RNG *rng,
-	ShaderData *sd, float3 throughput, ccl_addr_space PathState *state, PathRadiance *L)
+	ShaderData *sd, ShaderData *emission_sd, float3 throughput, ccl_addr_space PathState *state,
+	PathRadiance *L)
 {
 #ifdef __EMISSION__
 	if(!(kernel_data.integrator.use_direct_light && (ccl_fetch(sd, flag) & SD_BSDF_HAS_EVAL)))
@@ -206,11 +208,11 @@ ccl_device_inline void kernel_path_surface_connect_light(KernelGlobals *kg, ccl_
 	LightSample ls;
 	light_sample(kg, light_t, light_u, light_v, ccl_fetch(sd, time), ccl_fetch(sd, P), state->bounce, &ls);
 
-	if(direct_emission(kg, sd, &ls, &light_ray, &L_light, &is_lamp, state->bounce, state->transparent_bounce)) {
+	if(direct_emission(kg, sd, emission_sd, &ls, state, &light_ray, &L_light, &is_lamp)) {
 		/* trace shadow ray */
 		float3 shadow;
 
-		if(!shadow_blocked(kg, state, &light_ray, &shadow)) {
+		if(!shadow_blocked(kg, emission_sd, state, &light_ray, &shadow)) {
 			/* accumulate */
 			path_radiance_accum_light(L, throughput, &L_light, shadow, 1.0f, state->bounce, is_lamp);
 		}
@@ -257,7 +259,7 @@ ccl_device_inline bool kernel_path_surface_bounce(KernelGlobals *kg, ccl_addr_sp
 
 		/* setup ray */
 		ray->P = ray_offset(ccl_fetch(sd, P), (label & LABEL_TRANSMIT)? -ccl_fetch(sd, Ng): ccl_fetch(sd, Ng));
-		ray->D = bsdf_omega_in;
+		ray->D = normalize(bsdf_omega_in);
 
 		if(state->bounce == 0)
 			ray->t -= ccl_fetch(sd, ray_length); /* clipping works through transparent */

@@ -137,6 +137,7 @@ float ED_object_new_primitive_matrix(
 
 void ED_object_add_unit_props(struct wmOperatorType *ot);
 void ED_object_add_generic_props(struct wmOperatorType *ot, bool do_editmode);
+void ED_object_add_mesh_props(struct wmOperatorType *ot);
 bool ED_object_add_generic_get_opts(struct bContext *C, struct wmOperator *op, const char view_align_axis,
                                     float loc[3], float rot[3],
                                     bool *enter_editmode, unsigned int *layer, bool *is_view_aligned);
@@ -151,7 +152,7 @@ void ED_object_single_users(struct Main *bmain, struct Scene *scene, const bool 
 void ED_object_single_user(struct Main *bmain, struct Scene *scene, struct Object *ob);
 
 /* object motion paths */
-void ED_objects_clear_paths(struct bContext *C);
+void ED_objects_clear_paths(struct bContext *C, bool only_selected);
 void ED_objects_recalculate_paths(struct bContext *C, struct Scene *scene);
 
 /* constraints */
@@ -169,12 +170,12 @@ void ED_object_constraint_tag_update(struct Object *ob, struct bConstraint *con)
 void ED_object_constraint_dependency_tag_update(struct Main *bmain, struct Object *ob, struct bConstraint *con);
 
 /* object_lattice.c */
-bool mouse_lattice(struct bContext *C, const int mval[2], bool extend, bool deselect, bool toggle);
+bool ED_lattice_select_pick(struct bContext *C, const int mval[2], bool extend, bool deselect, bool toggle);
 void undo_push_lattice(struct bContext *C, const char *name);
 
 /* object_lattice.c */
 
-void ED_setflagsLatt(struct Object *obedit, int flag);
+void ED_lattice_flags_set(struct Object *obedit, int flag);
 
 /* object_modifier.c */
 enum {
