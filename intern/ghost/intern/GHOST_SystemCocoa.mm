@@ -1399,7 +1399,16 @@ GHOST_TSuccess GHOST_SystemCocoa::handleMouseEvent(void *eventPtr)
 				}
 			}
 			break;
-
+			
+			/* these events only happen on swiping trackpads or tablets */
+			/* warning: using tablet + trackpad at same time frustrates this static variable */
+		case NSEventTypeEndGesture:
+			{
+			pushEvent(new GHOST_EventTrackpad([event timestamp] * 1000, window, GHOST_kTrackpadEventUntouch, 0, 0,
+			                                  0, 0));
+			}
+			break;
+			
 		case NSScrollWheel:
 			{
 				NSEventPhase momentumPhase = NSEventPhaseNone;

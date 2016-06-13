@@ -75,6 +75,7 @@ enum {
 	MOUSEPAN            = 0x000e,
 	MOUSEZOOM           = 0x000f,
 	MOUSEROTATE         = 0x0010,
+	MOUSEUNTOUCH        = 0x0014,
 	/* defaults from ghost */
 	WHEELUPMOUSE        = 0x000a,
 	WHEELDOWNMOUSE      = 0x000b,
@@ -364,7 +365,7 @@ enum {
 	(((event_type) >= LEFTCTRLKEY && (event_type) <= LEFTSHIFTKEY) || (event_type) == OSKEY)
 
 /* test whether the event is a mouse button */
-#define ISMOUSE(event_type)  ((event_type) >= LEFTMOUSE && (event_type) <= BUTTON7MOUSE)
+#define ISMOUSE(event_type)  ((event_type) >= LEFTMOUSE && (event_type) <= MOUSEUNTOUCH)
 
 /* test whether the event is tweak event */
 #define ISTWEAK(event_type)  ((event_type) >= EVT_TWEAK_L && (event_type) <= EVT_GESTURE)
