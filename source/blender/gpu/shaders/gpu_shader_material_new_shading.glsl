@@ -502,7 +502,11 @@ void node_tex_image(vec3 co, sampler2D ima, out vec4 color, out float alpha)
 
 void node_tex_image_closest(vec3 co, sampler2D ima, vec2 res, out vec4 color, out float alpha)
 {
+#if __VERSION__ < 130
+	color = texture2DLod(ima, (floor(co.xy * res) + 0.5) / res, 0.0);
+#else
 	color = texelFetch(ima, ivec2(fract(co.xy) * res), 0);
+#endif
 	alpha = color.a;
 }
 

@@ -618,6 +618,22 @@ GPUTexture *GPU_texture_create_depth(int w, int h, char err_out[256])
 	
 	return tex;
 }
+
+
+GPUTexture *GPU_texture_create_depth_buffer(int w, int h, char err_out[256])
+{
+	GPUTexture *tex = GPU_texture_create_nD(w, h, 2, NULL, 1, GPU_HDR_NONE, 1, 0, err_out);
+
+	if (tex) {
+		/* Now we tweak some of the settings */
+		glTexParameteri(tex->target_base, GL_TEXTURE_COMPARE_MODE, GL_NONE);
+
+		GPU_texture_unbind(tex);
+	}
+	return tex;
+}
+
+
 GPUTexture *GPU_texture_create_depth_multisample(int w, int h, int samples, char err_out[256])
 {
 	GPUTexture *tex = GPU_texture_create_nD(w, h, 2, NULL, 1, GPU_HDR_NONE, 1, samples, err_out);

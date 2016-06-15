@@ -97,7 +97,7 @@ static GPUScreenBuffer *gpu_scenebuf_create(int width, int height, bool depth_on
 	}
 
 	if (depth_only) {
-		buf->tex = GPU_texture_create_depth(width, height, NULL);
+		buf->tex = GPU_texture_create_depth_buffer(width, height, NULL);
 		if (!buf->tex) {
 			GPU_scenebuf_free(buf);
 			return NULL;
@@ -115,7 +115,7 @@ static GPUScreenBuffer *gpu_scenebuf_create(int width, int height, bool depth_on
 		}
 	}
 	else {
-		buf->depth = GPU_texture_create_depth(width, height, NULL);
+		buf->depth = GPU_texture_create_depth_buffer(width, height, NULL);
 		if (!buf->depth) {
 			GPU_scenebuf_free(buf);
 			return NULL;

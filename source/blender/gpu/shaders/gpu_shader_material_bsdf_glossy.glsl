@@ -564,7 +564,7 @@ void env_sampling_glossy_sharp(
 	bool hit = raycast(viewpos, vL, hitstep, hitpixel, hitco);
 	float contrib = ssr_contribution(viewpos, hitstep, hit, hitco);
 
-	vec4 sample_ssr = texelFetch(unfscenebuf, ivec2(hitpixel.xy), 0);
+	vec4 sample_ssr = bufferFetch(unfscenebuf, ivec2(hitpixel.xy), 0);
 	srgb_to_linearrgb(sample_ssr, sample_ssr);
 
 	result = mix(sample_probe.rgb, sample_ssr.rgb, contrib);

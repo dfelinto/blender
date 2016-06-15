@@ -69,6 +69,15 @@ float hypot(float x, float y) { return sqrt(x*x + y*y); }
 
 float inverse_distance(vec3 V) { return max( 1 / length(V), 1e-8); }
 
+vec4 bufferFetch(sampler2D buffer, ivec2 texelpos, int lod)
+{
+#if __VERSION__ < 130
+	return texture2DLod(buffer, (vec2(texelpos) + 0.5) / (unfclip.zw / pow(2.0, float(lod))), float(lod));
+#else
+	return texelFetch(buffer, texelpos, lod);
+#endif
+}
+
 /* --------- Noise Utils Functions --------- */
 
 void generated_from_orco(vec3 orco, out vec3 generated)
@@ -176,7 +185,7 @@ float linear_depth(float z)
 
 float backface_depth(ivec2 texelpos, int lod)
 {
-	float depth = linear_depth(texelFetch(unfbackfacebuf, texelpos, lod).r);
+	float depth = linear_depth(bufferFetch(unfbackfacebuf, texelpos, lod).r);
 
 	/* background case */
 	if (depth == 1.0)
@@ -187,7 +196,7 @@ float backface_depth(ivec2 texelpos, int lod)
 
 float frontface_depth(ivec2 texelpos, int lod)
 {
-	float depth = linear_depth(texelFetch(unfdepthbuf, texelpos, lod).r);
+	float depth = linear_depth(bufferFetch(unfdepthbuf, texelpos, lod).r);
 
 	/* background case */
 	if (depth == 1.0)
@@ -815,8 +824,13 @@ vec4 sample_refract(vec3 L)
 
 void setup_noise(vec2 fragcoord)
 {
-	ivec2 texel = ivec2(mod(fragcoord.x, 64), mod(fragcoord.y, 64));
+	const int NOISE_SIZE = 64;
+	ivec2 texel = ivec2(mod(fragcoord.x, NOISE_SIZE), mod(fragcoord.y, NOISE_SIZE));
+#if __VERSION__ < 130
+	jitternoise = texture2DLod(unfjitter, (vec2(texel) + 0.5) / float(NOISE_SIZE), 0.0).rg; /* Global variable */
+#else
 	jitternoise = texelFetch(unfjitter, texel, 0).rg; /* Global variable */
+#endif
 }
 
 vec3 hammersley_3d(float i, float invsamplenbr)
@@ -828,7 +842,13 @@ vec3 hammersley_3d(float i, float invsamplenbr)
 
 	int u = int(mod(i + jitternoise.y * BSDF_SAMPLES, BSDF_SAMPLES));
 	Xi.yz = texelFetch(unflutsamples, u, 0).rg;
+	Xi.yz = texelFetch(unflutsamples, u, 0).rg;
 
+#if __VERSION__ < 130
+	Xi.yz = texture1DLod(unflutsamples, (float(u) + 0.5) / float(BSDF_SAMPLES), 0.0).rg; /* Global variable */
+#else
+	Xi.yz = texelFetch(unflutsamples, u, 0).rg; /* Global variable */
+#endif
 	return Xi;
 }
 
