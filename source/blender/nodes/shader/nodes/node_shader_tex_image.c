@@ -104,7 +104,11 @@ static int node_shader_gpu_tex_image(GPUMaterial *mat, bNode *node, bNodeExecDat
 	else {
 		if (tex->interpolation == SHD_INTERP_CLOSEST) {
 			ImBuf *ibuf = BKE_image_acquire_ibuf(ima, iuser, NULL);
-			float dim[2] = {ibuf->x, ibuf->y};
+
+			if (!ibuf)
+				return GPU_stack_link(mat, "node_tex_image_empty", in, out);
+
+			float dim[2] = {(float)ibuf->x, (float)ibuf->y};
 			GPU_stack_link(mat, "node_tex_image_closest", in, out, GPU_image(ima, iuser, isdata, do_clip), GPU_uniform(dim));
 			BKE_image_release_ibuf(ima, ibuf, NULL);
 		}
