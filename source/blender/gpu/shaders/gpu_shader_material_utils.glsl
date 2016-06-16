@@ -841,8 +841,6 @@ vec3 hammersley_3d(float i, float invsamplenbr)
 	Xi.x = fract(Xi.x + jitternoise.x);
 
 	int u = int(mod(i + jitternoise.y * BSDF_SAMPLES, BSDF_SAMPLES));
-	Xi.yz = texelFetch(unflutsamples, u, 0).rg;
-	Xi.yz = texelFetch(unflutsamples, u, 0).rg;
 
 #if __VERSION__ < 130
 	Xi.yz = texture1DLod(unflutsamples, (float(u) + 0.5) / float(BSDF_SAMPLES), 0.0).rg; /* Global variable */
