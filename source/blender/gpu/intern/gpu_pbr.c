@@ -216,7 +216,6 @@ void GPU_scenebuf_unbind(GPUScreenBuffer* buf)
 
 void GPU_scenebuf_filter_texture(GPUScreenBuffer* buf)
 {
-	return;
 	/* MinZ Pyramid for depth */
 	if (buf->depth) {
 		GPU_texture_bind(buf->depth, 0);

@@ -61,6 +61,9 @@ vec3 mul(mat3 m, vec3 v) { return m * v; }
 mat3 mul(mat3 m1, mat3 m2) { return m1 * m2; }
 
 float saturate(float a) { return clamp(a, 0.0, 1.0); }
+vec2 saturate(vec2 a) { return vec2(saturate(a.x), saturate(a.y)); }
+vec3 saturate(vec3 a) { return vec3(saturate(a.x), saturate(a.y), saturate(a.z)); }
+vec4 saturate(vec4 a) { return vec4(saturate(a.x), saturate(a.y), saturate(a.z), saturate(a.w)); }
 
 float distance_squared(vec2 a, vec2 b) { a -= b; return dot(a, a); }
 float distance_squared(vec3 a, vec3 b) { a -= b; return dot(a, a); }
@@ -69,12 +72,12 @@ float hypot(float x, float y) { return sqrt(x*x + y*y); }
 
 float inverse_distance(vec3 V) { return max( 1 / length(V), 1e-8); }
 
-vec4 bufferFetch(sampler2D buffer, ivec2 texelpos, int lod)
+vec4 bufferFetch(sampler2D buf, ivec2 texelpos, int lod)
 {
 #if __VERSION__ < 130
-	return texture2DLod(buffer, (vec2(texelpos) + 0.5) / (unfclip.zw / pow(2.0, float(lod))), float(lod));
+	return texture2DLod(buf, (vec2(texelpos) + 0.5) / (unfclip.zw / exp2(float(lod))), float(lod));
 #else
-	return texelFetch(buffer, texelpos, lod);
+	return texelFetch(buf, texelpos, lod);
 #endif
 }
 
@@ -179,11 +182,23 @@ float linear_depth(float z)
 	}
 	else {
 		float zf = unfclip.y; // camera z far
-		return z * 2.0 * zf - zf;
+		return (z * 2.0 - 1.0) * zf;
 	}
 }
 
 float backface_depth(ivec2 texelpos, int lod)
+{
+	float depth = bufferFetch(unfbackfacebuf, texelpos, lod).r;
+	return depth;
+}
+
+float frontface_depth(ivec2 texelpos, int lod)
+{
+	float depth = bufferFetch(unfdepthbuf, texelpos, lod).r;
+	return depth;
+}
+
+float backface_depth_linear(ivec2 texelpos, int lod)
 {
 	float depth = linear_depth(bufferFetch(unfbackfacebuf, texelpos, lod).r);
 
@@ -194,7 +209,7 @@ float backface_depth(ivec2 texelpos, int lod)
 		return -depth;
 }
 
-float frontface_depth(ivec2 texelpos, int lod)
+float frontface_depth_linear(ivec2 texelpos, int lod)
 {
 	float depth = linear_depth(bufferFetch(unfdepthbuf, texelpos, lod).r);
 
@@ -870,7 +885,9 @@ void swapIfBigger(inout float a, inout float b)
 	}
 }
 
-/* 2D raycast : still have some bug that needs to be sorted out before being usable */
+#if 1 /* Linear 2D raymarching */
+
+/* 2D raycast */
 bool raycast(vec3 ray_origin, vec3 ray_dir, out float hitstep, out vec2 hitpixel, out vec3 hitco)
 {
 	/* ssr_parameters */
@@ -940,8 +957,6 @@ bool raycast(vec3 ray_origin, vec3 ray_dir, out float hitstep, out vec2 hitpixel
 
 	bool hit = false;
 
-#if 1 /* Linear 2D raymarching */
-
 	/* We track the ray depth at +/- 1/2 pixel to treat pixels as clip-space solid
 	 * voxels. Because the depth at -1/2 for a given pixel will be the same as at
 	 * +1/2 for the previous iteration, we actually only have to compute one value
@@ -967,12 +982,12 @@ bool raycast(vec3 ray_origin, vec3 ray_dir, out float hitstep, out vec2 hitpixel
 		prev_zmax = zmax;
 		swapIfBigger(zmin, zmax);
 
-		float frontface = frontface_depth(ivec2(hitpixel), 0);
+		float frontface = frontface_depth_linear(ivec2(hitpixel), 0);
 
 		if (zmax < frontface) {
 			/* Below surface */
 #ifdef USE_BACKFACE
-			float backface = backface_depth(ivec2(hitpixel), 0);
+			float backface = backface_depth_linear(ivec2(hitpixel), 0);
 #else
 			float backface = frontface - unfssrparam.z;
 #endif
@@ -983,67 +998,97 @@ bool raycast(vec3 ray_origin, vec3 ray_dir, out float hitstep, out vec2 hitpixel
 	/* Hit coordinate in 3D */
 	hitco = (Q0 + dQ * hitstep) / pqk.w;
 
-#else /* Hierarchical raymarching */
-
-	float z, mip, mippow, s;
-	float level = 1.0;
-	float steps = 0.0;
-	float dir = 1.0;
-	float lastdir = 1.0;
-	for (hitstep = 0.0; hitstep < unfssrparam.x && level > 0.0; hitstep++) {
-		mip = level - 1.0;
-		mippow = pow(2, mip);
-
-		/* step through current cell */
-		//s = dir * max(1.0, mippow / 2);
-		s = dir * mippow;
-		//s = dir * level;
-		P += dP * s; Q.z += dQ.z * s; k += dk * s; steps += s;
-
-		hitpixel = permute ? P.yx : P;
-		z = dQ.z / k;
-
-		float frontface = frontface_depth(ivec2(hitpixel / mippow), int(mip));
-
-		if (z < frontface) {
-			/* Below surface */
-#ifdef USE_BACKFACE
-			float backface = backface_depth(ivec2(hitpixel), 0);
-#else
-			float backface = -1e16; /* Todo find a good thickness */
-#endif
-			if (z > backface) {
-				/* Hit */
-				/* This will step back the current step */
-				//s = -1.0 * level;
-				//P += dP * s; Q.z += dQ.z * s; k += dk * s; steps += s;
-				dir = -1.0;
-				level--;
-				continue;
-			}
-		}
-
-		/* Above surface */
-		if (dir != -1.0 && lastdir != -1.0) {
-			/* Only step up in mip if the last iteration was positive
-			 * This way we don't skip potential occluders */
-			level++;
-			level = min(level, 5.0);
-		}
-		lastdir = dir;
-		dir = 1.0;
-	}
-
-	hitstep = 1.0;
-
-	hit = (level == 0.0);
-
-	/* Hit coordinate in 3D */
-	hitco = (Q0 + dQ * steps) / k;
-#endif
-
 	return hit;
 }
+
+#else /* Hierarchical raymarching */
+
+vec3 point_on_line(vec3 origin, vec3 direction, float dist)
+{
+	return origin + direction * dist;
+}
+
+vec2 get_cell(vec2 ray, vec2 cellcount)
+{
+	return floor(ray * cellcount);
+}
+
+vec3 intersect_cell_boundary(vec3 o, vec3 d, vec2 cell, vec2 cellcount, vec2 crossstep, vec2 crossoffset)
+{
+	vec2 newcell = ((cell + crossstep) / cellcount) + crossoffset;
+	vec2 delta = (newcell - o.xy) / d.xy;
+	float t = min(delta.x, delta.y);
+
+	return point_on_line(o, d, t);
+}
+
+vec2 get_cell_count(float level)
+{
+	return floor(unfclip.zw / (level > 0.0 ? exp2(level) : 1.0));
+}
+
+bool crossed_cell_boundary(vec2 a, vec2 b)
+{
+	return (a.x - b.x != 0.0) || (a.y - b.y != 0.0);
+}
+
+#define HIZ_MAX_LEVEL 5.0
+
+bool raycast(vec3 ray_origin, vec3 ray_dir, out float hitstep, out vec2 hitpixel, out vec3 hitco)
+{
+	float miplvl = 0.0; /* Start level */
+	vec2 cellcount = get_cell_count(miplvl); /* cellcount for mip 0 */
+
+	/* scale vector such that z is 1.0f (maximum depth) */
+	ray_dir = ray_dir.xyz / ray_dir.z;
+
+	vec2 crossstep, crossoffset;
+	vec2 cross_epsilon = 0.5 / unfclip.zw; /* Enough to get to the next cell */
+	crossstep.x = ray_dir.x >= 0.0 ? 1.0 : -1.0;
+	crossstep.y = ray_dir.y >= 0.0 ? 1.0 : -1.0;
+	crossoffset = crossstep * cross_epsilon;
+	crossstep = saturate(crossstep);
+
+	/* set current ray to original screen coordinate and depth */
+	vec3 ray;
+	ray.xy = uv_from_position(ray_origin);
+	ray.z = frontface_depth(ivec2(ray.xy * cellcount), int(miplvl));
+
+	/* project ray origin to the near clip plane */
+	vec3 o = point_on_line(ray, ray_dir, -ray.z);
+
+	/* Cross first cell (texel) to not get self-intersection */
+	vec2 cell = get_cell(ray.xy, cellcount);
+	ray = intersect_cell_boundary(o, ray_dir, cell, cellcount, crossstep, crossoffset);
+
+	for (hitstep = 0.0; hitstep < unfssrparam.x && miplvl >= 0.0; hitstep++)
+	{
+		cellcount = get_cell_count(miplvl);
+		cell = get_cell(ray.xy, cellcount);
+
+		float frontface = frontface_depth(ivec2(cell), int(miplvl));
+
+		/* Try intersecting the depth plane */
+		vec3 raytmp = point_on_line(o, ray_dir, min(ray.z, frontface));
+		vec2 celltmp = get_cell(raytmp.xy, cellcount);
+
+		if (crossed_cell_boundary(cell, celltmp)) {
+			raytmp = intersect_cell_boundary(o, ray_dir, cell, cellcount, crossstep, crossoffset);
+			miplvl = min(HIZ_MAX_LEVEL, miplvl + 2.0);
+		}
+
+		ray = raytmp;
+
+		--miplvl;
+	}
+
+	hitpixel = ray.xy * unfclip.zw;
+	hitco = position_from_depth(ray.xy, linear_depth(ray.z));
+
+
+	return (miplvl < 0.0);
+}
+#endif
 
 float ssr_contribution(vec3 ray_origin, float hitstep, bool hit, inout vec3 hitco)
 {
