@@ -3302,8 +3302,7 @@ class VIEW3D_PT_view3d_shading(Panel):
                     subcol = col.column(align=True)
                     subcol.prop(ssr_settings, "attenuation")
                     subcol.prop(ssr_settings, "steps")
-                    if not pbr_settings.use_backface:
-                        subcol.prop(ssr_settings, "thickness")
+                    subcol.prop(ssr_settings, "thickness")
 
                 if pbr_settings.use_ssao or pbr_settings.use_ssr:
                     col.prop(pbr_settings, "use_backface", text="Backface Buffer")

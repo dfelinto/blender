@@ -568,6 +568,11 @@ void env_sampling_glossy_sharp(
 	srgb_to_linearrgb(sample_ssr, sample_ssr);
 
 	result = mix(sample_probe.rgb, sample_ssr.rgb, contrib);
+	//result = mix(vec3(1.0,0.0,0.0), vec3(0.0,1.0,0.0), hit);
+	//result = sample_ssr.rgb * float(hit);
+	// result = hitco;
+//result = vL.rgb;
+	//result = vec3(frontface_depth(ivec2(gl_FragCoord.xy), 0));
 #else
 	result = sample_probe.rgb;
 #endif

@@ -188,14 +188,12 @@ float linear_depth(float z)
 
 float backface_depth(ivec2 texelpos, int lod)
 {
-	float depth = bufferFetch(unfbackfacebuf, texelpos, lod).r;
-	return depth;
+	return bufferFetch(unfbackfacebuf, texelpos, lod).r;
 }
 
 float frontface_depth(ivec2 texelpos, int lod)
 {
-	float depth = bufferFetch(unfdepthbuf, texelpos, lod).r;
-	return depth;
+	return bufferFetch(unfdepthbuf, texelpos, lod).r;
 }
 
 float backface_depth_linear(ivec2 texelpos, int lod)
@@ -1024,28 +1022,31 @@ vec3 intersect_cell_boundary(vec3 o, vec3 d, vec2 cell, vec2 cellcount, vec2 cro
 
 vec2 get_cell_count(float level)
 {
-	return floor(unfclip.zw / (level > 0.0 ? exp2(level) : 1.0));
+	return floor(unfclip.zw / exp2(level));
 }
 
 bool crossed_cell_boundary(vec2 a, vec2 b)
 {
-	return (a.x - b.x != 0.0) || (a.y - b.y != 0.0);
+	return (a.x != b.x) || (a.y != b.y);
 }
 
-#define HIZ_MAX_LEVEL 5.0
+#define HIZ_MAX_LEVEL 8.0
 
 bool raycast(vec3 ray_origin, vec3 ray_dir, out float hitstep, out vec2 hitpixel, out vec3 hitco)
 {
 	float miplvl = 0.0; /* Start level */
-	vec2 cellcount = get_cell_count(miplvl); /* cellcount for mip 0 */
+	vec2 cellcount = get_cell_count(0.0);
+
+	/* Invert Z component so we can work with the raw depth buffer which is positive */
+	ray_dir.z *= -1;
 
 	/* scale vector such that z is 1.0f (maximum depth) */
-	ray_dir = ray_dir.xyz / ray_dir.z;
+	ray_dir = ray_dir.xyz / abs(ray_dir.z);
 
 	vec2 crossstep, crossoffset;
-	vec2 cross_epsilon = 0.5 / unfclip.zw; /* Enough to get to the next cell */
-	crossstep.x = ray_dir.x >= 0.0 ? 1.0 : -1.0;
-	crossstep.y = ray_dir.y >= 0.0 ? 1.0 : -1.0;
+	vec2 cross_epsilon = vec2(0.2) / cellcount; /* Enough to get to the next cell */
+	crossstep.x = (ray_dir.x > 0.0) ? 1.0 : -1.0;
+	crossstep.y = (ray_dir.y > 0.0) ? 1.0 : -1.0;
 	crossoffset = crossstep * cross_epsilon;
 	crossstep = saturate(crossstep);
 
@@ -1068,25 +1069,27 @@ bool raycast(vec3 ray_origin, vec3 ray_dir, out float hitstep, out vec2 hitpixel
 
 		float frontface = frontface_depth(ivec2(cell), int(miplvl));
 
-		/* Try intersecting the depth plane */
-		vec3 raytmp = point_on_line(o, ray_dir, min(ray.z, frontface));
+		/* Try intersecting the depth plane
+		 * or stay in place if there is an intersection */
+		vec3 raytmp = point_on_line(o, ray_dir, max(ray.z, frontface));
+		/* Go to the next cell and go up a level */
 		vec2 celltmp = get_cell(raytmp.xy, cellcount);
 
+		/* If ray crossed a cell then it's not blocked */
 		if (crossed_cell_boundary(cell, celltmp)) {
+			/* Go to the next cell and go up a level */
 			raytmp = intersect_cell_boundary(o, ray_dir, cell, cellcount, crossstep, crossoffset);
 			miplvl = min(HIZ_MAX_LEVEL, miplvl + 2.0);
 		}
 
 		ray = raytmp;
-
 		--miplvl;
 	}
 
 	hitpixel = ray.xy * unfclip.zw;
 	hitco = position_from_depth(ray.xy, linear_depth(ray.z));
 
-
-	return (miplvl < 0.0);
+	return (miplvl < 0.0 && ray.z < 1.0 && ray.z > 0.0 && ray_dir.z > 0 && ray.x > 0 && ray.x < 1 && ray.y > 0 && ray.y < 1);
 }
 #endif
 
