@@ -72,6 +72,8 @@
 
 #include "BLO_readfile.h"
 
+#include "ED_view3d.h"
+
 #include "readfile.h"
 
 #include "MEM_guardedalloc.h"
@@ -1331,6 +1333,23 @@ void blo_do_versions_270(FileData *fd, Library *UNUSED(lib), Main *main)
 							smd->domain->slice_per_voxel = 5.0f;
 							smd->domain->slice_depth = 0.5f;
 							smd->domain->display_thickness = 1.0f;
+						}
+					}
+				}
+			}
+		}
+
+		if (!DNA_struct_elem_find(fd->filesdna, "View3D", "ListBase", "display_layers")) {
+			bScreen *screen;
+
+			for (screen = main->screen.first; screen; screen = screen->id.next) {
+				ScrArea *sa;
+				for (sa = screen->areabase.first; sa; sa = sa->next) {
+					SpaceLink *sl;
+					for (sl = sa->spacedata.first; sl; sl = sl->next) {
+						if (sl->spacetype == SPACE_VIEW3D) {
+							View3D *v3d = (View3D *)sl;
+							ED_view3d_display_layers_init(v3d);
 						}
 					}
 				}

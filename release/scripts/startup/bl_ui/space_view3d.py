@@ -18,7 +18,7 @@
 
 # <pep8 compliant>
 import bpy
-from bpy.types import Header, Menu, Panel
+from bpy.types import Header, Menu, Panel, UIList
 from bl_ui.properties_grease_pencil_common import (
         GreasePencilDataPanel,
         GreasePencilPaletteColorPanel,
@@ -2976,6 +2976,30 @@ class VIEW3D_MT_edit_gpencil_transform(Menu):
 
 # ********** Panel **********
 
+class VIEW3D_UL_layers():
+    def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
+        layer = item
+        if self.layout_type in {'DEFAULT', 'COMPACT'}:
+            layout.label(layer.name)
+            layout.prop(layer, "hide", text="", index=index, emboss=False,
+                        icon='RESTRICT_VIEW_OFF' if (not layer.hide) else 'RESTRICT_VIEW_ON')
+
+        elif self.layout_type == 'GRID':
+            layout.alignment = 'CENTER'
+            layout.label("", icon_value=icon + layer.hide)
+
+
+class VIEW3D_UL_drawing_support(UIList, VIEW3D_UL_layers):
+    pass
+
+
+class VIEW3D_UL_scene_elements(UIList, VIEW3D_UL_layers):
+    pass
+
+
+class VIEW3D_UL_screen_effects(UIList, VIEW3D_UL_layers):
+    pass
+
 
 class VIEW3D_PT_viewport_debug(Panel):
     bl_space_type = 'VIEW_3D'
@@ -3002,11 +3026,51 @@ class VIEW3D_PT_viewport_debug(Panel):
         col.label(text="Placeholder for debugging options")
 
 
+class VIEW3D_PT_display(Panel):
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_label = "Display"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    @classmethod
+    def poll(cls, context):
+        view = context.space_data
+        return (view) and view.use_modern_viewport
+
+    def draw(self, context):
+        layout = self.layout
+
+        view = context.space_data
+
+        layout.prop(view, "show_all_display_layers")
+
+        row = layout.row(align=True)
+        row.menu("VIEW3D_MT_display_presets", text=bpy.types.VIEW3D_MT_display_presets.bl_label)
+        row.operator("view3d.display_preset_add", text="", icon='ZOOMIN')
+        row.operator("view3d.display_preset_add", text="", icon='ZOOMOUT').remove_active = True
+
+        col = layout.column()
+
+        col.label(text="Drawing Support:")
+        col.row().template_list("VIEW3D_UL_drawing_support", "", view, "drawing_support", view, "active_drawing_support_index", rows=2)
+
+        col.label(text="Scene Elements:")
+        col.row().template_list("VIEW3D_UL_scene_elements", "", view, "scene_elements", view, "active_scene_elements_index", rows=2)
+
+        col.label(text="Screen Effects:")
+        col.row().template_list("VIEW3D_UL_screen_effects", "", view, "screen_effects", view, "active_screen_effects_index", rows=2)
+
+
 class VIEW3D_PT_grease_pencil(GreasePencilDataPanel, Panel):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
 
     # NOTE: this is just a wrapper around the generic GP Panel
+
+    @classmethod
+    def poll(cls, context):
+        view = context.space_data
+        return (view) and not view.use_modern_viewport
 
 
 class VIEW3D_PT_grease_pencil_palettecolor(GreasePencilPaletteColorPanel, Panel):
@@ -3272,7 +3336,7 @@ class VIEW3D_PT_view3d_motion_tracking(Panel):
     @classmethod
     def poll(cls, context):
         view = context.space_data
-        return (view)
+        return (view) and not view.use_modern_viewport
 
     def draw_header(self, context):
         view = context.space_data
@@ -3434,6 +3498,11 @@ class VIEW3D_PT_background_image(Panel):
     bl_region_type = 'UI'
     bl_label = "Background Images"
     bl_options = {'DEFAULT_CLOSED'}
+
+    @classmethod
+    def poll(cls, context):
+        view = context.space_data
+        return (view) and not view.use_modern_viewport
 
     def draw_header(self, context):
         view = context.space_data
@@ -3657,6 +3726,20 @@ class VIEW3D_PT_context_properties(Panel):
         if member:
             # Draw with no edit button
             rna_prop_ui.draw(self.layout, context, member, object, False)
+
+
+class VIEW3D_MT_display_presets(Menu):
+    bl_label = "Display Presets"
+    preset_subdir = "viewport_display"
+    preset_operator = "script.execute_preset"
+    draw = Menu.draw_preset
+
+
+class VIEW3D_MT_solid_objects_presets(Menu):
+    bl_label = "Solid Objects Presets"
+    preset_subdir = "viewport"
+    preset_operator = "script.execute_preset"
+    draw = Menu.draw_preset
 
 
 def register():

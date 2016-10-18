@@ -84,6 +84,75 @@ typedef struct BGpic {
 
 /* ********************************* */
 
+/* WARNING ALERT! TYPEDEF VALUES ARE WRITTEN IN FILES! SO DO NOT CHANGE!
+ * (ONLY ADD NEW ITEMS AT THE END)
+ */
+
+/* DisplayLayerData->subtype */
+typedef enum DrawingSupportType {
+	eDrawingSupportType_None             = 0,
+	eDrawingSupportType_GridAxes         = 1,
+	eDrawingSupportType_BackgroundImages = 2,
+	eDrawingSupportType_GreasePencil     = 3,
+	eDrawingSupportType_MotionTracking   = 4,
+} DrawingSupportType;
+
+typedef enum SceneElementsType {
+	eSceneElementsType_None               = 0,
+	eSceneElementsType_Solid              = 1,
+	eSceneElementsType_Helper             = 2,
+	eSceneElementsType_Volumetric         = 3,
+	eSceneElementsType_HairParticles      = 4,
+} SceneElementsType;
+
+typedef enum ScreenEffectsType {
+	eScreenEffectsType_None               = 0,
+	eScreenEffectsType_DepthOfField       = 1,
+	eScreenEffectsType_Reflections        = 2,
+} ScreenEffectsType;
+
+/* DisplayLayerData->type */
+typedef enum DisplayLayerType {
+	eDisplayLayerType_None               = 0,
+	eDisplayLayerType_DrawingSupport     = 1,
+	eDisplayLayerType_SceneElements      = 2,
+	eDisplayLayerType_ScreenEffects      = 3,
+} DisplayLayerType;
+
+typedef struct DisplayLayerData {
+	int type;
+	int subtype;
+	short flag;
+	short pad2[3];
+	char name[64];  /* MAX_NAME */
+} DisplayLayerData;
+
+typedef struct DisplayLayer {
+	struct DisplayLayer *next, *prev;
+
+	DisplayLayerData display;
+} DisplayLayer;
+
+typedef struct GridAxesDisplayLayer {
+	struct DisplayLayer *next, *prev;
+
+	DisplayLayerData display;
+
+	float grid;
+	float gridview;
+	short gridlines;
+	short gridsubdiv;	/* Number of subdivisions in the grid between each highlighted grid line */
+	char gridflag;
+	char pad[3];
+} GridAxesDisplayLayer;
+
+/* DisplayLayerData->flag */
+enum {
+	V3D_DISPLAYLAYER_HIDE = (1 << 1),
+};
+
+/* ********************************* */
+
 typedef struct RegionView3D {
 	
 	float winmat[4][4];			/* GL_PROJECTION matrix */
@@ -139,7 +208,7 @@ typedef struct RegionView3D {
 	float lviewquat[4];
 	short lpersp, lview; /* lpersp can never be set to 'RV3D_CAMOB' */
 
-	float gridview;
+	float gridview; /* DEPRECATED */
 	float tw_idot[3];  /* manipulator runtime: (1 - dot) product with view vector (used to check view alignment) */
 
 
@@ -193,16 +262,17 @@ typedef struct View3D {
 	short scenelock, around;
 	short flag, flag2;
 	
-	float lens, grid;
+	float lens;
+	float grid DNA_DEPRECATED;
 	float near, far;
 	float ofs[3]  DNA_DEPRECATED;			/* XXX deprecated */
 	float cursor[3];
 
 	short matcap_icon;			/* icon id */
 
-	short gridlines;
-	short gridsubdiv;	/* Number of subdivisions in the grid between each highlighted grid line */
-	char gridflag;
+	short gridlines DNA_DEPRECATED;
+	short gridsubdiv DNA_DEPRECATED; /* Number of subdivisions in the grid between each highlighted grid line */
+	char gridflag DNA_DEPRECATED;
 
 	/* transform manipulator info */
 	char twtype, twmode, twflag;
@@ -243,12 +313,18 @@ typedef struct View3D {
 	float stereo3d_volume_alpha;
 	float stereo3d_convergence_alpha;
 
+	/* display layers */
+	ListBase drawing_support, scene_elements, screen_effects;
+	int active_drawing_support;
+	int active_scene_elements;
+	int active_screen_effects;
+	int pad2[2];
+
 	/* Previous viewport draw type.
 	 * Runtime-only, set in the rendered viewport toggle operator.
 	 */
 	short prev_drawtype;
 	short pad1;
-	float pad2;
 } View3D;
 
 
@@ -323,11 +399,14 @@ typedef struct View3D {
 
 
 /* View3d->flag3 (short) */
-#define V3D_SHOW_WORLD			(1 << 0)
+enum {
+	V3D_SHOW_WORLD         = (1 << 0),
+	V3D_SHOW_ALL_LAYERS    = (1 << 1),
+};
 
 /* View3d->tmp_compat_flag */
 enum {
-	V3D_NEW_VIEWPORT      = (1 << 0),
+	V3D_NEW_VIEWPORT       = (1 << 0),
 };
 
 /* View3D->around */

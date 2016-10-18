@@ -594,6 +594,210 @@ static void rna_SpaceView3D_pivot_update(Main *bmain, Scene *UNUSED(scene), Poin
 	}
 }
 
+/* display layers */
+static StructRNA *rna_DisplayLayer_refine(struct PointerRNA *ptr)
+{
+	DisplayLayer *layer = (DisplayLayer *)ptr->data;
+	switch (layer->display.type) {
+		case eDisplayLayerType_DrawingSupport:
+			switch (layer->display.subtype) {
+				case eDrawingSupportType_GridAxes:
+					return &RNA_GridAxesDisplayLayer;
+				case eDrawingSupportType_BackgroundImages:
+				case eDrawingSupportType_GreasePencil:
+				case eDrawingSupportType_MotionTracking:
+				default:
+					return &RNA_DisplayLayer;
+			}
+		case eDisplayLayerType_SceneElements:
+			switch (layer->display.subtype) {
+				case eSceneElementsType_Solid:
+				case eSceneElementsType_Helper:
+				case eSceneElementsType_Volumetric:
+				case eSceneElementsType_HairParticles:
+				default:
+					return &RNA_DisplayLayer;
+			}
+		case eDisplayLayerType_ScreenEffects:
+			switch (layer->display.subtype) {
+				case eScreenEffectsType_DepthOfField:
+				case eScreenEffectsType_Reflections:
+				default:
+					return &RNA_DisplayLayer;
+			}
+		default:
+			return &RNA_DisplayLayer;
+	}
+}
+
+static int rna_SpaceView3D_display_layers_skip(CollectionPropertyIterator *iter, void *UNUSED(data))
+{
+	ListBaseIterator *internal = &iter->internal.listbase;
+	DisplayLayer *dl = (DisplayLayer *)internal->link;
+
+	return ((dl->display.flag & V3D_DISPLAYLAYER_HIDE) != 0) ? 1 : 0;
+}
+
+static void rna_SpaceView3D_drawing_support_begin(CollectionPropertyIterator *iter, PointerRNA *ptr)
+{
+	View3D *v3d = (View3D *)(ptr->data);
+
+	if ((v3d->flag3 & V3D_SHOW_ALL_LAYERS) != 0) {
+		rna_iterator_listbase_begin(iter, &v3d->drawing_support, NULL);
+	}
+	else {
+		rna_iterator_listbase_begin(iter, &v3d->drawing_support, rna_SpaceView3D_display_layers_skip);
+	}
+}
+
+static void rna_SpaceView3D_scene_elements_begin(CollectionPropertyIterator *iter, PointerRNA *ptr)
+{
+	View3D *v3d = (View3D *)(ptr->data);
+
+	if ((v3d->flag3 & V3D_SHOW_ALL_LAYERS) != 0) {
+		rna_iterator_listbase_begin(iter, &v3d->scene_elements, NULL);
+	}
+	else {
+		rna_iterator_listbase_begin(iter, &v3d->scene_elements, rna_SpaceView3D_display_layers_skip);
+	}
+}
+
+static void rna_SpaceView3D_screen_effects_begin(CollectionPropertyIterator *iter, PointerRNA *ptr)
+{
+	View3D *v3d = (View3D *)(ptr->data);
+
+	if ((v3d->flag3 & V3D_SHOW_ALL_LAYERS) != 0) {
+		rna_iterator_listbase_begin(iter, &v3d->screen_effects, NULL);
+	}
+	else {
+		rna_iterator_listbase_begin(iter, &v3d->screen_effects, rna_SpaceView3D_display_layers_skip);
+	}
+}
+
+static int rna_SpaceView3D_active_drawing_support_index_get(PointerRNA *ptr)
+{
+	View3D *v3d = (View3D *)(ptr->data);
+	return v3d->active_drawing_support;
+}
+
+static int rna_SpaceView3D_active_scene_elements_index_get(PointerRNA *ptr)
+{
+	View3D *v3d = (View3D *)(ptr->data);
+	return v3d->active_scene_elements;
+}
+
+static int rna_SpaceView3D_active_screen_effects_index_get(PointerRNA *ptr)
+{
+	View3D *v3d = (View3D *)(ptr->data);
+	return v3d->active_screen_effects;
+}
+
+static void rna_SpaceView3D_active_display_layer_index_reset(View3D *v3d, int value)
+{
+	v3d->active_drawing_support = -1;
+	v3d->active_scene_elements = -1;
+	v3d->active_screen_effects = -1;
+}
+
+static void rna_SpaceView3D_active_drawing_support_index_set(PointerRNA *ptr, int value)
+{
+	View3D *v3d = (View3D *)(ptr->data);
+	rna_SpaceView3D_active_display_layer_index_reset(v3d, value);
+	v3d->active_drawing_support = value;
+}
+
+static void rna_SpaceView3D_active_scene_elements_index_set(PointerRNA *ptr, int value)
+{
+	View3D *v3d = (View3D *)(ptr->data);
+	rna_SpaceView3D_active_display_layer_index_reset(v3d, value);
+	v3d->active_scene_elements = value;
+}
+
+static void rna_SpaceView3D_active_screen_effects_index_set(PointerRNA *ptr, int value)
+{
+	View3D *v3d = (View3D *)(ptr->data);
+	rna_SpaceView3D_active_display_layer_index_reset(v3d, value);
+	v3d->active_screen_effects = value;
+}
+
+static void rna_SpaceView3D_active_drawing_support_index_range(
+	PointerRNA *ptr, int *min, int *max, int *UNUSED(softmin), int *UNUSED(softmax))
+{
+	View3D *v3d = (View3D *)(ptr->data);
+
+	*min = 0;
+	*max = max_ii(0, BLI_listbase_count(&v3d->drawing_support) - 1);
+}
+
+static void rna_SpaceView3D_active_scene_elements_index_range(
+	PointerRNA *ptr, int *min, int *max, int *UNUSED(softmin), int *UNUSED(softmax))
+{
+	View3D *v3d = (View3D *)(ptr->data);
+
+	*min = 0;
+	*max = max_ii(0, BLI_listbase_count(&v3d->scene_elements) - 1);
+}
+
+static void rna_SpaceView3D_active_screen_effects_index_range(
+	PointerRNA *ptr, int *min, int *max, int *UNUSED(softmin), int *UNUSED(softmax))
+{
+	View3D *v3d = (View3D *)(ptr->data);
+
+	*min = 0;
+	*max = max_ii(0, BLI_listbase_count(&v3d->screen_effects) - 1);
+}
+
+#if 0
+static PointerRNA rna_SpaceView3D_active_display_layer_get(PointerRNA *ptr)
+{
+	View3D *v3d = (View3D *)(ptr->data);
+	DisplayLayer *display_layer;
+	int active_display_layer = -1;
+
+	if (v3d->active_drawing_support != -1) {
+		active_display_layer = v3d->active_drawing_support;
+	}
+	else if (v3d->active_scene_elements != -1) {
+		active_display_layer = v3d->active_scene_elements;
+	}
+	else {
+		active_display_layer = v3d->active_screen_effects;
+	}
+
+	display_layer = BLI_findlink(&v3d->display_layers, v3d->active_display_layer);
+	return rna_pointer_inherit_refine(ptr, &RNA_DisplayLayer, display_layer);
+}
+
+static void rna_SpaceView3D_active_display_layer_set(PointerRNA *ptr, PointerRNA value)
+{
+	View3D *v3d = (View3D *)(ptr->data);
+	DisplayLayer *display_layer = (DisplayLayer *)value.data;
+
+	switch display_layer->display.type:
+		case eDisplayLayerType_DrawingSupport:
+			const int index = BLI_findindex(&v3d->drawing_support, display_layer);
+			if (index != -1) v3d->active_drawing_support = index;
+			break;
+		case eDisplayLayerType_SceneElements:
+			const int index = BLI_findindex(&v3d->scene_elements, display_layer);
+			if (index != -1) v3d->active_scene_elements = index;
+			break;
+		case eDisplayLayerType_ScreenEffects:
+		default:
+			const int index = BLI_findindex(&v3d->screen_effects, display_layer);
+			if (index != -1) v3d->active_screen_effects = index;
+			break;
+	}
+}
+#endif
+
+static PointerRNA rna_SpaceView3D_region_quadviews_get(CollectionPropertyIterator *iter)
+{
+	void *regiondata = ((ARegion *)rna_iterator_listbase_get(iter))->regiondata;
+
+	return rna_pointer_inherit_refine(&iter->parent, &RNA_RegionView3D, regiondata);
+}
+
 static PointerRNA rna_SpaceView3D_region_3d_get(PointerRNA *ptr)
 {
 	View3D *v3d = (View3D *)(ptr->data);
@@ -628,13 +832,6 @@ static void rna_SpaceView3D_region_quadviews_begin(CollectionPropertyIterator *i
 	}
 
 	rna_iterator_listbase_begin(iter, &lb, NULL);
-}
-
-static PointerRNA rna_SpaceView3D_region_quadviews_get(CollectionPropertyIterator *iter)
-{
-	void *regiondata = ((ARegion *)rna_iterator_listbase_get(iter))->regiondata;
-
-	return rna_pointer_inherit_refine(&iter->parent, &RNA_RegionView3D, regiondata);
 }
 
 static void rna_RegionView3D_quadview_update(Main *UNUSED(main), Scene *UNUSED(scene), PointerRNA *ptr)
@@ -2303,6 +2500,129 @@ static void rna_def_backgroundImages(BlenderRNA *brna, PropertyRNA *cprop)
 	RNA_def_function_ui_description(func, "Remove all background images");
 }
 
+static void rna_def_display_layer(BlenderRNA *brna)
+{
+	StructRNA *srna;
+	PropertyRNA *prop;
+
+	static const EnumPropertyItem display_layer_type_items[] = {
+		{ eDisplayLayerType_DrawingSupport, "DRAWING_SUPPORT", ICON_NONE, "Grid Drawing Support", "" },
+		{ eDisplayLayerType_SceneElements, "SCENE_ELEMENT", ICON_NONE, "Scene Element", "" },
+		{ eDisplayLayerType_ScreenEffects, "SCREEN_EFFECT", ICON_NONE, "Screen Effect", "" },
+		{ 0, NULL, 0, NULL, NULL }
+	};
+
+	static const EnumPropertyItem display_layer_subtype_items[] = {
+		{ eDrawingSupportType_GridAxes, "GRID", ICON_NONE, "Grid & Axes", "" },
+		{ eDrawingSupportType_BackgroundImages, "BACKGROUND_IMAGES", ICON_NONE, "Background Images", "" },
+		{ eDrawingSupportType_GreasePencil, "GREASE_PENCIL", ICON_NONE, "Grease Pencil", "" },
+		{ eDrawingSupportType_MotionTracking, "MOTION_TRACKING", ICON_NONE, "Motion Tracking", "" },
+		{ eSceneElementsType_Solid, "SOLID", ICON_NONE, "Solid Objects", "" },
+		{ eSceneElementsType_Helper, "HELPER", ICON_NONE, "Helper Objects", "" },
+		{ eSceneElementsType_Volumetric, "VOLUMETRIC", ICON_NONE, "Volumetric Objects", "" },
+		{ eSceneElementsType_HairParticles, "HAIR_PARTICLES", ICON_NONE, "Hair Particles", "" },
+		{ eScreenEffectsType_DepthOfField, "DEPTH_OF_FIELD", ICON_NONE, "Depth of Field", "" },
+		{ eScreenEffectsType_Reflections, "REFLECTIONS", ICON_NONE, "Reflections", "" },
+		{ 0, NULL, 0, NULL, NULL }
+	};
+
+	srna = RNA_def_struct(brna, "DisplayLayer", NULL);
+	RNA_def_struct_sdna(srna, "DisplayLayer");
+	RNA_def_struct_ui_text(srna, "Display Layer", "Collection of display layers");
+	RNA_def_struct_refine_func(srna, "rna_DisplayLayer_refine");
+
+	prop = RNA_def_property(srna, "type", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_sdna(prop, NULL, "display.type");
+	RNA_def_property_enum_items(prop, display_layer_type_items);
+	RNA_def_property_ui_text(prop, "Type", "");
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+
+	prop = RNA_def_property(srna, "subtype", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_sdna(prop, NULL, "display.subtype");
+	RNA_def_property_enum_items(prop, display_layer_subtype_items);
+	RNA_def_property_ui_text(prop, "Sub-Type", "");
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+
+	prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
+	RNA_def_property_string_sdna(prop, NULL, "display.name");
+	RNA_def_property_ui_text(prop, "Name", "Display layer name");
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+
+	prop = RNA_def_property(srna, "hide", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "display.flag", V3D_DISPLAYLAYER_HIDE);
+	RNA_def_property_ui_text(prop, "Hide", "Hide display layer");
+	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
+}
+
+static void rna_def_gridaxes_display_layer(BlenderRNA *brna)
+{
+	StructRNA *srna;
+	PropertyRNA *prop;
+
+	static const EnumPropertyItem display_layer_type_items[] = {
+		{eDisplayLayerType_DrawingSupport, "DRAWING_SUPPORT", ICON_NONE, "Grid Drawing Support", "" },
+		{eDisplayLayerType_SceneElements, "SCENE_ELEMENT", ICON_NONE, "Scene Element", "" },
+		{eDisplayLayerType_ScreenEffects, "SCREEN_EFFECT", ICON_NONE, "Screen Effect", "" },
+		{0, NULL, 0, NULL, NULL}
+	};
+
+	static const EnumPropertyItem display_layer_subtype_items[] = {
+		{eDrawingSupportType_GridAxes, "GRID", ICON_NONE, "Grid & Axes", "" },
+		{eDrawingSupportType_BackgroundImages, "BACKGROUND_IMAGES", ICON_NONE, "Background Images", "" },
+		{eDrawingSupportType_GreasePencil, "GREASE_PENCIL", ICON_NONE, "Grease Pencil", "" },
+		{eDrawingSupportType_MotionTracking, "MOTION_TRACKING", ICON_NONE, "Motion Tracking", "" },
+		{eSceneElementsType_Solid, "SOLID", ICON_NONE, "Solid Objects", "" },
+		{eSceneElementsType_Helper, "HELPER", ICON_NONE, "Helper Objects", "" },
+		{eSceneElementsType_Volumetric, "VOLUMETRIC", ICON_NONE, "Volumetric Objects", "" },
+		{eSceneElementsType_HairParticles, "HAIR_PARTICLES", ICON_NONE, "Hair Particles", "" },
+		{eScreenEffectsType_DepthOfField, "DEPTH_OF_FIELD", ICON_NONE, "Depth of Field", "" },
+		{eScreenEffectsType_Reflections, "REFLECTIONS", ICON_NONE, "Reflections", "" },
+		{0, NULL, 0, NULL, NULL }
+	};
+
+	srna = RNA_def_struct(brna, "GridAxesDisplayLayer", "DisplayLayer");
+	RNA_def_struct_sdna(srna, "GridAxesDisplayLayer");
+	RNA_def_struct_ui_text(srna, "Grid Axes Display Layer", "Collection of display layers");
+
+	prop = RNA_def_property(srna, "grid_lines", PROP_INT, PROP_NONE);
+	RNA_def_property_int_sdna(prop, NULL, "gridlines");
+	RNA_def_property_ui_text(prop, "Grid Lines", "Number of grid lines to display in perspective view");
+	RNA_def_property_range(prop, 0, 1024);
+	RNA_def_property_int_default(prop, 16);
+	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
+
+	prop = RNA_def_property(srna, "grid_subdivisions", PROP_INT, PROP_NONE);
+	RNA_def_property_int_sdna(prop, NULL, "gridsubdiv");
+	RNA_def_property_ui_text(prop, "Grid Subdivisions", "Number of subdivisions between grid lines");
+	RNA_def_property_range(prop, 1, 1024);
+	RNA_def_property_int_default(prop, 10);
+	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
+
+	prop = RNA_def_property(srna, "grid_scale_unit", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+	RNA_def_property_float_funcs(prop, "rna_View3D_GridScaleUnit_get", NULL, NULL);
+	RNA_def_property_ui_text(prop, "Grid Scale Unit", "Grid cell size scaled by scene unit system settings");
+
+	prop = RNA_def_property(srna, "show_floor", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "gridflag", V3D_SHOW_FLOOR);
+	RNA_def_property_ui_text(prop, "Display Grid Floor", "Show the ground plane grid in perspective view");
+	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
+
+	prop = RNA_def_property(srna, "show_axis_x", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "gridflag", V3D_SHOW_X);
+	RNA_def_property_ui_text(prop, "Display X Axis", "Show the X axis line in perspective view");
+	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
+
+	prop = RNA_def_property(srna, "show_axis_y", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "gridflag", V3D_SHOW_Y);
+	RNA_def_property_ui_text(prop, "Display Y Axis", "Show the Y axis line in perspective view");
+	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
+
+	prop = RNA_def_property(srna, "show_axis_z", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "gridflag", V3D_SHOW_Z);
+	RNA_def_property_ui_text(prop, "Display Z Axis", "Show the Z axis line in perspective view");
+	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
+}
 
 static void rna_def_space_view3d(BlenderRNA *brna)
 {
@@ -2364,7 +2684,7 @@ static void rna_def_space_view3d(BlenderRNA *brna)
 		{ICON_MATCAP_24, "24", ICON_MATCAP_24, "", ""},
 		{0, NULL, 0, NULL, NULL}
 	};
-	
+
 	srna = RNA_def_struct(brna, "SpaceView3D", "Space");
 	RNA_def_struct_sdna(srna, "View3D");
 	RNA_def_struct_ui_text(srna, "3D View Space", "3D View space data");
@@ -2475,6 +2795,7 @@ static void rna_def_space_view3d(BlenderRNA *brna)
 	RNA_def_property_float_default(prop, 1.0f);
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
 
+	/* DEPRECATED */
 	prop = RNA_def_property(srna, "grid_lines", PROP_INT, PROP_NONE);
 	RNA_def_property_int_sdna(prop, NULL, "gridlines");
 	RNA_def_property_ui_text(prop, "Grid Lines", "Number of grid lines to display in perspective view");
@@ -2482,6 +2803,7 @@ static void rna_def_space_view3d(BlenderRNA *brna)
 	RNA_def_property_int_default(prop, 16);
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
 	
+	/* DEPRECATED */
 	prop = RNA_def_property(srna, "grid_subdivisions", PROP_INT, PROP_NONE);
 	RNA_def_property_int_sdna(prop, NULL, "gridsubdiv");
 	RNA_def_property_ui_text(prop, "Grid Subdivisions", "Number of subdivisions between grid lines");
@@ -2489,26 +2811,31 @@ static void rna_def_space_view3d(BlenderRNA *brna)
 	RNA_def_property_int_default(prop, 10);
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
 
+	/* DEPRECATED */
 	prop = RNA_def_property(srna, "grid_scale_unit", PROP_FLOAT, PROP_NONE);
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 	RNA_def_property_float_funcs(prop, "rna_View3D_GridScaleUnit_get", NULL, NULL);
 	RNA_def_property_ui_text(prop, "Grid Scale Unit", "Grid cell size scaled by scene unit system settings");
 
+	/* DEPRECATED */
 	prop = RNA_def_property(srna, "show_floor", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "gridflag", V3D_SHOW_FLOOR);
 	RNA_def_property_ui_text(prop, "Display Grid Floor", "Show the ground plane grid in perspective view");
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
 	
+	/* DEPRECATED */
 	prop = RNA_def_property(srna, "show_axis_x", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "gridflag", V3D_SHOW_X);
 	RNA_def_property_ui_text(prop, "Display X Axis", "Show the X axis line in perspective view");
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
 	
+	/* DEPRECATED */
 	prop = RNA_def_property(srna, "show_axis_y", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "gridflag", V3D_SHOW_Y);
 	RNA_def_property_ui_text(prop, "Display Y Axis", "Show the Y axis line in perspective view");
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
 	
+	/* DEPRECATED */
 	prop = RNA_def_property(srna, "show_axis_z", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "gridflag", V3D_SHOW_Z);
 	RNA_def_property_ui_text(prop, "Display Z Axis", "Show the Z axis line in perspective view");
@@ -2762,6 +3089,60 @@ static void rna_def_space_view3d(BlenderRNA *brna)
 	RNA_def_property_boolean_sdna(prop, NULL, "tmp_compat_flag", V3D_NEW_VIEWPORT);
 	RNA_def_property_ui_text(prop, "Modern Viewport", "Use modern viewport");
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
+
+	prop = RNA_def_property(srna, "show_all_display_layers", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "flag3", V3D_SHOW_ALL_LAYERS);
+	RNA_def_property_ui_text(prop, "Show All Display Layers", "");
+	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
+
+	/* display layers */
+	prop = RNA_def_property(srna, "active_drawing_support_index", PROP_INT, PROP_UNSIGNED);
+	RNA_def_property_int_sdna(prop, NULL, "active_drawing_support");
+	RNA_def_property_int_funcs(prop, "rna_SpaceView3D_active_drawing_support_index_get",
+	                           "rna_SpaceView3D_active_drawing_support_index_set",
+	                            "rna_SpaceView3D_active_drawing_support_index_range");
+	RNA_def_property_ui_text(prop, "Active View Index", "Active index in render view array");
+	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
+
+	prop = RNA_def_property(srna, "active_scene_elements_index", PROP_INT, PROP_UNSIGNED);
+	RNA_def_property_int_sdna(prop, NULL, "active_scene_elements");
+	RNA_def_property_int_funcs(prop, "rna_SpaceView3D_active_scene_elements_index_get",
+	                           "rna_SpaceView3D_active_scene_elements_index_set",
+	                           "rna_SpaceView3D_active_scene_elements_index_range");
+	RNA_def_property_ui_text(prop, "Active Scene Elements Index", "");
+	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
+
+	prop = RNA_def_property(srna, "active_screen_effects_index", PROP_INT, PROP_UNSIGNED);
+	RNA_def_property_int_sdna(prop, NULL, "active_screen_effects");
+	RNA_def_property_int_funcs(prop, "rna_SpaceView3D_active_screen_effects_index_get",
+	                           "rna_SpaceView3D_active_screen_effects_index_set",
+	                           "rna_SpaceView3D_active_screen_effects_index_range");
+	RNA_def_property_ui_text(prop, "Active Screen Effects Index", "");
+	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
+
+	prop = RNA_def_property(srna, "drawing_support", PROP_COLLECTION, PROP_NONE);
+	RNA_def_property_collection_sdna(prop, NULL, "drawing_support", NULL);
+	RNA_def_property_collection_funcs(prop, "rna_SpaceView3D_drawing_support_begin", "rna_iterator_listbase_next",
+	                                  "rna_iterator_listbase_end", "rna_iterator_listbase_get",
+	                                  NULL, NULL, NULL, NULL);
+	RNA_def_property_struct_type(prop, "DisplayLayer");
+	RNA_def_property_ui_text(prop, "Drawing Support", "");
+
+	prop = RNA_def_property(srna, "scene_elements", PROP_COLLECTION, PROP_NONE);
+	RNA_def_property_collection_sdna(prop, NULL, "scene_elements", NULL);
+	RNA_def_property_collection_funcs(prop, "rna_SpaceView3D_scene_elements_begin", "rna_iterator_listbase_next",
+	                                  "rna_iterator_listbase_end", "rna_iterator_listbase_get",
+	                                  NULL, NULL, NULL, NULL);
+	RNA_def_property_struct_type(prop, "DisplayLayer");
+	RNA_def_property_ui_text(prop, "Scene Elements", "");
+
+	prop = RNA_def_property(srna, "screen_effects", PROP_COLLECTION, PROP_NONE);
+	RNA_def_property_collection_sdna(prop, NULL, "screen_effects", NULL);
+	RNA_def_property_collection_funcs(prop, "rna_SpaceView3D_screen_effects_begin", "rna_iterator_listbase_next",
+	                                  "rna_iterator_listbase_end", "rna_iterator_listbase_get",
+	                                  NULL, NULL, NULL, NULL);
+	RNA_def_property_struct_type(prop, "DisplayLayer");
+	RNA_def_property_ui_text(prop, "Screen Effects", "");
 
 	/* *** Animated *** */
 	RNA_define_animate_sdna(true);
@@ -4744,6 +5125,12 @@ static void rna_def_space_clip(BlenderRNA *brna)
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_CLIP, NULL);
 }
 
+static void rna_def_display_layers(BlenderRNA *brna)
+{
+	rna_def_display_layer(brna);
+
+	rna_def_gridaxes_display_layer(brna);
+}
 
 void RNA_def_space(BlenderRNA *brna)
 {
@@ -4756,6 +5143,7 @@ void RNA_def_space(BlenderRNA *brna)
 	rna_def_space_filebrowser(brna);
 	rna_def_space_outliner(brna);
 	rna_def_background_image(brna);
+	rna_def_display_layers(brna);
 	rna_def_space_view3d(brna);
 	rna_def_space_buttons(brna);
 	rna_def_space_dopesheet(brna);

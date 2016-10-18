@@ -650,3 +650,48 @@ class AddPresetUnitsLength(AddPresetBase, Operator):
     ]
 
     preset_subdir = "units_length"
+
+
+class AddDisplayPresetViewport(AddPresetBase, Operator):
+    """Add a display viewport preset"""
+    bl_label = "Add Viewport Display Preset"
+    bl_idname = "view3d.display_preset_add"
+    preset_menu = "VIEW3D_MT_display_presets"
+
+    preset_defines = [
+        "drawing_support = bpy.context.space_data.drawing_support",
+        "scene_elements = bpy.context.space_data.scene_elements",
+        "screen_effects = bpy.context.space_data.screen_effects",
+    ]
+
+    preset_values = [
+        "drawing_support[0].hide",
+        "drawing_support[1].hide",
+        "drawing_support[2].hide",
+        "drawing_support[3].hide",
+        "scene_elements[0].hide",
+        "scene_elements[1].hide",
+        "scene_elements[2].hide",
+        "scene_elements[3].hide",
+        "screen_effects[0].hide",
+        "screen_effects[1].hide",
+    ]
+
+    preset_subdir = "viewport_display"
+
+
+class AddPresetSolidObjectsViewport(AddPresetBase, Operator):
+    """Add a solid objects viewport preset"""
+    bl_label = "Add Viewport Solid Objects Preset"
+    bl_idname = "view3d.solid_objects_preset_add"
+
+    preset_defines = [
+        "",
+    ]
+
+    preset_values = [
+        "",
+    ]
+
+    preset_subdir = "viewport_solid_objects"
+

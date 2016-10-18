@@ -53,6 +53,7 @@
 
 #include "ED_space_api.h"
 #include "ED_screen.h"
+#include "ED_view3d.h"
 
 #include "GPU_compositing.h"
 #include "GPU_framebuffer.h"
@@ -311,6 +312,78 @@ void ED_view3d_shade_update(Main *bmain, Scene *scene, View3D *v3d, ScrArea *sa)
 
 /* ******************** default callbacks for view3d space ***************** */
 
+static void view3d_display_layer_data_init(DisplayLayerData *display, int type, int subtype, const char *name)
+{
+	display->type = type;
+	display->subtype = subtype;
+	BLI_strncpy(display->name, name, sizeof(display->name));
+}
+
+/**
+ * If we add a new display layer we need to update:
+ * preset.py::AddDisplayPresetViewport::preset_values
+ */
+void ED_view3d_display_layers_init(View3D *v3d)
+{
+	GridAxesDisplayLayer *grid;
+	DisplayLayer *background_images, *grease_pencil, *motion_tracking;
+	DisplayLayer *solid, *helper, *volumetric, *hair_particles;
+	DisplayLayer *depth_of_field, *reflections;
+
+	v3d->active_drawing_support = 0;
+	v3d->active_scene_elements = -1;
+	v3d->active_screen_effects = -1;
+
+	v3d->flag3 |= V3D_SHOW_ALL_LAYERS;
+
+	/* Drawing Support */
+	grid = MEM_callocN(sizeof(GridAxesDisplayLayer), "Grid & Axes display layer");
+	view3d_display_layer_data_init(&grid->display, eDisplayLayerType_DrawingSupport, eDrawingSupportType_GridAxes, "Grid & Axes");
+	grid->grid = 1.0f;
+	grid->gridlines = 16;
+	grid->gridsubdiv = 10;
+	grid->gridflag = V3D_SHOW_X | V3D_SHOW_Y | V3D_SHOW_FLOOR;
+	BLI_addtail(&v3d->drawing_support, grid);
+
+	background_images = MEM_callocN(sizeof(DisplayLayer), "Background Images display layer");
+	view3d_display_layer_data_init(&background_images->display, eDisplayLayerType_DrawingSupport, eDrawingSupportType_BackgroundImages, "Background Images");
+	BLI_addtail(&v3d->drawing_support, background_images);
+
+	grease_pencil = MEM_callocN(sizeof(DisplayLayer), "Grease Pencil display layer");
+	view3d_display_layer_data_init(&grease_pencil->display, eDisplayLayerType_DrawingSupport, eDrawingSupportType_GreasePencil, "Grease Pencil");
+	BLI_addtail(&v3d->drawing_support, grease_pencil);
+
+	motion_tracking = MEM_callocN(sizeof(DisplayLayer), "Motion Tracking display layer");
+	view3d_display_layer_data_init(&motion_tracking->display, eDisplayLayerType_DrawingSupport, eDrawingSupportType_MotionTracking, "Motion Tracking");
+	BLI_addtail(&v3d->drawing_support, motion_tracking);
+
+	/* Scene Elements */
+	solid = MEM_callocN(sizeof(DisplayLayer), "Solid Objects display layer");
+	view3d_display_layer_data_init(&solid->display, eDisplayLayerType_SceneElements, eSceneElementsType_Solid, "Solid Objects");
+	BLI_addtail(&v3d->scene_elements, solid);
+
+	helper = MEM_callocN(sizeof(DisplayLayer), "Helper Objects display layer");
+	view3d_display_layer_data_init(&helper->display, eDisplayLayerType_SceneElements, eSceneElementsType_Helper, "Helper Objects");
+	BLI_addtail(&v3d->scene_elements, helper);
+
+	volumetric = MEM_callocN(sizeof(DisplayLayer), "Volumetric Objects display layer");
+	view3d_display_layer_data_init(&volumetric->display, eDisplayLayerType_SceneElements, eSceneElementsType_Volumetric, "Volumetric Objects");
+	BLI_addtail(&v3d->scene_elements, volumetric);
+
+	hair_particles = MEM_callocN(sizeof(DisplayLayer), "Hair Particles display layer");
+	view3d_display_layer_data_init(&hair_particles->display, eDisplayLayerType_SceneElements, eSceneElementsType_HairParticles, "Hair Particles");
+	BLI_addtail(&v3d->scene_elements, hair_particles);
+
+	/* Screen Effect */
+	depth_of_field = MEM_callocN(sizeof(DisplayLayer), "Depth of Field display layer");
+	view3d_display_layer_data_init(&depth_of_field->display, eDisplayLayerType_ScreenEffects, eScreenEffectsType_DepthOfField, "Depth of Field");
+	BLI_addtail(&v3d->screen_effects, depth_of_field);
+
+	reflections = MEM_callocN(sizeof(DisplayLayer), "Reflections display layer");
+	view3d_display_layer_data_init(&reflections->display, eDisplayLayerType_ScreenEffects, eScreenEffectsType_Reflections, "Reflections");
+	BLI_addtail(&v3d->screen_effects, reflections);
+}
+
 static SpaceLink *view3d_new(const bContext *C)
 {
 	Scene *scene = CTX_data_scene(C);
@@ -353,6 +426,9 @@ static SpaceLink *view3d_new(const bContext *C)
 	v3d->stereo3d_flag |= V3D_S3D_DISPPLANE;
 	v3d->stereo3d_convergence_alpha = 0.15f;
 	v3d->stereo3d_volume_alpha = 0.05f;
+
+	/* display layers */
+	ED_view3d_display_layers_init(v3d);
 
 	/* header */
 	ar = MEM_callocN(sizeof(ARegion), "header for view3d");
@@ -397,7 +473,7 @@ static SpaceLink *view3d_new(const bContext *C)
 	rv3d->persp = RV3D_PERSP;
 	rv3d->view = RV3D_VIEW_USER;
 	rv3d->dist = 10.0;
-	
+
 	return (SpaceLink *)v3d;
 }
 
@@ -433,6 +509,10 @@ static void view3d_free(SpaceLink *sl)
 		MEM_freeN(vd->fx_settings.ssao);
 	if (vd->fx_settings.dof)
 		MEM_freeN(vd->fx_settings.dof);
+
+	BLI_freelistN(&vd->drawing_support);
+	BLI_freelistN(&vd->scene_elements);
+	BLI_freelistN(&vd->screen_effects);
 }
 
 
