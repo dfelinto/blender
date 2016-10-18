@@ -802,6 +802,71 @@ static void rna_SpaceView3D_active_display_layer_set(PointerRNA *ptr, PointerRNA
 	}
 }
 
+static int rna_SpaceView3D_display_layers_pack(ListBase *lb)
+{
+	DisplayLayer *link;
+	int value = 0;
+
+	for (link = lb->first; link; link = link->next) {
+		if ((link->display.flag & V3D_DISPLAYLAYER_HIDE) == 0) {
+			value |= (1 << ((DisplayLayer *)link)->display.subtype);
+		}
+	}
+
+	return value;
+}
+
+static void rna_SpaceView3D_display_layers_unpack(ListBase *lb, const int value)
+{
+	DisplayLayer *link;
+
+	for (link = lb->first; link; link = link->next) {
+		if ((value & (1 << link->display.subtype)) == 0) {
+			link->display.flag |= V3D_DISPLAYLAYER_HIDE;
+		}
+		else {
+			link->display.flag &= ~V3D_DISPLAYLAYER_HIDE;
+		}
+	}
+}
+
+static int rna_SpaceView3D_drawing_support_visibility_get(PointerRNA *ptr)
+{
+	View3D *v3d = (View3D *)(ptr->data);
+	return rna_SpaceView3D_display_layers_pack(&v3d->drawing_support);
+}
+
+static int rna_SpaceView3D_scene_elements_visibility_get(PointerRNA *ptr)
+{
+	View3D *v3d = (View3D *)(ptr->data);
+	return rna_SpaceView3D_display_layers_pack(&v3d->scene_elements);
+}
+
+static int rna_SpaceView3D_screen_effects_visibility_get(PointerRNA *ptr)
+{
+	View3D *v3d = (View3D *)(ptr->data);
+	return rna_SpaceView3D_display_layers_pack(&v3d->screen_effects);
+}
+
+static void rna_SpaceView3D_drawing_support_visibility_set(PointerRNA *ptr, int value)
+{
+	View3D *v3d = (View3D *)(ptr->data);
+	rna_SpaceView3D_display_layers_unpack(&v3d->drawing_support, value);
+}
+
+static void rna_SpaceView3D_scene_elements_visibility_set(PointerRNA *ptr, int value)
+{
+	View3D *v3d = (View3D *)(ptr->data);
+	rna_SpaceView3D_display_layers_unpack(&v3d->scene_elements, value);
+}
+
+
+static void rna_SpaceView3D_screen_effects_visibility_set(PointerRNA *ptr, int value)
+{
+	View3D *v3d = (View3D *)(ptr->data);
+	rna_SpaceView3D_display_layers_unpack(&v3d->screen_effects, value);
+}
+
 static PointerRNA rna_SpaceView3D_region_quadviews_get(CollectionPropertyIterator *iter)
 {
 	void *regiondata = ((ARegion *)rna_iterator_listbase_get(iter))->regiondata;
@@ -3111,8 +3176,23 @@ static void rna_def_space_view3d(BlenderRNA *brna)
 	RNA_def_property_struct_type(prop, "DisplayLayer");
 	RNA_def_property_pointer_funcs(prop, "rna_SpaceView3D_active_display_layer_get",
 	                               "rna_SpaceView3D_active_display_layer_set", NULL, NULL);
-	RNA_def_property_flag(prop, PROP_EDITABLE | PROP_NEVER_NULL);
+	RNA_def_property_flag(prop, PROP_NEVER_NULL);
 	RNA_def_property_ui_text(prop, "Active Display Layer", "Active Display Layer");
+
+	prop = RNA_def_property(srna, "drawing_support_visibility", PROP_INT, PROP_NONE);
+	RNA_def_property_int_funcs(prop, "rna_SpaceView3D_drawing_support_visibility_get",
+	                           "rna_SpaceView3D_drawing_support_visibility_set", NULL);
+	RNA_def_property_ui_text(prop, "Drawing Support Visibility", "Visibility of all drawing support");
+
+	prop = RNA_def_property(srna, "scene_elements_visibility", PROP_INT, PROP_NONE);
+	RNA_def_property_int_funcs(prop, "rna_SpaceView3D_scene_elements_visibility_get",
+	                           "rna_SpaceView3D_scene_elements_visibility_set", NULL);
+	RNA_def_property_ui_text(prop, "Scene Elements Visibility", "Visibility of all scene elements");
+
+	prop = RNA_def_property(srna, "screen_effects_visibility", PROP_INT, PROP_NONE);
+	RNA_def_property_int_funcs(prop, "rna_SpaceView3D_screen_effects_visibility_get",
+	                           "rna_SpaceView3D_screen_effects_visibility_set", NULL);
+	RNA_def_property_ui_text(prop, "Screen Effects Visibility", "Visibility of all screen effects");
 
 	prop = RNA_def_property(srna, "active_drawing_support_index", PROP_INT, PROP_UNSIGNED);
 	RNA_def_property_int_sdna(prop, NULL, "active_drawing_support");
