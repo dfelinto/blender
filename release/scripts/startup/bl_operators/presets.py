@@ -679,19 +679,3 @@ class AddDisplayPresetViewport(AddPresetBase, Operator):
 
     preset_subdir = "viewport_display"
 
-
-class AddPresetSolidObjectsViewport(AddPresetBase, Operator):
-    """Add a solid objects viewport preset"""
-    bl_label = "Add Viewport Solid Objects Preset"
-    bl_idname = "view3d.solid_objects_preset_add"
-
-    preset_defines = [
-        "",
-    ]
-
-    preset_values = [
-        "",
-    ]
-
-    preset_subdir = "viewport_solid_objects"
-

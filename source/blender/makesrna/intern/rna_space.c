@@ -692,7 +692,7 @@ static int rna_SpaceView3D_active_screen_effects_index_get(PointerRNA *ptr)
 	return v3d->active_screen_effects;
 }
 
-static void rna_SpaceView3D_active_display_layer_index_reset(View3D *v3d, int value)
+static void rna_SpaceView3D_active_display_layer_index_reset(View3D *v3d)
 {
 	v3d->active_drawing_support = -1;
 	v3d->active_scene_elements = -1;
@@ -702,21 +702,21 @@ static void rna_SpaceView3D_active_display_layer_index_reset(View3D *v3d, int va
 static void rna_SpaceView3D_active_drawing_support_index_set(PointerRNA *ptr, int value)
 {
 	View3D *v3d = (View3D *)(ptr->data);
-	rna_SpaceView3D_active_display_layer_index_reset(v3d, value);
+	rna_SpaceView3D_active_display_layer_index_reset(v3d);
 	v3d->active_drawing_support = value;
 }
 
 static void rna_SpaceView3D_active_scene_elements_index_set(PointerRNA *ptr, int value)
 {
 	View3D *v3d = (View3D *)(ptr->data);
-	rna_SpaceView3D_active_display_layer_index_reset(v3d, value);
+	rna_SpaceView3D_active_display_layer_index_reset(v3d);
 	v3d->active_scene_elements = value;
 }
 
 static void rna_SpaceView3D_active_screen_effects_index_set(PointerRNA *ptr, int value)
 {
 	View3D *v3d = (View3D *)(ptr->data);
-	rna_SpaceView3D_active_display_layer_index_reset(v3d, value);
+	rna_SpaceView3D_active_display_layer_index_reset(v3d);
 	v3d->active_screen_effects = value;
 }
 
@@ -747,24 +747,21 @@ static void rna_SpaceView3D_active_screen_effects_index_range(
 	*max = max_ii(0, BLI_listbase_count(&v3d->screen_effects) - 1);
 }
 
-#if 0
 static PointerRNA rna_SpaceView3D_active_display_layer_get(PointerRNA *ptr)
 {
 	View3D *v3d = (View3D *)(ptr->data);
 	DisplayLayer *display_layer;
-	int active_display_layer = -1;
 
 	if (v3d->active_drawing_support != -1) {
-		active_display_layer = v3d->active_drawing_support;
+		display_layer = BLI_findlink(&v3d->drawing_support, v3d->active_drawing_support);
 	}
 	else if (v3d->active_scene_elements != -1) {
-		active_display_layer = v3d->active_scene_elements;
+		display_layer = BLI_findlink(&v3d->scene_elements, v3d->active_scene_elements);
 	}
 	else {
-		active_display_layer = v3d->active_screen_effects;
+		display_layer = BLI_findlink(&v3d->screen_effects, v3d->active_screen_effects);
 	}
 
-	display_layer = BLI_findlink(&v3d->display_layers, v3d->active_display_layer);
 	return rna_pointer_inherit_refine(ptr, &RNA_DisplayLayer, display_layer);
 }
 
@@ -773,23 +770,37 @@ static void rna_SpaceView3D_active_display_layer_set(PointerRNA *ptr, PointerRNA
 	View3D *v3d = (View3D *)(ptr->data);
 	DisplayLayer *display_layer = (DisplayLayer *)value.data;
 
-	switch display_layer->display.type:
+	switch (display_layer->display.type) {
 		case eDisplayLayerType_DrawingSupport:
-			const int index = BLI_findindex(&v3d->drawing_support, display_layer);
-			if (index != -1) v3d->active_drawing_support = index;
-			break;
+		{
+		const int index = BLI_findindex(&v3d->drawing_support, display_layer);
+		if (index != -1) {
+			rna_SpaceView3D_active_display_layer_index_reset(v3d);
+			v3d->active_drawing_support = index;
+		}
+		break;
+		}
 		case eDisplayLayerType_SceneElements:
+		{
 			const int index = BLI_findindex(&v3d->scene_elements, display_layer);
-			if (index != -1) v3d->active_scene_elements = index;
+			if (index != -1) {
+				rna_SpaceView3D_active_display_layer_index_reset(v3d);
+				v3d->active_scene_elements = index;
+			}
 			break;
+		}
 		case eDisplayLayerType_ScreenEffects:
 		default:
+		{
 			const int index = BLI_findindex(&v3d->screen_effects, display_layer);
-			if (index != -1) v3d->active_screen_effects = index;
+			if (index != -1) {
+				rna_SpaceView3D_active_display_layer_index_reset(v3d);
+				v3d->active_screen_effects = index;
+			}
 			break;
+		}
 	}
 }
-#endif
 
 static PointerRNA rna_SpaceView3D_region_quadviews_get(CollectionPropertyIterator *iter)
 {
@@ -2506,10 +2517,10 @@ static void rna_def_display_layer(BlenderRNA *brna)
 	PropertyRNA *prop;
 
 	static const EnumPropertyItem display_layer_type_items[] = {
-		{ eDisplayLayerType_DrawingSupport, "DRAWING_SUPPORT", ICON_NONE, "Grid Drawing Support", "" },
-		{ eDisplayLayerType_SceneElements, "SCENE_ELEMENT", ICON_NONE, "Scene Element", "" },
-		{ eDisplayLayerType_ScreenEffects, "SCREEN_EFFECT", ICON_NONE, "Screen Effect", "" },
-		{ 0, NULL, 0, NULL, NULL }
+		{eDisplayLayerType_DrawingSupport, "DRAWING_SUPPORT", ICON_NONE, "Grid Drawing Support", ""},
+		{eDisplayLayerType_SceneElements, "SCENE_ELEMENT", ICON_NONE, "Scene Element", ""},
+		{eDisplayLayerType_ScreenEffects, "SCREEN_EFFECT", ICON_NONE, "Screen Effect", ""},
+		{0, NULL, 0, NULL, NULL}
 	};
 
 	static const EnumPropertyItem display_layer_subtype_items[] = {
@@ -3096,6 +3107,13 @@ static void rna_def_space_view3d(BlenderRNA *brna)
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
 
 	/* display layers */
+	prop = RNA_def_property(srna, "active_display_layer", PROP_POINTER, PROP_NONE);
+	RNA_def_property_struct_type(prop, "DisplayLayer");
+	RNA_def_property_pointer_funcs(prop, "rna_SpaceView3D_active_display_layer_get",
+	                               "rna_SpaceView3D_active_display_layer_set", NULL, NULL);
+	RNA_def_property_flag(prop, PROP_EDITABLE | PROP_NEVER_NULL);
+	RNA_def_property_ui_text(prop, "Active Display Layer", "Active Display Layer");
+
 	prop = RNA_def_property(srna, "active_drawing_support_index", PROP_INT, PROP_UNSIGNED);
 	RNA_def_property_int_sdna(prop, NULL, "active_drawing_support");
 	RNA_def_property_int_funcs(prop, "rna_SpaceView3D_active_drawing_support_index_get",

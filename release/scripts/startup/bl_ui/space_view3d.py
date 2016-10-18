@@ -2976,7 +2976,7 @@ class VIEW3D_MT_edit_gpencil_transform(Menu):
 
 # ********** Panel **********
 
-class VIEW3D_UL_layers():
+class VIEW3D_UL_display_layers(UIList):
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
         layer = item
         if self.layout_type in {'DEFAULT', 'COMPACT'}:
@@ -2987,18 +2987,6 @@ class VIEW3D_UL_layers():
         elif self.layout_type == 'GRID':
             layout.alignment = 'CENTER'
             layout.label("", icon_value=icon + layer.hide)
-
-
-class VIEW3D_UL_drawing_support(UIList, VIEW3D_UL_layers):
-    pass
-
-
-class VIEW3D_UL_scene_elements(UIList, VIEW3D_UL_layers):
-    pass
-
-
-class VIEW3D_UL_screen_effects(UIList, VIEW3D_UL_layers):
-    pass
 
 
 class VIEW3D_PT_viewport_debug(Panel):
@@ -3052,13 +3040,13 @@ class VIEW3D_PT_display(Panel):
         col = layout.column()
 
         col.label(text="Drawing Support:")
-        col.row().template_list("VIEW3D_UL_drawing_support", "", view, "drawing_support", view, "active_drawing_support_index", rows=2)
+        col.row().template_list("VIEW3D_UL_display_layers", "", view, "drawing_support", view, "active_drawing_support_index", rows=2)
 
         col.label(text="Scene Elements:")
-        col.row().template_list("VIEW3D_UL_scene_elements", "", view, "scene_elements", view, "active_scene_elements_index", rows=2)
+        col.row().template_list("VIEW3D_UL_display_layers", "", view, "scene_elements", view, "active_scene_elements_index", rows=2)
 
         col.label(text="Screen Effects:")
-        col.row().template_list("VIEW3D_UL_screen_effects", "", view, "screen_effects", view, "active_screen_effects_index", rows=2)
+        col.row().template_list("VIEW3D_UL_display_layers", "", view, "screen_effects", view, "active_screen_effects_index", rows=2)
 
 
 class VIEW3D_PT_grease_pencil(GreasePencilDataPanel, Panel):

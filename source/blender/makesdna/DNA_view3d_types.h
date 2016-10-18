@@ -139,11 +139,11 @@ typedef struct GridAxesDisplayLayer {
 	DisplayLayerData display;
 
 	float grid;
-	float gridview;
+	float pad;
 	short gridlines;
 	short gridsubdiv;	/* Number of subdivisions in the grid between each highlighted grid line */
 	char gridflag;
-	char pad[3];
+	char pad2[3];
 } GridAxesDisplayLayer;
 
 /* DisplayLayerData->flag */
@@ -208,7 +208,7 @@ typedef struct RegionView3D {
 	float lviewquat[4];
 	short lpersp, lview; /* lpersp can never be set to 'RV3D_CAMOB' */
 
-	float gridview; /* DEPRECATED */
+	float gridview;
 	float tw_idot[3];  /* manipulator runtime: (1 - dot) product with view vector (used to check view alignment) */
 
 
