@@ -2989,6 +2989,18 @@ class VIEW3D_UL_display_layers(UIList):
             layout.label("", icon_value=icon + layer.hide)
 
 
+class VIEW3D_UL_drawing_support_display_layers(VIEW3D_UL_display_layers):
+    pass
+
+
+class VIEW3D_UL_scene_elements_display_layers(VIEW3D_UL_display_layers):
+    pass
+
+
+class VIEW3D_UL_screen_effects_display_layers(VIEW3D_UL_display_layers):
+    pass
+
+
 class VIEW3D_PT_viewport_debug(Panel):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
@@ -3018,7 +3030,6 @@ class VIEW3D_PT_display(Panel):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_label = "Display"
-    bl_options = {'DEFAULT_CLOSED'}
 
     @classmethod
     def poll(cls, context):
@@ -3040,22 +3051,83 @@ class VIEW3D_PT_display(Panel):
         col = layout.column()
 
         col.label(text="Drawing Support:")
-        col.row().template_list("VIEW3D_UL_display_layers", "",
+        col.row().template_list("VIEW3D_UL_drawing_support_display_layers", "",
                                 view, "drawing_support",
                                 view, "active_drawing_support_index",
                                 rows=2)
 
         col.label(text="Scene Elements:")
-        col.row().template_list("VIEW3D_UL_display_layers", "",
+        col.row().template_list("VIEW3D_UL_scene_elements_display_layers", "",
                                 view, "scene_elements",
                                 view, "active_scene_elements_index",
                                 rows=2)
 
         col.label(text="Screen Effects:")
-        col.row().template_list("VIEW3D_UL_display_layers", "",
+        col.row().template_list("VIEW3D_UL_screen_effects_display_layers", "",
                                 view, "screen_effects",
                                 view, "active_screen_effects_index",
                                 rows=2)
+
+
+class VIEW3D_PT_display_layer(Panel):
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_label = "Display Layer"
+
+    def __init__(self):
+        super(VIEW3D_PT_display_layer, self).__init__()
+        self._draw_funcs = {
+            'GRID_AXES' : self.draw_grid_and_axes,
+            }
+
+    @classmethod
+    def poll(cls, context):
+        view = context.space_data
+        return (view) and view.use_modern_viewport
+
+    def draw(self, context):
+        view = context.space_data
+        display_layer = view.active_display_layer
+
+        self.draw_title(display_layer)
+        self._draw_funcs.get(display_layer.subtype, self.draw_default) \
+                (context, view, display_layer)
+
+    def draw_title(self, display_layer):
+        """leave it here during development"""
+        return
+        layout = self.layout
+        col = layout.column()
+
+        col.label(text="Layer: {0}".format(display_layer.name))
+        col.label(text="Type: {0}".format(display_layer.type))
+        col.label(text="Sub-Type: {0}".format(display_layer.subtype))
+        col.separator()
+
+    def draw_default(self, context, view, display_layer):
+        self.layout.label(text="Panel not yet created", icon='INFO')
+
+    def draw_grid_and_axes(self, context, view, display_layer):
+        layout = self.layout
+
+        scene = context.scene
+
+        col = layout.column()
+        split = col.split(percentage=0.55)
+        split.prop(view, "show_floor", text="Grid Floor")
+
+        row = split.row(align=True)
+        row.prop(view, "show_axis_x", text="X", toggle=True)
+        row.prop(view, "show_axis_y", text="Y", toggle=True)
+        row.prop(view, "show_axis_z", text="Z", toggle=True)
+
+        sub = col.column(align=True)
+        sub.active = view.show_floor
+        sub.prop(view, "grid_lines", text="Lines")
+        sub.prop(view, "grid_scale", text="Scale")
+        subsub = sub.column(align=True)
+        subsub.active = scene.unit_settings.system == 'NONE'
+        subsub.prop(view, "grid_subdivisions", text="Subdivisions")
 
 
 class VIEW3D_PT_grease_pencil(GreasePencilDataPanel, Panel):

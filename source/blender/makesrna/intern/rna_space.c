@@ -595,38 +595,57 @@ static void rna_SpaceView3D_pivot_update(Main *bmain, Scene *UNUSED(scene), Poin
 }
 
 /* display layers */
+static StructRNA *rna_DrawingSupportDisplayLayer_refine(struct PointerRNA *ptr)
+{
+	DisplayLayer *layer = (DisplayLayer *)ptr->data;
+	switch (layer->display.subtype) {
+		case eDrawingSupportType_GridAxes:
+			return &RNA_GridAxesDisplayLayer;
+		case eDrawingSupportType_BackgroundImages:
+		case eDrawingSupportType_GreasePencil:
+		case eDrawingSupportType_MotionTracking:
+		default:
+			return &RNA_DrawingSupportDisplayLayer;
+	}
+}
+
+static StructRNA *rna_SceneElementsDisplayLayer_refine(struct PointerRNA *ptr)
+{
+	DisplayLayer *layer = (DisplayLayer *)ptr->data;
+	switch (layer->display.subtype) {
+		case eSceneElementsType_Solid:
+			return &RNA_SolidObjectsDisplayLayer;
+		case eSceneElementsType_Helper:
+		case eSceneElementsType_Volumetric:
+		case eSceneElementsType_HairParticles:
+		default:
+			return &RNA_SceneElementsDisplayLayer;
+	}
+}
+
+static StructRNA *rna_ScreenEffectsDisplayLayer_refine(struct PointerRNA *ptr)
+{
+	DisplayLayer *layer = (DisplayLayer *)ptr->data;
+	switch (layer->display.subtype) {
+		case eScreenEffectsType_DepthOfField:
+		case eScreenEffectsType_Reflections:
+		default:
+			return &RNA_ScreenEffectsDisplayLayer;
+	}
+}
+
 static StructRNA *rna_DisplayLayer_refine(struct PointerRNA *ptr)
 {
 	DisplayLayer *layer = (DisplayLayer *)ptr->data;
 	switch (layer->display.type) {
-		case eDisplayLayerType_DrawingSupport:
-			switch (layer->display.subtype) {
-				case eDrawingSupportType_GridAxes:
-					return &RNA_GridAxesDisplayLayer;
-				case eDrawingSupportType_BackgroundImages:
-				case eDrawingSupportType_GreasePencil:
-				case eDrawingSupportType_MotionTracking:
-				default:
-					return &RNA_DisplayLayer;
-			}
-		case eDisplayLayerType_SceneElements:
-			switch (layer->display.subtype) {
-				case eSceneElementsType_Solid:
-				case eSceneElementsType_Helper:
-				case eSceneElementsType_Volumetric:
-				case eSceneElementsType_HairParticles:
-				default:
-					return &RNA_DisplayLayer;
-			}
-		case eDisplayLayerType_ScreenEffects:
-			switch (layer->display.subtype) {
-				case eScreenEffectsType_DepthOfField:
-				case eScreenEffectsType_Reflections:
-				default:
-					return &RNA_DisplayLayer;
-			}
-		default:
-			return &RNA_DisplayLayer;
+	case eDisplayLayerType_DrawingSupport:
+		return rna_DrawingSupportDisplayLayer_refine(ptr);
+	case eDisplayLayerType_SceneElements:
+		return rna_SceneElementsDisplayLayer_refine(ptr);
+	case eDisplayLayerType_ScreenEffects:
+		return rna_ScreenEffectsDisplayLayer_refine(ptr);
+	default:
+		return &RNA_DisplayLayer;
 	}
 }
 
@@ -754,15 +773,16 @@ static PointerRNA rna_SpaceView3D_active_display_layer_get(PointerRNA *ptr)
 
 	if (v3d->active_drawing_support != -1) {
 		display_layer = BLI_findlink(&v3d->drawing_support, v3d->active_drawing_support);
+		return rna_pointer_inherit_refine(ptr, &RNA_DrawingSupportDisplayLayer, display_layer);
 	}
 	else if (v3d->active_scene_elements != -1) {
 		display_layer = BLI_findlink(&v3d->scene_elements, v3d->active_scene_elements);
+		return rna_pointer_inherit_refine(ptr, &RNA_SceneElementsDisplayLayer, display_layer);
 	}
 	else {
 		display_layer = BLI_findlink(&v3d->screen_effects, v3d->active_screen_effects);
+		return rna_pointer_inherit_refine(ptr, &RNA_ScreenEffectsDisplayLayer, display_layer);
 	}
-
-	return rna_pointer_inherit_refine(ptr, &RNA_DisplayLayer, display_layer);
 }
 
 static void rna_SpaceView3D_active_display_layer_set(PointerRNA *ptr, PointerRNA value)
@@ -2576,6 +2596,7 @@ static void rna_def_backgroundImages(BlenderRNA *brna, PropertyRNA *cprop)
 	RNA_def_function_ui_description(func, "Remove all background images");
 }
 
+/* Display Layers */
 static void rna_def_display_layer(BlenderRNA *brna)
 {
 	StructRNA *srna;
@@ -2586,20 +2607,6 @@ static void rna_def_display_layer(BlenderRNA *brna)
 		{eDisplayLayerType_SceneElements, "SCENE_ELEMENT", ICON_NONE, "Scene Element", ""},
 		{eDisplayLayerType_ScreenEffects, "SCREEN_EFFECT", ICON_NONE, "Screen Effect", ""},
 		{0, NULL, 0, NULL, NULL}
-	};
-
-	static const EnumPropertyItem display_layer_subtype_items[] = {
-		{ eDrawingSupportType_GridAxes, "GRID", ICON_NONE, "Grid & Axes", "" },
-		{ eDrawingSupportType_BackgroundImages, "BACKGROUND_IMAGES", ICON_NONE, "Background Images", "" },
-		{ eDrawingSupportType_GreasePencil, "GREASE_PENCIL", ICON_NONE, "Grease Pencil", "" },
-		{ eDrawingSupportType_MotionTracking, "MOTION_TRACKING", ICON_NONE, "Motion Tracking", "" },
-		{ eSceneElementsType_Solid, "SOLID", ICON_NONE, "Solid Objects", "" },
-		{ eSceneElementsType_Helper, "HELPER", ICON_NONE, "Helper Objects", "" },
-		{ eSceneElementsType_Volumetric, "VOLUMETRIC", ICON_NONE, "Volumetric Objects", "" },
-		{ eSceneElementsType_HairParticles, "HAIR_PARTICLES", ICON_NONE, "Hair Particles", "" },
-		{ eScreenEffectsType_DepthOfField, "DEPTH_OF_FIELD", ICON_NONE, "Depth of Field", "" },
-		{ eScreenEffectsType_Reflections, "REFLECTIONS", ICON_NONE, "Reflections", "" },
-		{ 0, NULL, 0, NULL, NULL }
 	};
 
 	srna = RNA_def_struct(brna, "DisplayLayer", NULL);
@@ -2613,12 +2620,6 @@ static void rna_def_display_layer(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Type", "");
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 
-	prop = RNA_def_property(srna, "subtype", PROP_ENUM, PROP_NONE);
-	RNA_def_property_enum_sdna(prop, NULL, "display.subtype");
-	RNA_def_property_enum_items(prop, display_layer_subtype_items);
-	RNA_def_property_ui_text(prop, "Sub-Type", "");
-	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
-
 	prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
 	RNA_def_property_string_sdna(prop, NULL, "display.name");
 	RNA_def_property_ui_text(prop, "Name", "Display layer name");
@@ -2630,33 +2631,85 @@ static void rna_def_display_layer(BlenderRNA *brna)
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
 }
 
+static void rna_def_drawing_support_display_layer(BlenderRNA *brna)
+{
+	StructRNA *srna;
+	PropertyRNA *prop;
+
+	static const EnumPropertyItem subtype_items[] = {
+		{eDrawingSupportType_GridAxes, "GRID_AXES", ICON_NONE, "Grid & Axes", ""},
+		{eDrawingSupportType_BackgroundImages, "BACKGROUND_IMAGES", ICON_NONE, "Background Images", ""},
+		{eDrawingSupportType_GreasePencil, "GREASE_PENCIL", ICON_NONE, "Grease Pencil", ""},
+		{eDrawingSupportType_MotionTracking, "MOTION_TRACKING", ICON_NONE, "Motion Tracking", ""},
+		{0, NULL, 0, NULL, NULL}
+	};
+
+	srna = RNA_def_struct(brna, "DrawingSupportDisplayLayer", "DisplayLayer");
+	RNA_def_struct_sdna(srna, "DisplayLayer");
+	RNA_def_struct_ui_text(srna, "Drawing Support Display Layer", "Collection of display layers");
+	RNA_def_struct_refine_func(srna, "rna_DrawingSupportDisplayLayer_refine");
+
+	prop = RNA_def_property(srna, "subtype", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_sdna(prop, NULL, "display.subtype");
+	RNA_def_property_enum_items(prop, subtype_items);
+	RNA_def_property_ui_text(prop, "Sub-Type", "");
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+}
+
+static void rna_def_scene_elements_display_layer(BlenderRNA *brna)
+{
+	StructRNA *srna;
+	PropertyRNA *prop;
+
+	static const EnumPropertyItem subtype_items[] = {
+		{eSceneElementsType_Solid, "SOLID_OBJECTS", ICON_NONE, "Solid Objects", ""},
+		{eSceneElementsType_Helper, "HELPER_OBJECTS", ICON_NONE, "Helper Objects", ""},
+		{eSceneElementsType_Volumetric, "VOLUMETRIC_OBJECTS", ICON_NONE, "Volumetric Objects", ""},
+		{eSceneElementsType_HairParticles, "HAIR_PARTICLES", ICON_NONE, "Hair & Particles", ""},
+		{0, NULL, 0, NULL, NULL}
+	};
+
+	srna = RNA_def_struct(brna, "SceneElementsDisplayLayer", "DisplayLayer");
+	RNA_def_struct_sdna(srna, "DisplayLayer");
+	RNA_def_struct_ui_text(srna, "Scene Elements Display Layer", "Collection of display layers");
+	RNA_def_struct_refine_func(srna, "rna_SceneElementsDisplayLayer_refine");
+
+	prop = RNA_def_property(srna, "subtype", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_sdna(prop, NULL, "display.subtype");
+	RNA_def_property_enum_items(prop, subtype_items);
+	RNA_def_property_ui_text(prop, "Sub-Type", "");
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+}
+
+static void rna_def_screen_effects_display_layer(BlenderRNA *brna)
+{
+	StructRNA *srna;
+	PropertyRNA *prop;
+
+	static const EnumPropertyItem subtype_items[] = {
+		{eScreenEffectsType_DepthOfField, "DEPTH_OF_FIELD", ICON_NONE, "Depth of Field", ""},
+		{eScreenEffectsType_Reflections, "REFLECTIONS", ICON_NONE, "Reflections", ""},
+		{0, NULL, 0, NULL, NULL}
+	};
+
+	srna = RNA_def_struct(brna, "ScreenEffectsDisplayLayer", "DisplayLayer");
+	RNA_def_struct_sdna(srna, "DisplayLayer");
+	RNA_def_struct_ui_text(srna, "Screen Effects Display Layer", "Collection of display layers");
+	RNA_def_struct_refine_func(srna, "rna_ScreenEffectsDisplayLayer_refine");
+
+	prop = RNA_def_property(srna, "subtype", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_sdna(prop, NULL, "display.subtype");
+	RNA_def_property_enum_items(prop, subtype_items);
+	RNA_def_property_ui_text(prop, "Sub-Type", "");
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+}
+
 static void rna_def_gridaxes_display_layer(BlenderRNA *brna)
 {
 	StructRNA *srna;
 	PropertyRNA *prop;
 
-	static const EnumPropertyItem display_layer_type_items[] = {
-		{eDisplayLayerType_DrawingSupport, "DRAWING_SUPPORT", ICON_NONE, "Grid Drawing Support", "" },
-		{eDisplayLayerType_SceneElements, "SCENE_ELEMENT", ICON_NONE, "Scene Element", "" },
-		{eDisplayLayerType_ScreenEffects, "SCREEN_EFFECT", ICON_NONE, "Screen Effect", "" },
-		{0, NULL, 0, NULL, NULL}
-	};
-
-	static const EnumPropertyItem display_layer_subtype_items[] = {
-		{eDrawingSupportType_GridAxes, "GRID", ICON_NONE, "Grid & Axes", "" },
-		{eDrawingSupportType_BackgroundImages, "BACKGROUND_IMAGES", ICON_NONE, "Background Images", "" },
-		{eDrawingSupportType_GreasePencil, "GREASE_PENCIL", ICON_NONE, "Grease Pencil", "" },
-		{eDrawingSupportType_MotionTracking, "MOTION_TRACKING", ICON_NONE, "Motion Tracking", "" },
-		{eSceneElementsType_Solid, "SOLID", ICON_NONE, "Solid Objects", "" },
-		{eSceneElementsType_Helper, "HELPER", ICON_NONE, "Helper Objects", "" },
-		{eSceneElementsType_Volumetric, "VOLUMETRIC", ICON_NONE, "Volumetric Objects", "" },
-		{eSceneElementsType_HairParticles, "HAIR_PARTICLES", ICON_NONE, "Hair Particles", "" },
-		{eScreenEffectsType_DepthOfField, "DEPTH_OF_FIELD", ICON_NONE, "Depth of Field", "" },
-		{eScreenEffectsType_Reflections, "REFLECTIONS", ICON_NONE, "Reflections", "" },
-		{0, NULL, 0, NULL, NULL }
-	};
-
-	srna = RNA_def_struct(brna, "GridAxesDisplayLayer", "DisplayLayer");
+	srna = RNA_def_struct(brna, "GridAxesDisplayLayer", "DrawingSupportDisplayLayer");
 	RNA_def_struct_sdna(srna, "GridAxesDisplayLayer");
 	RNA_def_struct_ui_text(srna, "Grid Axes Display Layer", "Collection of display layers");
 
@@ -2698,6 +2751,16 @@ static void rna_def_gridaxes_display_layer(BlenderRNA *brna)
 	RNA_def_property_boolean_sdna(prop, NULL, "gridflag", V3D_SHOW_Z);
 	RNA_def_property_ui_text(prop, "Display Z Axis", "Show the Z axis line in perspective view");
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
+}
+
+static void rna_def_solid_objects_display_layer(BlenderRNA *brna)
+{
+	StructRNA *srna;
+	PropertyRNA *UNUSED(prop);
+
+	srna = RNA_def_struct(brna, "SolidObjectsDisplayLayer", "SceneElementsDisplayLayer");
+	RNA_def_struct_sdna(srna, "DisplayLayer");
+	RNA_def_struct_ui_text(srna, "Solid Objects Display Layer", "Collection of display layers");
 }
 
 static void rna_def_space_view3d(BlenderRNA *brna)
@@ -5227,7 +5290,12 @@ static void rna_def_display_layers(BlenderRNA *brna)
 {
 	rna_def_display_layer(brna);
 
+	rna_def_drawing_support_display_layer(brna);
+	rna_def_scene_elements_display_layer(brna);
+	rna_def_screen_effects_display_layer(brna);
+
 	rna_def_gridaxes_display_layer(brna);
+	rna_def_solid_objects_display_layer(brna);
 }
 
 void RNA_def_space(BlenderRNA *brna)
