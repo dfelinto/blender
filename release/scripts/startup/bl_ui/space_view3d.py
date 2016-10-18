@@ -3040,13 +3040,22 @@ class VIEW3D_PT_display(Panel):
         col = layout.column()
 
         col.label(text="Drawing Support:")
-        col.row().template_list("VIEW3D_UL_display_layers", "", view, "drawing_support", view, "active_drawing_support_index", rows=2)
+        col.row().template_list("VIEW3D_UL_display_layers", "",
+                                view, "drawing_support",
+                                view, "active_drawing_support_index",
+                                rows=2)
 
         col.label(text="Scene Elements:")
-        col.row().template_list("VIEW3D_UL_display_layers", "", view, "scene_elements", view, "active_scene_elements_index", rows=2)
+        col.row().template_list("VIEW3D_UL_display_layers", "",
+                                view, "scene_elements",
+                                view, "active_scene_elements_index",
+                                rows=2)
 
         col.label(text="Screen Effects:")
-        col.row().template_list("VIEW3D_UL_display_layers", "", view, "screen_effects", view, "active_screen_effects_index", rows=2)
+        col.row().template_list("VIEW3D_UL_display_layers", "",
+                                view, "screen_effects",
+                                view, "active_screen_effects_index",
+                                rows=2)
 
 
 class VIEW3D_PT_grease_pencil(GreasePencilDataPanel, Panel):
