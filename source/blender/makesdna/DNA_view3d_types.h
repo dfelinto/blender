@@ -109,6 +109,8 @@ typedef enum ScreenEffectsType {
 	V3D_DLAYER_SCR_NONE               = 0,
 	V3D_DLAYER_SCR_DEPTH_OF_FIELD     = 1,
 	V3D_DLAYER_SCR_REFLECTIONS        = 2,
+	V3D_DLAYER_SCR_AMBIENT_OCCLUSION  = 3,
+	V3D_DLAYER_SCR_MOTION_BLUR        = 4,
 } ScreenEffectsType;
 
 /* DisplayLayerData->type */
@@ -129,13 +131,11 @@ typedef struct DisplayLayerData {
 
 typedef struct DisplayLayer {
 	struct DisplayLayer *next, *prev;
-
 	DisplayLayerData display;
 } DisplayLayer;
 
 typedef struct GridAxesDisplayLayer {
 	struct DisplayLayer *next, *prev;
-
 	DisplayLayerData display;
 
 	float grid;

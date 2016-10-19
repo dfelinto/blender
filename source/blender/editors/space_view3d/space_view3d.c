@@ -328,7 +328,7 @@ void ED_view3d_display_layers_init(View3D *v3d)
 	GridAxesDisplayLayer *grid;
 	DisplayLayer *background_images, *grease_pencil, *motion_tracking;
 	DisplayLayer *solid, *helper, *volumetric, *hair_particles;
-	DisplayLayer *depth_of_field, *reflections;
+	DisplayLayer *depth_of_field, *reflections, *ambient_occlusion, *motion_blur;
 
 	v3d->active_drawing_support = 0;
 	v3d->active_scene_elements = -1;
@@ -382,6 +382,14 @@ void ED_view3d_display_layers_init(View3D *v3d)
 	reflections = MEM_callocN(sizeof(DisplayLayer), "Reflections display layer");
 	view3d_display_layer_data_init(&reflections->display, V3D_DLAYER_TYPE_SCREEN_EFFECTS, V3D_DLAYER_SCR_REFLECTIONS, "Reflections");
 	BLI_addtail(&v3d->screen_effects, reflections);
+
+	ambient_occlusion = MEM_callocN(sizeof(DisplayLayer), "Ambient Occlusion display layer");
+	view3d_display_layer_data_init(&ambient_occlusion->display, V3D_DLAYER_TYPE_SCREEN_EFFECTS, V3D_DLAYER_SCR_AMBIENT_OCCLUSION, "Ambient Occlusion");
+	BLI_addtail(&v3d->screen_effects, ambient_occlusion);
+
+	motion_blur = MEM_callocN(sizeof(DisplayLayer), "Motion Blur display layer");
+	view3d_display_layer_data_init(&motion_blur->display, V3D_DLAYER_TYPE_SCREEN_EFFECTS, V3D_DLAYER_SCR_REFLECTIONS, "Reflections");
+	BLI_addtail(&v3d->screen_effects, motion_blur);
 }
 
 static SpaceLink *view3d_new(const bContext *C)

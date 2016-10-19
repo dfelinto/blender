@@ -629,6 +629,8 @@ static StructRNA *rna_ScreenEffectsDisplayLayer_refine(struct PointerRNA *ptr)
 	switch (layer->display.subtype) {
 		case V3D_DLAYER_SCR_DEPTH_OF_FIELD:
 		case V3D_DLAYER_SCR_REFLECTIONS:
+		case V3D_DLAYER_SCR_AMBIENT_OCCLUSION:
+		case V3D_DLAYER_SCR_MOTION_BLUR:
 		default:
 			return &RNA_ScreenEffectsDisplayLayer;
 	}
@@ -2689,6 +2691,8 @@ static void rna_def_screen_effects_display_layer(BlenderRNA *brna)
 	static const EnumPropertyItem subtype_items[] = {
 		{V3D_DLAYER_SCR_DEPTH_OF_FIELD, "DEPTH_OF_FIELD", ICON_NONE, "Depth of Field", ""},
 		{V3D_DLAYER_SCR_REFLECTIONS, "REFLECTIONS", ICON_NONE, "Reflections", ""},
+		{V3D_DLAYER_SCR_AMBIENT_OCCLUSION, "AMBIENT_OCCLUSION", ICON_NONE, "Ambient Occlusion", ""},
+		{V3D_DLAYER_SCR_MOTION_BLUR, "MOTION_BLUR", ICON_NONE, "Motion Blur", ""},
 		{0, NULL, 0, NULL, NULL}
 	};
 
