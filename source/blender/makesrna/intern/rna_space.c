@@ -599,11 +599,11 @@ static StructRNA *rna_DrawingSupportDisplayLayer_refine(struct PointerRNA *ptr)
 {
 	DisplayLayer *layer = (DisplayLayer *)ptr->data;
 	switch (layer->display.subtype) {
-		case eDrawingSupportType_GridAxes:
+		case V3D_DLAYER_DRAW_GRID_AXES:
 			return &RNA_GridAxesDisplayLayer;
-		case eDrawingSupportType_BackgroundImages:
-		case eDrawingSupportType_GreasePencil:
-		case eDrawingSupportType_MotionTracking:
+		case V3D_DLAYER_DRAW_BG_IMAGES:
+		case V3D_DLAYER_DRAW_GPENCIL:
+		case V3D_DLAYER_DRAW_MOTION_TRACK:
 		default:
 			return &RNA_DrawingSupportDisplayLayer;
 	}
@@ -613,11 +613,11 @@ static StructRNA *rna_SceneElementsDisplayLayer_refine(struct PointerRNA *ptr)
 {
 	DisplayLayer *layer = (DisplayLayer *)ptr->data;
 	switch (layer->display.subtype) {
-		case eSceneElementsType_Solid:
+		case V3D_DLAYER_SCE_SOLID:
 			return &RNA_SolidObjectsDisplayLayer;
-		case eSceneElementsType_Helper:
-		case eSceneElementsType_Volumetric:
-		case eSceneElementsType_HairParticles:
+		case V3D_DLAYER_SCE_HELPER:
+		case V3D_DLAYER_SCE_VOLUMETRIC:
+		case V3D_DLAYER_SCE_HAIR_PARTICLES:
 		default:
 			return &RNA_SceneElementsDisplayLayer;
 	}
@@ -627,8 +627,8 @@ static StructRNA *rna_ScreenEffectsDisplayLayer_refine(struct PointerRNA *ptr)
 {
 	DisplayLayer *layer = (DisplayLayer *)ptr->data;
 	switch (layer->display.subtype) {
-		case eScreenEffectsType_DepthOfField:
-		case eScreenEffectsType_Reflections:
+		case V3D_DLAYER_SCR_DEPTH_OF_FIELD:
+		case V3D_DLAYER_SCR_REFLECTIONS:
 		default:
 			return &RNA_ScreenEffectsDisplayLayer;
 	}
@@ -638,11 +638,11 @@ static StructRNA *rna_DisplayLayer_refine(struct PointerRNA *ptr)
 {
 	DisplayLayer *layer = (DisplayLayer *)ptr->data;
 	switch (layer->display.type) {
-	case eDisplayLayerType_DrawingSupport:
+	case V3D_DLAYER_TYPE_DRAW_SUPPORT:
 		return rna_DrawingSupportDisplayLayer_refine(ptr);
-	case eDisplayLayerType_SceneElements:
+	case V3D_DLAYER_TYPE_SCENE_ELEMENTS:
 		return rna_SceneElementsDisplayLayer_refine(ptr);
-	case eDisplayLayerType_ScreenEffects:
+	case V3D_DLAYER_TYPE_SCREEN_EFFECTS:
 		return rna_ScreenEffectsDisplayLayer_refine(ptr);
 	default:
 		return &RNA_DisplayLayer;
@@ -791,7 +791,7 @@ static void rna_SpaceView3D_active_display_layer_set(PointerRNA *ptr, PointerRNA
 	DisplayLayer *display_layer = (DisplayLayer *)value.data;
 
 	switch (display_layer->display.type) {
-		case eDisplayLayerType_DrawingSupport:
+		case V3D_DLAYER_TYPE_DRAW_SUPPORT:
 		{
 		const int index = BLI_findindex(&v3d->drawing_support, display_layer);
 		if (index != -1) {
@@ -800,7 +800,7 @@ static void rna_SpaceView3D_active_display_layer_set(PointerRNA *ptr, PointerRNA
 		}
 		break;
 		}
-		case eDisplayLayerType_SceneElements:
+		case V3D_DLAYER_TYPE_SCENE_ELEMENTS:
 		{
 			const int index = BLI_findindex(&v3d->scene_elements, display_layer);
 			if (index != -1) {
@@ -809,7 +809,7 @@ static void rna_SpaceView3D_active_display_layer_set(PointerRNA *ptr, PointerRNA
 			}
 			break;
 		}
-		case eDisplayLayerType_ScreenEffects:
+		case V3D_DLAYER_TYPE_SCREEN_EFFECTS:
 		default:
 		{
 			const int index = BLI_findindex(&v3d->screen_effects, display_layer);
@@ -2603,9 +2603,9 @@ static void rna_def_display_layer(BlenderRNA *brna)
 	PropertyRNA *prop;
 
 	static const EnumPropertyItem display_layer_type_items[] = {
-		{eDisplayLayerType_DrawingSupport, "DRAWING_SUPPORT", ICON_NONE, "Grid Drawing Support", ""},
-		{eDisplayLayerType_SceneElements, "SCENE_ELEMENT", ICON_NONE, "Scene Element", ""},
-		{eDisplayLayerType_ScreenEffects, "SCREEN_EFFECT", ICON_NONE, "Screen Effect", ""},
+		{V3D_DLAYER_TYPE_DRAW_SUPPORT, "DRAWING_SUPPORT", ICON_NONE, "Grid Drawing Support", ""},
+		{V3D_DLAYER_TYPE_SCENE_ELEMENTS, "SCENE_ELEMENT", ICON_NONE, "Scene Element", ""},
+		{V3D_DLAYER_TYPE_SCREEN_EFFECTS, "SCREEN_EFFECT", ICON_NONE, "Screen Effect", ""},
 		{0, NULL, 0, NULL, NULL}
 	};
 
@@ -2637,10 +2637,10 @@ static void rna_def_drawing_support_display_layer(BlenderRNA *brna)
 	PropertyRNA *prop;
 
 	static const EnumPropertyItem subtype_items[] = {
-		{eDrawingSupportType_GridAxes, "GRID_AXES", ICON_NONE, "Grid & Axes", ""},
-		{eDrawingSupportType_BackgroundImages, "BACKGROUND_IMAGES", ICON_NONE, "Background Images", ""},
-		{eDrawingSupportType_GreasePencil, "GREASE_PENCIL", ICON_NONE, "Grease Pencil", ""},
-		{eDrawingSupportType_MotionTracking, "MOTION_TRACKING", ICON_NONE, "Motion Tracking", ""},
+		{V3D_DLAYER_DRAW_GRID_AXES, "GRID_AXES", ICON_NONE, "Grid & Axes", ""},
+		{V3D_DLAYER_DRAW_BG_IMAGES, "BACKGROUND_IMAGES", ICON_NONE, "Background Images", ""},
+		{V3D_DLAYER_DRAW_GPENCIL, "GREASE_PENCIL", ICON_NONE, "Grease Pencil", ""},
+		{V3D_DLAYER_DRAW_MOTION_TRACK, "MOTION_TRACKING", ICON_NONE, "Motion Tracking", ""},
 		{0, NULL, 0, NULL, NULL}
 	};
 
@@ -2662,10 +2662,10 @@ static void rna_def_scene_elements_display_layer(BlenderRNA *brna)
 	PropertyRNA *prop;
 
 	static const EnumPropertyItem subtype_items[] = {
-		{eSceneElementsType_Solid, "SOLID_OBJECTS", ICON_NONE, "Solid Objects", ""},
-		{eSceneElementsType_Helper, "HELPER_OBJECTS", ICON_NONE, "Helper Objects", ""},
-		{eSceneElementsType_Volumetric, "VOLUMETRIC_OBJECTS", ICON_NONE, "Volumetric Objects", ""},
-		{eSceneElementsType_HairParticles, "HAIR_PARTICLES", ICON_NONE, "Hair & Particles", ""},
+		{V3D_DLAYER_SCE_SOLID, "SOLID_OBJECTS", ICON_NONE, "Solid Objects", ""},
+		{V3D_DLAYER_SCE_HELPER, "HELPER_OBJECTS", ICON_NONE, "Helper Objects", ""},
+		{V3D_DLAYER_SCE_VOLUMETRIC, "VOLUMETRIC_OBJECTS", ICON_NONE, "Volumetric Objects", ""},
+		{V3D_DLAYER_SCE_HAIR_PARTICLES, "HAIR_PARTICLES", ICON_NONE, "Hair & Particles", ""},
 		{0, NULL, 0, NULL, NULL}
 	};
 
@@ -2687,8 +2687,8 @@ static void rna_def_screen_effects_display_layer(BlenderRNA *brna)
 	PropertyRNA *prop;
 
 	static const EnumPropertyItem subtype_items[] = {
-		{eScreenEffectsType_DepthOfField, "DEPTH_OF_FIELD", ICON_NONE, "Depth of Field", ""},
-		{eScreenEffectsType_Reflections, "REFLECTIONS", ICON_NONE, "Reflections", ""},
+		{V3D_DLAYER_SCR_DEPTH_OF_FIELD, "DEPTH_OF_FIELD", ICON_NONE, "Depth of Field", ""},
+		{V3D_DLAYER_SCR_REFLECTIONS, "REFLECTIONS", ICON_NONE, "Reflections", ""},
 		{0, NULL, 0, NULL, NULL}
 	};
 

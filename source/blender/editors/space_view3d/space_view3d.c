@@ -338,7 +338,7 @@ void ED_view3d_display_layers_init(View3D *v3d)
 
 	/* Drawing Support */
 	grid = MEM_callocN(sizeof(GridAxesDisplayLayer), "Grid & Axes display layer");
-	view3d_display_layer_data_init(&grid->display, eDisplayLayerType_DrawingSupport, eDrawingSupportType_GridAxes, "Grid & Axes");
+	view3d_display_layer_data_init(&grid->display, V3D_DLAYER_TYPE_DRAW_SUPPORT, V3D_DLAYER_DRAW_GRID_AXES, "Grid & Axes");
 	grid->grid = 1.0f;
 	grid->gridlines = 16;
 	grid->gridsubdiv = 10;
@@ -346,41 +346,41 @@ void ED_view3d_display_layers_init(View3D *v3d)
 	BLI_addtail(&v3d->drawing_support, grid);
 
 	background_images = MEM_callocN(sizeof(DisplayLayer), "Background Images display layer");
-	view3d_display_layer_data_init(&background_images->display, eDisplayLayerType_DrawingSupport, eDrawingSupportType_BackgroundImages, "Background Images");
+	view3d_display_layer_data_init(&background_images->display, V3D_DLAYER_TYPE_DRAW_SUPPORT, V3D_DLAYER_DRAW_BG_IMAGES, "Background Images");
 	BLI_addtail(&v3d->drawing_support, background_images);
 
 	grease_pencil = MEM_callocN(sizeof(DisplayLayer), "Grease Pencil display layer");
-	view3d_display_layer_data_init(&grease_pencil->display, eDisplayLayerType_DrawingSupport, eDrawingSupportType_GreasePencil, "Grease Pencil");
+	view3d_display_layer_data_init(&grease_pencil->display, V3D_DLAYER_TYPE_DRAW_SUPPORT, V3D_DLAYER_DRAW_GPENCIL, "Grease Pencil");
 	BLI_addtail(&v3d->drawing_support, grease_pencil);
 
 	motion_tracking = MEM_callocN(sizeof(DisplayLayer), "Motion Tracking display layer");
-	view3d_display_layer_data_init(&motion_tracking->display, eDisplayLayerType_DrawingSupport, eDrawingSupportType_MotionTracking, "Motion Tracking");
+	view3d_display_layer_data_init(&motion_tracking->display, V3D_DLAYER_TYPE_DRAW_SUPPORT, V3D_DLAYER_DRAW_MOTION_TRACK, "Motion Tracking");
 	BLI_addtail(&v3d->drawing_support, motion_tracking);
 
 	/* Scene Elements */
 	solid = MEM_callocN(sizeof(DisplayLayer), "Solid Objects display layer");
-	view3d_display_layer_data_init(&solid->display, eDisplayLayerType_SceneElements, eSceneElementsType_Solid, "Solid Objects");
+	view3d_display_layer_data_init(&solid->display, V3D_DLAYER_TYPE_SCENE_ELEMENTS, V3D_DLAYER_SCE_SOLID, "Solid Objects");
 	BLI_addtail(&v3d->scene_elements, solid);
 
 	helper = MEM_callocN(sizeof(DisplayLayer), "Helper Objects display layer");
-	view3d_display_layer_data_init(&helper->display, eDisplayLayerType_SceneElements, eSceneElementsType_Helper, "Helper Objects");
+	view3d_display_layer_data_init(&helper->display, V3D_DLAYER_TYPE_SCENE_ELEMENTS, V3D_DLAYER_SCE_HELPER, "Helper Objects");
 	BLI_addtail(&v3d->scene_elements, helper);
 
 	volumetric = MEM_callocN(sizeof(DisplayLayer), "Volumetric Objects display layer");
-	view3d_display_layer_data_init(&volumetric->display, eDisplayLayerType_SceneElements, eSceneElementsType_Volumetric, "Volumetric Objects");
+	view3d_display_layer_data_init(&volumetric->display, V3D_DLAYER_TYPE_SCENE_ELEMENTS, V3D_DLAYER_SCE_VOLUMETRIC, "Volumetric Objects");
 	BLI_addtail(&v3d->scene_elements, volumetric);
 
 	hair_particles = MEM_callocN(sizeof(DisplayLayer), "Hair Particles display layer");
-	view3d_display_layer_data_init(&hair_particles->display, eDisplayLayerType_SceneElements, eSceneElementsType_HairParticles, "Hair Particles");
+	view3d_display_layer_data_init(&hair_particles->display, V3D_DLAYER_TYPE_SCENE_ELEMENTS, V3D_DLAYER_SCE_HAIR_PARTICLES, "Hair Particles");
 	BLI_addtail(&v3d->scene_elements, hair_particles);
 
 	/* Screen Effect */
 	depth_of_field = MEM_callocN(sizeof(DisplayLayer), "Depth of Field display layer");
-	view3d_display_layer_data_init(&depth_of_field->display, eDisplayLayerType_ScreenEffects, eScreenEffectsType_DepthOfField, "Depth of Field");
+	view3d_display_layer_data_init(&depth_of_field->display, V3D_DLAYER_TYPE_SCREEN_EFFECTS, V3D_DLAYER_SCR_DEPTH_OF_FIELD, "Depth of Field");
 	BLI_addtail(&v3d->screen_effects, depth_of_field);
 
 	reflections = MEM_callocN(sizeof(DisplayLayer), "Reflections display layer");
-	view3d_display_layer_data_init(&reflections->display, eDisplayLayerType_ScreenEffects, eScreenEffectsType_Reflections, "Reflections");
+	view3d_display_layer_data_init(&reflections->display, V3D_DLAYER_TYPE_SCREEN_EFFECTS, V3D_DLAYER_SCR_REFLECTIONS, "Reflections");
 	BLI_addtail(&v3d->screen_effects, reflections);
 }
 

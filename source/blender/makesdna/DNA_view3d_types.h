@@ -90,33 +90,33 @@ typedef struct BGpic {
 
 /* DisplayLayerData->subtype */
 typedef enum DrawingSupportType {
-	eDrawingSupportType_None             = 0,
-	eDrawingSupportType_GridAxes         = 1,
-	eDrawingSupportType_BackgroundImages = 2,
-	eDrawingSupportType_GreasePencil     = 3,
-	eDrawingSupportType_MotionTracking   = 4,
+	V3D_DLAYER_DRAW_NONE              = 0,
+	V3D_DLAYER_DRAW_GRID_AXES         = 1,
+	V3D_DLAYER_DRAW_BG_IMAGES         = 2,
+	V3D_DLAYER_DRAW_GPENCIL           = 3,
+	V3D_DLAYER_DRAW_MOTION_TRACK      = 4,
 } DrawingSupportType;
 
 typedef enum SceneElementsType {
-	eSceneElementsType_None               = 0,
-	eSceneElementsType_Solid              = 1,
-	eSceneElementsType_Helper             = 2,
-	eSceneElementsType_Volumetric         = 3,
-	eSceneElementsType_HairParticles      = 4,
+	V3D_DLAYER_SCE_NONE               = 0,
+	V3D_DLAYER_SCE_SOLID              = 1,
+	V3D_DLAYER_SCE_HELPER             = 2,
+	V3D_DLAYER_SCE_VOLUMETRIC         = 3,
+	V3D_DLAYER_SCE_HAIR_PARTICLES     = 4,
 } SceneElementsType;
 
 typedef enum ScreenEffectsType {
-	eScreenEffectsType_None               = 0,
-	eScreenEffectsType_DepthOfField       = 1,
-	eScreenEffectsType_Reflections        = 2,
+	V3D_DLAYER_SCR_NONE               = 0,
+	V3D_DLAYER_SCR_DEPTH_OF_FIELD     = 1,
+	V3D_DLAYER_SCR_REFLECTIONS        = 2,
 } ScreenEffectsType;
 
 /* DisplayLayerData->type */
 typedef enum DisplayLayerType {
-	eDisplayLayerType_None               = 0,
-	eDisplayLayerType_DrawingSupport     = 1,
-	eDisplayLayerType_SceneElements      = 2,
-	eDisplayLayerType_ScreenEffects      = 3,
+	V3D_DLAYER_TYPE_NONE              = 0,
+	V3D_DLAYER_TYPE_DRAW_SUPPORT      = 1,
+	V3D_DLAYER_TYPE_SCENE_ELEMENTS    = 2,
+	V3D_DLAYER_TYPE_SCREEN_EFFECTS    = 3,
 } DisplayLayerType;
 
 typedef struct DisplayLayerData {
