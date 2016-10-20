@@ -505,6 +505,11 @@ static void vicon_keytype_jitter_draw(int x, int y, int w, int h, float alpha)
 	vicon_keytype_draw_wrapper(x, y, w, h, alpha, BEZT_KEYTYPE_JITTER);
 }
 
+static void vicon_keytype_moving_hold_draw(int x, int y, int w, int h, float alpha)
+{
+	vicon_keytype_draw_wrapper(x, y, w, h, alpha, BEZT_KEYTYPE_MOVEHOLD);
+}
+
 static void vicon_colorset_draw(int index, int x, int y, int w, int h, float UNUSED(alpha))
 {
 	bTheme *btheme = UI_GetTheme();
@@ -792,6 +797,7 @@ static void init_internal_icons(void)
 	def_internal_vicon(VICO_KEYTYPE_BREAKDOWN_VEC, vicon_keytype_breakdown_draw);
 	def_internal_vicon(VICO_KEYTYPE_EXTREME_VEC, vicon_keytype_extreme_draw);
 	def_internal_vicon(VICO_KEYTYPE_JITTER_VEC, vicon_keytype_jitter_draw);
+	def_internal_vicon(VICO_KEYTYPE_MOVING_HOLD_VEC, vicon_keytype_moving_hold_draw);
 	
 	def_internal_vicon(VICO_COLORSET_01_VEC, vicon_colorset_draw_01);
 	def_internal_vicon(VICO_COLORSET_02_VEC, vicon_colorset_draw_02);
@@ -1055,6 +1061,9 @@ static void icon_create_rect(struct PreviewImage *prv_img, enum eIconSizes size)
 	}
 }
 
+static void ui_id_preview_image_render_size(
+        const bContext *C, Scene *scene, ID *id, PreviewImage *pi, int size, const bool use_job);
+
 void ui_icon_ensure_deferred(const bContext *C, const int icon_id, const bool big)
 {
 	Icon *icon = BKE_icon_get(icon_id);
@@ -1070,22 +1079,20 @@ void ui_icon_ensure_deferred(const bContext *C, const int icon_id, const bool bi
 		}
 
 		if (di) {
-			if (di->type == ICON_TYPE_PREVIEW) {
-				PreviewImage *prv = (icon->type != 0) ? BKE_previewimg_id_ensure((ID *)icon->obj) : icon->obj;
+			switch (di->type) {
+				case ICON_TYPE_PREVIEW:
+				{
+					ID *id = (icon->type != 0) ? icon->obj : NULL;
+					PreviewImage *prv = id ? BKE_previewimg_id_ensure(id) : icon->obj;
 
-				if (prv) {
-					const int size = big ? ICON_SIZE_PREVIEW : ICON_SIZE_ICON;
+					if (prv) {
+						const int size = big ? ICON_SIZE_PREVIEW : ICON_SIZE_ICON;
 
-					if (!prv->use_deferred || prv->rect[size] || (prv->flag[size] & PRV_USER_EDITED)) {
-						return;
+						if (id || prv->use_deferred) {
+							ui_id_preview_image_render_size(C, NULL, id, prv, size, true);
+						}
 					}
-
-					icon_create_rect(prv, size);
-
-					/* Always using job (background) version. */
-					ED_preview_icon_job(C, prv, NULL, prv->rect[size], prv->w[size], prv->h[size]);
-
-					prv->flag[size] &= ~PRV_CHANGED;
+					break;
 				}
 			}
 		}

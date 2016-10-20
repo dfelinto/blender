@@ -59,6 +59,8 @@
 #include "BKE_depsgraph.h"
 #include "BKE_scene.h"
 #include "BKE_library.h"
+#include "BKE_library_query.h"
+#include "BKE_library_remap.h"
 #include "BKE_displist.h"
 #include "BKE_mball.h"
 #include "BKE_object.h"
@@ -100,12 +102,12 @@ MetaBall *BKE_mball_add(Main *bmain, const char *name)
 	return mb;
 }
 
-MetaBall *BKE_mball_copy(MetaBall *mb)
+MetaBall *BKE_mball_copy(Main *bmain, MetaBall *mb)
 {
 	MetaBall *mbn;
 	int a;
 	
-	mbn = BKE_libblock_copy(&mb->id);
+	mbn = BKE_libblock_copy(bmain, &mb->id);
 
 	BLI_duplicatelist(&mbn->elems, &mb->elems);
 	
@@ -117,67 +119,14 @@ MetaBall *BKE_mball_copy(MetaBall *mb)
 	mbn->editelems = NULL;
 	mbn->lastelem = NULL;
 	
-	if (mb->id.lib) {
-		BKE_id_lib_local_paths(G.main, mb->id.lib, &mbn->id);
-	}
+	BKE_id_copy_ensure_local(bmain, &mb->id, &mbn->id);
 
 	return mbn;
 }
 
-static void extern_local_mball(MetaBall *mb)
+void BKE_mball_make_local(Main *bmain, MetaBall *mb, const bool lib_local)
 {
-	if (mb->mat) {
-		extern_local_matarar(mb->mat, mb->totcol);
-	}
-}
-
-void BKE_mball_make_local(MetaBall *mb)
-{
-	Main *bmain = G.main;
-	Object *ob;
-	bool is_local = false, is_lib = false;
-
-	/* - only lib users: do nothing
-	 * - only local users: set flag
-	 * - mixed: make copy
-	 */
-	
-	if (mb->id.lib == NULL) return;
-	if (mb->id.us == 1) {
-		id_clear_lib_data(bmain, &mb->id);
-		extern_local_mball(mb);
-		
-		return;
-	}
-
-	for (ob = G.main->object.first; ob && ELEM(0, is_lib, is_local); ob = ob->id.next) {
-		if (ob->data == mb) {
-			if (ob->id.lib) is_lib = true;
-			else is_local = true;
-		}
-	}
-	
-	if (is_local && is_lib == false) {
-		id_clear_lib_data(bmain, &mb->id);
-		extern_local_mball(mb);
-	}
-	else if (is_local && is_lib) {
-		MetaBall *mb_new = BKE_mball_copy(mb);
-		mb_new->id.us = 0;
-
-		/* Remap paths of new ID using old library as base. */
-		BKE_id_lib_local_paths(bmain, mb->id.lib, &mb_new->id);
-
-		for (ob = G.main->object.first; ob; ob = ob->id.next) {
-			if (ob->data == mb) {
-				if (ob->id.lib == NULL) {
-					ob->data = mb_new;
-					id_us_plus(&mb_new->id);
-					id_us_min(&mb->id);
-				}
-			}
-		}
-	}
+	BKE_id_make_local_generic(bmain, &mb->id, true, lib_local);
 }
 
 /* most simple meta-element adding function

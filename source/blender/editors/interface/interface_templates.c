@@ -302,7 +302,7 @@ static void template_id_cb(bContext *C, void *arg_litem, void *arg_event)
 			break;
 		case UI_ID_LOCAL:
 			if (id) {
-				if (id_make_local(id, false)) {
+				if (id_make_local(CTX_data_main(C), id, false, false)) {
 					/* reassign to get get proper updates/notifiers */
 					idptr = RNA_property_pointer_get(&template->ptr, template->prop);
 					RNA_property_pointer_set(&template->ptr, template->prop, idptr);
@@ -455,7 +455,7 @@ static void template_ID(
 			else {
 				but = uiDefIconBut(block, UI_BTYPE_BUT, 0, ICON_LIBRARY_DATA_DIRECT, 0, 0, UI_UNIT_X, UI_UNIT_Y,
 				                   NULL, 0, 0, 0, 0, TIP_("Direct linked library datablock, click to make local"));
-				if (!id_make_local(id, true /* test */) || (idfrom && idfrom->lib))
+				if (!id_make_local(CTX_data_main(C), id, true /* test */, false) || (idfrom && idfrom->lib))
 					UI_but_flag_enable(but, UI_BUT_DISABLED);
 			}
 
@@ -475,7 +475,7 @@ static void template_ID(
 
 			UI_but_funcN_set(but, template_id_cb, MEM_dupallocN(template), SET_INT_IN_POINTER(UI_ID_ALONE));
 			if (/* test only */
-			    (id_copy(id, NULL, true) == false) ||
+			    (id_copy(CTX_data_main(C), id, NULL, true) == false) ||
 			    (idfrom && idfrom->lib) ||
 			    (!editable) ||
 			    /* object in editmode - don't change data */
@@ -974,7 +974,7 @@ static uiLayout *draw_modifier(
 			}
 			
 			UI_block_lock_clear(block);
-			UI_block_lock_set(block, ob && ob->id.lib, ERROR_LIBDATA_MESSAGE);
+			UI_block_lock_set(block, ob && ID_IS_LINKED_DATABLOCK(ob), ERROR_LIBDATA_MESSAGE);
 			
 			if (!ELEM(md->type, eModifierType_Fluidsim, eModifierType_Softbody, eModifierType_ParticleSystem,
 			           eModifierType_Cloth, eModifierType_Smoke))
@@ -1021,7 +1021,7 @@ uiLayout *uiTemplateModifier(uiLayout *layout, bContext *C, PointerRNA *ptr)
 		return NULL;
 	}
 	
-	UI_block_lock_set(uiLayoutGetBlock(layout), (ob && ob->id.lib), ERROR_LIBDATA_MESSAGE);
+	UI_block_lock_set(uiLayoutGetBlock(layout), (ob && ID_IS_LINKED_DATABLOCK(ob)), ERROR_LIBDATA_MESSAGE);
 	
 	/* find modifier and draw it */
 	cageIndex = modifiers_getCageIndex(scene, ob, &lastCageIndex, 0);
@@ -1249,7 +1249,7 @@ uiLayout *uiTemplateConstraint(uiLayout *layout, PointerRNA *ptr)
 		return NULL;
 	}
 	
-	UI_block_lock_set(uiLayoutGetBlock(layout), (ob && ob->id.lib), ERROR_LIBDATA_MESSAGE);
+	UI_block_lock_set(uiLayoutGetBlock(layout), (ob && ID_IS_LINKED_DATABLOCK(ob)), ERROR_LIBDATA_MESSAGE);
 
 	/* hrms, the temporal constraint should not draw! */
 	if (con->type == CONSTRAINT_TYPE_KINEMATIC) {
@@ -1611,7 +1611,7 @@ void uiTemplateColorRamp(uiLayout *layout, PointerRNA *ptr, const char *propname
 	block = uiLayoutAbsoluteBlock(layout);
 
 	id = cptr.id.data;
-	UI_block_lock_set(block, (id && id->lib), ERROR_LIBDATA_MESSAGE);
+	UI_block_lock_set(block, (id && ID_IS_LINKED_DATABLOCK(id)), ERROR_LIBDATA_MESSAGE);
 
 	colorband_buttons_layout(layout, block, cptr.data, &rect, cb, expand);
 
@@ -1940,6 +1940,7 @@ enum {
 	UICURVE_FUNC_RESET_VIEW,
 	UICURVE_FUNC_HANDLE_VECTOR,
 	UICURVE_FUNC_HANDLE_AUTO,
+	UICURVE_FUNC_HANDLE_AUTO_ANIM,
 	UICURVE_FUNC_EXTEND_HOZ,
 	UICURVE_FUNC_EXTEND_EXP,
 };
@@ -1960,13 +1961,16 @@ static void curvemap_tools_dofunc(bContext *C, void *cumap_v, int event)
 			cumap->curr = cumap->clipr;
 			break;
 		case UICURVE_FUNC_HANDLE_VECTOR: /* set vector */
-			curvemap_sethandle(cuma, 1);
+			curvemap_handle_set(cuma, HD_VECT);
 			curvemapping_changed(cumap, false);
 			break;
 		case UICURVE_FUNC_HANDLE_AUTO: /* set auto */
-			curvemap_sethandle(cuma, 0);
+			curvemap_handle_set(cuma, HD_AUTO);
 			curvemapping_changed(cumap, false);
 			break;
+		case UICURVE_FUNC_HANDLE_AUTO_ANIM: /* set auto-clamped */
+			curvemap_handle_set(cuma, HD_AUTO_ANIM);
+			curvemapping_changed(cumap, false);
 		case UICURVE_FUNC_EXTEND_HOZ: /* extend horiz */
 			cuma->flag &= ~CUMA_EXTEND_EXTRAPOLATE;
 			curvemapping_changed(cumap, false);
@@ -2000,6 +2004,9 @@ static uiBlock *curvemap_tools_func(
 		uiDefIconTextBut(
 		        block, UI_BTYPE_BUT_MENU, 1, ICON_BLANK1, IFACE_("Auto Handle"),
 		        0, yco -= UI_UNIT_Y, menuwidth, UI_UNIT_Y, NULL, 0.0, 0.0, 0, UICURVE_FUNC_HANDLE_AUTO, "");
+		uiDefIconTextBut(
+		        block, UI_BTYPE_BUT_MENU, 1, ICON_BLANK1, IFACE_("Auto Clamped Handle"),
+		        0, yco -= UI_UNIT_Y, menuwidth, UI_UNIT_Y, NULL, 0.0, 0.0, 0, UICURVE_FUNC_HANDLE_AUTO_ANIM, "");
 	}
 
 	if (show_extend) {
@@ -2263,7 +2270,7 @@ void uiTemplateCurveMapping(
 	cb->prop = prop;
 
 	id = cptr.id.data;
-	UI_block_lock_set(block, (id && id->lib), ERROR_LIBDATA_MESSAGE);
+	UI_block_lock_set(block, (id && ID_IS_LINKED_DATABLOCK(id)), ERROR_LIBDATA_MESSAGE);
 
 	curvemap_buttons_layout(layout, &cptr, type, levels, brush, neg_slope, cb);
 

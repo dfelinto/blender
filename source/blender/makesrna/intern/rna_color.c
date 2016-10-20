@@ -696,7 +696,8 @@ static void rna_def_curvemappoint(BlenderRNA *brna)
 	PropertyRNA *prop;
 	static EnumPropertyItem prop_handle_type_items[] = {
 		{0, "AUTO", 0, "Auto Handle", ""},
-		{CUMA_VECTOR, "VECTOR", 0, "Vector Handle", ""},
+		{CUMA_HANDLE_AUTO_ANIM, "AUTO_CLAMPED", 0, "Auto Clamped Handle", ""},
+		{CUMA_HANDLE_VECTOR, "VECTOR", 0, "Vector Handle", ""},
 		{0, NULL, 0, NULL, NULL}
 	};
 
@@ -1024,10 +1025,11 @@ static void rna_def_scopes(BlenderRNA *brna)
 
 	static EnumPropertyItem prop_wavefrm_mode_items[] = {
 		{SCOPES_WAVEFRM_LUMA, "LUMA", ICON_COLOR, "Luma", ""},
-		{SCOPES_WAVEFRM_RGB, "RGB", ICON_COLOR, "Red Green Blue", ""},
+		{SCOPES_WAVEFRM_RGB_PARADE, "PARADE", ICON_COLOR, "Parade", ""},
 		{SCOPES_WAVEFRM_YCC_601, "YCBCR601", ICON_COLOR, "YCbCr (ITU 601)", ""},
 		{SCOPES_WAVEFRM_YCC_709, "YCBCR709", ICON_COLOR, "YCbCr (ITU 709)", ""},
 		{SCOPES_WAVEFRM_YCC_JPEG, "YCBCRJPG", ICON_COLOR, "YCbCr (Jpeg)", ""},
+		{SCOPES_WAVEFRM_RGB, "RGB", ICON_COLOR, "Red Green Blue", ""},
 		{0, NULL, 0, NULL, NULL}
 	};
 

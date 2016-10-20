@@ -826,7 +826,7 @@ static void graph_draw_driver_debug(bAnimContext *ac, ID *id, FCurve *fcu)
 	//if ((driver->flag & DRIVER_FLAG_SHOWDEBUG) == 0)
 	//	return;
 	
-	/* No curve to modify/visualise the result? 
+	/* No curve to modify/visualize the result?
 	 * => We still want to show the 1-1 default... 
 	 */
 	if ((fcu->totvert == 0) && BLI_listbase_is_empty(&fcu->modifiers)) {
@@ -1130,18 +1130,18 @@ void graph_draw_channel_names(bContext *C, bAnimContext *ac, ARegion *ar)
 	 *	- offset of ACHANNEL_HEIGHT*2 is added to the height of the channels, as first is for 
 	 *	  start of list offset, and the second is as a correction for the scrollers.
 	 */
-	height = (float)((items * ACHANNEL_STEP) + (ACHANNEL_HEIGHT * 2));
+	height = (float)((items * ACHANNEL_STEP(ac)) + (ACHANNEL_HEIGHT(ac) * 2));
 	UI_view2d_totRect_set(v2d, ar->winx, height);
 	
 	/* loop through channels, and set up drawing depending on their type  */
 	{   /* first pass: just the standard GL-drawing for backdrop + text */
 		size_t channel_index = 0;
 		
-		y = (float)ACHANNEL_FIRST;
+		y = (float)ACHANNEL_FIRST(ac);
 		
 		for (ale = anim_data.first, i = 0; ale; ale = ale->next, i++) {
-			const float yminc = (float)(y - ACHANNEL_HEIGHT_HALF);
-			const float ymaxc = (float)(y + ACHANNEL_HEIGHT_HALF);
+			const float yminc = (float)(y - ACHANNEL_HEIGHT_HALF(ac));
+			const float ymaxc = (float)(y + ACHANNEL_HEIGHT_HALF(ac));
 			
 			/* check if visible */
 			if (IN_RANGE(yminc, v2d->cur.ymin, v2d->cur.ymax) ||
@@ -1152,7 +1152,7 @@ void graph_draw_channel_names(bContext *C, bAnimContext *ac, ARegion *ar)
 			}
 			
 			/* adjust y-position for next one */
-			y -= ACHANNEL_STEP;
+			y -= ACHANNEL_STEP(ac);
 			channel_index++;
 		}
 	}
@@ -1160,15 +1160,15 @@ void graph_draw_channel_names(bContext *C, bAnimContext *ac, ARegion *ar)
 		uiBlock *block = UI_block_begin(C, ar, __func__, UI_EMBOSS);
 		size_t channel_index = 0;
 		
-		y = (float)ACHANNEL_FIRST;
+		y = (float)ACHANNEL_FIRST(ac);
 		
 		/* set blending again, as may not be set in previous step */
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 		glEnable(GL_BLEND);
 		
 		for (ale = anim_data.first, i = 0; ale; ale = ale->next, i++) {
-			const float yminc = (float)(y - ACHANNEL_HEIGHT_HALF);
-			const float ymaxc = (float)(y + ACHANNEL_HEIGHT_HALF);
+			const float yminc = (float)(y - ACHANNEL_HEIGHT_HALF(ac));
+			const float ymaxc = (float)(y + ACHANNEL_HEIGHT_HALF(ac));
 			
 			/* check if visible */
 			if (IN_RANGE(yminc, v2d->cur.ymin, v2d->cur.ymax) ||
@@ -1179,7 +1179,7 @@ void graph_draw_channel_names(bContext *C, bAnimContext *ac, ARegion *ar)
 			}
 			
 			/* adjust y-position for next one */
-			y -= ACHANNEL_STEP;
+			y -= ACHANNEL_STEP(ac);
 			channel_index++;
 		}
 		

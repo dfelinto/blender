@@ -34,6 +34,8 @@
 #include "BKE_animsys.h"
 #include "BKE_global.h"
 #include "BKE_library.h"
+#include "BKE_library_query.h"
+#include "BKE_library_remap.h"
 #include "BKE_main.h"
 #include "BKE_speaker.h"
 
@@ -66,77 +68,23 @@ void *BKE_speaker_add(Main *bmain, const char *name)
 	return spk;
 }
 
-Speaker *BKE_speaker_copy(Speaker *spk)
+Speaker *BKE_speaker_copy(Main *bmain, Speaker *spk)
 {
 	Speaker *spkn;
 
-	spkn = BKE_libblock_copy(&spk->id);
+	spkn = BKE_libblock_copy(bmain, &spk->id);
+
 	if (spkn->sound)
 		id_us_plus(&spkn->sound->id);
 
-	if (spk->id.lib) {
-		BKE_id_lib_local_paths(G.main, spk->id.lib, &spkn->id);
-	}
+	BKE_id_copy_ensure_local(bmain, &spk->id, &spkn->id);
 
 	return spkn;
 }
 
-static void extern_local_speaker(Speaker *spk)
+void BKE_speaker_make_local(Main *bmain, Speaker *spk, const bool lib_local)
 {
-	id_lib_extern((ID *)spk->sound);
-}
-
-void BKE_speaker_make_local(Speaker *spk)
-{
-	Main *bmain = G.main;
-	Object *ob;
-	bool is_local = false, is_lib = false;
-
-	/* - only lib users: do nothing
-	 * - only local users: set flag
-	 * - mixed: make copy
-	 */
-
-	if (spk->id.lib == NULL) return;
-	if (spk->id.us == 1) {
-		id_clear_lib_data(bmain, &spk->id);
-		extern_local_speaker(spk);
-		return;
-	}
-
-	ob = bmain->object.first;
-	while (ob) {
-		if (ob->data == spk) {
-			if (ob->id.lib) is_lib = true;
-			else is_local = true;
-		}
-		ob = ob->id.next;
-	}
-
-	if (is_local && is_lib == false) {
-		id_clear_lib_data(bmain, &spk->id);
-		extern_local_speaker(spk);
-	}
-	else if (is_local && is_lib) {
-		Speaker *spk_new = BKE_speaker_copy(spk);
-		spk_new->id.us = 0;
-
-		/* Remap paths of new ID using old library as base. */
-		BKE_id_lib_local_paths(bmain, spk->id.lib, &spk_new->id);
-
-		ob = bmain->object.first;
-		while (ob) {
-			if (ob->data == spk) {
-
-				if (ob->id.lib == NULL) {
-					ob->data = spk_new;
-					id_us_plus(&spk_new->id);
-					id_us_min(&spk->id);
-				}
-			}
-			ob = ob->id.next;
-		}
-	}
+	BKE_id_make_local_generic(bmain, &spk->id, true, lib_local);
 }
 
 void BKE_speaker_free(Speaker *spk)

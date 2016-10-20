@@ -177,7 +177,7 @@ PyObject *PyC_FromArray(const void *array, int length, const PyTypeObject *type,
 
 /**
  * Caller needs to ensure tuple is uninitialized.
- * Handy for filling a typle with None for eg.
+ * Handy for filling a tuple with None for eg.
  */
 void PyC_Tuple_Fill(PyObject *tuple, PyObject *value)
 {
@@ -367,11 +367,12 @@ PyObject *PyC_FrozenSetFromStrings(const char **strings)
 }
 
 
-/* similar to PyErr_Format(),
+/**
+ * Similar to #PyErr_Format(),
  *
- * implementation - we cant actually preprend the existing exception,
+ * Implementation - we cant actually prepend the existing exception,
  * because it could have _any_ arguments given to it, so instead we get its
- * __str__ output and raise our own exception including it.
+ * ``__str__`` output and raise our own exception including it.
  */
 PyObject *PyC_Err_Format_Prefix(PyObject *exception_type_prefix, const char *format, ...)
 {
@@ -539,6 +540,35 @@ PyObject *PyC_ExceptionBuffer_Simple(void)
 }
 
 /* string conversion, escape non-unicode chars, coerce must be set to NULL */
+const char *PyC_UnicodeAsByteAndSize(PyObject *py_str, Py_ssize_t *size, PyObject **coerce)
+{
+	const char *result;
+
+	result = _PyUnicode_AsStringAndSize(py_str, size);
+
+	if (result) {
+		/* 99% of the time this is enough but we better support non unicode
+		 * chars since blender doesnt limit this */
+		return result;
+	}
+	else {
+		PyErr_Clear();
+
+		if (PyBytes_Check(py_str)) {
+			*size = PyBytes_GET_SIZE(py_str);
+			return PyBytes_AS_STRING(py_str);
+		}
+		else if ((*coerce = PyUnicode_EncodeFSDefault(py_str))) {
+			*size = PyBytes_GET_SIZE(*coerce);
+			return PyBytes_AS_STRING(*coerce);
+		}
+		else {
+			/* leave error raised from EncodeFS */
+			return NULL;
+		}
+	}
+}
+
 const char *PyC_UnicodeAsByte(PyObject *py_str, PyObject **coerce)
 {
 	const char *result;
@@ -748,6 +778,7 @@ void PyC_RunQuicky(const char *filepath, int n, ...)
 		
 		/* set the value so we can access it */
 		PyDict_SetItemString(py_dict, "values", values);
+		Py_DECREF(values);
 
 		py_result = PyRun_File(fp, filepath, Py_file_input, py_dict, py_dict);
 

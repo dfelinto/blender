@@ -245,7 +245,7 @@ typedef struct View3D {
 	struct GPUPBR *pbr; /* holds all pbr specific textures */
 
 	/* Previous viewport draw type.
-	 * Runtime-only, set in the rendered viewport otggle operator.
+	 * Runtime-only, set in the rendered viewport toggle operator.
 	 */
 	short prev_drawtype;
 	short pad1;

@@ -59,6 +59,8 @@
 #include "BKE_main.h"
 
 #include "BKE_library.h"
+#include "BKE_library_query.h"
+#include "BKE_library_remap.h"
 #include "BKE_image.h"
 #include "BKE_material.h"
 #include "BKE_texture.h"
@@ -844,11 +846,11 @@ MTex *BKE_texture_mtex_add_id(ID *id, int slot)
 
 /* ------------------------------------------------------------------------- */
 
-Tex *BKE_texture_copy(Tex *tex)
+Tex *BKE_texture_copy(Main *bmain, Tex *tex)
 {
 	Tex *texn;
 	
-	texn = BKE_libblock_copy(&tex->id);
+	texn = BKE_libblock_copy(bmain, &tex->id);
 	if (BKE_texture_is_image_user(tex)) {
 		id_us_plus((ID *)texn->ima);
 	}
@@ -861,18 +863,17 @@ Tex *BKE_texture_copy(Tex *tex)
 	if (texn->pd) texn->pd = BKE_texture_pointdensity_copy(texn->pd);
 	if (texn->vd) texn->vd = MEM_dupallocN(texn->vd);
 	if (texn->ot) texn->ot = BKE_texture_ocean_copy(texn->ot);
-	if (tex->preview) texn->preview = BKE_previewimg_copy(tex->preview);
 
 	if (tex->nodetree) {
 		if (tex->nodetree->execdata) {
 			ntreeTexEndExecTree(tex->nodetree->execdata);
 		}
-		texn->nodetree = ntreeCopyTree(tex->nodetree);
+		texn->nodetree = ntreeCopyTree(bmain, tex->nodetree);
 	}
-	
-	if (tex->id.lib) {
-		BKE_id_lib_local_paths(G.main, tex->id.lib, &texn->id);
-	}
+
+	BKE_previewimg_id_copy(&texn->id, &tex->id);
+
+	BKE_id_copy_ensure_local(bmain, &tex->id, &texn->id);
 
 	return texn;
 }
@@ -913,195 +914,9 @@ Tex *BKE_texture_localize(Tex *tex)
 
 /* ------------------------------------------------------------------------- */
 
-static void extern_local_texture(Tex *tex)
+void BKE_texture_make_local(Main *bmain, Tex *tex, const bool lib_local)
 {
-	id_lib_extern((ID *)tex->ima);
-}
-
-void BKE_texture_make_local(Tex *tex)
-{
-	Main *bmain = G.main;
-	Material *ma;
-	World *wrld;
-	Lamp *la;
-	Brush *br;
-	ParticleSettings *pa;
-	FreestyleLineStyle *ls;
-	int a;
-	bool is_local = false, is_lib = false;
-
-	/* - only lib users: do nothing
-	 * - only local users: set flag
-	 * - mixed: make copy
-	 */
-	
-	if (tex->id.lib == NULL) return;
-
-	if (tex->id.us == 1) {
-		id_clear_lib_data(bmain, &tex->id);
-		extern_local_texture(tex);
-		return;
-	}
-	
-	ma = bmain->mat.first;
-	while (ma) {
-		for (a = 0; a < MAX_MTEX; a++) {
-			if (ma->mtex[a] && ma->mtex[a]->tex == tex) {
-				if (ma->id.lib) is_lib = true;
-				else is_local = true;
-			}
-		}
-		ma = ma->id.next;
-	}
-	la = bmain->lamp.first;
-	while (la) {
-		for (a = 0; a < MAX_MTEX; a++) {
-			if (la->mtex[a] && la->mtex[a]->tex == tex) {
-				if (la->id.lib) is_lib = true;
-				else is_local = true;
-			}
-		}
-		la = la->id.next;
-	}
-	wrld = bmain->world.first;
-	while (wrld) {
-		for (a = 0; a < MAX_MTEX; a++) {
-			if (wrld->mtex[a] && wrld->mtex[a]->tex == tex) {
-				if (wrld->id.lib) is_lib = true;
-				else is_local = true;
-			}
-		}
-		wrld = wrld->id.next;
-	}
-	br = bmain->brush.first;
-	while (br) {
-		if (br->mtex.tex == tex) {
-			if (br->id.lib) is_lib = true;
-			else is_local = true;
-		}
-		if (br->mask_mtex.tex == tex) {
-			if (br->id.lib) is_lib = true;
-			else is_local = true;
-		}
-		br = br->id.next;
-	}
-	pa = bmain->particle.first;
-	while (pa) {
-		for (a = 0; a < MAX_MTEX; a++) {
-			if (pa->mtex[a] && pa->mtex[a]->tex == tex) {
-				if (pa->id.lib) is_lib = true;
-				else is_local = true;
-			}
-		}
-		pa = pa->id.next;
-	}
-	ls = bmain->linestyle.first;
-	while (ls) {
-		for (a = 0; a < MAX_MTEX; a++) {
-			if (ls->mtex[a] && ls->mtex[a]->tex == tex) {
-				if (ls->id.lib) is_lib = true;
-				else is_local = true;
-			}
-		}
-		ls = ls->id.next;
-	}
-	
-	if (is_local && is_lib == false) {
-		id_clear_lib_data(bmain, &tex->id);
-		extern_local_texture(tex);
-	}
-	else if (is_local && is_lib) {
-		Tex *tex_new = BKE_texture_copy(tex);
-
-		tex_new->id.us = 0;
-
-		/* Remap paths of new ID using old library as base. */
-		BKE_id_lib_local_paths(bmain, tex->id.lib, &tex_new->id);
-		
-		ma = bmain->mat.first;
-		while (ma) {
-			for (a = 0; a < MAX_MTEX; a++) {
-				if (ma->mtex[a] && ma->mtex[a]->tex == tex) {
-					if (ma->id.lib == NULL) {
-						ma->mtex[a]->tex = tex_new;
-						id_us_plus(&tex_new->id);
-						id_us_min(&tex->id);
-					}
-				}
-			}
-			ma = ma->id.next;
-		}
-		la = bmain->lamp.first;
-		while (la) {
-			for (a = 0; a < MAX_MTEX; a++) {
-				if (la->mtex[a] && la->mtex[a]->tex == tex) {
-					if (la->id.lib == NULL) {
-						la->mtex[a]->tex = tex_new;
-						id_us_plus(&tex_new->id);
-						id_us_min(&tex->id);
-					}
-				}
-			}
-			la = la->id.next;
-		}
-		wrld = bmain->world.first;
-		while (wrld) {
-			for (a = 0; a < MAX_MTEX; a++) {
-				if (wrld->mtex[a] && wrld->mtex[a]->tex == tex) {
-					if (wrld->id.lib == NULL) {
-						wrld->mtex[a]->tex = tex_new;
-						id_us_plus(&tex_new->id);
-						id_us_min(&tex->id);
-					}
-				}
-			}
-			wrld = wrld->id.next;
-		}
-		br = bmain->brush.first;
-		while (br) {
-			if (br->mtex.tex == tex) {
-				if (br->id.lib == NULL) {
-					br->mtex.tex = tex_new;
-					id_us_plus(&tex_new->id);
-					id_us_min(&tex->id);
-				}
-			}
-			if (br->mask_mtex.tex == tex) {
-				if (br->id.lib == NULL) {
-					br->mask_mtex.tex = tex_new;
-					id_us_plus(&tex_new->id);
-					id_us_min(&tex->id);
-				}
-			}
-			br = br->id.next;
-		}
-		pa = bmain->particle.first;
-		while (pa) {
-			for (a = 0; a < MAX_MTEX; a++) {
-				if (pa->mtex[a] && pa->mtex[a]->tex == tex) {
-					if (pa->id.lib == NULL) {
-						pa->mtex[a]->tex = tex_new;
-						id_us_plus(&tex_new->id);
-						id_us_min(&tex->id);
-					}
-				}
-			}
-			pa = pa->id.next;
-		}
-		ls = bmain->linestyle.first;
-		while (ls) {
-			for (a = 0; a < MAX_MTEX; a++) {
-				if (ls->mtex[a] && ls->mtex[a]->tex == tex) {
-					if (ls->id.lib == NULL) {
-						ls->mtex[a]->tex = tex_new;
-						id_us_plus(&tex_new->id);
-						id_us_min(&tex->id);
-					}
-				}
-			}
-			ls = ls->id.next;
-		}
-	}
+	BKE_id_make_local_generic(bmain, &tex->id, true, lib_local);
 }
 
 Tex *give_current_object_texture(Object *ob)

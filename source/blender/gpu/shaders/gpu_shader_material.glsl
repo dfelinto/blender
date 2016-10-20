@@ -1153,14 +1153,10 @@ void mtex_rgb_color(vec3 outcol, vec3 texcol, float fact, float facg, out vec3 i
 
 void mtex_rgb_soft(vec3 outcol, vec3 texcol, float fact, float facg, out vec3 incol)
 {
-	float facm;
+	vec4 col;
 
-	fact *= facg;
-	facm = 1.0 - fact;
-
-	vec3 one = vec3(1.0);
-	vec3 scr = one - (one - texcol) * (one - outcol);
-	incol = facm * outcol + fact * ((one - texcol) * outcol * texcol + outcol * scr);
+	mix_soft(fact * facg, vec4(outcol, 1.0), vec4(texcol, 1.0), col);
+	incol.rgb = col.rgb;
 }
 
 void mtex_rgb_linear(vec3 outcol, vec3 texcol, float fact, float facg, out vec3 incol)
@@ -1367,6 +1363,13 @@ void mtex_cube_map(vec3 co, samplerCube ima, out float value, out vec4 color)
 {
 	color = textureCube(ima, co);
 	value = 1.0;
+}
+
+void mtex_cube_map_refl_from_refldir(
+        samplerCube ima, vec3 reflecteddirection, out float value, out vec4 color)
+{
+        color = textureCube(ima, reflecteddirection);
+        value = 1.0;
 }
 
 void mtex_cube_map_refl(
@@ -2191,6 +2194,13 @@ void shade_add_clamped(vec4 col1, vec4 col2, out vec4 outcol)
 void shade_madd_clamped(vec4 col, vec4 col1, vec4 col2, out vec4 outcol)
 {
 	outcol = col + max(col1 * col2, vec4(0.0, 0.0, 0.0, 0.0));
+}
+
+void env_apply(vec4 col, vec4 hor, vec4 zen, vec4 f, mat4 vm, vec3 vn, out vec4 outcol)
+{
+	vec3 vv = normalize(vm[2].xyz);
+	float skyfac = 0.5 * (1.0 + dot(vn, -vv));
+	outcol = col + f * mix(hor, zen, skyfac);
 }
 
 void shade_maddf(vec4 col, float f, vec4 col1, out vec4 outcol)

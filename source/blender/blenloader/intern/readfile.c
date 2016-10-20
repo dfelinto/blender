@@ -113,7 +113,6 @@
 
 #include "BKE_action.h"
 #include "BKE_armature.h"
-#include "BKE_blender_version.h"
 #include "BKE_brush.h"
 #include "BKE_cloth.h"
 #include "BKE_constraint.h"
@@ -145,7 +144,7 @@
 #include "BKE_sequencer.h"
 #include "BKE_outliner_treehash.h"
 #include "BKE_sound.h"
-
+#include "BKE_colortools.h"
 
 #include "NOD_common.h"
 #include "NOD_socket.h"
@@ -910,7 +909,10 @@ static void decode_blender_header(FileData *fd)
 	}
 }
 
-static int read_file_dna(FileData *fd)
+/**
+ * \return Success if the file is read correctly, else set \a r_error_message.
+ */
+static bool read_file_dna(FileData *fd, const char **r_error_message)
 {
 	BHead *bhead;
 	
@@ -918,20 +920,25 @@ static int read_file_dna(FileData *fd)
 		if (bhead->code == DNA1) {
 			const bool do_endian_swap = (fd->flags & FD_FLAGS_SWITCH_ENDIAN) != 0;
 			
-			fd->filesdna = DNA_sdna_from_data(&bhead[1], bhead->len, do_endian_swap);
+			fd->filesdna = DNA_sdna_from_data(&bhead[1], bhead->len, do_endian_swap, true, r_error_message);
 			if (fd->filesdna) {
 				fd->compflags = DNA_struct_get_compareflags(fd->filesdna, fd->memsdna);
 				/* used to retrieve ID names from (bhead+1) */
 				fd->id_name_offs = DNA_elem_offset(fd->filesdna, "ID", "char", "name[]");
+
+				return true;
+			}
+			else {
+				return false;
 			}
 			
-			return 1;
 		}
 		else if (bhead->code == ENDB)
 			break;
 	}
 	
-	return 0;
+	*r_error_message = "Missing DNA block";
+	return false;
 }
 
 static int *read_file_thumbnail(FileData *fd)
@@ -1073,13 +1080,9 @@ static FileData *filedata_new(void)
 	
 	fd->filedes = -1;
 	fd->gzfiledes = NULL;
-	
-	/* XXX, this doesn't need to be done all the time,
-	 * but it keeps us re-entrant,  remove once we have
-	 * a lib that provides a nice lock. - zr
-	 */
-	fd->memsdna = DNA_sdna_from_data(DNAstr, DNAlen, false);
-	
+
+	fd->memsdna = DNA_sdna_current_get();
+
 	fd->datamap = oldnewmap_new();
 	fd->globmap = oldnewmap_new();
 	fd->libmap = oldnewmap_new();
@@ -1092,8 +1095,11 @@ static FileData *blo_decode_and_check(FileData *fd, ReportList *reports)
 	decode_blender_header(fd);
 	
 	if (fd->flags & FD_FLAGS_FILE_OK) {
-		if (!read_file_dna(fd)) {
-			BKE_reportf(reports, RPT_ERROR, "Failed to read blend file '%s', incomplete", fd->relabase);
+		const char *error_message = NULL;
+		if (read_file_dna(fd, &error_message) == false) {
+			BKE_reportf(reports, RPT_ERROR,
+			            "Failed to read blend file '%s': %s",
+			            fd->relabase, error_message);
 			blo_freefiledata(fd);
 			fd = NULL;
 		}
@@ -1270,13 +1276,11 @@ void blo_freefiledata(FileData *fd)
 		
 		// Free all BHeadN data blocks
 		BLI_freelistN(&fd->listbase);
-		
-		if (fd->memsdna)
-			DNA_sdna_free(fd->memsdna);
+
 		if (fd->filesdna)
 			DNA_sdna_free(fd->filesdna);
 		if (fd->compflags)
-			MEM_freeN(fd->compflags);
+			MEM_freeN((void *)fd->compflags);
 		
 		if (fd->datamap)
 			oldnewmap_free(fd->datamap);
@@ -1845,7 +1849,7 @@ void blo_add_library_pointer_map(ListBase *old_mainlist, FileData *fd)
 /* ********** END OLD POINTERS ****************** */
 /* ********** READ FILE ****************** */
 
-static void switch_endian_structs(struct SDNA *filesdna, BHead *bhead)
+static void switch_endian_structs(const struct SDNA *filesdna, BHead *bhead)
 {
 	int blocksize, nblocks;
 	char *data;
@@ -2140,6 +2144,7 @@ static PreviewImage *direct_link_preview_image(FileData *fd, PreviewImage *old_p
 			}
 			prv->gputexture[i] = NULL;
 		}
+		prv->icon_id = 0;
 	}
 	
 	return prv;
@@ -2708,7 +2713,7 @@ static void lib_link_node_socket(FileData *fd, ID *UNUSED(id), bNodeSocket *sock
 	IDP_LibLinkProperty(sock->prop, (fd->flags & FD_FLAGS_SWITCH_ENDIAN), fd);
 }
 
-/* singe node tree (also used for material/scene trees), ntree is not NULL */
+/* Single node tree (also used for material/scene trees), ntree is not NULL */
 static void lib_link_ntree(FileData *fd, ID *id, bNodeTree *ntree)
 {
 	bNode *node;
@@ -2749,22 +2754,6 @@ static void lib_link_nodetree(FileData *fd, Main *main)
 			lib_link_ntree(fd, &ntree->id, ntree);
 		}
 	}
-}
-
-/* get node tree stored locally in other IDs */
-static bNodeTree *nodetree_from_id(ID *id)
-{
-	if (!id)
-		return NULL;
-	switch (GS(id->name)) {
-		case ID_SCE: return ((Scene *)id)->nodetree;
-		case ID_MA: return ((Material *)id)->nodetree;
-		case ID_WO: return ((World *)id)->nodetree;
-		case ID_LA: return ((Lamp *)id)->nodetree;
-		case ID_TE: return ((Tex *)id)->nodetree;
-		case ID_LS: return ((FreestyleLineStyle *)id)->nodetree;
-	}
-	return NULL;
 }
 
 /* updates group node socket identifier so that
@@ -4052,6 +4041,7 @@ static void lib_link_particlesettings(FileData *fd, Main *main)
 			part->dup_group = newlibadr(fd, part->id.lib, part->dup_group);
 			part->eff_group = newlibadr(fd, part->id.lib, part->eff_group);
 			part->bb_ob = newlibadr(fd, part->id.lib, part->bb_ob);
+			part->collision_group = newlibadr(fd, part->id.lib, part->collision_group);
 			
 			lib_link_partdeflect(fd, &part->id, part->pd);
 			lib_link_partdeflect(fd, &part->id, part->pd2);
@@ -4903,8 +4893,11 @@ static void lib_link_object(FileData *fd, Main *main)
 			if (ob->pd)
 				lib_link_partdeflect(fd, &ob->id, ob->pd);
 			
-			if (ob->soft)
+			if (ob->soft) {
+				ob->soft->collision_group = newlibadr(fd, ob->id.lib, ob->soft->collision_group);
+
 				ob->soft->effector_weights->group = newlibadr(fd, ob->id.lib, ob->soft->effector_weights->group);
+			}
 			
 			lib_link_particlesystems(fd, ob, &ob->id, &ob->particlesystem);
 			lib_link_modifiers(fd, ob);
@@ -5889,6 +5882,22 @@ static void direct_link_scene(FileData *fd, Scene *sce)
 			sce->toolsettings->wpaint->wpaint_prev = NULL;
 			sce->toolsettings->wpaint->tot = 0;
 		}
+		/* relink grease pencil drawing brushes */
+		link_list(fd, &sce->toolsettings->gp_brushes);
+		for (bGPDbrush *brush = sce->toolsettings->gp_brushes.first; brush; brush = brush->next) {
+			brush->cur_sensitivity = newdataadr(fd, brush->cur_sensitivity);
+			if (brush->cur_sensitivity) {
+				direct_link_curvemapping(fd, brush->cur_sensitivity);
+			}
+			brush->cur_strength = newdataadr(fd, brush->cur_strength);
+			if (brush->cur_strength) {
+				direct_link_curvemapping(fd, brush->cur_strength);
+			}
+			brush->cur_jitter = newdataadr(fd, brush->cur_jitter);
+			if (brush->cur_jitter) {
+				direct_link_curvemapping(fd, brush->cur_jitter);
+			}
+		}
 	}
 
 	if (sce->ed) {
@@ -6171,7 +6180,8 @@ static void direct_link_gpencil(FileData *fd, bGPdata *gpd)
 	bGPDlayer *gpl;
 	bGPDframe *gpf;
 	bGPDstroke *gps;
-	
+	bGPDpalette *palette;
+
 	/* we must firstly have some grease-pencil data to link! */
 	if (gpd == NULL)
 		return;
@@ -6179,11 +6189,19 @@ static void direct_link_gpencil(FileData *fd, bGPdata *gpd)
 	/* relink animdata */
 	gpd->adt = newdataadr(fd, gpd->adt);
 	direct_link_animdata(fd, gpd->adt);
-	
+
+	/* relink palettes */
+	link_list(fd, &gpd->palettes);
+	for (palette = gpd->palettes.first; palette; palette = palette->next) {
+		link_list(fd, &palette->colors);
+	}
+
 	/* relink layers */
 	link_list(fd, &gpd->layers);
 	
 	for (gpl = gpd->layers.first; gpl; gpl = gpl->next) {
+		/* parent */
+		gpl->parent = newlibadr(fd, gpd->id.lib, gpl->parent);
 		/* relink frames */
 		link_list(fd, &gpl->frames);
 		gpl->actframe = newdataadr(fd, gpl->actframe);
@@ -6196,9 +6214,12 @@ static void direct_link_gpencil(FileData *fd, bGPdata *gpd)
 				gps->points = newdataadr(fd, gps->points);
 				
 				/* the triangulation is not saved, so need to be recalculated */
-				gps->flag |= GP_STROKE_RECALC_CACHES;
 				gps->triangles = NULL;
 				gps->tot_triangles = 0;
+				gps->flag |= GP_STROKE_RECALC_CACHES;
+				/* the color pointer is not saved, so need to be recalculated using the color name */
+				gps->palcolor = NULL;
+				gps->flag |= GP_STROKE_RECALC_COLOR;
 			}
 		}
 	}
@@ -6355,12 +6376,8 @@ static void lib_link_screen(FileData *fd, Main *main)
 						snode->id = newlibadr(fd, sc->id.lib, snode->id);
 						snode->from = newlibadr(fd, sc->id.lib, snode->from);
 						
-						ntree = nodetree_from_id(snode->id);
-						if (ntree)
-							snode->nodetree = ntree;
-						else {
-							snode->nodetree = newlibadr_us(fd, sc->id.lib, snode->nodetree);
-						}
+						ntree = snode->id ? ntreeFromID(snode->id) : NULL;
+						snode->nodetree = ntree ? ntree : newlibadr_us(fd, sc->id.lib, snode->nodetree);
 						
 						for (path = snode->treepath.first; path; path = path->next) {
 							if (path == snode->treepath.first) {
@@ -6739,11 +6756,8 @@ void blo_lib_link_screen_restore(Main *newmain, bScreen *curscreen, Scene *cursc
 					snode->id = restore_pointer_by_name(id_map, snode->id, USER_REAL);
 					snode->from = restore_pointer_by_name(id_map, snode->from, USER_IGNORE);
 					
-					ntree = nodetree_from_id(snode->id);
-					if (ntree)
-						snode->nodetree = ntree;
-					else
-						snode->nodetree = restore_pointer_by_name(id_map, (ID*)snode->nodetree, USER_REAL);
+					ntree = snode->id ? ntreeFromID(snode->id) : NULL;
+					snode->nodetree = ntree ? ntree : restore_pointer_by_name(id_map, (ID *)snode->nodetree, USER_REAL);
 					
 					for (path = snode->treepath.first; path; path = path->next) {
 						if (path == snode->treepath.first) {
@@ -7502,6 +7516,7 @@ static void lib_link_movieclip(FileData *fd, Main *main)
 
 			for (object = tracking->objects.first; object; object = object->next) {
 				lib_link_movieTracks(fd, clip, &object->tracks);
+				lib_link_moviePlaneTracks(fd, clip, &object->plane_tracks);
 			}
 
 			clip->id.tag &= ~LIB_TAG_NEED_LINK;
@@ -8305,9 +8320,6 @@ static void do_versions(FileData *fd, Library *lib, Main *main)
 	blo_do_versions_260(fd, lib, main);
 	blo_do_versions_270(fd, lib, main);
 
-	main->versionfile = BLENDER_VERSION;
-	main->subversionfile = BLENDER_SUBVERSION;
-
 	/* WATCH IT!!!: pointers from libdata have not been converted yet here! */
 	/* WATCH IT 2!: Userdef struct init see do_versions_userdef() above! */
 
@@ -8873,6 +8885,7 @@ static void expand_particlesettings(FileData *fd, Main *mainvar, ParticleSetting
 	expand_doit(fd, mainvar, part->dup_group);
 	expand_doit(fd, mainvar, part->eff_group);
 	expand_doit(fd, mainvar, part->bb_ob);
+	expand_doit(fd, mainvar, part->collision_group);
 	
 	if (part->adt)
 		expand_animdata(fd, mainvar, part->adt);
@@ -8881,6 +8894,37 @@ static void expand_particlesettings(FileData *fd, Main *mainvar, ParticleSetting
 		if (part->mtex[a]) {
 			expand_doit(fd, mainvar, part->mtex[a]->tex);
 			expand_doit(fd, mainvar, part->mtex[a]->object);
+		}
+	}
+
+	if (part->effector_weights) {
+		expand_doit(fd, mainvar, part->effector_weights->group);
+	}
+
+	if (part->pd) {
+		expand_doit(fd, mainvar, part->pd->tex);
+		expand_doit(fd, mainvar, part->pd->f_source);
+	}
+	if (part->pd2) {
+		expand_doit(fd, mainvar, part->pd2->tex);
+		expand_doit(fd, mainvar, part->pd2->f_source);
+	}
+
+	if (part->boids) {
+		BoidState *state;
+		BoidRule *rule;
+
+		for (state = part->boids->states.first; state; state = state->next) {
+			for (rule = state->rules.first; rule; rule = rule->next) {
+				if (rule->type == eBoidRuleType_Avoid) {
+					BoidRuleGoalAvoid *gabr = (BoidRuleGoalAvoid *)rule;
+					expand_doit(fd, mainvar, gabr->ob);
+				}
+				else if (rule->type == eBoidRuleType_FollowLeader) {
+					BoidRuleFollowLeader *flbr = (BoidRuleFollowLeader *)rule;
+					expand_doit(fd, mainvar, flbr->ob);
+				}
+			}
 		}
 	}
 }
@@ -9246,7 +9290,7 @@ static void expand_object(FileData *fd, Main *mainvar, Object *ob)
 	
 	for (psys = ob->particlesystem.first; psys; psys = psys->next)
 		expand_doit(fd, mainvar, psys->part);
-	
+
 	for (sens = ob->sensors.first; sens; sens = sens->next) {
 		if (sens->type == SENS_MESSAGE) {
 			bMessageSensor *ms = sens->data;
@@ -9325,8 +9369,18 @@ static void expand_object(FileData *fd, Main *mainvar, Object *ob)
 		}
 	}
 	
-	if (ob->pd && ob->pd->tex)
+	if (ob->pd) {
 		expand_doit(fd, mainvar, ob->pd->tex);
+		expand_doit(fd, mainvar, ob->pd->f_source);
+	}
+
+	if (ob->soft) {
+		expand_doit(fd, mainvar, ob->soft->collision_group);
+
+		if (ob->soft->effector_weights) {
+			expand_doit(fd, mainvar, ob->soft->effector_weights->group);
+		}
+	}
 
 	if (ob->rigidbody_constraint) {
 		expand_doit(fd, mainvar, ob->rigidbody_constraint->ob1);

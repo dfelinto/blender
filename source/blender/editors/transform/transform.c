@@ -51,6 +51,7 @@
 #include "BLI_listbase.h"
 #include "BLI_string.h"
 #include "BLI_ghash.h"
+#include "BLI_stackdefines.h"
 #include "BLI_memarena.h"
 
 #include "BKE_nla.h"
@@ -100,7 +101,6 @@ static void doVertSlide(TransInfo *t, float perc);
 
 static void drawEdgeSlide(TransInfo *t);
 static void drawVertSlide(TransInfo *t);
-static void len_v3_ensure(float v[3], const float length);
 static void postInputRotation(TransInfo *t, float values[3]);
 
 static void ElementRotation(TransInfo *t, TransData *td, float mat[3][3], short around);
@@ -3720,19 +3720,10 @@ static void initRotation(TransInfo *t)
 	copy_v3_v3(t->axis_orig, t->axis);
 }
 
-static void ElementRotation(TransInfo *t, TransData *td, float mat[3][3], short around)
+static void ElementRotation_ex(TransInfo *t, TransData *td, float mat[3][3], const float *center)
 {
 	float vec[3], totmat[3][3], smat[3][3];
 	float eul[3], fmat[3][3], quat[4];
-	const float *center;
-
-	/* local constraint shouldn't alter center */
-	if (transdata_check_local_center(t, around)) {
-		center = td->center;
-	}
-	else {
-		center = t->center;
-	}
 
 	if (t->flag & T_POINTS) {
 		mul_m3_m3m3(totmat, mat, td->mtx);
@@ -3942,6 +3933,21 @@ static void ElementRotation(TransInfo *t, TransData *td, float mat[3][3], short 
 	}
 }
 
+static void ElementRotation(TransInfo *t, TransData *td, float mat[3][3], const short around)
+{
+	const float *center;
+
+	/* local constraint shouldn't alter center */
+	if (transdata_check_local_center(t, around)) {
+		center = td->center;
+	}
+	else {
+		center = t->center;
+	}
+
+	ElementRotation_ex(t, td, mat, center);
+}
+
 static void applyRotationValue(TransInfo *t, float angle, float axis[3])
 {
 	TransData *td = t->data;
@@ -3991,10 +3997,8 @@ static void applyRotation(TransInfo *t, const int UNUSED(mval[2]))
 
 	applySnapping(t, &final);
 
-	if (applyNumInput(&t->num, &final)) {
-		/* Clamp between -PI and PI */
-		final = angle_wrap_rad(final);
-	}
+	/* Used to clamp final result in [-PI, PI[ range, no idea why, inheritance from 2.4x area, see T48998. */
+	applyNumInput(&t->num, &final);
 
 	t->values[0] = final;
 
@@ -4342,12 +4346,16 @@ static void applyTranslationValue(TransInfo *t, const float vec[3])
 		if (td->flag & TD_SKIP)
 			continue;
 
+		float rotate_offset[3] = {0};
+		bool use_rotate_offset = false;
+
 		/* handle snapping rotation before doing the translation */
 		if (usingSnappingNormal(t)) {
+			float mat[3][3];
+
 			if (validSnappingNormal(t)) {
 				const float *original_normal;
-				float mat[3][3];
-				
+
 				/* In pose mode, we want to align normals with Y axis of bones... */
 				if (t->flag & T_POSE)
 					original_normal = td->axismtx[1];
@@ -4355,24 +4363,29 @@ static void applyTranslationValue(TransInfo *t, const float vec[3])
 					original_normal = td->axismtx[2];
 
 				rotation_between_vecs_to_mat3(mat, original_normal, t->tsnap.snapNormal);
-
-				ElementRotation(t, td, mat, V3D_AROUND_LOCAL_ORIGINS);
 			}
 			else {
-				float mat[3][3];
-				
 				unit_m3(mat);
-				
-				ElementRotation(t, td, mat, V3D_AROUND_LOCAL_ORIGINS);
+			}
+
+			ElementRotation_ex(t, td, mat, t->tsnap.snapTarget);
+
+			if (td->loc) {
+				use_rotate_offset = true;
+				sub_v3_v3v3(rotate_offset, td->loc, td->iloc);
 			}
 		}
-		
+
 		if (t->con.applyVec) {
 			float pvec[3];
 			t->con.applyVec(t, td, vec, tvec, pvec);
 		}
 		else {
 			copy_v3_v3(tvec, vec);
+		}
+
+		if (use_rotate_offset) {
+			add_v3_v3(tvec, rotate_offset);
 		}
 		
 		mul_m3_v3(td->smtx, tvec);
@@ -4382,7 +4395,7 @@ static void applyTranslationValue(TransInfo *t, const float vec[3])
 		
 		if (td->loc)
 			add_v3_v3v3(td->loc, td->iloc, tvec);
-		
+
 		constraintTransLim(t, td);
 	}
 }
@@ -4957,9 +4970,7 @@ static void applyPushPull(TransInfo *t, const int UNUSED(mval[2]))
 				project_v3_v3v3(vec, vec, axis);
 			}
 		}
-		normalize_v3(vec);
-		mul_v3_fl(vec, distance);
-		mul_v3_fl(vec, td->factor);
+		normalize_v3_length(vec, distance * td->factor);
 
 		add_v3_v3v3(td->loc, td->iloc, vec);
 	}
@@ -5753,13 +5764,6 @@ static void interp_line_v3_v3v3v3(float p[3], const float v1[3], const float v2[
 	}
 }
 
-
-static void len_v3_ensure(float v[3], const float length)
-{
-	normalize_v3(v);
-	mul_v3_fl(v, length);
-}
-
 /**
  * Find the closest point on the ngon on the opposite side.
  * used to set the edge slide distance for ngons.
@@ -5823,7 +5827,7 @@ static BMLoop *get_next_loop(BMVert *v, BMLoop *l,
 		
 		if (l->e == e_next) {
 			if (i) {
-				len_v3_ensure(vec_accum, vec_accum_len / (float)i);
+				normalize_v3_length(vec_accum, vec_accum_len / (float)i);
 			}
 			else {
 				/* When there is no edge to slide along,
@@ -5843,7 +5847,7 @@ static BMLoop *get_next_loop(BMVert *v, BMLoop *l,
 					cross_v3_v3v3(vec_accum, l_tmp->f->no, tdir);
 #if 0
 					/* rough guess, we can  do better! */
-					len_v3_ensure(vec_accum, (BM_edge_calc_length(e_prev) + BM_edge_calc_length(e_next)) / 2.0f);
+					normalize_v3_length(vec_accum, (BM_edge_calc_length(e_prev) + BM_edge_calc_length(e_next)) / 2.0f);
 #else
 					/* be clever, check the opposite ngon edge to slide into.
 					 * this gives best results */
@@ -5858,7 +5862,7 @@ static BMLoop *get_next_loop(BMVert *v, BMLoop *l,
 							dist = (BM_edge_calc_length(e_prev) + BM_edge_calc_length(e_next)) / 2.0f;
 						}
 
-						len_v3_ensure(vec_accum, dist);
+						normalize_v3_length(vec_accum, dist);
 					}
 #endif
 				}
@@ -5879,7 +5883,7 @@ static BMLoop *get_next_loop(BMVert *v, BMLoop *l,
 
 		if (BM_loop_other_edge_loop(l, v)->e == e_next) {
 			if (i) {
-				len_v3_ensure(vec_accum, vec_accum_len / (float)i);
+				normalize_v3_length(vec_accum, vec_accum_len / (float)i);
 			}
 
 			copy_v3_v3(r_slide_vec, vec_accum);
@@ -5890,7 +5894,7 @@ static BMLoop *get_next_loop(BMVert *v, BMLoop *l,
 	         ((l = l->radial_next) != l_first));
 
 	if (i) {
-		len_v3_ensure(vec_accum, vec_accum_len / (float)i);
+		normalize_v3_length(vec_accum, vec_accum_len / (float)i);
 	}
 	
 	copy_v3_v3(r_slide_vec, vec_accum);
@@ -5903,7 +5907,7 @@ static BMLoop *get_next_loop(BMVert *v, BMLoop *l,
  */
 static void calcEdgeSlide_mval_range(
         TransInfo *t, EdgeSlideData *sld, const int *sv_table, const int loop_nr,
-        const float mval[2], const bool use_btree_disp, const bool use_calc_direction)
+        const float mval[2], const bool use_occlude_geometry, const bool use_calc_direction)
 {
 	TransDataEdgeSlideVert *sv_array = sld->sv;
 	BMEditMesh *em = BKE_editmesh_from_object(t->obedit);
@@ -5912,7 +5916,7 @@ static void calcEdgeSlide_mval_range(
 	View3D *v3d = NULL;
 	RegionView3D *rv3d = NULL;
 	float projectMat[4][4];
-	BMBVHTree *btree;
+	BMBVHTree *bmbvh;
 
 	/* only for use_calc_direction */
 	float (*loop_dir)[3] = NULL, *loop_maxdist = NULL;
@@ -5936,11 +5940,11 @@ static void calcEdgeSlide_mval_range(
 		ED_view3d_ob_project_mat_get(rv3d, t->obedit, projectMat);
 	}
 
-	if (use_btree_disp) {
-		btree = BKE_bmbvh_new_from_editmesh(em, BMBVH_RESPECT_HIDDEN, NULL, false);
+	if (use_occlude_geometry) {
+		bmbvh = BKE_bmbvh_new_from_editmesh(em, BMBVH_RESPECT_HIDDEN, NULL, false);
 	}
 	else {
-		btree = NULL;
+		bmbvh = NULL;
 	}
 
 	/* find mouse vectors, the global one, and one per loop in case we have
@@ -5975,7 +5979,7 @@ static void calcEdgeSlide_mval_range(
 						continue;
 
 					/* This test is only relevant if object is not wire-drawn! See [#32068]. */
-					if (use_btree_disp && !BMBVH_EdgeVisible(btree, e_other, ar, v3d, t->obedit)) {
+					if (use_occlude_geometry && !BMBVH_EdgeVisible(bmbvh, e_other, ar, v3d, t->obedit)) {
 						continue;
 					}
 
@@ -6056,8 +6060,8 @@ static void calcEdgeSlide_mval_range(
 	sld->mval_end[0] = t->mval[0] + mval_end[0];
 	sld->mval_end[1] = t->mval[1] + mval_end[1];
 
-	if (btree) {
-		BKE_bmbvh_free(btree);
+	if (bmbvh) {
+		BKE_bmbvh_free(bmbvh);
 	}
 }
 
@@ -6119,8 +6123,8 @@ static bool createEdgeSlideVerts_double_side(TransInfo *t, bool use_even, bool f
 	int *sv_table;  /* BMVert -> sv_array index */
 	EdgeSlideData *sld = MEM_callocN(sizeof(*sld), "sld");
 	float mval[2] = {(float)t->mval[0], (float)t->mval[1]};
-	int numsel, i, j, loop_nr;
-	bool use_btree_disp = false;
+	int numsel, i, loop_nr;
+	bool use_occlude_geometry = false;
 	View3D *v3d = NULL;
 	RegionView3D *rv3d = NULL;
 
@@ -6167,30 +6171,38 @@ static bool createEdgeSlideVerts_double_side(TransInfo *t, bool use_even, bool f
 
 	sv_table = MEM_mallocN(sizeof(*sv_table) * bm->totvert, __func__);
 
-	j = 0;
-	BM_ITER_MESH_INDEX (v, &iter, bm, BM_VERTS_OF_MESH, i) {
-		if (BM_elem_flag_test(v, BM_ELEM_SELECT)) {
-			BM_elem_flag_enable(v, BM_ELEM_TAG);
-			sv_table[i] = j;
-			j += 1;
-		}
-		else {
-			BM_elem_flag_disable(v, BM_ELEM_TAG);
-			sv_table[i] = -1;
-		}
-		BM_elem_index_set(v, i); /* set_inline */
-	}
-	bm->elem_index_dirty &= ~BM_VERT;
+#define INDEX_UNSET   -1
+#define INDEX_INVALID -2
 
-	if (!j) {
-		MEM_freeN(sld);
-		MEM_freeN(sv_table);
-		return false;
+	{
+		int j = 0;
+		BM_ITER_MESH_INDEX (v, &iter, bm, BM_VERTS_OF_MESH, i) {
+			if (BM_elem_flag_test(v, BM_ELEM_SELECT)) {
+				BM_elem_flag_enable(v, BM_ELEM_TAG);
+				sv_table[i] = INDEX_UNSET;
+				j += 1;
+			}
+			else {
+				BM_elem_flag_disable(v, BM_ELEM_TAG);
+				sv_table[i] = INDEX_INVALID;
+			}
+			BM_elem_index_set(v, i); /* set_inline */
+		}
+		bm->elem_index_dirty &= ~BM_VERT;
+
+		if (!j) {
+			MEM_freeN(sld);
+			MEM_freeN(sv_table);
+			return false;
+		}
+		sv_tot = j;
 	}
 
-	sv_tot = j;
 	sv_array = MEM_callocN(sizeof(TransDataEdgeSlideVert) * sv_tot, "sv_array");
 	loop_nr = 0;
+
+	STACK_DECLARE(sv_array);
+	STACK_INIT(sv_array, sv_tot);
 
 	while (1) {
 		float vec_a[3], vec_b[3];
@@ -6284,6 +6296,11 @@ static bool createEdgeSlideVerts_double_side(TransInfo *t, bool use_even, bool f
 		l_a_prev = NULL;
 		l_b_prev = NULL;
 
+#define SV_FROM_VERT(v) ( \
+		(sv_table[BM_elem_index_get(v)] == INDEX_UNSET) ? \
+			((void)(sv_table[BM_elem_index_get(v)] = STACK_SIZE(sv_array)), STACK_PUSH_RET_PTR(sv_array)) : \
+			(&sv_array[sv_table[BM_elem_index_get(v)]]))
+
 		/*iterate over the loop*/
 		v_first = v;
 		do {
@@ -6295,8 +6312,8 @@ static bool createEdgeSlideVerts_double_side(TransInfo *t, bool use_even, bool f
 
 			/* XXX, 'sv' will initialize multiple times, this is suspicious. see [#34024] */
 			BLI_assert(v != NULL);
-			BLI_assert(sv_table[BM_elem_index_get(v)] != -1);
-			sv = &sv_array[sv_table[BM_elem_index_get(v)]];
+			BLI_assert(sv_table[BM_elem_index_get(v)] != INDEX_INVALID);
+			sv = SV_FROM_VERT(v);
 			sv->v = v;
 			copy_v3_v3(sv->v_co_orig, v->co);
 			sv->loop_nr = loop_nr;
@@ -6321,8 +6338,10 @@ static bool createEdgeSlideVerts_double_side(TransInfo *t, bool use_even, bool f
 
 			if (!e) {
 				BLI_assert(v != NULL);
-				BLI_assert(sv_table[BM_elem_index_get(v)] != -1);
-				sv = &sv_array[sv_table[BM_elem_index_get(v)]];
+
+				BLI_assert(sv_table[BM_elem_index_get(v)] != INDEX_INVALID);
+				sv = SV_FROM_VERT(v);
+
 				sv->v = v;
 				copy_v3_v3(sv->v_co_orig, v->co);
 				sv->loop_nr = loop_nr;
@@ -6411,12 +6430,18 @@ static bool createEdgeSlideVerts_double_side(TransInfo *t, bool use_even, bool f
 			BM_elem_flag_disable(v_prev, BM_ELEM_TAG);
 		} while ((e != v_first->e) && (l_a || l_b));
 
+#undef SV_FROM_VERT
+#undef INDEX_UNSET
+#undef INDEX_INVALID
+
 		loop_nr++;
 
 #undef EDGESLIDE_VERT_IS_INNER
 	}
 
 	/* EDBM_flag_disable_all(em, BM_ELEM_SELECT); */
+
+	BLI_assert(STACK_SIZE(sv_array) == sv_tot);
 
 	sld->sv = sv_array;
 	sld->totsv = sv_tot;
@@ -6425,10 +6450,10 @@ static bool createEdgeSlideVerts_double_side(TransInfo *t, bool use_even, bool f
 	if (t->spacetype == SPACE_VIEW3D) {
 		v3d = t->sa ? t->sa->spacedata.first : NULL;
 		rv3d = t->ar ? t->ar->regiondata : NULL;
-		use_btree_disp = (v3d && t->obedit->dt > OB_WIRE && v3d->drawtype > OB_WIRE);
+		use_occlude_geometry = (v3d && t->obedit->dt > OB_WIRE && v3d->drawtype > OB_WIRE);
 	}
 
-	calcEdgeSlide_mval_range(t, sld, sv_table, loop_nr, mval, use_btree_disp, true);
+	calcEdgeSlide_mval_range(t, sld, sv_table, loop_nr, mval, use_occlude_geometry, true);
 
 	/* create copies of faces for customdata projection */
 	bmesh_edit_begin(bm, BMO_OPTYPE_FLAG_UNTAN_MULTIRES);
@@ -6466,7 +6491,7 @@ static bool createEdgeSlideVerts_single_side(TransInfo *t, bool use_even, bool f
 	EdgeSlideData *sld = MEM_callocN(sizeof(*sld), "sld");
 	float mval[2] = {(float)t->mval[0], (float)t->mval[1]};
 	int loop_nr;
-	bool use_btree_disp = false;
+	bool use_occlude_geometry = false;
 	View3D *v3d = NULL;
 	RegionView3D *rv3d = NULL;
 
@@ -6513,6 +6538,7 @@ static bool createEdgeSlideVerts_single_side(TransInfo *t, bool use_even, bool f
 		bm->elem_index_dirty &= ~BM_VERT;
 
 		if (!j) {
+			MEM_freeN(sld);
 			return false;
 		}
 
@@ -6627,10 +6653,10 @@ static bool createEdgeSlideVerts_single_side(TransInfo *t, bool use_even, bool f
 	if (t->spacetype == SPACE_VIEW3D) {
 		v3d = t->sa ? t->sa->spacedata.first : NULL;
 		rv3d = t->ar ? t->ar->regiondata : NULL;
-		use_btree_disp = (v3d && t->obedit->dt > OB_WIRE && v3d->drawtype > OB_WIRE);
+		use_occlude_geometry = (v3d && t->obedit->dt > OB_WIRE && v3d->drawtype > OB_WIRE);
 	}
 
-	calcEdgeSlide_mval_range(t, sld, sv_table, loop_nr, mval, use_btree_disp, false);
+	calcEdgeSlide_mval_range(t, sld, sv_table, loop_nr, mval, use_occlude_geometry, false);
 
 	/* create copies of faces for customdata projection */
 	bmesh_edit_begin(bm, BMO_OPTYPE_FLAG_UNTAN_MULTIRES);

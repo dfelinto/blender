@@ -105,7 +105,7 @@ static int material_slot_add_exec(bContext *C, wmOperator *UNUSED(op))
 	if (!ob)
 		return OPERATOR_CANCELLED;
 	
-	object_add_material_slot(ob);
+	BKE_object_material_slot_add(ob);
 
 	if (ob->mode & OB_MODE_TEXTURE_PAINT) {
 		Scene *scene = CTX_data_scene(C);
@@ -148,7 +148,7 @@ static int material_slot_remove_exec(bContext *C, wmOperator *op)
 		return OPERATOR_CANCELLED;
 	}
 	
-	object_remove_material_slot(ob);
+	BKE_object_material_slot_remove(ob);
 
 	if (ob->mode & OB_MODE_TEXTURE_PAINT) {
 		Scene *scene = CTX_data_scene(C);
@@ -467,7 +467,7 @@ static int new_material_exec(bContext *C, wmOperator *UNUSED(op))
 
 	/* add or copy material */
 	if (ma) {
-		ma = BKE_material_copy(ma);
+		ma = BKE_material_copy(bmain, ma);
 	}
 	else {
 		ma = BKE_material_add(bmain, DATA_("Material"));
@@ -521,7 +521,7 @@ static int new_texture_exec(bContext *C, wmOperator *UNUSED(op))
 
 	/* add or copy texture */
 	if (tex) {
-		tex = BKE_texture_copy(tex);
+		tex = BKE_texture_copy(bmain, tex);
 	}
 	else {
 		tex = BKE_texture_add(bmain, DATA_("Texture"));
@@ -532,7 +532,7 @@ static int new_texture_exec(bContext *C, wmOperator *UNUSED(op))
 
 	if (prop) {
 		/* when creating new ID blocks, use is already 1, but RNA
-		 * pointer se also increases user, so this compensates it */
+		 * pointer use also increases user, so this compensates it */
 		id_us_min(&tex->id);
 
 		if (ptr.id.data && GS(((ID *)ptr.id.data)->name) == ID_MA &&
@@ -579,7 +579,7 @@ static int new_world_exec(bContext *C, wmOperator *UNUSED(op))
 
 	/* add or copy world */
 	if (wo) {
-		wo = BKE_world_copy(wo);
+		wo = BKE_world_copy(bmain, wo);
 	}
 	else {
 		wo = add_world(bmain, DATA_("World"));
@@ -595,7 +595,7 @@ static int new_world_exec(bContext *C, wmOperator *UNUSED(op))
 
 	if (prop) {
 		/* when creating new ID blocks, use is already 1, but RNA
-		 * pointer se also increases user, so this compensates it */
+		 * pointer use also increases user, so this compensates it */
 		id_us_min(&wo->id);
 
 		RNA_id_pointer_create(&wo->id, &idptr);

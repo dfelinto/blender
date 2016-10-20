@@ -58,6 +58,8 @@
 #include "BKE_global.h"
 #include "BKE_key.h"
 #include "BKE_library.h"
+#include "BKE_library_query.h"
+#include "BKE_library_remap.h"
 #include "BKE_main.h"
 #include "BKE_object.h"
 #include "BKE_material.h"
@@ -172,12 +174,13 @@ Curve *BKE_curve_add(Main *bmain, const char *name, int type)
 	return cu;
 }
 
-Curve *BKE_curve_copy(Curve *cu)
+Curve *BKE_curve_copy(Main *bmain, Curve *cu)
 {
 	Curve *cun;
 	int a;
 
-	cun = BKE_libblock_copy(&cu->id);
+	cun = BKE_libblock_copy(bmain, &cu->id);
+
 	BLI_listbase_clear(&cun->nurb);
 	BKE_nurbList_duplicate(&(cun->nurb), &(cu->nurb));
 
@@ -191,88 +194,27 @@ Curve *BKE_curve_copy(Curve *cu)
 	cun->tb = MEM_dupallocN(cu->tb);
 	cun->bb = MEM_dupallocN(cu->bb);
 
-	cun->key = BKE_key_copy(cu->key);
-	if (cun->key) cun->key->from = (ID *)cun;
+	if (cu->key) {
+		cun->key = BKE_key_copy(bmain, cu->key);
+		cun->key->from = (ID *)cun;
+	}
 
 	cun->editnurb = NULL;
 	cun->editfont = NULL;
-
-#if 0   // XXX old animation system
-	/* single user ipo too */
-	if (cun->ipo) cun->ipo = copy_ipo(cun->ipo);
-#endif // XXX old animation system
 
 	id_us_plus((ID *)cun->vfont);
 	id_us_plus((ID *)cun->vfontb);
 	id_us_plus((ID *)cun->vfonti);
 	id_us_plus((ID *)cun->vfontbi);
 
-	if (cu->id.lib) {
-		BKE_id_lib_local_paths(G.main, cu->id.lib, &cun->id);
-	}
+	BKE_id_copy_ensure_local(bmain, &cu->id, &cun->id);
 
 	return cun;
 }
 
-static void extern_local_curve(Curve *cu)
+void BKE_curve_make_local(Main *bmain, Curve *cu, const bool lib_local)
 {
-	id_lib_extern((ID *)cu->vfont);
-	id_lib_extern((ID *)cu->vfontb);
-	id_lib_extern((ID *)cu->vfonti);
-	id_lib_extern((ID *)cu->vfontbi);
-
-	if (cu->mat) {
-		extern_local_matarar(cu->mat, cu->totcol);
-	}
-}
-
-void BKE_curve_make_local(Curve *cu)
-{
-	Main *bmain = G.main;
-	Object *ob;
-	bool is_local = false, is_lib = false;
-
-	/* - when there are only lib users: don't do
-	 * - when there are only local users: set flag
-	 * - mixed: do a copy
-	 */
-
-	if (cu->id.lib == NULL)
-		return;
-
-	if (cu->id.us == 1) {
-		id_clear_lib_data(bmain, &cu->id);
-		extern_local_curve(cu);
-		return;
-	}
-
-	for (ob = bmain->object.first; ob && ELEM(0, is_lib, is_local); ob = ob->id.next) {
-		if (ob->data == cu) {
-			if (ob->id.lib) is_lib = true;
-			else is_local = true;
-		}
-	}
-
-	if (is_local && is_lib == false) {
-		id_clear_lib_data(bmain, &cu->id);
-		extern_local_curve(cu);
-	}
-	else if (is_local && is_lib) {
-		Curve *cu_new = BKE_curve_copy(cu);
-		cu_new->id.us = 0;
-
-		BKE_id_lib_local_paths(bmain, cu->id.lib, &cu_new->id);
-
-		for (ob = bmain->object.first; ob; ob = ob->id.next) {
-			if (ob->data == cu) {
-				if (ob->id.lib == NULL) {
-					ob->data = cu_new;
-					id_us_plus(&cu_new->id);
-					id_us_min(&cu->id);
-				}
-			}
-		}
-	}
+	BKE_id_make_local_generic(bmain, &cu->id, true, lib_local);
 }
 
 /* Get list of nurbs from editnurbs structure */
@@ -1397,7 +1339,7 @@ unsigned int BKE_curve_calc_coords_axis_len(
 }
 
 /**
- * Calcualte an array for the entire curve (cyclic or non-cyclic).
+ * Calculate an array for the entire curve (cyclic or non-cyclic).
  * \note Call for each axis.
  *
  * \param use_cyclic_duplicate_endpoint: Duplicate values at the beginning & end of the array.

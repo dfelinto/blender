@@ -76,6 +76,8 @@
 #include "BKE_material.h"
 #include "BKE_key.h"
 #include "BKE_library.h"
+#include "BKE_library_query.h"
+#include "BKE_library_remap.h"
 #include "BKE_depsgraph.h"
 #include "BKE_modifier.h"
 #include "BKE_mesh.h"
@@ -3304,12 +3306,13 @@ void BKE_particlesettings_rough_curve_init(ParticleSettings *part)
 	part->roughcurve = cumap;
 }
 
-ParticleSettings *BKE_particlesettings_copy(ParticleSettings *part)
+ParticleSettings *BKE_particlesettings_copy(Main *bmain, ParticleSettings *part)
 {
 	ParticleSettings *partn;
 	int a;
 
-	partn = BKE_libblock_copy(&part->id);
+	partn = BKE_libblock_copy(bmain, &part->id);
+
 	partn->pd = MEM_dupallocN(part->pd);
 	partn->pd2 = MEM_dupallocN(part->pd2);
 	partn->effector_weights = MEM_dupallocN(part->effector_weights);
@@ -3332,75 +3335,14 @@ ParticleSettings *BKE_particlesettings_copy(ParticleSettings *part)
 
 	BLI_duplicatelist(&partn->dupliweights, &part->dupliweights);
 	
-	if (part->id.lib) {
-		BKE_id_lib_local_paths(G.main, part->id.lib, &partn->id);
-	}
+	BKE_id_copy_ensure_local(bmain, &part->id, &partn->id);
 
 	return partn;
 }
 
-static void expand_local_particlesettings(ParticleSettings *part)
+void BKE_particlesettings_make_local(Main *bmain, ParticleSettings *part, const bool lib_local)
 {
-	int i;
-	id_lib_extern((ID *)part->dup_group);
-
-	for (i = 0; i < MAX_MTEX; i++) {
-		if (part->mtex[i]) id_lib_extern((ID *)part->mtex[i]->tex);
-	}
-}
-
-void BKE_particlesettings_make_local(ParticleSettings *part)
-{
-	Main *bmain = G.main;
-	Object *ob;
-	bool is_local = false, is_lib = false;
-
-	/* - only lib users: do nothing
-	 * - only local users: set flag
-	 * - mixed: make copy
-	 */
-	
-	if (part->id.lib == 0) return;
-	if (part->id.us == 1) {
-		id_clear_lib_data(bmain, &part->id);
-		expand_local_particlesettings(part);
-		return;
-	}
-
-	/* test objects */
-	for (ob = bmain->object.first; ob && ELEM(false, is_lib, is_local); ob = ob->id.next) {
-		ParticleSystem *psys = ob->particlesystem.first;
-		for (; psys; psys = psys->next) {
-			if (psys->part == part) {
-				if (ob->id.lib) is_lib = true;
-				else is_local = true;
-			}
-		}
-	}
-	
-	if (is_local && is_lib == false) {
-		id_clear_lib_data(bmain, &part->id);
-		expand_local_particlesettings(part);
-	}
-	else if (is_local && is_lib) {
-		ParticleSettings *part_new = BKE_particlesettings_copy(part);
-		part_new->id.us = 0;
-
-		/* Remap paths of new ID using old library as base. */
-		BKE_id_lib_local_paths(bmain, part->id.lib, &part_new->id);
-
-		/* do objects */
-		for (ob = bmain->object.first; ob; ob = ob->id.next) {
-			ParticleSystem *psys;
-			for (psys = ob->particlesystem.first; psys; psys = psys->next) {
-				if (psys->part == part && ob->id.lib == 0) {
-					psys->part = part_new;
-					id_us_plus(&part_new->id);
-					id_us_min(&part->id);
-				}
-			}
-		}
-	}
+	BKE_id_make_local_generic(bmain, &part->id, true, lib_local);
 }
 
 /************************************************/

@@ -28,6 +28,22 @@ set(SRC
 	kernels/cuda/kernel.cu
 )
 
+set(SRC_BVH_HEADERS
+	bvh/bvh.h
+	bvh/bvh_nodes.h
+	bvh/bvh_shadow_all.h
+	bvh/bvh_subsurface.h
+	bvh/bvh_traversal.h
+	bvh/bvh_volume.h
+	bvh/bvh_volume_all.h
+	bvh/qbvh_nodes.h
+	bvh/qbvh_shadow_all.h
+	bvh/qbvh_subsurface.h
+	bvh/qbvh_traversal.h
+	bvh/qbvh_volume.h
+	bvh/qbvh_volume_all.h
+)
+
 set(SRC_HEADERS
 	kernel_accumulate.h
 	kernel_bake.h
@@ -71,6 +87,7 @@ set(SRC_KERNELS_CPU_HEADERS
 )
 
 set(SRC_CLOSURE_HEADERS
+	closure/alloc.h
 	closure/bsdf.h
 	closure/bsdf_ashikhmin_velvet.h
 	closure/bsdf_diffuse.h
@@ -124,6 +141,7 @@ set(SRC_SVM_HEADERS
 	svm/svm_noisetex.h
 	svm/svm_normal.h
 	svm/svm_ramp.h
+	svm/svm_ramp_util.h
 	svm/svm_sepcomb_hsv.h
 	svm/svm_sepcomb_vector.h
 	svm/svm_sky.h
@@ -140,23 +158,12 @@ set(SRC_SVM_HEADERS
 set(SRC_GEOM_HEADERS
 	geom/geom.h
 	geom/geom_attribute.h
-	geom/geom_bvh.h
-	geom/geom_bvh_shadow.h
-	geom/geom_bvh_subsurface.h
-	geom/geom_bvh_traversal.h
-	geom/geom_bvh_volume.h
-	geom/geom_bvh_volume_all.h
 	geom/geom_curve.h
 	geom/geom_motion_curve.h
 	geom/geom_motion_triangle.h
 	geom/geom_object.h
 	geom/geom_primitive.h
-	geom/geom_qbvh.h
-	geom/geom_qbvh_shadow.h
-	geom/geom_qbvh_subsurface.h
-	geom/geom_qbvh_traversal.h
-	geom/geom_qbvh_volume.h
-	geom/geom_qbvh_volume_all.h
+	geom/geom_subd_triangle.h
 	geom/geom_triangle.h
 	geom/geom_triangle_intersect.h
 	geom/geom_volume.h
@@ -212,7 +219,14 @@ if(WITH_CYCLES_CUDA_BINARIES)
 	endif()
 
 	# build for each arch
-	set(cuda_sources kernels/cuda/kernel.cu ${SRC_HEADERS} ${SRC_SVM_HEADERS} ${SRC_GEOM_HEADERS} ${SRC_CLOSURE_HEADERS} ${SRC_UTIL_HEADERS})
+	set(cuda_sources kernels/cuda/kernel.cu
+		${SRC_HEADERS}
+		${SRC_BVH_HEADERS}
+		${SRC_SVM_HEADERS}
+		${SRC_GEOM_HEADERS}
+		${SRC_CLOSURE_HEADERS}
+		${SRC_UTIL_HEADERS}
+	)
 	set(cuda_cubins)
 
 	macro(CYCLES_CUDA_KERNEL_ADD arch experimental)
@@ -230,12 +244,20 @@ if(WITH_CYCLES_CUDA_BINARIES)
 			set(cuda_debug_flags "")
 		endif()
 
-		set(cuda_version_flags "-D__KERNEL_CUDA_VERSION__=${CUDA_VERSION}")
+		set(cuda_nvcc_command ${CUDA_NVCC_EXECUTABLE})
+		set(cuda_nvcc_version ${CUDA_VERSION})
+
+		if(DEFINED CUDA_NVCC8_EXECUTABLE  AND ((${arch} STREQUAL "sm_60") OR (${arch} STREQUAL "sm_61")))
+			set(cuda_nvcc_command ${CUDA_NVCC8_EXECUTABLE})
+			set(cuda_nvcc_version "80")
+		endif()
+
+		set(cuda_version_flags "-D__KERNEL_CUDA_VERSION__=${cuda_nvcc_version}")
 		set(cuda_math_flags "--use_fast_math")
 
 		add_custom_command(
 			OUTPUT ${cuda_cubin}
-			COMMAND ${CUDA_NVCC_EXECUTABLE}
+			COMMAND ${cuda_nvcc_command}
 					-arch=${arch}
 					${CUDA_NVCC_FLAGS}
 					-m${CUDA_BITS}
@@ -252,7 +274,6 @@ if(WITH_CYCLES_CUDA_BINARIES)
 					-DCCL_NAMESPACE_BEGIN=
 					-DCCL_NAMESPACE_END=
 					-DNVCC
-
 			DEPENDS ${cuda_sources})
 
 		delayed_install("${CMAKE_CURRENT_BINARY_DIR}" "${cuda_cubin}" ${CYCLES_INSTALL_PATH}/lib)
@@ -260,6 +281,9 @@ if(WITH_CYCLES_CUDA_BINARIES)
 
 		unset(cuda_extra_flags)
 		unset(cuda_debug_flags)
+
+		unset(cuda_nvcc_command)
+		unset(cuda_nvcc_version)
 	endmacro()
 
 	foreach(arch ${CYCLES_CUDA_BINARIES_ARCH})
@@ -312,6 +336,7 @@ add_library(cycles_kernel
 	${SRC}
 	${SRC_HEADERS}
 	${SRC_KERNELS_CPU_HEADERS}
+	${SRC_BVH_HEADERS}
 	${SRC_CLOSURE_HEADERS}
 	${SRC_SVM_HEADERS}
 	${SRC_GEOM_HEADERS}
@@ -346,6 +371,7 @@ delayed_install(${CMAKE_CURRENT_SOURCE_DIR} "kernels/opencl/kernel_next_iteratio
 delayed_install(${CMAKE_CURRENT_SOURCE_DIR} "kernels/opencl/kernel_sum_all_radiance.cl" ${CYCLES_INSTALL_PATH}/kernel/kernels/opencl)
 delayed_install(${CMAKE_CURRENT_SOURCE_DIR} "kernels/cuda/kernel.cu" ${CYCLES_INSTALL_PATH}/kernel/kernels/cuda)
 delayed_install(${CMAKE_CURRENT_SOURCE_DIR} "${SRC_HEADERS}" ${CYCLES_INSTALL_PATH}/kernel)
+delayed_install(${CMAKE_CURRENT_SOURCE_DIR} "${SRC_BVH_HEADERS}" ${CYCLES_INSTALL_PATH}/kernel/bvh)
 delayed_install(${CMAKE_CURRENT_SOURCE_DIR} "${SRC_CLOSURE_HEADERS}" ${CYCLES_INSTALL_PATH}/kernel/closure)
 delayed_install(${CMAKE_CURRENT_SOURCE_DIR} "${SRC_SVM_HEADERS}" ${CYCLES_INSTALL_PATH}/kernel/svm)
 delayed_install(${CMAKE_CURRENT_SOURCE_DIR} "${SRC_GEOM_HEADERS}" ${CYCLES_INSTALL_PATH}/kernel/geom)

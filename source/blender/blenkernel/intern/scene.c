@@ -49,6 +49,7 @@
 #include "DNA_space_types.h"
 #include "DNA_view3d_types.h"
 #include "DNA_windowmanager_types.h"
+#include "DNA_gpencil_types.h"
 
 #include "BLI_math.h"
 #include "BLI_blenlib.h"
@@ -150,7 +151,7 @@ static void remove_sequencer_fcurves(Scene *sce)
 	}
 }
 
-Scene *BKE_scene_copy(Scene *sce, int type)
+Scene *BKE_scene_copy(Main *bmain, Scene *sce, int type)
 {
 	Scene *scen;
 	SceneRenderLayer *srl, *new_srl;
@@ -161,7 +162,7 @@ Scene *BKE_scene_copy(Scene *sce, int type)
 	if (type == SCE_COPY_EMPTY) {
 		ListBase rl, rv;
 		/* XXX. main should become an arg */
-		scen = BKE_scene_add(G.main, sce->id.name + 2);
+		scen = BKE_scene_add(bmain, sce->id.name + 2);
 		
 		rl = scen->r.layers;
 		rv = scen->r.views;
@@ -182,10 +183,10 @@ Scene *BKE_scene_copy(Scene *sce, int type)
 		BKE_sound_destroy_scene(scen);
 	}
 	else {
-		scen = BKE_libblock_copy(&sce->id);
+		scen = BKE_libblock_copy(bmain, &sce->id);
 		BLI_duplicatelist(&(scen->base), &(sce->base));
 		
-		BKE_main_id_clear_newpoins(G.main);
+		BKE_main_id_clear_newpoins(bmain);
 		
 		id_us_plus((ID *)scen->world);
 		id_us_plus((ID *)scen->set);
@@ -209,7 +210,7 @@ Scene *BKE_scene_copy(Scene *sce, int type)
 
 		if (sce->nodetree) {
 			/* ID's are managed on both copy and switch */
-			scen->nodetree = ntreeCopyTree(sce->nodetree);
+			scen->nodetree = ntreeCopyTree(bmain, sce->nodetree);
 			ntreeSwitchID(scen->nodetree, &sce->id, &scen->id);
 		}
 
@@ -237,7 +238,7 @@ Scene *BKE_scene_copy(Scene *sce, int type)
 				for (lineset = new_srl->freestyleConfig.linesets.first; lineset; lineset = lineset->next) {
 					if (lineset->linestyle) {
 						id_us_plus((ID *)lineset->linestyle);
-						lineset->linestyle = BKE_linestyle_copy(G.main, lineset->linestyle);
+						lineset->linestyle = BKE_linestyle_copy(bmain, lineset->linestyle);
 					}
 				}
 			}
@@ -286,6 +287,13 @@ Scene *BKE_scene_copy(Scene *sce, int type)
 		ts->imapaint.paintcursor = NULL;
 		id_us_plus((ID *)ts->imapaint.stencil);
 		ts->particle.paintcursor = NULL;
+		/* duplicate Grease Pencil Drawing Brushes */
+		BLI_listbase_clear(&ts->gp_brushes);
+		for (bGPDbrush *brush = sce->toolsettings->gp_brushes.first; brush; brush = brush->next) {
+			bGPDbrush *newbrush = gpencil_brush_duplicate(brush);
+			BLI_addtail(&ts->gp_brushes, newbrush);
+		}
+
 	}
 	
 	/* make a private copy of the avicodecdata */
@@ -320,7 +328,7 @@ Scene *BKE_scene_copy(Scene *sce, int type)
 	if (type == SCE_COPY_FULL) {
 		if (scen->world) {
 			id_us_plus((ID *)scen->world);
-			scen->world = BKE_world_copy(scen->world);
+			scen->world = BKE_world_copy(bmain, scen->world);
 			BKE_animdata_copy_id_action((ID *)scen->world);
 		}
 
@@ -334,7 +342,7 @@ Scene *BKE_scene_copy(Scene *sce, int type)
 	/* grease pencil */
 	if (scen->gpd) {
 		if (type == SCE_COPY_FULL) {
-			scen->gpd = gpencil_data_duplicate(scen->gpd, false);
+			scen->gpd = gpencil_data_duplicate(bmain, scen->gpd, false);
 		}
 		else if (type == SCE_COPY_EMPTY) {
 			scen->gpd = NULL;
@@ -344,9 +352,7 @@ Scene *BKE_scene_copy(Scene *sce, int type)
 		}
 	}
 
-	if (sce->preview) {
-		scen->preview = BKE_previewimg_copy(sce->preview);
-	}
+	BKE_previewimg_id_copy(&scen->id, &sce->id);
 
 	return scen;
 }
@@ -355,6 +361,13 @@ void BKE_scene_groups_relink(Scene *sce)
 {
 	if (sce->rigidbody_world)
 		BKE_rigidbody_world_groups_relink(sce->rigidbody_world);
+}
+
+void BKE_scene_make_local(Main *bmain, Scene *sce, const bool lib_local)
+{
+	/* For now should work, may need more work though to support all possible corner cases
+	 * (also scene_copy probably needs some love). */
+	BKE_id_make_local_generic(bmain, &sce->id, true, lib_local);
 }
 
 /** Free (or release) any data used by this scene (does not free the scene itself). */
@@ -427,6 +440,10 @@ void BKE_scene_free(Scene *sce)
 			BKE_paint_free(&sce->toolsettings->uvsculpt->paint);
 			MEM_freeN(sce->toolsettings->uvsculpt);
 		}
+		/* free Grease Pencil Drawing Brushes */
+		free_gpencil_brushes(&sce->toolsettings->gp_brushes);
+		BLI_freelistN(&sce->toolsettings->gp_brushes);
+
 		BKE_paint_free(&sce->toolsettings->imapaint.paint);
 
 		MEM_freeN(sce->toolsettings);
@@ -759,6 +776,11 @@ void BKE_scene_init(Scene *sce)
 		gp_brush->strength = 0.5f;
 		gp_brush->flag = GP_EDITBRUSH_FLAG_USE_FALLOFF;
 		
+		gp_brush = &gset->brush[GP_EDITBRUSH_TYPE_STRENGTH];
+		gp_brush->size = 25;
+		gp_brush->strength = 0.5f;
+		gp_brush->flag = GP_EDITBRUSH_FLAG_USE_FALLOFF;
+
 		gp_brush = &gset->brush[GP_EDITBRUSH_TYPE_GRAB];
 		gp_brush->size = 50;
 		gp_brush->strength = 0.3f;
@@ -1125,7 +1147,7 @@ char *BKE_scene_find_last_marker_name(Scene *scene, int frame)
 
 Base *BKE_scene_base_add(Scene *sce, Object *ob)
 {
-	Base *b = MEM_callocN(sizeof(*b), "BKE_scene_base_add");
+	Base *b = MEM_callocN(sizeof(*b), __func__);
 	BLI_addhead(&sce->base, b);
 
 	b->object = ob;

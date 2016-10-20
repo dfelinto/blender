@@ -563,7 +563,7 @@ static void recalcData_nla(TransInfo *t)
 		}
 		
 		/* Use RNA to write the values to ensure that constraints on these are obeyed
-		 * (e.g. for transition strips, the values are taken from the neighbours)
+		 * (e.g. for transition strips, the values are taken from the neighbors)
 		 * 
 		 * NOTE: we write these twice to avoid truncation errors which can arise when
 		 * moving the strips a large distance using numeric input [#33852] 
@@ -975,7 +975,9 @@ static void recalcData_gpencil_strokes(TransInfo *t)
 	TransData *td = t->data;
 	for (int i = 0; i < t->total; i++, td++) {
 		bGPDstroke *gps = td->extra;
-		gps->flag |= GP_STROKE_RECALC_CACHES;
+		if (gps != NULL) {
+			gps->flag |= GP_STROKE_RECALC_CACHES;
+		}
 	}
 }
 

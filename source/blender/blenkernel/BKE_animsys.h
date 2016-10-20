@@ -37,6 +37,7 @@ struct Main;
 struct AnimData;
 struct KeyingSet;
 struct KS_Path;
+struct PathResolvedRNA;
 struct bContext;
 
 struct PointerRNA;
@@ -50,7 +51,8 @@ struct AnimMapper;
 /* AnimData API */
 
 /* Check if the given ID-block can have AnimData */
-bool id_type_can_have_animdata(struct ID *id);
+bool id_type_can_have_animdata(const short id_type);
+bool id_can_have_animdata(const struct ID *id);
 
 /* Get AnimData from the given ID-block */
 struct AnimData *BKE_animdata_from_id(struct ID *id);

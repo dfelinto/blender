@@ -476,7 +476,7 @@ static void rna_Object_data_set(PointerRNA *ptr, PointerRNA value)
 		id_us_plus(id);
 
 		ob->data = id;
-		test_object_materials(G.main, id);
+		test_object_materials(ob, id);
 
 		if (GS(id->name) == ID_CU)
 			BKE_curve_type_test(ob);
@@ -796,10 +796,10 @@ static int rna_Object_active_material_editable(PointerRNA *ptr)
 	bool is_editable;
 
 	if ((ob->matbits == NULL) || (ob->actcol == 0) || ob->matbits[ob->actcol - 1]) {
-		is_editable = (ob->id.lib == NULL);
+		is_editable = !ID_IS_LINKED_DATABLOCK(ob);
 	}
 	else {
-		is_editable = ob->data ? (((ID *)ob->data)->lib == NULL) : false;
+		is_editable = ob->data ? !ID_IS_LINKED_DATABLOCK(ob->data) : false;
 	}
 
 	return is_editable ? PROP_EDITABLE : 0;
@@ -1111,7 +1111,7 @@ static void rna_GameObjectSettings_physics_type_set(PointerRNA *ptr, int value)
 			ob->gameflag &= ~(OB_SENSOR | OB_OCCLUDER | OB_DYNAMIC | OB_RIGID_BODY | OB_SOFT_BODY | OB_ACTOR |
 			                  OB_ANISOTROPIC_FRICTION | OB_DO_FH | OB_ROT_FH | OB_COLLISION_RESPONSE | OB_NAVMESH);
 			/* When we switch to character physics and the collision bounds is set to triangle mesh
-			we have to change collision bounds because triangle mesh is not supported by Characters*/
+			 * we have to change collision bounds because triangle mesh is not supported by Characters */
 			if ((ob->gameflag & OB_BOUNDS) && ob->collision_boundtype == OB_BOUND_TRIANGLE_MESH) {
 				ob->boundtype = ob->collision_boundtype = OB_BOUND_BOX;
 			}

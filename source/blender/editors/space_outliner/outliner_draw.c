@@ -402,7 +402,7 @@ void restrictbutton_gr_restrict_flag(void *poin, void *poin2, int flag)
 
 	if (group_restrict_flag(gr, flag)) {
 		for (gob = gr->gobject.first; gob; gob = gob->next) {
-			if (gob->ob->id.lib)
+			if (ID_IS_LINKED_DATABLOCK(gob->ob))
 				continue;
 
 			gob->ob->restrictflag &= ~flag;
@@ -414,7 +414,7 @@ void restrictbutton_gr_restrict_flag(void *poin, void *poin2, int flag)
 	}
 	else {
 		for (gob = gr->gobject.first; gob; gob = gob->next) {
-			if (gob->ob->id.lib)
+			if (ID_IS_LINKED_DATABLOCK(gob->ob))
 				continue;
 
 			/* not in editmode */
@@ -655,7 +655,7 @@ static void outliner_draw_restrictbuts(uiBlock *block, Scene *scene, ARegion *ar
 				int but_flag = UI_BUT_DRAG_LOCK;
 				gr = (Group *)tselem->id;
 
-				if (gr->id.lib)
+				if (ID_IS_LINKED_DATABLOCK(gr))
 					but_flag |= UI_BUT_DISABLED;
 				
 				UI_block_emboss_set(block, UI_EMBOSS_NONE);
@@ -828,7 +828,7 @@ static void outliner_draw_userbuts(uiBlock *block, ARegion *ar, SpaceOops *soops
 				char buf[16] = "";
 				int but_flag = UI_BUT_DRAG_LOCK;
 
-				if (id->lib)
+				if (ID_IS_LINKED_DATABLOCK(id))
 					but_flag |= UI_BUT_DISABLED;
 
 				UI_block_emboss_set(block, UI_EMBOSS_NONE);
@@ -993,7 +993,8 @@ static void tselem_draw_icon_uibut(struct DrawIconArg *arg, int icon)
 	}
 	else {
 		uiBut *but = uiDefIconBut(arg->block, UI_BTYPE_LABEL, 0, icon, arg->xb, arg->yb, UI_UNIT_X, UI_UNIT_Y, NULL,
-		                          0.0, 0.0, 1.0, arg->alpha, (arg->id && arg->id->lib) ? arg->id->lib->name : "");
+		                          0.0, 0.0, 1.0, arg->alpha,
+		                          (arg->id && ID_IS_LINKED_DATABLOCK(arg->id)) ? arg->id->lib->name : "");
 		
 		if (arg->id)
 			UI_but_drag_set_id(but, arg->id);
@@ -1001,7 +1002,7 @@ static void tselem_draw_icon_uibut(struct DrawIconArg *arg, int icon)
 
 }
 
-static void tselem_draw_gp_icon_uibut(struct DrawIconArg *arg, ID *id, bGPDlayer *gpl)
+static void UNUSED_FUNCTION(tselem_draw_gp_icon_uibut)(struct DrawIconArg *arg, ID *id, bGPDlayer *gpl)
 {
 	/* restrict column clip - skip it for now... */
 	if (arg->x >= arg->xmax) {
@@ -1232,113 +1233,116 @@ static void tselem_draw_icon(uiBlock *block, int xmax, float x, float y, TreeSto
 				else
 					UI_icon_draw(x, y, RNA_struct_ui_icon(te->rnaptr.type));
 				break;
+			/* Removed the icons from outliner. Need a better structure with Layers, Palettes and Colors */
+#if 0
 			case TSE_GP_LAYER:
 				tselem_draw_gp_icon_uibut(&arg, tselem->id, te->directdata);
 				break;
+#endif
 			default:
 				UI_icon_draw(x, y, ICON_DOT); break;
 		}
 	}
-	else if (GS(tselem->id->name) == ID_OB) {
-		Object *ob = (Object *)tselem->id;
-		switch (ob->type) {
-			case OB_LAMP:
-				tselem_draw_icon_uibut(&arg, ICON_OUTLINER_OB_LAMP); break;
-			case OB_MESH: 
-				tselem_draw_icon_uibut(&arg, ICON_OUTLINER_OB_MESH); break;
-			case OB_CAMERA: 
-				tselem_draw_icon_uibut(&arg, ICON_OUTLINER_OB_CAMERA); break;
-			case OB_CURVE: 
-				tselem_draw_icon_uibut(&arg, ICON_OUTLINER_OB_CURVE); break;
-			case OB_MBALL: 
-				tselem_draw_icon_uibut(&arg, ICON_OUTLINER_OB_META); break;
-			case OB_LATTICE: 
-				tselem_draw_icon_uibut(&arg, ICON_OUTLINER_OB_LATTICE); break;
-			case OB_ARMATURE: 
-				tselem_draw_icon_uibut(&arg, ICON_OUTLINER_OB_ARMATURE); break;
-			case OB_FONT: 
-				tselem_draw_icon_uibut(&arg, ICON_OUTLINER_OB_FONT); break;
-			case OB_SURF: 
-				tselem_draw_icon_uibut(&arg, ICON_OUTLINER_OB_SURFACE); break;
-			case OB_SPEAKER:
-				tselem_draw_icon_uibut(&arg, ICON_OUTLINER_OB_SPEAKER); break;
-			case OB_EMPTY: 
-				tselem_draw_icon_uibut(&arg, ICON_OUTLINER_OB_EMPTY); break;
-		
-		}
-	}
-	else {
-		switch (GS(tselem->id->name)) {
-			case ID_SCE:
-				tselem_draw_icon_uibut(&arg, ICON_SCENE_DATA); break;
-			case ID_ME:
-				tselem_draw_icon_uibut(&arg, ICON_OUTLINER_DATA_MESH); break;
-			case ID_CU:
-				tselem_draw_icon_uibut(&arg, ICON_OUTLINER_DATA_CURVE); break;
-			case ID_MB:
-				tselem_draw_icon_uibut(&arg, ICON_OUTLINER_DATA_META); break;
-			case ID_LT:
-				tselem_draw_icon_uibut(&arg, ICON_OUTLINER_DATA_LATTICE); break;
-			case ID_LA:
-			{
-				Lamp *la = (Lamp *)tselem->id;
-				
-				switch (la->type) {
-					case LA_LOCAL:
-						tselem_draw_icon_uibut(&arg, ICON_LAMP_POINT); break;
-					case LA_SUN:
-						tselem_draw_icon_uibut(&arg, ICON_LAMP_SUN); break;
-					case LA_SPOT:
-						tselem_draw_icon_uibut(&arg, ICON_LAMP_SPOT); break;
-					case LA_HEMI:
-						tselem_draw_icon_uibut(&arg, ICON_LAMP_HEMI); break;
-					case LA_AREA:
-						tselem_draw_icon_uibut(&arg, ICON_LAMP_AREA); break;
-					default:
-						tselem_draw_icon_uibut(&arg, ICON_OUTLINER_DATA_LAMP); break;
-				}
-				break;
+	else if (tselem->id) {
+		if (GS(tselem->id->name) == ID_OB) {
+			Object *ob = (Object *)tselem->id;
+			switch (ob->type) {
+				case OB_LAMP:
+					tselem_draw_icon_uibut(&arg, ICON_OUTLINER_OB_LAMP); break;
+				case OB_MESH:
+					tselem_draw_icon_uibut(&arg, ICON_OUTLINER_OB_MESH); break;
+				case OB_CAMERA:
+					tselem_draw_icon_uibut(&arg, ICON_OUTLINER_OB_CAMERA); break;
+				case OB_CURVE:
+					tselem_draw_icon_uibut(&arg, ICON_OUTLINER_OB_CURVE); break;
+				case OB_MBALL:
+					tselem_draw_icon_uibut(&arg, ICON_OUTLINER_OB_META); break;
+				case OB_LATTICE:
+					tselem_draw_icon_uibut(&arg, ICON_OUTLINER_OB_LATTICE); break;
+				case OB_ARMATURE:
+					tselem_draw_icon_uibut(&arg, ICON_OUTLINER_OB_ARMATURE); break;
+				case OB_FONT:
+					tselem_draw_icon_uibut(&arg, ICON_OUTLINER_OB_FONT); break;
+				case OB_SURF:
+					tselem_draw_icon_uibut(&arg, ICON_OUTLINER_OB_SURFACE); break;
+				case OB_SPEAKER:
+					tselem_draw_icon_uibut(&arg, ICON_OUTLINER_OB_SPEAKER); break;
+				case OB_EMPTY:
+					tselem_draw_icon_uibut(&arg, ICON_OUTLINER_OB_EMPTY); break;
 			}
-			case ID_MA:
-				tselem_draw_icon_uibut(&arg, ICON_MATERIAL_DATA); break;
-			case ID_TE:
-				tselem_draw_icon_uibut(&arg, ICON_TEXTURE_DATA); break;
-			case ID_IM:
-				tselem_draw_icon_uibut(&arg, ICON_IMAGE_DATA); break;
-			case ID_SPK:
-			case ID_SO:
-				tselem_draw_icon_uibut(&arg, ICON_OUTLINER_DATA_SPEAKER); break;
-			case ID_AR:
-				tselem_draw_icon_uibut(&arg, ICON_OUTLINER_DATA_ARMATURE); break;
-			case ID_CA:
-				tselem_draw_icon_uibut(&arg, ICON_OUTLINER_DATA_CAMERA); break;
-			case ID_KE:
-				tselem_draw_icon_uibut(&arg, ICON_SHAPEKEY_DATA); break;
-			case ID_WO:
-				tselem_draw_icon_uibut(&arg, ICON_WORLD_DATA); break;
-			case ID_AC:
-				tselem_draw_icon_uibut(&arg, ICON_ACTION); break;
-			case ID_NLA:
-				tselem_draw_icon_uibut(&arg, ICON_NLA); break;
-			case ID_TXT:
-				tselem_draw_icon_uibut(&arg, ICON_SCRIPT); break;
-			case ID_GR:
-				tselem_draw_icon_uibut(&arg, ICON_GROUP); break;
-			case ID_LI:
-				if (tselem->id->tag & LIB_TAG_MISSING) {
-					tselem_draw_icon_uibut(&arg, ICON_LIBRARY_DATA_BROKEN);
+		}
+		else {
+			switch (GS(tselem->id->name)) {
+				case ID_SCE:
+					tselem_draw_icon_uibut(&arg, ICON_SCENE_DATA); break;
+				case ID_ME:
+					tselem_draw_icon_uibut(&arg, ICON_OUTLINER_DATA_MESH); break;
+				case ID_CU:
+					tselem_draw_icon_uibut(&arg, ICON_OUTLINER_DATA_CURVE); break;
+				case ID_MB:
+					tselem_draw_icon_uibut(&arg, ICON_OUTLINER_DATA_META); break;
+				case ID_LT:
+					tselem_draw_icon_uibut(&arg, ICON_OUTLINER_DATA_LATTICE); break;
+				case ID_LA:
+				{
+					Lamp *la = (Lamp *)tselem->id;
+					switch (la->type) {
+						case LA_LOCAL:
+							tselem_draw_icon_uibut(&arg, ICON_LAMP_POINT); break;
+						case LA_SUN:
+							tselem_draw_icon_uibut(&arg, ICON_LAMP_SUN); break;
+						case LA_SPOT:
+							tselem_draw_icon_uibut(&arg, ICON_LAMP_SPOT); break;
+						case LA_HEMI:
+							tselem_draw_icon_uibut(&arg, ICON_LAMP_HEMI); break;
+						case LA_AREA:
+							tselem_draw_icon_uibut(&arg, ICON_LAMP_AREA); break;
+						default:
+							tselem_draw_icon_uibut(&arg, ICON_OUTLINER_DATA_LAMP); break;
+					}
+					break;
 				}
-				else if (((Library *)tselem->id)->parent) {
-					tselem_draw_icon_uibut(&arg, ICON_LIBRARY_DATA_INDIRECT);
-				}
-				else {
-					tselem_draw_icon_uibut(&arg, ICON_LIBRARY_DATA_DIRECT);
-				}
-				break;
-			case ID_LS:
-				tselem_draw_icon_uibut(&arg, ICON_LINE_DATA); break;
-			case ID_GD:
-				tselem_draw_icon_uibut(&arg, ICON_GREASEPENCIL); break;
+				case ID_MA:
+					tselem_draw_icon_uibut(&arg, ICON_MATERIAL_DATA); break;
+				case ID_TE:
+					tselem_draw_icon_uibut(&arg, ICON_TEXTURE_DATA); break;
+				case ID_IM:
+					tselem_draw_icon_uibut(&arg, ICON_IMAGE_DATA); break;
+				case ID_SPK:
+				case ID_SO:
+					tselem_draw_icon_uibut(&arg, ICON_OUTLINER_DATA_SPEAKER); break;
+				case ID_AR:
+					tselem_draw_icon_uibut(&arg, ICON_OUTLINER_DATA_ARMATURE); break;
+				case ID_CA:
+					tselem_draw_icon_uibut(&arg, ICON_OUTLINER_DATA_CAMERA); break;
+				case ID_KE:
+					tselem_draw_icon_uibut(&arg, ICON_SHAPEKEY_DATA); break;
+				case ID_WO:
+					tselem_draw_icon_uibut(&arg, ICON_WORLD_DATA); break;
+				case ID_AC:
+					tselem_draw_icon_uibut(&arg, ICON_ACTION); break;
+				case ID_NLA:
+					tselem_draw_icon_uibut(&arg, ICON_NLA); break;
+				case ID_TXT:
+					tselem_draw_icon_uibut(&arg, ICON_SCRIPT); break;
+				case ID_GR:
+					tselem_draw_icon_uibut(&arg, ICON_GROUP); break;
+				case ID_LI:
+					if (tselem->id->tag & LIB_TAG_MISSING) {
+						tselem_draw_icon_uibut(&arg, ICON_LIBRARY_DATA_BROKEN);
+					}
+					else if (((Library *)tselem->id)->parent) {
+						tselem_draw_icon_uibut(&arg, ICON_LIBRARY_DATA_INDIRECT);
+					}
+					else {
+						tselem_draw_icon_uibut(&arg, ICON_LIBRARY_DATA_DIRECT);
+					}
+					break;
+				case ID_LS:
+					tselem_draw_icon_uibut(&arg, ICON_LINE_DATA); break;
+				case ID_GD:
+					tselem_draw_icon_uibut(&arg, ICON_GREASEPENCIL); break;
+			}
 		}
 	}
 }
@@ -1567,7 +1571,7 @@ static void outliner_draw_tree_element(
 		else
 			offsx += 2 * ufac;
 		
-		if (tselem->type == 0 && tselem->id->lib) {
+		if (tselem->type == 0 && ID_IS_LINKED_DATABLOCK(tselem->id)) {
 			glPixelTransferf(GL_ALPHA_SCALE, 0.5f);
 			if (tselem->id->tag & LIB_TAG_MISSING) {
 				UI_icon_draw((float)startx + offsx, (float)*starty + 2 * ufac, ICON_LIBRARY_DATA_BROKEN);

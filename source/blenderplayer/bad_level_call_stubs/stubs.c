@@ -111,6 +111,7 @@ struct bConstraint;
 struct bConstraintOb;
 struct bConstraintTarget;
 struct bContextDataResult;
+struct bGPDlayer;
 struct bNode;
 struct bNodeType;
 struct bNodeSocket;
@@ -153,6 +154,7 @@ struct wmWindowManager;
 #include "../blender/editors/include/ED_clip.h"
 #include "../blender/editors/include/ED_curve.h"
 #include "../blender/editors/include/ED_fileselect.h"
+#include "../blender/editors/include/ED_gpencil.h"
 #include "../blender/editors/include/ED_image.h"
 #include "../blender/editors/include/ED_info.h"
 #include "../blender/editors/include/ED_keyframes_edit.h"
@@ -246,7 +248,7 @@ bool RE_HasFakeLayer(RenderResult *res) RET_ZERO
 
 /* zbuf.c stub */
 void antialias_tagbuf(int xsize, int ysize, char *rectmove) RET_NONE
-void RE_zbuf_accumulate_vecblur(struct NodeBlurData *nbd, int xsize, int ysize, float *newrect, float *imgrect, float *vecbufrect, float *zbufrect) RET_NONE
+void RE_zbuf_accumulate_vecblur(struct NodeBlurData *nbd, int xsize, int ysize, float *newrect, const float *imgrect, float *vecbufrect, const float *zbufrect) RET_NONE
 
 /* imagetexture.c stub */
 void ibuf_sample(struct ImBuf *ibuf, float fx, float fy, float dx, float dy, float *result) RET_NONE
@@ -308,6 +310,8 @@ void WM_operator_handlers_clear(wmWindowManager *wm, struct wmOperatorType *ot) 
 void WM_autosave_init(wmWindowManager *wm) RET_NONE
 void WM_jobs_kill_all_except(struct wmWindowManager *wm, void *owner) RET_NONE
 
+void WM_lib_reload(struct Library *lib, struct bContext *C, struct ReportList *reports) RET_NONE
+
 char *WM_clipboard_text_get(bool selection, int *r_len) RET_NULL
 char *WM_clipboard_text_get_firstline(bool selection, int *r_len) RET_NULL
 void WM_clipboard_text_set(const char *buf, bool selection) RET_NONE
@@ -348,6 +352,7 @@ void *ED_region_draw_cb_activate(struct ARegionType *art, void(*draw)(const stru
 void *ED_region_draw_cb_customdata(void *handle) RET_ZERO /* XXX This one looks wrong also */
 void ED_region_draw_cb_exit(struct ARegionType *art, void *handle) RET_NONE
 void ED_area_headerprint(struct ScrArea *sa, const char *str) RET_NONE
+void ED_gpencil_parent_location(struct bGPDlayer *gpl, float diff_mat[4][4]) RET_NONE
 void UI_view2d_region_to_view(struct View2D *v2d, float x, float y, float *viewx, float *viewy) RET_NONE
 bool UI_view2d_view_to_region_clip(struct View2D *v2d, float x, float y, int *regionx, int *regiony) RET_ZERO
 void UI_view2d_view_to_region(struct View2D *v2d, float x, float y, int *regionx, int *region_y) RET_NONE
@@ -724,7 +729,7 @@ void BPY_text_free_code(struct Text *text) RET_NONE
 void BPY_id_release(struct ID *id) RET_NONE
 int BPY_context_member_get(struct bContext *C, const char *member, struct bContextDataResult *result) RET_ZERO
 void BPY_pyconstraint_target(struct bPythonConstraint *con, struct bConstraintTarget *ct) RET_NONE
-float BPY_driver_exec(struct ChannelDriver *driver, const float evaltime) RET_ZERO /* might need this one! */
+float BPY_driver_exec(PathResolvedRNA *anim_rna, struct ChannelDriver *driver, const float evaltime) RET_ZERO /* might need this one! */
 void BPY_DECREF(void *pyob_ptr) RET_NONE
 void BPY_pyconstraint_exec(struct bPythonConstraint *con, struct bConstraintOb *cob, struct ListBase *targets) RET_NONE
 void macro_wrapper(struct wmOperatorType *ot, void *userdata) RET_NONE

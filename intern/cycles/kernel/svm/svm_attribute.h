@@ -28,9 +28,7 @@ ccl_device void svm_node_attr_init(KernelGlobals *kg, ShaderData *sd,
 		/* find attribute by unique id */
 		uint id = node.y;
 		uint attr_offset = ccl_fetch(sd, object)*kernel_data.bvh.attributes_map_stride;
-#ifdef __HAIR__
-		attr_offset = (ccl_fetch(sd, type) & PRIMITIVE_ALL_CURVE)? attr_offset + ATTR_PRIM_CURVE: attr_offset;
-#endif
+		attr_offset += attribute_primitive_type(kg, sd);
 		uint4 attr_map = kernel_tex_fetch(__attributes_map, attr_offset);
 		
 		while(attr_map.x != id) {
@@ -89,7 +87,12 @@ ccl_device void svm_node_attr(KernelGlobals *kg, ShaderData *sd, float *stack, u
 	}
 }
 
-ccl_device void svm_node_attr_bump_dx(KernelGlobals *kg, ShaderData *sd, float *stack, uint4 node)
+#ifndef __KERNEL_CUDS__
+ccl_device
+#else
+ccl_device_noinline
+#endif
+void svm_node_attr_bump_dx(KernelGlobals *kg, ShaderData *sd, float *stack, uint4 node)
 {
 	NodeAttributeType type, mesh_type;
 	AttributeElement elem;
@@ -125,7 +128,15 @@ ccl_device void svm_node_attr_bump_dx(KernelGlobals *kg, ShaderData *sd, float *
 	}
 }
 
-ccl_device void svm_node_attr_bump_dy(KernelGlobals *kg, ShaderData *sd, float *stack, uint4 node)
+#ifndef __KERNEL_CUDS__
+ccl_device
+#else
+ccl_device_noinline
+#endif
+void svm_node_attr_bump_dy(KernelGlobals *kg,
+                           ShaderData *sd,
+                           float *stack,
+                           uint4 node)
 {
 	NodeAttributeType type, mesh_type;
 	AttributeElement elem;

@@ -50,6 +50,8 @@
 #include "BKE_global.h"
 #include "BKE_lamp.h"
 #include "BKE_library.h"
+#include "BKE_library_query.h"
+#include "BKE_library_remap.h"
 #include "BKE_main.h"
 #include "BKE_node.h"
 
@@ -114,12 +116,12 @@ Lamp *BKE_lamp_add(Main *bmain, const char *name)
 	return la;
 }
 
-Lamp *BKE_lamp_copy(Lamp *la)
+Lamp *BKE_lamp_copy(Main *bmain, Lamp *la)
 {
 	Lamp *lan;
 	int a;
 	
-	lan = BKE_libblock_copy(&la->id);
+	lan = BKE_libblock_copy(bmain, &la->id);
 
 	for (a = 0; a < MAX_MTEX; a++) {
 		if (lan->mtex[a]) {
@@ -132,14 +134,11 @@ Lamp *BKE_lamp_copy(Lamp *la)
 	lan->curfalloff = curvemapping_copy(la->curfalloff);
 
 	if (la->nodetree)
-		lan->nodetree = ntreeCopyTree(la->nodetree);
-	
-	if (la->preview)
-		lan->preview = BKE_previewimg_copy(la->preview);
-	
-	if (la->id.lib) {
-		BKE_id_lib_local_paths(G.main, la->id.lib, &lan->id);
-	}
+		lan->nodetree = ntreeCopyTree(bmain, la->nodetree);
+
+	BKE_previewimg_id_copy(&lan->id, &la->id);
+
+	BKE_id_copy_ensure_local(bmain, &la->id, &lan->id);
 
 	return lan;
 }
@@ -166,59 +165,13 @@ Lamp *localize_lamp(Lamp *la)
 		lan->nodetree = ntreeLocalize(la->nodetree);
 	
 	lan->preview = NULL;
-	
+
 	return lan;
 }
 
-void BKE_lamp_make_local(Lamp *la)
+void BKE_lamp_make_local(Main *bmain, Lamp *la, const bool lib_local)
 {
-	Main *bmain = G.main;
-	Object *ob;
-	bool is_local = false, is_lib = false;
-
-	/* - only lib users: do nothing
-	 * - only local users: set flag
-	 * - mixed: make copy
-	 */
-	
-	if (la->id.lib == NULL) return;
-	if (la->id.us == 1) {
-		id_clear_lib_data(bmain, &la->id);
-		return;
-	}
-	
-	ob = bmain->object.first;
-	while (ob) {
-		if (ob->data == la) {
-			if (ob->id.lib) is_lib = true;
-			else is_local = true;
-		}
-		ob = ob->id.next;
-	}
-	
-	if (is_local && is_lib == false) {
-		id_clear_lib_data(bmain, &la->id);
-	}
-	else if (is_local && is_lib) {
-		Lamp *la_new = BKE_lamp_copy(la);
-		la_new->id.us = 0;
-
-		/* Remap paths of new ID using old library as base. */
-		BKE_id_lib_local_paths(bmain, la->id.lib, &la_new->id);
-
-		ob = bmain->object.first;
-		while (ob) {
-			if (ob->data == la) {
-				
-				if (ob->id.lib == NULL) {
-					ob->data = la_new;
-					id_us_plus(&la_new->id);
-					id_us_min(&la->id);
-				}
-			}
-			ob = ob->id.next;
-		}
-	}
+	BKE_id_make_local_generic(bmain, &la->id, true, lib_local);
 }
 
 void BKE_lamp_free(Lamp *la)

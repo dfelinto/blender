@@ -23,10 +23,17 @@ CCL_NAMESPACE_BEGIN
 
 /* Generic primitive attribute reading functions */
 
-ccl_device float primitive_attribute_float(KernelGlobals *kg, const ShaderData *sd, AttributeElement elem, int offset, float *dx, float *dy)
+ccl_device_inline float primitive_attribute_float(KernelGlobals *kg,
+                                                  const ShaderData *sd,
+                                                  AttributeElement elem,
+                                                  int offset,
+                                                  float *dx, float *dy)
 {
 	if(ccl_fetch(sd, type) & PRIMITIVE_ALL_TRIANGLE) {
-		return triangle_attribute_float(kg, sd, elem, offset, dx, dy);
+		if(subd_triangle_patch(kg, sd) == ~0)
+			return triangle_attribute_float(kg, sd, elem, offset, dx, dy);
+		else
+			return subd_triangle_attribute_float(kg, sd, elem, offset, dx, dy);
 	}
 #ifdef __HAIR__
 	else if(ccl_fetch(sd, type) & PRIMITIVE_ALL_CURVE) {
@@ -45,10 +52,18 @@ ccl_device float primitive_attribute_float(KernelGlobals *kg, const ShaderData *
 	}
 }
 
-ccl_device float3 primitive_attribute_float3(KernelGlobals *kg, const ShaderData *sd, AttributeElement elem, int offset, float3 *dx, float3 *dy)
+ccl_device_inline float3 primitive_attribute_float3(KernelGlobals *kg,
+                                                    const ShaderData *sd,
+                                                    AttributeElement elem,
+                                                    int offset,
+                                                    float3 *dx,
+                                                    float3 *dy)
 {
 	if(ccl_fetch(sd, type) & PRIMITIVE_ALL_TRIANGLE) {
-		return triangle_attribute_float3(kg, sd, elem, offset, dx, dy);
+		if(subd_triangle_patch(kg, sd) == ~0)
+			return triangle_attribute_float3(kg, sd, elem, offset, dx, dy);
+		else
+			return subd_triangle_attribute_float3(kg, sd, elem, offset, dx, dy);
 	}
 #ifdef __HAIR__
 	else if(ccl_fetch(sd, type) & PRIMITIVE_ALL_CURVE) {
@@ -69,7 +84,7 @@ ccl_device float3 primitive_attribute_float3(KernelGlobals *kg, const ShaderData
 
 /* Default UV coordinate */
 
-ccl_device float3 primitive_uv(KernelGlobals *kg, ShaderData *sd)
+ccl_device_inline float3 primitive_uv(KernelGlobals *kg, ShaderData *sd)
 {
 	AttributeElement elem_uv;
 	int offset_uv = find_attribute(kg, sd, ATTR_STD_UV, &elem_uv);
@@ -138,7 +153,7 @@ ccl_device float3 primitive_tangent(KernelGlobals *kg, ShaderData *sd)
 
 /* Motion vector for motion pass */
 
-ccl_device float4 primitive_motion_vector(KernelGlobals *kg, ShaderData *sd)
+ccl_device_inline float4 primitive_motion_vector(KernelGlobals *kg, ShaderData *sd)
 {
 	/* center position */
 	float3 center;

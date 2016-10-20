@@ -72,6 +72,7 @@ EnumPropertyItem rna_enum_fmodifier_type_items[] = {
 EnumPropertyItem rna_enum_beztriple_keyframe_type_items[] = {
 	{BEZT_KEYTYPE_KEYFRAME, "KEYFRAME", VICO_KEYTYPE_KEYFRAME_VEC, "Keyframe", "Normal keyframe - e.g. for key poses"},
 	{BEZT_KEYTYPE_BREAKDOWN, "BREAKDOWN", VICO_KEYTYPE_BREAKDOWN_VEC, "Breakdown", "A breakdown pose - e.g. for transitions between key poses"},
+	{BEZT_KEYTYPE_MOVEHOLD, "MOVING_HOLD", VICO_KEYTYPE_MOVING_HOLD_VEC, "Moving Hold", "A keyframe that is part of a moving hold"},
 	{BEZT_KEYTYPE_EXTREME, "EXTREME", VICO_KEYTYPE_EXTREME_VEC, "Extreme", "An 'extreme' pose, or some other purpose as needed"},
 	{BEZT_KEYTYPE_JITTER, "JITTER", VICO_KEYTYPE_JITTER_VEC, "Jitter", "A filler or baked keyframe for keying on ones, or some other purpose as needed"},
 	{0, NULL, 0, NULL, NULL}
@@ -1599,7 +1600,13 @@ static void rna_def_channeldriver(BlenderRNA *brna)
 	RNA_def_property_boolean_sdna(prop, NULL, "flag", DRIVER_FLAG_SHOWDEBUG);
 	RNA_def_property_ui_text(prop, "Show Debug Info",
 	                         "Show intermediate values for the driver calculations to allow debugging of drivers");
-	
+
+	prop = RNA_def_property(srna, "use_self", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "flag", DRIVER_FLAG_USE_SELF);
+	RNA_def_property_ui_text(prop, "Use Self",
+	                         "Include a 'self' variable in the name-space, "
+	                         "so drivers can easily reference the data being modified (object, bone, etc...)");
+
 	/* State Info (for Debugging) */
 	prop = RNA_def_property(srna, "is_valid", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_negative_sdna(prop, NULL, "flag", DRIVER_FLAG_INVALID);

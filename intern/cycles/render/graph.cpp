@@ -1,5 +1,5 @@
 /*
- * Copyright 2011-2013 Blender Foundation
+ * Copyright 2011-2016 Blender Foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,11 +18,13 @@
 #include "graph.h"
 #include "nodes.h"
 #include "shader.h"
+#include "constant_fold.h"
 
 #include "util_algorithm.h"
 #include "util_debug.h"
 #include "util_foreach.h"
 #include "util_queue.h"
+#include "util_logging.h"
 
 CCL_NAMESPACE_BEGIN
 
@@ -124,17 +126,6 @@ ShaderOutput *ShaderNode::output(ustring name)
 			return socket;
 
 	return NULL;
-}
-
-bool ShaderNode::all_inputs_constant() const
-{
-	foreach(ShaderInput *input, inputs) {
-		if(input->link) {
-			return false;
-		}
-	}
-
-	return true;
 }
 
 void ShaderNode::attributes(Shader *shader, AttributeRequestSet *attributes)
@@ -278,6 +269,17 @@ void ShaderGraph::connect(ShaderOutput *from, ShaderInput *to)
 	}
 }
 
+void ShaderGraph::disconnect(ShaderOutput *from)
+{
+	assert(!finalized);
+
+	foreach(ShaderInput *sock, from->links) {
+		sock->link = NULL;
+	}
+
+	from->links.clear();
+}
+
 void ShaderGraph::disconnect(ShaderInput *to)
 {
 	assert(!finalized);
@@ -373,24 +375,12 @@ void ShaderGraph::copy_nodes(ShaderNodeSet& nodes, ShaderNodeMap& nnodemap)
 		ShaderNode *nnode = node->clone();
 		nnodemap[node] = nnode;
 
+		/* create new inputs and outputs to recreate links and ensure
+		 * that we still point to valid SocketType if the NodeType
+		 * changed in cloning, as it does for OSL nodes */
 		nnode->inputs.clear();
 		nnode->outputs.clear();
-
-		foreach(ShaderInput *input, node->inputs) {
-			ShaderInput *ninput = new ShaderInput(*input);
-			nnode->inputs.push_back(ninput);
-
-			ninput->parent = nnode;
-			ninput->link = NULL;
-		}
-
-		foreach(ShaderOutput *output, node->outputs) {
-			ShaderOutput *noutput = new ShaderOutput(*output);
-			nnode->outputs.push_back(noutput);
-
-			noutput->parent = nnode;
-			noutput->links.clear();
-		}
+		nnode->create_inputs_outputs(nnode->type);
 	}
 
 	/* recreate links */
@@ -525,15 +515,8 @@ void ShaderGraph::constant_fold()
 				}
 			}
 			/* Optimize current node. */
-			if(node->constant_fold(this, output, output->links[0])) {
-				/* Apply optimized value to other connected sockets and disconnect. */
-				vector<ShaderInput*> links(output->links);
-				for(size_t i = 0; i < links.size(); i++) {
-					if(i > 0)
-						links[i]->parent->copy_value(links[i]->socket_type, *links[0]->parent, links[0]->socket_type);
-					disconnect(links[i]);
-				}
-			}
+			ConstantFolder folder(this, node, output);
+			node->constant_fold(folder);
 		}
 	}
 }
@@ -561,6 +544,7 @@ void ShaderGraph::deduplicate_nodes()
 	ShaderNodeSet scheduled, done;
 	map<ustring, ShaderNodeSet> candidates;
 	queue<ShaderNode*> traverse_queue;
+	int num_deduplicated = 0;
 
 	/* Schedule nodes which doesn't have any dependencies. */
 	foreach(ShaderNode *node, nodes) {
@@ -575,8 +559,10 @@ void ShaderGraph::deduplicate_nodes()
 		traverse_queue.pop();
 		done.insert(node);
 		/* Schedule the nodes which were depending on the current node. */
+		bool has_output_links = false;
 		foreach(ShaderOutput *output, node->outputs) {
 			foreach(ShaderInput *input, output->links) {
+				has_output_links = true;
 				if(scheduled.find(input->parent) != scheduled.end()) {
 					/* Node might not be optimized yet but scheduled already
 					 * by other dependencies. No need to re-schedule it.
@@ -589,6 +575,10 @@ void ShaderGraph::deduplicate_nodes()
 					scheduled.insert(input->parent);
 				}
 			}
+		}
+		/* Only need to care about nodes that are actually used */
+		if(!has_output_links) {
+			continue;
 		}
 		/* Try to merge this node with another one. */
 		ShaderNode *merge_with = NULL;
@@ -603,10 +593,15 @@ void ShaderGraph::deduplicate_nodes()
 			for(int i = 0; i < node->outputs.size(); ++i) {
 				relink(node, node->outputs[i], merge_with->outputs[i]);
 			}
+			num_deduplicated++;
 		}
 		else {
 			candidates[node->type->name].insert(node);
 		}
+	}
+
+	if(num_deduplicated > 0) {
+		VLOG(1) << "Deduplicated " << num_deduplicated << " nodes.";
 	}
 }
 
@@ -983,6 +978,9 @@ int ShaderGraph::get_num_closures()
 			num_closures += 3;
 		}
 		else if(CLOSURE_IS_GLASS(closure_type)) {
+			num_closures += 2;
+		}
+		else if(CLOSURE_IS_BSDF_MULTISCATTER(closure_type)) {
 			num_closures += 2;
 		}
 		else {

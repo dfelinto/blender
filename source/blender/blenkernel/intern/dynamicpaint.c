@@ -2249,7 +2249,7 @@ static void dynamic_paint_create_uv_surface_neighbor_cb(void *userdata, const in
 							/* tri index */
 							/* There is a low possibility of actually having a neighbor point which tri is
 							 * already set from another neighbor in a separate thread here.
-							 * Cheking for both tri_index and neighbour_pixel above reduces that probability
+							 * Checking for both tri_index and neighbour_pixel above reduces that probability
 							 * but it remains possible.
 							 * That atomic op (and its memory fence) ensures tPoint->neighbour_pixel is set
 							 * to non--1 *before* its tri_index is set (i.e. that it cannot be used a neighbour).
@@ -3830,7 +3830,7 @@ static int dynamicPaint_paintMesh(DynamicPaintSurface *surface,
 		const float brush_radius = brush->paint_distance * surface->radius_scale;
 		int numOfVerts;
 		int ii;
-		Bounds3D mesh_bb = {0};
+		Bounds3D mesh_bb = {{0}};
 		VolumeGrid *grid = bData->grid;
 
 		dm = CDDM_copy(brush->dm);
@@ -4100,7 +4100,7 @@ static int dynamicPaint_paintParticles(DynamicPaintSurface *surface,
 
 	const float range = solidradius + smooth;
 
-	Bounds3D part_bb = {0};
+	Bounds3D part_bb = {{0}};
 
 	if (psys->totpart < 1)
 		return 1;
@@ -4483,7 +4483,7 @@ static void dynamicPaint_doSmudge(DynamicPaintSurface *surface, DynamicPaintBrus
 		CLAMP_MIN(max_velocity, vel);
 	}
 
-	steps = (int)ceil(max_velocity / bData->average_dist * timescale);
+	steps = (int)ceil((double)max_velocity / bData->average_dist * (double)timescale);
 	CLAMP(steps, 0, 12);
 	eff_scale = brush->smudge_strength / (float)steps * timescale;
 
@@ -4634,7 +4634,7 @@ static int dynamicPaint_prepareEffectStep(
 
 			/* calculate average values (single thread) */
 			for (int index = 0; index < sData->total_points; index++) {
-				average_force += (*force)[index * 4 + 3];
+				average_force += (double)(*force)[index * 4 + 3];
 			}
 			average_force /= sData->total_points;
 		}
@@ -4651,7 +4651,7 @@ static int dynamicPaint_prepareEffectStep(
 		shrink_speed = surface->shrink_speed;
 
 	fastest_effect = max_fff(spread_speed, shrink_speed, average_force);
-	avg_dist = bData->average_dist * CANVAS_REL_SIZE / getSurfaceDimension(sData);
+	avg_dist = bData->average_dist * (double)CANVAS_REL_SIZE / (double)getSurfaceDimension(sData);
 
 	steps = (int)ceilf(1.5f * EFF_MOVEMENT_PER_FRAME * fastest_effect / avg_dist * timescale);
 	CLAMP(steps, 1, 20);
@@ -4797,7 +4797,7 @@ static void dynamic_paint_effect_drip_cb(void *userdata, const int index)
 
 			/* Sort of spinlock, but only for given ePoint.
 			 * Since the odds a same ePoint is modified at the same time by several threads is very low, this is
-			 * much more eficient than a global spin lock. */
+			 * much more efficient than a global spin lock. */
 			const unsigned int pointlock_idx = n_trgt / 8;
 			const uint8_t pointlock_bitmask = 1 << (n_trgt & 7);  /* 7 == 0b111 */
 			while (atomic_fetch_and_or_uint8(&point_locks[pointlock_idx], pointlock_bitmask) & pointlock_bitmask);
@@ -5009,7 +5009,8 @@ static void dynamicPaint_doWaveStep(DynamicPaintSurface *surface, float timescal
 	const float wave_scale = CANVAS_REL_SIZE / canvas_size;
 
 	/* allocate memory */
-	PaintWavePoint *prevPoint = MEM_mallocN(sData->total_points * sizeof(PaintWavePoint), "Temp previous points for wave simulation");
+	PaintWavePoint *prevPoint = MEM_mallocN(
+	        sData->total_points * sizeof(PaintWavePoint), __func__);
 	if (!prevPoint)
 		return;
 
@@ -5019,13 +5020,14 @@ static void dynamicPaint_doWaveStep(DynamicPaintSurface *surface, float timescal
 		int numOfNeighs = sData->adj_data->n_num[index];
 
 		for (i = 0; i < numOfNeighs; i++) {
-			average_dist += bNeighs[sData->adj_data->n_index[index] + i].dist;
+			average_dist += (double)bNeighs[sData->adj_data->n_index[index] + i].dist;
 		}
 	}
-	average_dist  *= wave_scale / sData->adj_data->total_targets;
+	average_dist  *= (double)wave_scale / sData->adj_data->total_targets;
 
 	/* determine number of required steps */
-	steps = (int)ceil((WAVE_TIME_FAC * timescale * surface->wave_timescale) / (average_dist / wave_speed / 3));
+	steps = (int)ceil((double)(WAVE_TIME_FAC * timescale * surface->wave_timescale) /
+	                  (average_dist / (double)wave_speed / 3));
 	CLAMP(steps, 1, 20);
 	timescale /= steps;
 
