@@ -99,8 +99,9 @@ void GPU_clear_tpage(bool force);
  * - this affects fixed functions materials and texface, not glsl */
 
 int GPU_default_lights(void);
-int GPU_scene_object_lights(struct Scene *scene, struct Object *ob,
-	int lay, float viewmat[4][4], int ortho);
+int GPU_scene_object_lights(
+        struct Scene *scene, struct Object *ob,
+        int lay, float viewmat[4][4], int ortho);
 
 /* Text render
  * - based on moving uv coordinates */
@@ -135,13 +136,15 @@ void GPU_set_gpu_mipmapping(int gpu_mipmap);
 void GPU_paint_update_image(struct Image *ima, struct ImageUser *iuser, int x, int y, int w, int h);
 void GPU_update_images_framechange(void);
 int GPU_update_image_time(struct Image *ima, double time);
-int GPU_verify_image(struct Image *ima,
-	struct ImageUser *iuser, int textarget, int tftile, bool compare, bool mipmap, bool is_data, bool is_envmap);
-void GPU_create_gl_tex(unsigned int *bind, unsigned int *rect, float *frect, int rectw, int recth,
-	int textarget, bool mipmap, bool use_hight_bit_depth, struct Image *ima, bool is_envmap);
+int GPU_verify_image(
+        struct Image *ima, struct ImageUser *iuser,
+        int textarget, int tftile, bool compare, bool mipmap, bool is_data, bool is_envmap);
+void GPU_create_gl_tex(
+        unsigned int *bind, unsigned int *rect, float *frect, int rectw, int recth,
+        int textarget, bool mipmap, bool use_hight_bit_depth, struct Image *ima, bool is_envmap);
 void GPU_create_gl_tex_compressed(
-	unsigned int *bind, unsigned int *pix, int x, int y, int mipmap,
-	int textarget, struct Image *ima, struct ImBuf *ibuf);
+        unsigned int *bind, unsigned int *pix, int x, int y, int mipmap,
+        int textarget, struct Image *ima, struct ImBuf *ibuf);
 bool GPU_upload_dxt_texture(struct ImBuf *ibuf);
 void GPU_free_image(struct Image *ima);
 void GPU_free_images(void);
@@ -159,6 +162,12 @@ void GPU_free_unused_buffers(void);
 struct DerivedMesh;
 void GPU_draw_update_fvar_offset(struct DerivedMesh *dm);
 #endif
+
+/* utilities */
+void	GPU_select_index_set(int index);
+void	GPU_select_index_get(int index, int *r_col);
+int		GPU_select_to_index(unsigned int col);
+void	GPU_select_to_index_array(unsigned int *col, const unsigned int size);
 
 #ifdef __cplusplus
 }

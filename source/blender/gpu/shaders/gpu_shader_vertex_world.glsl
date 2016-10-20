@@ -2,6 +2,9 @@
 varying vec3 varposition;
 varying vec3 varnormal;
 
+
+/* Color, keep in sync with: gpu_shader_vertex.glsl */
+
 float srgb_to_linearrgb(float c)
 {
 	if (c < 0.04045)
@@ -63,6 +66,9 @@ void set_var_from_attr(vec4 attr, int info, out vec4 var)
 		var = attr;
 	}
 }
+
+/* end color code */
+
 
 void main()
 {

@@ -1181,6 +1181,14 @@ static void emDM_drawMappedFaces(
 
 	/* if non zero we know a face was rendered */
 	if (poly_prev != GL_ZERO) glEnd();
+
+	if (draw_option_prev == DM_DRAW_OPTION_STIPPLE) {
+		GPU_basic_shader_bind(GPU_SHADER_USE_COLOR);
+	}
+
+	if (shade_prev == GL_FLAT) {
+		glShadeModel(GL_SMOOTH);
+	}
 }
 
 static void bmdm_get_tri_uv(BMLoop *ltri[3], MLoopUV *luv[3], const int cd_loop_uv_offset)
@@ -1236,8 +1244,6 @@ static void emDM_drawFacesTex_common(
 	// dummylcol.r = dummylcol.g = dummylcol.b = dummylcol.a = 255;  /* UNUSED */
 
 	/* always use smooth shading even for flat faces, else vertex colors wont interpolate */
-	glShadeModel(GL_SMOOTH);
-
 	BM_mesh_elem_index_ensure(bm, BM_FACE);
 
 	/* call again below is ok */
@@ -1384,8 +1390,6 @@ static void emDM_drawFacesTex_common(
 			}
 		}
 	}
-
-	glShadeModel(GL_FLAT);
 }
 
 static void emDM_drawFacesTex(
@@ -1524,8 +1528,6 @@ static void emDM_drawMappedFacesGLSL(
 	vertexNos = bmdm->vertexNos;
 	polyNos = bmdm->polyNos;
 
-	/* always use smooth shading even for flat faces, else vertex colors wont interpolate */
-	glShadeModel(GL_SMOOTH);
 	BM_mesh_elem_index_ensure(bm, (BM_VERT | BM_FACE) | (lnors ? BM_LOOP : 0));
 
 	for (i = 0; i < em->tottri; i++) {
@@ -1636,8 +1638,6 @@ static void emDM_drawMappedFacesMat(
 	vertexNos = bmdm->vertexNos;
 	polyNos = bmdm->polyNos;
 
-	/* always use smooth shading even for flat faces, else vertex colors wont interpolate */
-	glShadeModel(GL_SMOOTH);
 	BM_mesh_elem_index_ensure(bm, (BM_VERT | BM_FACE) | (lnors ? BM_LOOP : 0));
 
 	for (i = 0; i < em->tottri; i++) {
@@ -2226,16 +2226,17 @@ static CustomData *bmDm_getPolyDataLayout(DerivedMesh *dm)
 	return &bmdm->em->bm->pdata;
 }
 
-
+/**
+ * \note This may be called per-draw,
+ * avoid allocating large arrays where possible and keep this a thin wrapper for #BMesh.
+ */
 DerivedMesh *getEditDerivedBMesh(
-        BMEditMesh *em,
-        Object *UNUSED(ob),
+        BMEditMesh *em, struct Object *UNUSED(ob),
+        CustomDataMask data_mask,
         float (*vertexCos)[3])
 {
 	EditDerivedBMesh *bmdm = MEM_callocN(sizeof(*bmdm), __func__);
 	BMesh *bm = em->bm;
-	const int cd_dvert_offset = CustomData_get_offset(&bm->vdata, CD_MDEFORMVERT);
-	const int cd_skin_offset = CustomData_get_offset(&bm->vdata, CD_MVERT_SKIN);
 
 	bmdm->em = em;
 
@@ -2304,6 +2305,9 @@ DerivedMesh *getEditDerivedBMesh(
 	bmdm->vertexCos = (const float (*)[3])vertexCos;
 	bmdm->dm.deformedOnly = (vertexCos != NULL);
 
+	const int cd_dvert_offset = (data_mask & CD_MASK_MDEFORMVERT) ?
+	        CustomData_get_offset(&bm->vdata, CD_MDEFORMVERT) : -1;
+
 	if (cd_dvert_offset != -1) {
 		BMIter iter;
 		BMVert *eve;
@@ -2316,6 +2320,9 @@ DerivedMesh *getEditDerivedBMesh(
 			                 BM_ELEM_CD_GET_VOID_P(eve, cd_dvert_offset));
 		}
 	}
+
+	const int cd_skin_offset = (data_mask & CD_MASK_MVERT_SKIN) ?
+	        CustomData_get_offset(&bm->vdata, CD_MVERT_SKIN) : -1;
 
 	if (cd_skin_offset != -1) {
 		BMIter iter;

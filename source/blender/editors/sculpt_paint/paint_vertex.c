@@ -502,6 +502,51 @@ bool ED_vpaint_smooth(Object *ob)
 	return true;
 }
 
+/**
+ * Apply callback to each vertex of the active vertex color layer.
+ */
+bool ED_vpaint_color_transform(
+        struct Object *ob,
+        VPaintTransform_Callback vpaint_tx_fn,
+        const void *user_data)
+{
+	Mesh *me;
+	const MPoly *mp;
+
+	if (((me = BKE_mesh_from_object(ob)) == NULL) ||
+	    (me->mloopcol == NULL && (make_vertexcol(ob) == false)))
+	{
+		return false;
+	}
+
+	const bool do_face_sel = (me->editflag & ME_EDIT_PAINT_FACE_SEL) != 0;
+	mp = me->mpoly;
+
+	for (int i = 0; i < me->totpoly; i++, mp++) {
+		MLoopCol *lcol = &me->mloopcol[mp->loopstart];
+
+		if (do_face_sel && !(mp->flag & ME_FACE_SEL)) {
+			continue;
+		}
+
+		for (int j = 0; j < mp->totloop; j++, lcol++) {
+			float col[3];
+			rgb_uchar_to_float(col, &lcol->r);
+
+			vpaint_tx_fn(col, user_data, col);
+
+			rgb_float_to_uchar(&lcol->r, col);
+		}
+	}
+
+	/* remove stale me->mcol, will be added later */
+	BKE_mesh_tessface_clear(me);
+
+	DAG_id_tag_update(&me->id, 0);
+
+	return true;
+}
+
 /* XXX: should be re-implemented as a vertex/weight paint 'color correct' operator */
 #if 0
 void vpaint_dogamma(Scene *scene)
@@ -1323,7 +1368,7 @@ static bool do_weight_paint_normalize_all_locked(
 
 /**
  * \note same as function above except it does a second pass without active group
- * if nomalize fails with it.
+ * if normalize fails with it.
  */
 static void do_weight_paint_normalize_all_locked_try_active(
         MDeformVert *dvert, const int defbase_tot, const bool *vgroup_validmap,
@@ -1340,7 +1385,7 @@ static void do_weight_paint_normalize_all_locked_try_active(
 		 * - With 1.0 weight painted into active:
 		 *   nonzero locked weight; first pass zeroed out unlocked weight; scale 1 down to fit.
 		 * - With 0.0 weight painted into active:
-		 *   no unlocked groups; first pass did nothing; increaze 0 to fit.
+		 *   no unlocked groups; first pass did nothing; increase 0 to fit.
 		 */
 		do_weight_paint_normalize_all_locked(dvert, defbase_tot, vgroup_validmap, lock_flags);
 	}

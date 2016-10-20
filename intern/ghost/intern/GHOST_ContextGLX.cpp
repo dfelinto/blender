@@ -62,6 +62,7 @@ GHOST_ContextGLX::GHOST_ContextGLX(
         Window window,
         Display *display,
         XVisualInfo *visualInfo,
+        GLXFBConfig fbconfig,
         int contextProfileMask,
         int contextMajorVersion,
         int contextMinorVersion,
@@ -70,6 +71,7 @@ GHOST_ContextGLX::GHOST_ContextGLX(
     : GHOST_Context(stereoVisual, numOfAASamples),
       m_display(display),
       m_visualInfo(visualInfo),
+      m_fbconfig(fbconfig),
       m_window(window),
       m_contextProfileMask(contextProfileMask),
       m_contextMajorVersion(contextMajorVersion),
@@ -153,15 +155,7 @@ void GHOST_ContextGLX::initContextGLXEW()
 
 GHOST_TSuccess GHOST_ContextGLX::initializeDrawingContext()
 {
-#ifdef WITH_X11_XINPUT
-	/* use our own event handlers to avoid exiting blender,
-	 * this would happen for eg:
-	 * if you open blender, unplug a tablet, then open a new window. */
-	XErrorHandler   old_handler    = XSetErrorHandler  (GHOST_X11_ApplicationErrorHandler  );
-	XIOErrorHandler old_handler_io = XSetIOErrorHandler(GHOST_X11_ApplicationIOErrorHandler);
-#endif
-
-
+	GHOST_X11_ERROR_HANDLERS_OVERRIDE(handler_store);
 
 	/* -------------------------------------------------------------------- */
 	/* Begin Inline Glew  */
@@ -285,19 +279,24 @@ const bool GLXEW_ARB_create_context_robustness =
 		attribs[i++] = 0;
 
 		/* Create a GL 3.x context */
-		GLXFBConfig *framebuffer_config = NULL;
-		{
-			int glx_attribs[64];
-			int fbcount = 0;
-
-			GHOST_X11_GL_GetAttributes(glx_attribs, 64, m_numOfAASamples, m_stereoVisual, true);
-
-			framebuffer_config = glXChooseFBConfig(m_display, DefaultScreen(m_display), glx_attribs, &fbcount);
+		if (m_fbconfig) {
+			m_context = glXCreateContextAttribsARB(m_display, m_fbconfig, s_sharedContext, true, attribs);
 		}
+		else {
+			GLXFBConfig *framebuffer_config = NULL;
+			{
+				int glx_attribs[64];
+				int fbcount = 0;
 
-		if (framebuffer_config) {
-			m_context = glXCreateContextAttribsARB(m_display, framebuffer_config[0], s_sharedContext, True, attribs);
-			XFree(framebuffer_config);
+				GHOST_X11_GL_GetAttributes(glx_attribs, 64, m_numOfAASamples, m_stereoVisual, false, true);
+
+				framebuffer_config = glXChooseFBConfig(m_display, DefaultScreen(m_display), glx_attribs, &fbcount);
+			}
+
+			if (framebuffer_config) {
+				m_context = glXCreateContextAttribsARB(m_display, framebuffer_config[0], s_sharedContext, True, attribs);
+				XFree(framebuffer_config);
+			}
 		}
 	}
 	else {
@@ -343,11 +342,8 @@ const bool GLXEW_ARB_create_context_robustness =
 		success = GHOST_kFailure;
 	}
 
-#ifdef WITH_X11_XINPUT
-	/* Restore handler */
-	XSetErrorHandler  (old_handler);
-	XSetIOErrorHandler(old_handler_io);
-#endif
+
+	GHOST_X11_ERROR_HANDLERS_RESTORE(handler_store);
 
 	return success;
 }
@@ -401,15 +397,10 @@ GHOST_TSuccess GHOST_ContextGLX::getSwapInterval(int &intervalOut)
 int GHOST_X11_GL_GetAttributes(
         int *attribs, int attribs_max,
         int samples, bool is_stereo_visual,
+        bool need_alpha,
         bool for_fb_config)
 {
 	int i = 0;
-
-#ifdef GHOST_OPENGL_ALPHA
-	const bool need_alpha = true;
-#else
-	const bool need_alpha = false;
-#endif
 
 #ifdef GHOST_OPENGL_STENCIL
 	const bool need_stencil = true;

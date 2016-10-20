@@ -202,7 +202,7 @@ typedef struct ProjPaintImage {
  */
 typedef struct ProjStrokeHandle {
 	/* Support for painting from multiple views at once,
-	 * currently used to impliment summetry painting,
+	 * currently used to impliment symmetry painting,
 	 * we can assume at least the first is set while painting. */
 	struct ProjPaintState *ps_views[8];
 	int ps_views_tot;
@@ -717,7 +717,7 @@ static bool project_paint_PickColor(
 }
 
 /**
- * Check if 'pt' is infront of the 3 verts on the Z axis (used for screenspace occlusuion test)
+ * Check if 'pt' is infront of the 3 verts on the Z axis (used for screenspace occlusion test)
  * \return
  * -  `0`:   no occlusion
  * - `-1`: no occlusion but 2D intersection is true
@@ -3717,7 +3717,7 @@ static void project_paint_prepare_all_faces(
 		}
 
 		/* tfbase here should be non-null! */
-		BLI_assert (mloopuv_base != NULL);
+		BLI_assert(mloopuv_base != NULL);
 
 		if (is_face_sel && tpage) {
 			ProjPaintFaceCoSS coSS;
@@ -5858,7 +5858,9 @@ static int add_simple_uvs_exec(bContext *C, wmOperator *UNUSED(op))
 	Mesh *me = ob->data;
 	bool synch_selection = (scene->toolsettings->uv_flag & UV_SYNC_SELECTION) != 0;
 
-	BMesh *bm = BM_mesh_create(&bm_mesh_allocsize_default);
+	BMesh *bm = BM_mesh_create(
+	        &bm_mesh_allocsize_default,
+	        &((struct BMeshCreateParams){.use_toolflags = false,}));
 
 	/* turn synch selection off, since we are not in edit mode we need to ensure only the uv flags are tested */
 	scene->toolsettings->uv_flag &= ~UV_SYNC_SELECTION;

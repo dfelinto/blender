@@ -1069,6 +1069,9 @@ short insert_keyframe(ReportList *reports, ID *id, bAction *act, const char grou
 				if (ELEM(RNA_property_subtype(prop), PROP_TRANSLATION, PROP_XYZ, PROP_EULER, PROP_COLOR, PROP_COORDS)) {
 					fcu->color_mode = FCURVE_COLOR_AUTO_RGB;
 				}
+				else if (RNA_property_subtype(prop), PROP_QUATERNION) {
+					fcu->color_mode = FCURVE_COLOR_AUTO_YRGB;
+				}
 			}
 			
 			/* insert keyframe */
@@ -2035,7 +2038,7 @@ bool autokeyframe_cfra_can_key(Scene *scene, ID *id)
 	else {
 		/* Normal Mode (or treat as being normal mode):
 		 *
-		 * Just in case the flags are't set properly (i.e. only on/off is set, without a mode)
+		 * Just in case the flags aren't set properly (i.e. only on/off is set, without a mode)
 		 * let's set the "normal" flag too, so that it will all be sane everywhere...
 		 */
 		scene->toolsettings->autokey_mode = AUTOKEY_MODE_NORMAL;

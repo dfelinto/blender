@@ -32,6 +32,7 @@
  */
 
 struct ID;
+struct BMeshCreateParams;
 struct BoundBox;
 struct EdgeHash;
 struct ListBase;
@@ -69,7 +70,9 @@ extern "C" {
 
 /* *** mesh.c *** */
 
-struct BMesh *BKE_mesh_to_bmesh(struct Mesh *me, struct Object *ob, const bool add_key_index);
+struct BMesh *BKE_mesh_to_bmesh(
+        struct Mesh *me, struct Object *ob,
+        const bool add_key_index, const struct BMeshCreateParams *params);
 
 int poly_find_loop_from_vert(
         const struct MPoly *poly,
@@ -81,8 +84,7 @@ int poly_get_adj_loops_from_vert(
 
 int BKE_mesh_edge_other_vert(const struct MEdge *e, int v);
 
-void BKE_mesh_unlink(struct Mesh *me);
-void BKE_mesh_free(struct Mesh *me, int unlink);
+void BKE_mesh_free(struct Mesh *me);
 void BKE_mesh_init(struct Mesh *me);
 struct Mesh *BKE_mesh_add(struct Main *bmain, const char *name);
 struct Mesh *BKE_mesh_copy_ex(struct Main *bmain, struct Mesh *me);
@@ -323,7 +325,7 @@ void BKE_mesh_mdisp_flip(struct MDisps *md, const bool use_loop_mdisp_flip);
 
 void BKE_mesh_polygon_flip_ex(
         struct MPoly *mpoly, struct MLoop *mloop, struct CustomData *ldata,
-        struct MDisps *mdisp, const bool use_loop_mdisp_flip);
+        float (*lnors)[3], struct MDisps *mdisp, const bool use_loop_mdisp_flip);
 void BKE_mesh_polygon_flip(struct MPoly *mpoly, struct MLoop *mloop, struct CustomData *ldata);
 void BKE_mesh_polygons_flip(struct MPoly *mpoly, struct MLoop *mloop, struct CustomData *ldata, int totpoly);
 

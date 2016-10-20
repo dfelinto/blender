@@ -3620,7 +3620,7 @@ static int view3d_zoom_border_exec(bContext *C, wmOperator *op)
 		dist_range[0] = v3d->near * 1.5f;
 	}
 	else { /* othographic */
-		   /* find the current window width and height */
+		/* find the current window width and height */
 		vb[0] = ar->winx;
 		vb[1] = ar->winy;
 
@@ -4911,7 +4911,7 @@ static float view_autodist_depth_margin(ARegion *ar, const int mval[2], int marg
  * Get the world-space 3d location from a screen-space 2d point.
  *
  * \param mval: Input screen-space pixel location.
- * \param mouse_worldloc: Output world-space loction.
+ * \param mouse_worldloc: Output world-space location.
  * \param fallback_depth_pt: Use this points depth when no depth can be found.
  */
 bool ED_view3d_autodist(

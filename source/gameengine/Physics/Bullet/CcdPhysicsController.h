@@ -430,7 +430,7 @@ public:
 
 	// PHY_ICharacter interface
 	virtual void Jump()	{ jump(); }
-	virtual bool OnGround(){ return onGround(); }
+	virtual bool OnGround() { return onGround(); }
 	virtual float GetGravity() { return getGravity(); }
 	virtual void SetGravity(float gravity) { setGravity(gravity); }
 	virtual unsigned char GetMaxJumps() { return getMaxJumps(); }
@@ -542,14 +542,14 @@ protected:
 		CcdPhysicsController (const CcdConstructionInfo& ci);
 
 		/**
-		* Delete the current Bullet shape used in the rigid body.
-		*/
+		 * Delete the current Bullet shape used in the rigid body.
+		 */
 		bool DeleteControllerShape();
 
 		/**
-		* Delete the old Bullet shape and set the new Bullet shape : newShape
-		* \param newShape The new Bullet shape to set, if is NULL we create a new Bullet shape
-		*/
+		 * Delete the old Bullet shape and set the new Bullet shape : newShape
+		 * \param newShape The new Bullet shape to set, if is NULL we create a new Bullet shape
+		 */
 		bool ReplaceControllerShape(btCollisionShape *newShape);
 
 		virtual ~CcdPhysicsController();

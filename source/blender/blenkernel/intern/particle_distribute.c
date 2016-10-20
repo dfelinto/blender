@@ -392,22 +392,25 @@ static int distribute_binary_search(float *sum, int n, float value)
 {
 	int mid, low = 0, high = n - 1;
 
+	if (high == low)
+		return low;
+
 	if (sum[low] >= value)
 		return low;
 
-	if (sum[high] < value)
+	if (sum[high - 1] < value)
 		return high;
 
 	while (low < high) {
 		mid = (low + high) / 2;
 		
-		if ((sum[mid] < value) && (sum[mid + 1] >= value))
+		if ((sum[mid] >= value) && (sum[mid - 1] < value))
 			return mid;
 		
-		if (sum[mid] >= value) {
+		if (sum[mid] > value) {
 			high = mid - 1;
 		}
-		else if (sum[mid] < value) {
+		else {
 			low = mid + 1;
 		}
 	}
@@ -1004,56 +1007,62 @@ static int psys_thread_context_init_distribute(ParticleThreadContext *ctx, Parti
 		MEM_freeN(vweight);
 	}
 
+#define MIN_WEIGHT 1e-7f  /* Weights too small cause issues e.g. with binary search... */
+
 	/* Calculate total weight of all elements */
 	int totmapped = 0;
 	totweight = 0.0f;
 	for (i = 0; i < totelem; i++) {
-		if (element_weight[i] != 0.0f) {
+		if (element_weight[i] > MIN_WEIGHT) {
 			totmapped++;
+			totweight += element_weight[i];
 		}
-		totweight += element_weight[i];
 	}
 
-	if (totweight == 0.0f) {
+	if (totmapped == 0) {
 		/* We are not allowed to distribute particles anywhere... */
 		return 0;
 	}
 
-	inv_totweight = (totweight > 0.f ? 1.f/totweight : 0.f);
+	inv_totweight = 1.0f / totweight;
 
 	/* Calculate cumulative weights.
 	 * We remove all null-weighted elements from element_sum, and create a new mapping
 	 * 'activ'_elem_index -> orig_elem_index.
-	 * This simplifies greatly the filtering of zero-weighted items - and can be much mor efficient
+	 * This simplifies greatly the filtering of zero-weighted items - and can be much more efficient
 	 * especially in random case (reducing a lot the size of binary-searched array)...
 	 */
 	float *element_sum = MEM_mallocN(sizeof(*element_sum) * totmapped, __func__);
 	int *element_map = MEM_mallocN(sizeof(*element_map) * totmapped, __func__);
 	int i_mapped = 0;
 
-	for (i = 0; i < totelem && element_weight[i] == 0.0f; i++);
+	for (i = 0; i < totelem && element_weight[i] <= MIN_WEIGHT; i++);
 	element_sum[i_mapped] = element_weight[i] * inv_totweight;
 	element_map[i_mapped] = i;
 	i_mapped++;
 	for (i++; i < totelem; i++) {
-		if (element_weight[i] != 0.0f) {
+		if (element_weight[i] > MIN_WEIGHT) {
 			element_sum[i_mapped] = element_sum[i_mapped - 1] + element_weight[i] * inv_totweight;
+			BLI_assert(element_sum[i_mapped] > element_sum[i_mapped - 1]);
 			element_map[i_mapped] = i;
 			i_mapped++;
 		}
 	}
 
 	BLI_assert(i_mapped == totmapped);
-	
+
+#undef MIN_WEIGHT
+
 	/* Finally assign elements to particles */
 	if ((part->flag & PART_TRAND) || (part->simplify_flag & PART_SIMPLIFY_ENABLE)) {
-		float pos;
-
 		for (p = 0; p < totpart; p++) {
-			/* In theory element_sum[totelem - 1] should be 1.0,
+			/* In theory element_sum[totmapped - 1] should be 1.0,
 			 * but due to float errors this is not necessarily always true, so scale pos accordingly. */
-			pos = BLI_frand() * element_sum[totmapped - 1];
-			particle_element[p] = element_map[distribute_binary_search(element_sum, totmapped, pos)];
+			const float pos = BLI_frand() * element_sum[totmapped - 1];
+			const int eidx = distribute_binary_search(element_sum, totmapped, pos);
+			particle_element[p] = element_map[eidx];
+			BLI_assert(pos <= element_sum[eidx]);
+			BLI_assert(eidx ? (pos > element_sum[eidx - 1]) : (pos >= 0.0f));
 			jitter_offset[particle_element[p]] = pos;
 		}
 	}

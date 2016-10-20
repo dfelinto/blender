@@ -172,6 +172,7 @@ KX_Scene::KX_Scene(class SCA_IInputDevice* keyboarddevice,
 	m_activity_culling = false;
 	m_suspend = false;
 	m_isclearingZbuffer = true;
+	m_isShadowDone = false;
 	m_tempObjectList = new CListValue();
 	m_objectlist = new CListValue();
 	m_parentlist = new CListValue();
@@ -1784,7 +1785,7 @@ void KX_Scene::UpdateObjectLods(void)
 
 	for (int i = 0; i < this->GetObjectList()->GetCount(); i++) {
 		gameobj = (KX_GameObject*) GetObjectList()->GetValue(i);
-		if (!gameobj->GetCulled()){
+		if (!gameobj->GetCulled()) {
 			gameobj->UpdateLod(cam_pos);
 		}
 	}
