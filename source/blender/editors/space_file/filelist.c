@@ -309,8 +309,9 @@ typedef struct FileList {
 
 	struct BlendHandle *libfiledata;
 
-	/* Set given path as root directory, may change given string in place to a valid value. */
-	void (*checkdirf)(struct FileList *, char *);
+	/* Set given path as root directory, if last bool is true may change given string in place to a valid value.
+	 * Returns True if valid dir. */
+	bool (*checkdirf)(struct FileList *, char *, const bool);
 
 	/* Fill filelist (to be called by read job). */
 	void (*read_jobf)(struct FileList *, const char *, short *, short *, float *, ThreadMutex *);
@@ -920,6 +921,8 @@ static int filelist_geticon_ex(
 		return ICON_FILE_BLANK;
 	else if (typeflag & FILE_TYPE_COLLADA)
 		return ICON_FILE_BLANK;
+	else if (typeflag & FILE_TYPE_ALEMBIC)
+		return ICON_FILE_BLANK;
 	else if (typeflag & FILE_TYPE_TEXT)
 		return ICON_FILE_TEXT;
 	else if (typeflag & FILE_TYPE_BLENDERLIB) {
@@ -940,24 +943,37 @@ int filelist_geticon(struct FileList *filelist, const int index, const bool is_m
 
 /* ********** Main ********** */
 
-static void filelist_checkdir_dir(struct FileList *UNUSED(filelist), char *r_dir)
+static bool filelist_checkdir_dir(struct FileList *UNUSED(filelist), char *r_dir, const bool do_change)
 {
-	BLI_make_exist(r_dir);
-}
-
-static void filelist_checkdir_lib(struct FileList *UNUSED(filelist), char *r_dir)
-{
-	char dir[FILE_MAX_LIBEXTRA];
-	if (!BLO_library_path_explode(r_dir, dir, NULL, NULL)) {
-		/* if not a valid library, we need it to be a valid directory! */
+	if (do_change) {
 		BLI_make_exist(r_dir);
+		return true;
+	}
+	else {
+		return BLI_is_dir(r_dir);
 	}
 }
 
-static void filelist_checkdir_main(struct FileList *filelist, char *r_dir)
+static bool filelist_checkdir_lib(struct FileList *UNUSED(filelist), char *r_dir, const bool do_change)
+{
+	char tdir[FILE_MAX_LIBEXTRA];
+	char *name;
+
+	const bool is_valid = (BLI_is_dir(r_dir) ||
+	                       (BLO_library_path_explode(r_dir, tdir, NULL, &name) && BLI_is_file(tdir) && !name));
+
+	if (do_change && !is_valid) {
+		/* if not a valid library, we need it to be a valid directory! */
+		BLI_make_exist(r_dir);
+		return true;
+	}
+	return is_valid;
+}
+
+static bool filelist_checkdir_main(struct FileList *filelist, char *r_dir, const bool do_change)
 {
 	/* TODO */
-	filelist_checkdir_lib(filelist, r_dir);
+	return filelist_checkdir_lib(filelist, r_dir, do_change);
 }
 
 static void filelist_entry_clear(FileDirEntry *entry)
@@ -1376,6 +1392,11 @@ const char *filelist_dir(struct FileList *filelist)
 	return filelist->filelist.root;
 }
 
+bool filelist_is_dir(struct FileList *filelist, const char *path)
+{
+	return filelist->checkdirf(filelist, (char *)path, false);
+}
+
 /**
  * May modify in place given r_dir, which is expected to be FILE_MAX_LIBEXTRA length.
  */
@@ -1384,7 +1405,7 @@ void filelist_setdir(struct FileList *filelist, char *r_dir)
 	BLI_assert(strlen(r_dir) < FILE_MAX_LIBEXTRA);
 
 	BLI_cleanup_dir(G.main->name, r_dir);
-	filelist->checkdirf(filelist, r_dir);
+	BLI_assert(filelist->checkdirf(filelist, r_dir, true));
 
 	if (!STREQ(filelist->filelist.root, r_dir)) {
 		BLI_strncpy(filelist->filelist.root, r_dir, sizeof(filelist->filelist.root));
@@ -1952,6 +1973,9 @@ int ED_path_extension_type(const char *path)
 	else if (BLI_testextensie(path, ".dae")) {
 		return FILE_TYPE_COLLADA;
 	}
+	else if (BLI_testextensie(path, ".abc")) {
+		return FILE_TYPE_ALEMBIC;
+	}
 	else if (BLI_testextensie_array(path, imb_ext_image) ||
 	         (G.have_quicktime && BLI_testextensie_array(path, imb_ext_image_qt)))
 	{
@@ -2003,6 +2027,8 @@ int ED_file_extension_icon(const char *path)
 		case FILE_TYPE_BTX:
 			return ICON_FILE_BLANK;
 		case FILE_TYPE_COLLADA:
+			return ICON_FILE_BLANK;
+		case FILE_TYPE_ALEMBIC:
 			return ICON_FILE_BLANK;
 		case FILE_TYPE_TEXT:
 			return ICON_FILE_TEXT;

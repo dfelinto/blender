@@ -369,12 +369,14 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
                 description="Size of a micropolygon in pixels",
                 min=0.1, max=1000.0,
                 default=1.0,
+                subtype="PIXEL"
                 )
         cls.preview_dicing_rate = FloatProperty(
                 name="Preview Dicing Rate",
                 description="Size of a micropolygon in pixels during preview render",
                 min=0.1, max=1000.0,
                 default=8.0,
+                subtype="PIXEL"
                 )
 
         cls.max_subdivisions = IntProperty(
@@ -775,6 +777,13 @@ class CyclesMaterialSettings(bpy.types.PropertyGroup):
                 default='LINEAR',
                 )
 
+        cls.displacement_method = EnumProperty(
+                name="Displacement Method",
+                description="Method to use for the displacement",
+                items=enum_displacement_methods,
+                default='BUMP',
+                )
+
     @classmethod
     def unregister(cls):
         del bpy.types.Material.cycles
@@ -952,13 +961,6 @@ class CyclesMeshSettings(bpy.types.PropertyGroup):
                 type=cls,
                 )
 
-        cls.displacement_method = EnumProperty(
-                name="Displacement Method",
-                description="Method to use for the displacement",
-                items=enum_displacement_methods,
-                default='BUMP',
-                )
-
     @classmethod
     def unregister(cls):
         del bpy.types.Mesh.cycles
@@ -1007,8 +1009,8 @@ class CyclesObjectSettings(bpy.types.PropertyGroup):
                 )
 
         cls.dicing_rate = FloatProperty(
-                name="Dicing Rate",
-                description="Multiplier for scene dicing rate",
+                name="Dicing Scale",
+                description="Multiplier for scene dicing rate (located in the Geometry Panel)",
                 min=0.1, max=1000.0,
                 default=1.0,
                 )

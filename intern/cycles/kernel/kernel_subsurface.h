@@ -86,7 +86,7 @@ ccl_device ShaderClosure *subsurface_scatter_pick_closure(KernelGlobals *kg, Sha
 }
 
 #ifndef __KERNEL_GPU__
-ccl_device
+ccl_device_noinline
 #else
 ccl_device_inline
 #endif

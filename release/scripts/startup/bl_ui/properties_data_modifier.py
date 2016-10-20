@@ -181,6 +181,9 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
         layout.prop(md, "cache_format")
         layout.prop(md, "filepath")
 
+        if md.cache_format == 'ABC':
+            layout.prop(md, "sub_object")
+
         layout.label(text="Evaluation:")
         layout.prop(md, "factor", slider=True)
         layout.prop(md, "deform_mode")
@@ -214,6 +217,22 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
         split.label(text="Flip Axis:")
         row = split.row()
         row.prop(md, "flip_axis")
+
+    def MESH_SEQUENCE_CACHE(self, layout, ob, md):
+        layout.label(text="Cache File Properties:")
+        box = layout.box()
+        box.template_cache_file(md, "cache_file")
+
+        cache_file = md.cache_file
+
+        layout.label(text="Modifier Properties:")
+        box = layout.box()
+
+        if cache_file is not None:
+            box.prop_search(md, "object_path", cache_file, "object_paths")
+
+        if ob.type == 'MESH':
+            box.row().prop(md, "read_data")
 
     def CAST(self, layout, ob, md):
         split = layout.split(percentage=0.25)
@@ -881,9 +900,13 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
         split = layout.split()
         col = split.column()
 
-        engine = bpy.context.scene.render.engine
-        if engine == "CYCLES" and md == ob.modifiers[-1] and bpy.context.scene.cycles.feature_set == "EXPERIMENTAL":
-            col.label(text="Preview:")
+        scene = bpy.context.scene
+        engine = scene.render.engine
+        show_adaptive_options = (engine == "CYCLES" and md == ob.modifiers[-1] and
+                                 scene.cycles.feature_set == "EXPERIMENTAL")
+
+        if show_adaptive_options:
+            col.label(text="View:")
             col.prop(md, "levels", text="Levels")
             col.label(text="Render:")
             col.prop(ob.cycles, "use_adaptive_subdivision", text="Adaptive")
@@ -898,10 +921,25 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
 
         col = split.column()
         col.label(text="Options:")
-        col.prop(md, "use_subsurf_uv")
+
+        sub = col.column()
+        sub.active = (not show_adaptive_options) or (not ob.cycles.use_adaptive_subdivision)
+        sub.prop(md, "use_subsurf_uv")
+
         col.prop(md, "show_only_control_edges")
         if hasattr(md, "use_opensubdiv"):
             col.prop(md, "use_opensubdiv")
+
+        if show_adaptive_options and ob.cycles.use_adaptive_subdivision:
+            col = layout.column(align=True)
+            col.scale_y = 0.6
+            col.separator()
+            col.label("Final Dicing Rate:")
+            col.separator()
+
+            render = max(scene.cycles.dicing_rate * ob.cycles.dicing_rate, 0.1)
+            preview = max(scene.cycles.preview_dicing_rate * ob.cycles.dicing_rate, 0.1)
+            col.label("Render %.2f px, Preview %.2f px" % (render, preview))
 
     def SURFACE(self, layout, ob, md):
         layout.label(text="Settings are inside the Physics tab")

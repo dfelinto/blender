@@ -436,6 +436,7 @@ static void copy_image_packedfiles(ListBase *lb_dst, const ListBase *lb_src)
 Image *BKE_image_copy(Main *bmain, Image *ima)
 {
 	Image *nima = image_alloc(bmain, ima->id.name + 2, ima->source, ima->type);
+	ima->id.newid = &nima->id;
 
 	BLI_strncpy(nima->name, ima->name, sizeof(ima->name));
 
@@ -1865,7 +1866,7 @@ void BKE_image_stamp_buf(
 	display = IMB_colormanagement_display_get_named(display_device);
 
 	if (stamp_data_template == NULL) {
-		stampdata(scene, camera, &stamp_data, 1);
+		stampdata(scene, camera, &stamp_data, (scene->r.stamp & R_STAMP_HIDE_LABELS) == 0);
 	}
 	else {
 		stampdata_from_template(&stamp_data, scene, stamp_data_template);

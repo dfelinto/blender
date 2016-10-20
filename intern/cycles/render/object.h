@@ -51,6 +51,7 @@ public:
 	uint visibility;
 	MotionTransform motion;
 	bool use_motion;
+	bool hide_on_missing_motion;
 	bool use_holdout;
 
 	float3 dupli_generated;
@@ -97,6 +98,8 @@ public:
 	                         Scene *scene,
 	                         Progress& progress,
 	                         bool bounds_valid = true);
+	void device_update_patch_map_offsets(Device *device, DeviceScene *dscene, Scene *scene);
+
 	void device_free(Device *device, DeviceScene *dscene);
 
 	void tag_update(Scene *scene);

@@ -38,6 +38,7 @@ set(DEFSRC
 	rna_armature.c
 	rna_boid.c
 	rna_brush.c
+	rna_cachefile.c
 	rna_camera.c
 	rna_cloth.c
 	rna_color.c
@@ -290,6 +291,13 @@ if(WITH_INTERNATIONAL)
 	add_definitions(-DWITH_INTERNATIONAL)
 endif()
 
+if(WITH_ALEMBIC)
+	list(APPEND INC
+		../../alembic
+	)
+	add_definitions(-DWITH_ALEMBIC)
+endif()
+
 if(WITH_BULLET)
 	list(APPEND INC
 		../../../../intern/rigidbody
@@ -317,6 +325,10 @@ if(WITH_OPENVDB)
 	if(WITH_OPENVDB_BLOSC)
 		add_definitions(-DWITH_OPENVDB_BLOSC)
 	endif()
+endif()
+
+if(WITH_INPUT_NDOF)
+	add_definitions(-DWITH_INPUT_NDOF)
 endif()
 
 # Build makesrna executable

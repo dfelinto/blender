@@ -225,7 +225,7 @@ bool ED_gpencil_has_keyframe_v3d(Scene *scene, Object *ob, int cfra)
 	/* just check both for now... */
 	// XXX: this could get confusing (e.g. if only on the object, but other places don't show this)
 	if (scene->gpd) {
-		bGPDlayer *gpl = gpencil_layer_getactive(scene->gpd);
+		bGPDlayer *gpl = BKE_gpencil_layer_getactive(scene->gpd);
 		if (gpl) {
 			if (gpl->actframe) {
 				// XXX: assumes that frame has been fetched already
@@ -239,7 +239,7 @@ bool ED_gpencil_has_keyframe_v3d(Scene *scene, Object *ob, int cfra)
 	}
 	
 	if (ob && ob->gpd) {
-		bGPDlayer *gpl = gpencil_layer_getactive(ob->gpd);
+		bGPDlayer *gpl = BKE_gpencil_layer_getactive(ob->gpd);
 		if (gpl) {
 			if (gpl->actframe) {
 				// XXX: assumes that frame has been fetched already
@@ -269,7 +269,7 @@ int gp_add_poll(bContext *C)
 int gp_active_layer_poll(bContext *C)
 {
 	bGPdata *gpd = ED_gpencil_data_get_active(C);
-	bGPDlayer *gpl = gpencil_layer_getactive(gpd);
+	bGPDlayer *gpl = BKE_gpencil_layer_getactive(gpd);
 	
 	return (gpl != NULL);
 }
@@ -278,7 +278,7 @@ int gp_active_layer_poll(bContext *C)
 int gp_active_brush_poll(bContext *C)
 {
 	ToolSettings *ts = CTX_data_tool_settings(C);
-	bGPDbrush *brush = gpencil_brush_getactive(ts);
+	bGPDbrush *brush = BKE_gpencil_brush_getactive(ts);
 
 	return (brush != NULL);
 }
@@ -287,7 +287,7 @@ int gp_active_brush_poll(bContext *C)
 int gp_active_palette_poll(bContext *C)
 {
 	bGPdata *gpd = ED_gpencil_data_get_active(C);
-	bGPDpalette *palette = gpencil_palette_getactive(gpd);
+	bGPDpalette *palette = BKE_gpencil_palette_getactive(gpd);
 
 	return (palette != NULL);
 }
@@ -296,8 +296,8 @@ int gp_active_palette_poll(bContext *C)
 int gp_active_palettecolor_poll(bContext *C)
 {
 	bGPdata *gpd = ED_gpencil_data_get_active(C);
-	bGPDpalette *palette = gpencil_palette_getactive(gpd);
-	bGPDpalettecolor *palcolor = gpencil_palettecolor_getactive(palette);
+	bGPDpalette *palette = BKE_gpencil_palette_getactive(gpd);
+	bGPDpalettecolor *palcolor = BKE_gpencil_palettecolor_getactive(palette);
 
 	return (palcolor != NULL);
 }
@@ -470,20 +470,20 @@ bGPDpalettecolor *ED_gpencil_stroke_getcolor(bGPdata *gpd, bGPDstroke *gps)
 		return gps->palcolor;
 
 	/* get palette */
-	palette = gpencil_palette_getactive(gpd);
+	palette = BKE_gpencil_palette_getactive(gpd);
 	if (palette == NULL) {
-		palette = gpencil_palette_addnew(gpd, DATA_("GP_Palette"), true);
+		palette = BKE_gpencil_palette_addnew(gpd, DATA_("GP_Palette"), true);
 	}
 	/* get color */
-	palcolor = gpencil_palettecolor_getbyname(palette, gps->colorname);
+	palcolor = BKE_gpencil_palettecolor_getbyname(palette, gps->colorname);
 	if (palcolor == NULL) {
 		if (gps->palcolor == NULL) {
-			palcolor = gpencil_palettecolor_addnew(palette, DATA_("Color"), true);
+			palcolor = BKE_gpencil_palettecolor_addnew(palette, DATA_("Color"), true);
 			/* set to a different color */
 			ARRAY_SET_ITEMS(palcolor->color, 1.0f, 0.0f, 1.0f, 0.9f);
 		}
 		else {
-			palcolor = gpencil_palettecolor_addnew(palette, gps->colorname, true);
+			palcolor = BKE_gpencil_palettecolor_addnew(palette, gps->colorname, true);
 			/* set old color and attributes */
 			bGPDpalettecolor *gpscolor = gps->palcolor;
 			copy_v4_v4(palcolor->color, gpscolor->color);
@@ -624,6 +624,63 @@ void gp_point_to_xy(GP_SpaceConversion *gsc, bGPDstroke *gps, bGPDspoint *pt,
 			/* camera view, use subrect */
 			*r_x = (int)((pt->x / 100) * BLI_rctf_size_x(subrect)) + subrect->xmin;
 			*r_y = (int)((pt->y / 100) * BLI_rctf_size_y(subrect)) + subrect->ymin;
+		}
+	}
+}
+
+/* Convert Grease Pencil points to screen-space values (as floats)
+ * WARNING: This assumes that the caller has already checked whether the stroke in question can be drawn
+ */
+void gp_point_to_xy_fl(GP_SpaceConversion *gsc, bGPDstroke *gps, bGPDspoint *pt,
+                       float *r_x, float *r_y)
+{
+	ARegion *ar = gsc->ar;
+	View2D *v2d = gsc->v2d;
+	rctf *subrect = gsc->subrect;
+	float xyval[2];
+	
+	/* sanity checks */
+	BLI_assert(!(gps->flag & GP_STROKE_3DSPACE) || (gsc->sa->spacetype == SPACE_VIEW3D));
+	BLI_assert(!(gps->flag & GP_STROKE_2DSPACE) || (gsc->sa->spacetype != SPACE_VIEW3D));
+	
+	
+	if (gps->flag & GP_STROKE_3DSPACE) {
+		if (ED_view3d_project_float_global(ar, &pt->x, xyval, V3D_PROJ_TEST_NOP) == V3D_PROJ_RET_OK) {
+			*r_x = xyval[0];
+			*r_y = xyval[1];
+		}
+		else {
+			*r_x = 0.0f;
+			*r_y = 0.0f;
+		}
+	}
+	else if (gps->flag & GP_STROKE_2DSPACE) {
+		float vec[3] = {pt->x, pt->y, 0.0f};
+		int t_x, t_y;
+		
+		mul_m4_v3(gsc->mat, vec);
+		UI_view2d_view_to_region_clip(v2d, vec[0], vec[1], &t_x, &t_y);
+		
+		if ((t_x == t_y) && (t_x == V2D_IS_CLIPPED)) {
+			/* XXX: Or should we just always use the values as-is? */
+			*r_x = 0.0f;
+			*r_y = 0.0f;
+		}
+		else {
+			*r_x = (float)t_x;
+			*r_y = (float)t_y;
+		}
+	}
+	else {
+		if (subrect == NULL) {
+			/* normal 3D view (or view space) */
+			*r_x = (pt->x / 100.0f * ar->winx);
+			*r_y = (pt->y / 100.0f * ar->winy);
+		}
+		else {
+			/* camera view, use subrect */
+			*r_x = ((pt->x / 100.0f) * BLI_rctf_size_x(subrect)) + subrect->xmin;
+			*r_y = ((pt->y / 100.0f) * BLI_rctf_size_y(subrect)) + subrect->ymin;
 		}
 	}
 }
@@ -883,10 +940,12 @@ void gp_randomize_stroke(bGPDstroke *gps, bGPDbrush *brush)
 	float normal[3];
 	cross_v3_v3v3(normal, v1, v2);
 	normalize_v3(normal);
+	
 	/* get orthogonal vector to plane to rotate random effect */
 	float ortho[3];
 	cross_v3_v3v3(ortho, v1, normal);
 	normalize_v3(ortho);
+	
 	/* Read all points and apply shift vector (first and last point not modified) */
 	for (int i = 1; i < gps->totpoints - 1; ++i) {
 		bGPDspoint *pt = &gps->points[i];
@@ -955,8 +1014,8 @@ bool ED_gpencil_stroke_minmax(
 	}
 	return changed;
 }
-/* Dynamic Enums of GP Brushes */
 
+/* Dynamic Enums of GP Brushes */
 EnumPropertyItem *ED_gpencil_brushes_enum_itemf(
         bContext *C, PointerRNA *UNUSED(ptr), PropertyRNA *UNUSED(prop),
         bool *r_free)
@@ -990,8 +1049,8 @@ EnumPropertyItem *ED_gpencil_brushes_enum_itemf(
 
 	return item;
 }
-/* Dynamic Enums of GP Palettes */
 
+/* Dynamic Enums of GP Palettes */
 EnumPropertyItem *ED_gpencil_palettes_enum_itemf(
         bContext *C, PointerRNA *UNUSED(ptr), PropertyRNA *UNUSED(prop),
         bool *r_free)

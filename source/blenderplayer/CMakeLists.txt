@@ -58,7 +58,7 @@ if(WIN32 AND NOT UNIX)
 			blenderplayer ${EXETYPE}
 			bad_level_call_stubs/stubs.c
 			${CMAKE_SOURCE_DIR}/release/windows/icons/winblender.rc)
-
+	WINDOWS_SIGN_TARGET(blenderplayer)
 	install(TARGETS blenderplayer
 			COMPONENT Blenderplayer
 			DESTINATION ".")
@@ -231,6 +231,10 @@ endif()
 
 	if(WITH_OPENVDB)
 		list(APPEND BLENDER_SORTED_LIBS bf_intern_openvdb)
+	endif()
+
+	if(WITH_ALEMBIC)
+		list(APPEND BLENDER_SORTED_LIBS bf_alembic)
 	endif()
 
 	foreach(SORTLIB ${BLENDER_SORTED_LIBS})

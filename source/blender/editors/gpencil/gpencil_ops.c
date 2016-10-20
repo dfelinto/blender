@@ -240,6 +240,12 @@ static void ed_keymap_gpencil_editing(wmKeyConfig *keyconf)
 	
 	WM_keymap_add_item(keymap, "GPENCIL_OT_active_frames_delete_all", XKEY, KM_PRESS, KM_SHIFT, 0);
 	
+	/* join strokes */
+	WM_keymap_add_item(keymap, "GPENCIL_OT_stroke_join", JKEY, KM_PRESS, KM_CTRL, 0);
+	
+	kmi = WM_keymap_add_item(keymap, "GPENCIL_OT_stroke_join", JKEY, KM_PRESS, KM_CTRL | KM_SHIFT, 0);
+	RNA_enum_set(kmi->ptr, "type", GP_STROKE_JOINCOPY);
+	
 	/* copy + paste */
 	WM_keymap_add_item(keymap, "GPENCIL_OT_copy", CKEY, KM_PRESS, KM_CTRL, 0);
 	WM_keymap_add_item(keymap, "GPENCIL_OT_paste", VKEY, KM_PRESS, KM_CTRL, 0);
@@ -368,6 +374,8 @@ void ED_operatortypes_gpencil(void)
 	WM_operatortype_append(GPENCIL_OT_snap_to_grid);
 	WM_operatortype_append(GPENCIL_OT_snap_to_cursor);
 	WM_operatortype_append(GPENCIL_OT_snap_cursor_to_selected);
+	
+	WM_operatortype_append(GPENCIL_OT_reproject);
 	
 	WM_operatortype_append(GPENCIL_OT_brush_paint);
 	

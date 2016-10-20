@@ -66,6 +66,14 @@ enum VolumeInterpolation {
 	VOLUME_NUM_INTERPOLATION,
 };
 
+enum DisplacementMethod {
+	DISPLACE_BUMP = 0,
+	DISPLACE_TRUE = 1,
+	DISPLACE_BOTH = 2,
+
+	DISPLACE_NUM_METHODS,
+};
+
 /* Shader describing the appearance of a Mesh, Light or Background.
  *
  * While there is only a single shader graph, it has three outputs: surface,
@@ -109,6 +117,9 @@ public:
 	bool has_volume_spatial_varying;
 	bool has_object_dependency;
 	bool has_integrator_dependency;
+
+	/* displacement */
+	DisplacementMethod displacement_method;
 
 	/* requested mesh attributes */
 	AttributeRequestSet attributes;
@@ -162,7 +173,7 @@ public:
 	uint get_attribute_id(AttributeStandard std);
 
 	/* get shader id for mesh faces */
-	int get_shader_id(Shader *shader, Mesh *mesh = NULL, bool smooth = false);
+	int get_shader_id(Shader *shader, bool smooth = false);
 
 	/* add default shaders to scene, to use as default for things that don't
 	 * have any shader assigned explicitly */

@@ -42,6 +42,8 @@
  */
 #include "DNA_listBase.h"
 
+#include "BKE_library.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -102,8 +104,9 @@ typedef struct Main {
 	ListBase movieclip;
 	ListBase mask;
 	ListBase linestyle;
+	ListBase cachefiles;
 
-	char id_tag_update[256];
+	char id_tag_update[MAX_LIBARRAY];
 
 	/* Evaluation context used by viewport */
 	struct EvaluationContext *eval_ctx;

@@ -117,7 +117,7 @@ int ed_screen_context(const bContext *C, const char *member, bContextDataResult 
 	}
 	else if (CTX_data_equals(member, "visible_objects") || CTX_data_equals(member, "visible_bases")) {
 		const unsigned int lay = context_layers(sc, scene, sa);
-		int visible_objects = CTX_data_equals(member, "visible_objects");
+		const bool visible_objects = CTX_data_equals(member, "visible_objects");
 
 		for (base = scene->base.first; base; base = base->next) {
 			if (((base->object->restrictflag & OB_RESTRICT_VIEW) == 0) && (base->lay & lay)) {
@@ -132,7 +132,7 @@ int ed_screen_context(const bContext *C, const char *member, bContextDataResult 
 	}
 	else if (CTX_data_equals(member, "selectable_objects") || CTX_data_equals(member, "selectable_bases")) {
 		const unsigned int lay = context_layers(sc, scene, sa);
-		int selectable_objects = CTX_data_equals(member, "selectable_objects");
+		const bool selectable_objects = CTX_data_equals(member, "selectable_objects");
 
 		for (base = scene->base.first; base; base = base->next) {
 			if (base->lay & lay) {
@@ -149,7 +149,7 @@ int ed_screen_context(const bContext *C, const char *member, bContextDataResult 
 	}
 	else if (CTX_data_equals(member, "selected_objects") || CTX_data_equals(member, "selected_bases")) {
 		const unsigned int lay = context_layers(sc, scene, sa);
-		int selected_objects = CTX_data_equals(member, "selected_objects");
+		const bool selected_objects = CTX_data_equals(member, "selected_objects");
 
 		for (base = scene->base.first; base; base = base->next) {
 			if ((base->flag & SELECT) && (base->lay & lay)) {
@@ -164,7 +164,7 @@ int ed_screen_context(const bContext *C, const char *member, bContextDataResult 
 	}
 	else if (CTX_data_equals(member, "selected_editable_objects") || CTX_data_equals(member, "selected_editable_bases")) {
 		const unsigned int lay = context_layers(sc, scene, sa);
-		int selected_editable_objects = CTX_data_equals(member, "selected_editable_objects");
+		const bool selected_editable_objects = CTX_data_equals(member, "selected_editable_objects");
 
 		for (base = scene->base.first; base; base = base->next) {
 			if ((base->flag & SELECT) && (base->lay & lay)) {
@@ -183,7 +183,7 @@ int ed_screen_context(const bContext *C, const char *member, bContextDataResult 
 	}
 	else if (CTX_data_equals(member, "editable_objects") || CTX_data_equals(member, "editable_bases")) {
 		const unsigned int lay = context_layers(sc, scene, sa);
-		int editable_objects = CTX_data_equals(member, "editable_objects");
+		const bool editable_objects = CTX_data_equals(member, "editable_objects");
 		
 		/* Visible + Editable, but not necessarily selected */
 		for (base = scene->base.first; base; base = base->next) {
@@ -202,7 +202,7 @@ int ed_screen_context(const bContext *C, const char *member, bContextDataResult 
 	else if (CTX_data_equals(member, "visible_bones") || CTX_data_equals(member, "editable_bones")) {
 		bArmature *arm = (obedit && obedit->type == OB_ARMATURE) ? obedit->data : NULL;
 		EditBone *ebone, *flipbone = NULL;
-		int editable_bones = CTX_data_equals(member, "editable_bones");
+		const bool editable_bones = CTX_data_equals(member, "editable_bones");
 		
 		if (arm && arm->edbo) {
 			/* Attention: X-Axis Mirroring is also handled here... */
@@ -244,7 +244,7 @@ int ed_screen_context(const bContext *C, const char *member, bContextDataResult 
 	else if (CTX_data_equals(member, "selected_bones") || CTX_data_equals(member, "selected_editable_bones")) {
 		bArmature *arm = (obedit && obedit->type == OB_ARMATURE) ? obedit->data : NULL;
 		EditBone *ebone, *flipbone = NULL;
-		int selected_editable_bones = CTX_data_equals(member, "selected_editable_bones");
+		const bool selected_editable_bones = CTX_data_equals(member, "selected_editable_bones");
 		
 		if (arm && arm->edbo) {
 			/* Attention: X-Axis Mirroring is also handled here... */
@@ -467,7 +467,7 @@ int ed_screen_context(const bContext *C, const char *member, bContextDataResult 
 		bGPdata *gpd = ED_gpencil_data_get_active_direct((ID *)sc, scene, sa, obact);
 		
 		if (gpd) {
-			bGPDlayer *gpl = gpencil_layer_getactive(gpd);
+			bGPDlayer *gpl = BKE_gpencil_layer_getactive(gpd);
 			
 			if (gpl) {
 				CTX_data_pointer_set(result, &gpd->id, &RNA_GPencilLayer, gpl);
@@ -480,7 +480,7 @@ int ed_screen_context(const bContext *C, const char *member, bContextDataResult 
 		bGPdata *gpd = ED_gpencil_data_get_active_direct((ID *)sc, scene, sa, obact);
 
 		if (gpd) {
-			bGPDpalette *palette = gpencil_palette_getactive(gpd);
+			bGPDpalette *palette = BKE_gpencil_palette_getactive(gpd);
 
 			if (palette) {
 				CTX_data_pointer_set(result, &gpd->id, &RNA_GPencilPalette, palette);
@@ -493,10 +493,10 @@ int ed_screen_context(const bContext *C, const char *member, bContextDataResult 
 		bGPdata *gpd = ED_gpencil_data_get_active_direct((ID *)sc, scene, sa, obact);
 
 		if (gpd) {
-			bGPDpalette *palette = gpencil_palette_getactive(gpd);
+			bGPDpalette *palette = BKE_gpencil_palette_getactive(gpd);
 
 			if (palette) {
-				bGPDpalettecolor *palcolor = gpencil_palettecolor_getactive(palette);
+				bGPDpalettecolor *palcolor = BKE_gpencil_palettecolor_getactive(palette);
 				if (palcolor) {
 					CTX_data_pointer_set(result, &gpd->id, &RNA_GPencilPaletteColor, palcolor);
 					return 1;
@@ -506,7 +506,7 @@ int ed_screen_context(const bContext *C, const char *member, bContextDataResult 
 	}
 	else if (CTX_data_equals(member, "active_gpencil_brush")) {
 		/* XXX: see comment for gpencil_data case... */
-		bGPDbrush *brush = gpencil_brush_getactive(scene->toolsettings);
+		bGPDbrush *brush = BKE_gpencil_brush_getactive(scene->toolsettings);
 
 		if (brush) {
 			CTX_data_pointer_set(result, NULL, &RNA_GPencilBrush, brush);
@@ -518,7 +518,7 @@ int ed_screen_context(const bContext *C, const char *member, bContextDataResult 
 		bGPdata *gpd = ED_gpencil_data_get_active_direct((ID *)sc, scene, sa, obact);
 		
 		if (gpd) {
-			bGPDlayer *gpl = gpencil_layer_getactive(gpd);
+			bGPDlayer *gpl = BKE_gpencil_layer_getactive(gpd);
 			
 			if (gpl) {
 				CTX_data_pointer_set(result, &gpd->id, &RNA_GPencilLayer, gpl->actframe);

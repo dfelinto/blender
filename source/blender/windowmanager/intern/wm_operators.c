@@ -1369,11 +1369,12 @@ typedef struct wmOpPopUp {
 /* Only invoked by OK button in popups created with wm_block_dialog_create() */
 static void dialog_exec_cb(bContext *C, void *arg1, void *arg2)
 {
-	wmWindowManager *wm = CTX_wm_manager(C);
-	wmWindow *win = CTX_wm_window(C);
-
 	wmOpPopUp *data = arg1;
 	uiBlock *block = arg2;
+
+	/* Explicitly set UI_RETURN_OK flag, otherwise the menu might be cancelled
+	 * in case WM_operator_call_ex exits/reloads the current file (T49199). */
+	UI_popup_menu_retval_set(block, UI_RETURN_OK, true);
 
 	WM_operator_call_ex(C, data->op, true);
 
@@ -1384,8 +1385,18 @@ static void dialog_exec_cb(bContext *C, void *arg1, void *arg2)
 	/* in this case, wm_operator_ui_popup_cancel wont run */
 	MEM_freeN(data);
 
+	/* get context data *after* WM_operator_call_ex which might have closed the current file and changed context */
+	wmWindowManager *wm = CTX_wm_manager(C);
+	wmWindow *win = CTX_wm_window(C);
+
 	/* check window before 'block->handle' incase the
-	 * popup execution closed the window and freed the block. see T44688. */
+	 * popup execution closed the window and freed the block. see T44688.
+	 */
+	/* Post 2.78 TODO: Check if this fix and others related to T44688 are still
+	 * needed or can be improved now that requesting context data has been corrected
+	 * (see above). We're close to release so not a good time for experiments.
+	 * -- Julian
+	 */
 	if (BLI_findindex(&wm->windows, win) != -1) {
 		UI_popup_block_close(C, win, block);
 	}
@@ -4348,7 +4359,6 @@ void wm_window_keymap(wmKeyConfig *keyconf)
 {
 	wmKeyMap *keymap = WM_keymap_find(keyconf, "Window", 0, 0);
 	wmKeyMapItem *kmi;
-	const char *data_path;
 	
 	/* note, this doesn't replace existing keymap items */
 	WM_keymap_verify_item(keymap, "WM_OT_window_duplicate", WKEY, KM_PRESS, KM_CTRL | KM_ALT, 0);
@@ -4386,7 +4396,9 @@ void wm_window_keymap(wmKeyConfig *keyconf)
 
 	/* menus that can be accessed anywhere in blender */
 	WM_keymap_verify_item(keymap, "WM_OT_search_menu", SPACEKEY, KM_PRESS, 0, 0);
+#ifdef WITH_INPUT_NDOF
 	WM_keymap_add_menu(keymap, "USERPREF_MT_ndof_settings", NDOF_BUTTON_MENU, KM_PRESS, 0, 0);
+#endif
 
 	/* Space switching */
 	kmi = WM_keymap_add_item(keymap, "WM_OT_context_set_enum", F2KEY, KM_PRESS, KM_SHIFT, 0); /* new in 2.5x, was DXF export */
@@ -4433,8 +4445,9 @@ void wm_window_keymap(wmKeyConfig *keyconf)
 	RNA_string_set(kmi->ptr, "data_path", "area.type");
 	RNA_string_set(kmi->ptr, "value", "DOPESHEET_EDITOR");
 	
+#ifdef WITH_INPUT_NDOF
 	/* ndof speed */
-	data_path = "user_preferences.inputs.ndof_sensitivity";
+	const char *data_path = "user_preferences.inputs.ndof_sensitivity";
 	kmi = WM_keymap_add_item(keymap, "WM_OT_context_scale_float", NDOF_BUTTON_PLUS, KM_PRESS, 0, 0);
 	RNA_string_set(kmi->ptr, "data_path", data_path);
 	RNA_float_set(kmi->ptr, "value", 1.1f);
@@ -4450,9 +4463,7 @@ void wm_window_keymap(wmKeyConfig *keyconf)
 	kmi = WM_keymap_add_item(keymap, "WM_OT_context_scale_float", NDOF_BUTTON_MINUS, KM_PRESS, KM_SHIFT, 0);
 	RNA_string_set(kmi->ptr, "data_path", data_path);
 	RNA_float_set(kmi->ptr, "value", 1.0f / 1.5f);
-	data_path = NULL;
-	(void)data_path;
-
+#endif /* WITH_INPUT_NDOF */
 
 	gesture_circle_modal_keymap(keyconf);
 	gesture_border_modal_keymap(keyconf);

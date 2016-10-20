@@ -277,6 +277,7 @@ ccl_device void svm_node_normal_map(KernelGlobals *kg, ShaderData *sd, float *st
 	float3 color = stack_load_float3(stack, color_offset);
 	color = 2.0f*make_float3(color.x - 0.5f, color.y - 0.5f, color.z - 0.5f);
 
+	bool is_backfacing = (ccl_fetch(sd, flag) & SD_BACKFACING) != 0;
 	float3 N;
 
 	if(space == NODE_NORMAL_MAP_TANGENT) {
@@ -287,26 +288,31 @@ ccl_device void svm_node_normal_map(KernelGlobals *kg, ShaderData *sd, float *st
 		}
 
 		/* first try to get tangent attribute */
-		AttributeElement attr_elem, attr_sign_elem, attr_normal_elem;
-		int attr_offset = find_attribute(kg, sd, node.z, &attr_elem);
-		int attr_sign_offset = find_attribute(kg, sd, node.w, &attr_sign_elem);
-		int attr_normal_offset = find_attribute(kg, sd, ATTR_STD_VERTEX_NORMAL, &attr_normal_elem);
+		const AttributeDescriptor attr = find_attribute(kg, sd, node.z);
+		const AttributeDescriptor attr_sign = find_attribute(kg, sd, node.w);
+		const AttributeDescriptor attr_normal = find_attribute(kg, sd, ATTR_STD_VERTEX_NORMAL);
 
-		if(attr_offset == ATTR_STD_NOT_FOUND || attr_sign_offset == ATTR_STD_NOT_FOUND || attr_normal_offset == ATTR_STD_NOT_FOUND) {
+		if(attr.offset == ATTR_STD_NOT_FOUND || attr_sign.offset == ATTR_STD_NOT_FOUND || attr_normal.offset == ATTR_STD_NOT_FOUND) {
 			stack_store_float3(stack, normal_offset, make_float3(0.0f, 0.0f, 0.0f));
 			return;
 		}
 
 		/* get _unnormalized_ interpolated normal and tangent */
-		float3 tangent = primitive_attribute_float3(kg, sd, attr_elem, attr_offset, NULL, NULL);
-		float sign = primitive_attribute_float(kg, sd, attr_sign_elem, attr_sign_offset, NULL, NULL);
+		float3 tangent = primitive_attribute_float3(kg, sd, attr, NULL, NULL);
+		float sign = primitive_attribute_float(kg, sd, attr_sign, NULL, NULL);
 		float3 normal;
 
 		if(ccl_fetch(sd, shader) & SHADER_SMOOTH_NORMAL) {
-			normal = primitive_attribute_float3(kg, sd, attr_normal_elem, attr_normal_offset, NULL, NULL);
+			normal = primitive_attribute_float3(kg, sd, attr_normal, NULL, NULL);
 		}
 		else {
 			normal = ccl_fetch(sd, Ng);
+
+			/* the normal is already inverted, which is too soon for the math here */
+			if(is_backfacing) {
+				normal = -normal;
+			}
+
 			object_inverse_normal_transform(kg, sd, &normal);
 		}
 
@@ -333,6 +339,11 @@ ccl_device void svm_node_normal_map(KernelGlobals *kg, ShaderData *sd, float *st
 			N = safe_normalize(N);
 	}
 
+	/* invert normal for backfacing polygons */
+	if(is_backfacing) {
+		N = -N;
+	}
+
 	float strength = stack_load_float(stack, strength_offset);
 
 	if(strength != 1.0f) {
@@ -356,24 +367,22 @@ ccl_device void svm_node_tangent(KernelGlobals *kg, ShaderData *sd, float *stack
 
 	if(direction_type == NODE_TANGENT_UVMAP) {
 		/* UV map */
-		AttributeElement attr_elem;
-		int attr_offset = find_attribute(kg, sd, node.z, &attr_elem);
+		const AttributeDescriptor desc = find_attribute(kg, sd, node.z);
 
-		if(attr_offset == ATTR_STD_NOT_FOUND)
+		if(desc.offset == ATTR_STD_NOT_FOUND)
 			tangent = make_float3(0.0f, 0.0f, 0.0f);
 		else
-			tangent = primitive_attribute_float3(kg, sd, attr_elem, attr_offset, NULL, NULL);
+			tangent = primitive_attribute_float3(kg, sd, desc, NULL, NULL);
 	}
 	else {
 		/* radial */
-		AttributeElement attr_elem;
-		int attr_offset = find_attribute(kg, sd, node.z, &attr_elem);
+		const AttributeDescriptor desc = find_attribute(kg, sd, node.z);
 		float3 generated;
 
-		if(attr_offset == ATTR_STD_NOT_FOUND)
+		if(desc.offset == ATTR_STD_NOT_FOUND)
 			generated = ccl_fetch(sd, P);
 		else
-			generated = primitive_attribute_float3(kg, sd, attr_elem, attr_offset, NULL, NULL);
+			generated = primitive_attribute_float3(kg, sd, desc, NULL, NULL);
 
 		if(axis == NODE_TANGENT_AXIS_X)
 			tangent = make_float3(0.0f, -(generated.z - 0.5f), (generated.y - 0.5f));

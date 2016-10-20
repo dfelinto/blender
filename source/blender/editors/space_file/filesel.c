@@ -185,6 +185,8 @@ short ED_fileselect_set_params(SpaceFile *sfile)
 			params->filter |= RNA_property_boolean_get(op->ptr, prop) ? FILE_TYPE_BTX : 0;
 		if ((prop = RNA_struct_find_property(op->ptr, "filter_collada")))
 			params->filter |= RNA_property_boolean_get(op->ptr, prop) ? FILE_TYPE_COLLADA : 0;
+		if ((prop = RNA_struct_find_property(op->ptr, "filter_alembic")))
+			params->filter |= RNA_property_boolean_get(op->ptr, prop) ? FILE_TYPE_ALEMBIC : 0;
 		if ((prop = RNA_struct_find_property(op->ptr, "filter_glob"))) {
 			/* Protection against pyscripts not setting proper size limit... */
 			char *tmp = RNA_property_string_get_alloc(
@@ -213,7 +215,7 @@ short ED_fileselect_set_params(SpaceFile *sfile)
 		                    FILTER_ID_GR | FILTER_ID_IM | FILTER_ID_LA | FILTER_ID_LS | FILTER_ID_LT | FILTER_ID_MA |
 		                    FILTER_ID_MB | FILTER_ID_MC | FILTER_ID_ME | FILTER_ID_MSK | FILTER_ID_NT | FILTER_ID_OB |
 		                    FILTER_ID_PA | FILTER_ID_PAL | FILTER_ID_PC | FILTER_ID_SCE | FILTER_ID_SPK | FILTER_ID_SO |
-		                    FILTER_ID_TE | FILTER_ID_TXT | FILTER_ID_VF | FILTER_ID_WO;
+		                    FILTER_ID_TE | FILTER_ID_TXT | FILTER_ID_VF | FILTER_ID_WO | FILTER_ID_CF;
 
 		if (U.uiflag & USER_HIDE_DOT) {
 			params->flag |= FILE_HIDE_DOT;
@@ -590,7 +592,7 @@ void ED_file_change_dir(bContext *C)
 		sfile->params->filter_search[0] = '\0';
 		sfile->params->active_file = -1;
 
-		if (!file_is_dir(sfile, sfile->params->dir)) {
+		if (!filelist_is_dir(sfile->files, sfile->params->dir)) {
 			BLI_strncpy(sfile->params->dir, filelist_dir(sfile->files), sizeof(sfile->params->dir));
 			/* could return but just refresh the current dir */
 		}

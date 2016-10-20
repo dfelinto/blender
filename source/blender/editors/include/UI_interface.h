@@ -393,6 +393,8 @@ struct uiLayout *UI_popup_menu_layout(uiPopupMenu *head);
 void UI_popup_menu_reports(struct bContext *C, struct ReportList *reports) ATTR_NONNULL();
 int UI_popup_menu_invoke(struct bContext *C, const char *idname, struct ReportList *reports) ATTR_NONNULL(1, 2);
 
+void UI_popup_menu_retval_set(const uiBlock *block, const int retval, const bool enable);
+
 /* Pie menus */
 typedef struct uiPieMenu uiPieMenu;
 
@@ -945,6 +947,7 @@ void uiTemplateReportsBanner(uiLayout *layout, struct bContext *C);
 void uiTemplateKeymapItemProperties(uiLayout *layout, struct PointerRNA *ptr);
 void uiTemplateComponentMenu(uiLayout *layout, struct PointerRNA *ptr, const char *propname, const char *name);
 void uiTemplateNodeSocket(uiLayout *layout, struct bContext *C, float *color);
+void uiTemplateCacheFile(uiLayout *layout, struct bContext *C, struct PointerRNA *ptr, const char *propname);
 
 /* Default UIList class name, keep in sync with its declaration in bl_ui/__init__.py */
 #define UI_UL_DEFAULT_CLASS_NAME "UI_UL_list"

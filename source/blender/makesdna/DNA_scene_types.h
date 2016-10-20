@@ -1738,9 +1738,11 @@ typedef struct Scene {
 #define R_STAMP_CAMERALENS	0x0800
 #define R_STAMP_STRIPMETA	0x1000
 #define R_STAMP_MEMORY		0x2000
+#define R_STAMP_HIDE_LABELS	0x4000
 #define R_STAMP_ALL (R_STAMP_TIME|R_STAMP_FRAME|R_STAMP_DATE|R_STAMP_CAMERA|R_STAMP_SCENE| \
                      R_STAMP_NOTE|R_STAMP_MARKER|R_STAMP_FILENAME|R_STAMP_SEQSTRIP|        \
-                     R_STAMP_RENDERTIME|R_STAMP_CAMERALENS|R_STAMP_MEMORY)
+                     R_STAMP_RENDERTIME|R_STAMP_CAMERALENS|R_STAMP_MEMORY|                 \
+                     R_STAMP_HIDE_LABELS)
 
 /* alphamode */
 #define R_ADDSKY		0
@@ -2088,6 +2090,8 @@ typedef enum eGPencil_Flags {
 	GP_TOOL_FLAG_PAINTSESSIONS_ON       = (1 << 0),
 	/* When creating new frames, the last frame gets used as the basis for the new one */
 	GP_TOOL_FLAG_RETAIN_LAST            = (1 << 1),
+	/* Add the strokes below all strokes in the layer */
+	GP_TOOL_FLAG_PAINT_ONBACK = (1 << 2)
 } eGPencil_Flags;
 
 /* toolsettings->gpencil_src */

@@ -656,6 +656,7 @@ void IMAGE_OT_view_zoom(wmOperatorType *ot)
 	RNA_def_property_flag(prop, PROP_HIDDEN);
 }
 
+#ifdef WITH_INPUT_NDOF
 /********************** NDOF operator *********************/
 
 /* Combined pan/zoom from a 3D mouse device.
@@ -705,6 +706,7 @@ void IMAGE_OT_view_ndof(wmOperatorType *ot)
 	/* flags */
 	ot->flag = OPTYPE_LOCK_BYPASS;
 }
+#endif /* WITH_INPUT_NDOF */
 
 /********************** view all operator *********************/
 
@@ -1611,13 +1613,16 @@ static int save_image_options_init(SaveImageOptions *simopts, SpaceImage *sima, 
 			if (ima->source == IMA_SRC_GENERATED) {
 				simopts->im_format.imtype = R_IMF_IMTYPE_PNG;
 				simopts->im_format.compress = ibuf->foptions.quality;
+				simopts->im_format.planes = ibuf->planes;
 			}
 			else {
 				BKE_imbuf_to_image_format(&simopts->im_format, ibuf);
 			}
-		}
 
-		simopts->im_format.planes = ibuf->planes;
+			/* use the multiview image settings as the default */
+			simopts->im_format.stereo3d_format = *ima->stereo3d_format;
+			simopts->im_format.views_format = ima->views_format;
+		}
 
 		//simopts->subimtype = scene->r.subimtype; /* XXX - this is lame, we need to make these available too! */
 
@@ -1657,10 +1662,6 @@ static int save_image_options_init(SaveImageOptions *simopts, SpaceImage *sima, 
 				BLI_path_abs(simopts->filepath, is_prev_save ? G.ima : G.main->name);
 			}
 		}
-
-		/* use the multiview image settings as the default */
-		simopts->im_format.stereo3d_format = *ima->stereo3d_format;
-		simopts->im_format.views_format = ima->views_format;
 
 		/* color management */
 		BKE_color_managed_display_settings_copy(&simopts->im_format.display_settings, &scene->display_settings);

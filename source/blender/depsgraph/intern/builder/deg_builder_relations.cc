@@ -47,6 +47,7 @@ extern "C" {
 #include "DNA_anim_types.h"
 #include "DNA_armature_types.h"
 #include "DNA_camera_types.h"
+#include "DNA_cachefile_types.h"
 #include "DNA_constraint_types.h"
 #include "DNA_curve_types.h"
 #include "DNA_effect_types.h"
@@ -64,6 +65,7 @@ extern "C" {
 #include "DNA_scene_types.h"
 #include "DNA_texture_types.h"
 #include "DNA_world_types.h"
+#include "DNA_object_force.h"
 
 #include "BKE_action.h"
 #include "BKE_armature.h"
@@ -71,6 +73,7 @@ extern "C" {
 #include "BKE_constraint.h"
 #include "BKE_curve.h"
 #include "BKE_effect.h"
+#include "BKE_collision.h"
 #include "BKE_fcurve.h"
 #include "BKE_group.h"
 #include "BKE_key.h"
@@ -240,6 +243,69 @@ void DepsgraphRelationBuilder::add_operation_relation(
 		                 node_to,   (node_to)   ? node_to->identifier().c_str() : "<None>",
 		                 type, description);
 	}
+}
+
+void DepsgraphRelationBuilder::add_collision_relations(const OperationKey &key, Scene *scene, Object *ob, Group *group, int layer, bool dupli, const char *name)
+{
+	unsigned int numcollobj;
+	Object **collobjs = get_collisionobjects_ext(scene, ob, group, layer, &numcollobj, eModifierType_Collision, dupli);
+
+	for (unsigned int i = 0; i < numcollobj; i++)
+	{
+		Object *ob1 = collobjs[i];
+
+		ComponentKey trf_key(&ob1->id, DEPSNODE_TYPE_TRANSFORM);
+		add_relation(trf_key, key, DEPSREL_TYPE_STANDARD, name);
+
+		ComponentKey coll_key(&ob1->id, DEPSNODE_TYPE_GEOMETRY);
+		add_relation(coll_key, key, DEPSREL_TYPE_STANDARD, name);
+	}
+
+	if (collobjs)
+		MEM_freeN(collobjs);
+}
+
+void DepsgraphRelationBuilder::add_forcefield_relations(const OperationKey &key, Scene *scene, Object *ob, ParticleSystem *psys, EffectorWeights *eff, bool add_absorption, const char *name)
+{
+	ListBase *effectors = pdInitEffectors(scene, ob, psys, eff, false);
+
+	if (effectors) {
+		for (EffectorCache *eff = (EffectorCache *)effectors->first; eff; eff = eff->next) {
+			if (eff->ob != ob) {
+				ComponentKey eff_key(&eff->ob->id, DEPSNODE_TYPE_TRANSFORM);
+				add_relation(eff_key, key, DEPSREL_TYPE_STANDARD, name);
+			}
+
+			if (eff->psys) {
+				if (eff->ob != ob) {
+					ComponentKey eff_key(&eff->ob->id, DEPSNODE_TYPE_EVAL_PARTICLES);
+					add_relation(eff_key, key, DEPSREL_TYPE_STANDARD, name);
+
+					/* TODO: remove this when/if EVAL_PARTICLES is sufficient for up to date particles */
+					ComponentKey mod_key(&eff->ob->id, DEPSNODE_TYPE_GEOMETRY);
+					add_relation(mod_key, key, DEPSREL_TYPE_STANDARD, name);
+				}
+				else if (eff->psys != psys) {
+					OperationKey eff_key(&eff->ob->id, DEPSNODE_TYPE_EVAL_PARTICLES, DEG_OPCODE_PSYS_EVAL, eff->psys->name);
+					add_relation(eff_key, key, DEPSREL_TYPE_STANDARD, name);
+				}
+			}
+
+			if (eff->pd->forcefield == PFIELD_SMOKEFLOW && eff->pd->f_source) {
+				ComponentKey trf_key(&eff->pd->f_source->id, DEPSNODE_TYPE_TRANSFORM);
+				add_relation(trf_key, key, DEPSREL_TYPE_STANDARD, "Smoke Force Domain");
+
+				ComponentKey eff_key(&eff->pd->f_source->id, DEPSNODE_TYPE_GEOMETRY);
+				add_relation(eff_key, key, DEPSREL_TYPE_STANDARD, "Smoke Force Domain");
+			}
+
+			if (add_absorption && (eff->pd->flag & PFIELD_VISIBILITY)) {
+				add_collision_relations(key, scene, ob, NULL, eff->ob->lay, true, "Force Absorption");
+			}
+		}
+	}
+
+	pdEndEffectors(&effectors);
 }
 
 /* **** Functions to build relations between entities  **** */
@@ -598,6 +664,18 @@ void DepsgraphRelationBuilder::build_constraints(Scene *scene, ID *id, eDepsNode
 			/* TODO(sergey): This is more a TimeSource -> MovieClip -> Constraint dependency chain. */
 			TimeSourceKey time_src_key;
 			add_relation(time_src_key, constraint_op_key, DEPSREL_TYPE_TIME, "[TimeSrc -> Animation]");
+		}
+		else if (cti->type == CONSTRAINT_TYPE_TRANSFORM_CACHE) {
+			/* TODO(kevin): This is more a TimeSource -> CacheFile -> Constraint dependency chain. */
+			TimeSourceKey time_src_key;
+			add_relation(time_src_key, constraint_op_key, DEPSREL_TYPE_TIME, "[TimeSrc -> Animation]");
+
+			bTransformCacheConstraint *data = (bTransformCacheConstraint *)con->data;
+
+			if (data->cache_file) {
+				ComponentKey cache_key(&data->cache_file->id, DEPSNODE_TYPE_CACHE);
+				add_relation(cache_key, constraint_op_key, DEPSREL_TYPE_CACHE, cti->name);
+			}
 		}
 		else if (cti->get_constraint_targets) {
 			ListBase targets = {NULL, NULL};
@@ -1124,20 +1202,13 @@ void DepsgraphRelationBuilder::build_particles(Scene *scene, Object *ob)
 		}
 #endif
 
-		/* effectors */
-		ListBase *effectors = pdInitEffectors(scene, ob, psys, part->effector_weights, false);
-
-		if (effectors) {
-			for (EffectorCache *eff = (EffectorCache *)effectors->first; eff; eff = eff->next) {
-				if (eff->psys) {
-					// XXX: DAG_RL_DATA_DATA | DAG_RL_OB_DATA
-					ComponentKey eff_key(&eff->ob->id, DEPSNODE_TYPE_GEOMETRY); // xxx: particles instead?
-					add_relation(eff_key, psys_key, DEPSREL_TYPE_STANDARD, "Particle Field");
-				}
-			}
+		/* collisions */
+		if (part->type != PART_HAIR) {
+			add_collision_relations(psys_key, scene, ob, part->collision_group, ob->lay, true, "Particle Collision");
 		}
 
-		pdEndEffectors(&effectors);
+		/* effectors */
+		add_forcefield_relations(psys_key, scene, ob, psys, part->effector_weights, part->type == PART_HAIR, "Particle Field");
 
 		/* boids */
 		if (part->boids) {

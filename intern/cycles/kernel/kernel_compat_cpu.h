@@ -112,7 +112,7 @@ template<typename T> struct texture_image  {
 	ccl_always_inline float4 read(uchar r)
 	{
 		float f = r*(1.0f/255.0f);
-		return make_float4(f, f, f, 1.0);
+		return make_float4(f, f, f, 1.0f);
 	}
 
 	ccl_always_inline float4 read(float r)
@@ -495,6 +495,7 @@ typedef texture<uint> texture_uint;
 typedef texture<int> texture_int;
 typedef texture<uint4> texture_uint4;
 typedef texture<uchar4> texture_uchar4;
+typedef texture<uchar> texture_uchar;
 typedef texture_image<float> texture_image_float;
 typedef texture_image<uchar> texture_image_uchar;
 typedef texture_image<half> texture_image_half;

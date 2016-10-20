@@ -3172,6 +3172,9 @@ void object_remove_particle_system(Scene *UNUSED(scene), Object *ob)
 
 	/* clear particle system */
 	BLI_remlink(&ob->particlesystem, psys);
+	if (psys->part) {
+		id_us_min(&psys->part->id);
+	}
 	psys_free(ob, psys);
 
 	if (ob->particlesystem.first)
@@ -4050,13 +4053,16 @@ void psys_get_dupli_texture(ParticleSystem *psys, ParticleSettings *part,
 
 	uv[0] = uv[1] = 0.f;
 
+	/* Grid distribution doesn't support UV or emit from vertex mode */
+	bool is_grid = (part->distr == PART_DISTR_GRID && part->from != PART_FROM_VERT);
+
 	if (cpa) {
 		if ((part->childtype == PART_CHILD_FACES) && (psmd->dm_final != NULL)) {
 			CustomData *mtf_data = psmd->dm_final->getTessFaceDataLayout(psmd->dm_final);
 			const int uv_idx = CustomData_get_render_layer(mtf_data, CD_MTFACE);
 			mtface = CustomData_get_layer_n(mtf_data, CD_MTFACE, uv_idx);
 
-			if (mtface) {
+			if (mtface && !is_grid) {
 				mface = psmd->dm_final->getTessFaceData(psmd->dm_final, cpa->num, CD_MFACE);
 				mtface += cpa->num;
 				psys_interpolate_uvs(mtface, mface->v4, cpa->fuv, uv);
@@ -4070,7 +4076,7 @@ void psys_get_dupli_texture(ParticleSystem *psys, ParticleSettings *part,
 		}
 	}
 
-	if ((part->from == PART_FROM_FACE) && (psmd->dm_final != NULL)) {
+	if ((part->from == PART_FROM_FACE) && (psmd->dm_final != NULL) && !is_grid) {
 		CustomData *mtf_data = psmd->dm_final->getTessFaceDataLayout(psmd->dm_final);
 		const int uv_idx = CustomData_get_render_layer(mtf_data, CD_MTFACE);
 		mtface = CustomData_get_layer_n(mtf_data, CD_MTFACE, uv_idx);

@@ -164,9 +164,6 @@ typedef struct tGPsdata {
 
 /* ------ */
 
-/* maximum sizes of gp-session buffer */
-#define GP_STROKE_BUFFER_MAX    5000
-
 /* Macros for accessing sensitivity thresholds... */
 /* minimum number of pixels mouse should move before new point created */
 #define MIN_MANHATTEN_PX    (U.gp_manhattendist)
@@ -544,7 +541,7 @@ static short gp_stroke_addpoint(tGPsdata *p, const int mval[2], float pressure, 
 	}
 	else if (p->paintmode == GP_PAINTMODE_DRAW_POLY) {
 		
-		bGPDlayer *gpl = gpencil_layer_getactive(gpd);
+		bGPDlayer *gpl = BKE_gpencil_layer_getactive(gpd);
 		/* get pointer to destination point */
 		pt = (tGPspoint *)(gpd->sbuffer);
 		
@@ -692,6 +689,7 @@ static void gp_stroke_newfrombuffer(tGPsdata *p)
 	bGPDspoint *pt;
 	tGPspoint *ptc;
 	bGPDbrush *brush = p->brush;
+	ToolSettings *ts = p->scene->toolsettings;
 	
 	int i, totelem;
 	/* since strokes are so fine, when using their depth we need a margin otherwise they might get missed */
@@ -920,13 +918,21 @@ static void gp_stroke_newfrombuffer(tGPsdata *p)
 			MEM_freeN(depth_arr);
 	}
 	/* Save palette color */
-	bGPDpalette *palette = gpencil_palette_getactive(p->gpd);
-	bGPDpalettecolor *palcolor = gpencil_palettecolor_getactive(palette);
+	bGPDpalette *palette = BKE_gpencil_palette_getactive(p->gpd);
+	bGPDpalettecolor *palcolor = BKE_gpencil_palettecolor_getactive(palette);
 	gps->palcolor = palcolor;
-	strcpy(gps->colorname, palcolor->info);
+	BLI_strncpy(gps->colorname, palcolor->info, sizeof(gps->colorname));
 
-	/* add stroke to frame */
-	BLI_addtail(&p->gpf->strokes, gps);
+	/* add stroke to frame, usually on tail of the listbase, but if on back is enabled the stroke is added on listbase head 
+	* because the drawing order is inverse and the head stroke is the first to draw. This is very useful for artist
+	* when drawing the background
+	*/
+	if ((ts->gpencil_flags & GP_TOOL_FLAG_PAINT_ONBACK) && (p->paintmode != GP_PAINTMODE_DRAW_POLY)) {
+		BLI_addhead(&p->gpf->strokes, gps);
+	}
+	else {
+		BLI_addtail(&p->gpf->strokes, gps);
+	}
 	gp_stroke_added_enable(p);
 }
 
@@ -1221,7 +1227,7 @@ static bGPDpalettecolor *gp_create_new_color(bGPDpalette *palette)
 {
 	bGPDpalettecolor *palcolor;
 
-	palcolor = gpencil_palettecolor_addnew(palette, DATA_("Color"), true);
+	palcolor = BKE_gpencil_palettecolor_addnew(palette, DATA_("Color"), true);
 	
 	return palcolor;
 }
@@ -1234,12 +1240,12 @@ static void gp_init_drawing_brush(ToolSettings *ts, tGPsdata *p)
 	/* if not exist, create a new one */
 	if (BLI_listbase_is_empty(&ts->gp_brushes)) {
 		/* create new brushes */
-		gpencil_brush_init_presets(ts);
-		brush = gpencil_brush_getactive(ts);
+		BKE_gpencil_brush_init_presets(ts);
+		brush = BKE_gpencil_brush_getactive(ts);
 	}
 	else {
 		/* Use the current */
-		brush = gpencil_brush_getactive(ts);
+		brush = BKE_gpencil_brush_getactive(ts);
 	}
 	/* be sure curves are initializated */
 	curvemapping_initialize(brush->cur_sensitivity);
@@ -1263,23 +1269,23 @@ static void gp_init_palette(tGPsdata *p)
 	/* if not exist, create a new palette */
 	if (BLI_listbase_is_empty(&gpd->palettes)) {
 		/* create new palette */
-		palette = gpencil_palette_addnew(gpd, DATA_("GP_Palette"), true);
+		palette = BKE_gpencil_palette_addnew(gpd, DATA_("GP_Palette"), true);
 		/* now create a default color */
 		palcolor = gp_create_new_color(palette);
 	}
 	else {
 		/* Use the current palette and color */
-		palette = gpencil_palette_getactive(gpd);
+		palette = BKE_gpencil_palette_getactive(gpd);
 		/* the palette needs one color */
 		if (BLI_listbase_is_empty(&palette->colors)) {
 			palcolor = gp_create_new_color(palette);
 		}
 		else {
-			palcolor = gpencil_palettecolor_getactive(palette);
+			palcolor = BKE_gpencil_palettecolor_getactive(palette);
 		}
 		/* in some situations can be null, so use first */
 		if (palcolor == NULL) {
-			gpencil_palettecolor_setactive(palette, palette->colors.first);
+			BKE_gpencil_palettecolor_setactive(palette, palette->colors.first);
 			palcolor = palette->colors.first;
 		}
 	}
@@ -1439,7 +1445,7 @@ static bool gp_session_initdata(bContext *C, tGPsdata *p)
 	else {
 		/* if no existing GPencil block exists, add one */
 		if (*gpd_ptr == NULL)
-			*gpd_ptr = gpencil_data_addnew("GPencil");
+			*gpd_ptr = BKE_gpencil_data_addnew("GPencil");
 		p->gpd = *gpd_ptr;
 	}
 	
@@ -1514,9 +1520,9 @@ static void gp_paint_initstroke(tGPsdata *p, eGPencil_PaintModes paintmode)
 	ToolSettings *ts = scene->toolsettings;
 	
 	/* get active layer (or add a new one if non-existent) */
-	p->gpl = gpencil_layer_getactive(p->gpd);
+	p->gpl = BKE_gpencil_layer_getactive(p->gpd);
 	if (p->gpl == NULL) {
-		p->gpl = gpencil_layer_addnew(p->gpd, "GP_Layer", true);
+		p->gpl = BKE_gpencil_layer_addnew(p->gpd, "GP_Layer", true);
 		
 		if (p->custom_color[3])
 			copy_v3_v3(p->gpl->color, p->custom_color);
@@ -1544,7 +1550,7 @@ static void gp_paint_initstroke(tGPsdata *p, eGPencil_PaintModes paintmode)
 			/* Add a new frame if needed (and based off the active frame,
 			 * as we need some existing strokes to erase)
 			 */
-			gpl->actframe = gpencil_layer_getframe(gpl, CFRA, GP_GETFRAME_ADD_COPY);
+			gpl->actframe = BKE_gpencil_layer_getframe(gpl, CFRA, GP_GETFRAME_ADD_COPY);
 			
 			/* XXX: we omit GP_FRAME_PAINT here for now,
 			 * as it is only really useful for doing
@@ -1580,7 +1586,7 @@ static void gp_paint_initstroke(tGPsdata *p, eGPencil_PaintModes paintmode)
 		else
 			add_frame_mode = GP_GETFRAME_ADD_NEW;
 			
-		p->gpf = gpencil_layer_getframe(p->gpl, CFRA, add_frame_mode);
+		p->gpf = BKE_gpencil_layer_getframe(p->gpl, CFRA, add_frame_mode);
 		
 		if (p->gpf == NULL) {
 			p->status = GP_STATUS_ERROR;
@@ -2278,10 +2284,33 @@ static void gpencil_stroke_end(wmOperator *op)
 	p->gpf = NULL;
 }
 
+/* Move last stroke in the listbase to the head to be drawn below all previous strokes in the layer */
+static void gpencil_move_last_stroke_to_back(bContext *C)
+{
+	/* move last stroke (the polygon) to head of the listbase stroke to draw on back of all previous strokes */
+	bGPdata *gpd = ED_gpencil_data_get_active(C);
+	bGPDlayer *gpl = BKE_gpencil_layer_getactive(gpd);
+
+	/* sanity checks */
+	if (ELEM(NULL, gpd, gpl, gpl->actframe)) {
+		return;
+	}
+
+	bGPDframe *gpf = gpl->actframe;
+	bGPDstroke *gps = gpf->strokes.last;
+	if (ELEM(NULL, gps)) {
+		return;
+	}
+
+	BLI_remlink(&gpf->strokes, gps);
+	BLI_insertlinkbefore(&gpf->strokes, gpf->strokes.first, gps);
+}
+
 /* events handling during interactive drawing part of operator */
 static int gpencil_draw_modal(bContext *C, wmOperator *op, const wmEvent *event)
 {
 	tGPsdata *p = op->customdata;
+	ToolSettings *ts = CTX_data_tool_settings(C);
 	int estate = OPERATOR_PASS_THROUGH; /* default exit state - pass through to support MMB view nav, etc. */
 	
 	/* if (event->type == NDOF_MOTION)
@@ -2334,6 +2363,14 @@ static int gpencil_draw_modal(bContext *C, wmOperator *op, const wmEvent *event)
 	if (ELEM(event->type, RETKEY, PADENTER, ESCKEY, SPACEKEY, EKEY)) {
 		/* exit() ends the current stroke before cleaning up */
 		/* printf("\t\tGP - end of paint op + end of stroke\n"); */
+		/* if drawing polygon and enable on back, must move stroke */
+		if (ts) {
+			if ((ts->gpencil_flags & GP_TOOL_FLAG_PAINT_ONBACK) && (p->paintmode == GP_PAINTMODE_DRAW_POLY)) {
+				if (p->flags & GP_PAINTFLAG_STROKEADDED) {
+					gpencil_move_last_stroke_to_back(C);
+				}
+			}
+		}
 		p->status = GP_STATUS_DONE;
 		estate = OPERATOR_FINISHED;
 	}
@@ -2390,9 +2427,14 @@ static int gpencil_draw_modal(bContext *C, wmOperator *op, const wmEvent *event)
 			}
 			else {
 				/* printf("\t\tGP - end of stroke + op\n"); */
-				/* disable paint session */
-				p->scene->toolsettings->gpencil_flags &= ~GP_TOOL_FLAG_PAINTSESSIONS_ON;
-
+				/* if drawing polygon and enable on back, must move stroke */
+				if (ts) {
+					if ((ts->gpencil_flags & GP_TOOL_FLAG_PAINT_ONBACK) && (p->paintmode == GP_PAINTMODE_DRAW_POLY)) {
+						if (p->flags & GP_PAINTFLAG_STROKEADDED) {
+							gpencil_move_last_stroke_to_back(C);
+						}
+					}
+				}
 				p->status = GP_STATUS_DONE;
 				estate = OPERATOR_FINISHED;
 			}
@@ -2422,9 +2464,6 @@ static int gpencil_draw_modal(bContext *C, wmOperator *op, const wmEvent *event)
 					in_bounds = true;
 				}
 				else {
-					/* disable paint session */
-					p->scene->toolsettings->gpencil_flags &= ~GP_TOOL_FLAG_PAINTSESSIONS_ON;
-
 					/* Out of bounds, or invalid in some other way */
 					p->status = GP_STATUS_ERROR;
 					estate = OPERATOR_CANCELLED;
@@ -2441,9 +2480,6 @@ static int gpencil_draw_modal(bContext *C, wmOperator *op, const wmEvent *event)
 				in_bounds = BLI_rcti_isect_pt_v(&region_rect, event->mval);
 			}
 			else {
-				/* disable paint session */
-				p->scene->toolsettings->gpencil_flags &= ~GP_TOOL_FLAG_PAINTSESSIONS_ON;
-
 				/* No region */
 				p->status = GP_STATUS_ERROR;
 				estate = OPERATOR_CANCELLED;
@@ -2471,9 +2507,6 @@ static int gpencil_draw_modal(bContext *C, wmOperator *op, const wmEvent *event)
 				p = gpencil_stroke_begin(C, op);
 				
 				if (p->status == GP_STATUS_ERROR) {
-					/* disable paint session */
-					p->scene->toolsettings->gpencil_flags &= ~GP_TOOL_FLAG_PAINTSESSIONS_ON;
-
 					estate = OPERATOR_CANCELLED;
 				}
 			}
@@ -2482,9 +2515,14 @@ static int gpencil_draw_modal(bContext *C, wmOperator *op, const wmEvent *event)
 				 * NOTE: Don't eter this case if an error occurred while finding the
 				 *       region (as above)
 				 */
-				/* disable paint session */
-				p->scene->toolsettings->gpencil_flags &= ~GP_TOOL_FLAG_PAINTSESSIONS_ON;
-
+				/* if drawing polygon and enable on back, must move stroke */
+				if (ts) {
+					if ((ts->gpencil_flags & GP_TOOL_FLAG_PAINT_ONBACK) && (p->paintmode == GP_PAINTMODE_DRAW_POLY)) {
+						if (p->flags & GP_PAINTFLAG_STROKEADDED) {
+							gpencil_move_last_stroke_to_back(C);
+						}
+					}
+				}
 				p->status = GP_STATUS_DONE;
 				estate = OPERATOR_FINISHED;
 			}

@@ -45,6 +45,7 @@
 #include "DNA_anim_types.h"
 #include "DNA_armature_types.h"
 #include "DNA_brush_types.h"
+#include "DNA_cachefile_types.h"
 #include "DNA_camera_types.h"
 #include "DNA_group_types.h"
 #include "DNA_gpencil_types.h"
@@ -56,6 +57,7 @@
 #include "DNA_material_types.h"
 #include "DNA_mesh_types.h"
 #include "DNA_meta_types.h"
+#include "DNA_modifier_types.h"
 #include "DNA_movieclip_types.h"
 #include "DNA_mask_types.h"
 #include "DNA_node_types.h"
@@ -81,6 +83,7 @@
 #include "BKE_bpath.h"
 #include "BKE_brush.h"
 #include "BKE_camera.h"
+#include "BKE_cachefile.h"
 #include "BKE_context.h"
 #include "BKE_curve.h"
 #include "BKE_depsgraph.h"
@@ -332,8 +335,10 @@ void BKE_id_make_local_generic(Main *bmain, ID *id, const bool id_in_mainlist, c
  */
 bool id_make_local(Main *bmain, ID *id, const bool test, const bool lib_local)
 {
-	if (id->tag & LIB_TAG_INDIRECT)
+	/* We don't care whether ID is directly or indirectly linked in case we are making a whole lib local... */
+	if (!lib_local && (id->tag & LIB_TAG_INDIRECT)) {
 		return false;
+	}
 
 	switch ((ID_Type)GS(id->name)) {
 		case ID_SCE:
@@ -423,6 +428,9 @@ bool id_make_local(Main *bmain, ID *id, const bool test, const bool lib_local)
 		case ID_PC:
 			if (!test) BKE_paint_curve_make_local(bmain, (PaintCurve *)id, lib_local);
 			return true;
+		case ID_CF:
+			if (!test) BKE_cachefile_make_local(bmain, (CacheFile *)id, lib_local);
+			return true;
 		case ID_SCR:
 		case ID_LI:
 		case ID_KE:
@@ -510,7 +518,7 @@ bool id_copy(Main *bmain, ID *id, ID **newid, bool test)
 			if (!test) *newid = (ID *)BKE_particlesettings_copy(bmain, (ParticleSettings *)id);
 			return true;
 		case ID_GD:
-			if (!test) *newid = (ID *)gpencil_data_duplicate(bmain, (bGPdata *)id, false);
+			if (!test) *newid = (ID *)BKE_gpencil_data_duplicate(bmain, (bGPdata *)id, false);
 			return true;
 		case ID_MC:
 			if (!test) *newid = (ID *)BKE_movieclip_copy(bmain, (MovieClip *)id);
@@ -526,6 +534,9 @@ bool id_copy(Main *bmain, ID *id, ID **newid, bool test)
 			return true;
 		case ID_PC:
 			if (!test) *newid = (ID *)BKE_paint_curve_copy(bmain, (PaintCurve *)id);
+			return true;
+		case ID_CF:
+			if (!test) *newid = (ID *)BKE_cachefile_copy(bmain, (CacheFile *)id);
 			return true;
 		case ID_SCE:
 		case ID_LI:
@@ -639,6 +650,8 @@ ListBase *which_libbase(Main *mainlib, short type)
 			return &(mainlib->palettes);
 		case ID_PC:
 			return &(mainlib->paintcurves);
+		case ID_CF:
+			return &(mainlib->cachefiles);
 	}
 	return NULL;
 }
@@ -740,59 +753,56 @@ void BKE_main_lib_objects_recalc_all(Main *bmain)
  * \note MAX_LIBARRAY define should match this code */
 int set_listbasepointers(Main *main, ListBase **lb)
 {
-	int a = 0;
-
 	/* BACKWARDS! also watch order of free-ing! (mesh<->mat), first items freed last.
 	 * This is important because freeing data decreases usercounts of other datablocks,
 	 * if this data is its self freed it can crash. */
-	lb[a++] = &(main->library);  /* Libraries may be accessed from pretty much any other ID... */
-	lb[a++] = &(main->ipo);
-	lb[a++] = &(main->action); /* moved here to avoid problems when freeing with animato (aligorith) */
-	lb[a++] = &(main->key);
-	lb[a++] = &(main->gpencil); /* referenced by nodes, objects, view, scene etc, before to free after. */
-	lb[a++] = &(main->nodetree);
-	lb[a++] = &(main->image);
-	lb[a++] = &(main->tex);
-	lb[a++] = &(main->mat);
-	lb[a++] = &(main->vfont);
+	lb[INDEX_ID_LI] = &(main->library);  /* Libraries may be accessed from pretty much any other ID... */
+	lb[INDEX_ID_IP] = &(main->ipo);
+	lb[INDEX_ID_AC] = &(main->action); /* moved here to avoid problems when freeing with animato (aligorith) */
+	lb[INDEX_ID_KE] = &(main->key);
+	lb[INDEX_ID_GD] = &(main->gpencil); /* referenced by nodes, objects, view, scene etc, before to free after. */
+	lb[INDEX_ID_NT] = &(main->nodetree);
+	lb[INDEX_ID_IM] = &(main->image);
+	lb[INDEX_ID_TE] = &(main->tex);
+	lb[INDEX_ID_MA] = &(main->mat);
+	lb[INDEX_ID_VF] = &(main->vfont);
 	
 	/* Important!: When adding a new object type,
 	 * the specific data should be inserted here 
 	 */
 
-	lb[a++] = &(main->armature);
+	lb[INDEX_ID_AR] = &(main->armature);
 
-	lb[a++] = &(main->mesh);
-	lb[a++] = &(main->curve);
-	lb[a++] = &(main->mball);
+	lb[INDEX_ID_CF] = &(main->cachefiles);
+	lb[INDEX_ID_ME] = &(main->mesh);
+	lb[INDEX_ID_CU] = &(main->curve);
+	lb[INDEX_ID_MB] = &(main->mball);
 
-	lb[a++] = &(main->latt);
-	lb[a++] = &(main->lamp);
-	lb[a++] = &(main->camera);
+	lb[INDEX_ID_LT] = &(main->latt);
+	lb[INDEX_ID_LA] = &(main->lamp);
+	lb[INDEX_ID_CA] = &(main->camera);
 
-	lb[a++] = &(main->text);
-	lb[a++] = &(main->sound);
-	lb[a++] = &(main->group);
-	lb[a++] = &(main->palettes);
-	lb[a++] = &(main->paintcurves);
-	lb[a++] = &(main->brush);
-	lb[a++] = &(main->particle);
-	lb[a++] = &(main->speaker);
+	lb[INDEX_ID_TXT] = &(main->text);
+	lb[INDEX_ID_SO]  = &(main->sound);
+	lb[INDEX_ID_GR]  = &(main->group);
+	lb[INDEX_ID_PAL] = &(main->palettes);
+	lb[INDEX_ID_PC]  = &(main->paintcurves);
+	lb[INDEX_ID_BR]  = &(main->brush);
+	lb[INDEX_ID_PA]  = &(main->particle);
+	lb[INDEX_ID_SPK] = &(main->speaker);
 
-	lb[a++] = &(main->world);
-	lb[a++] = &(main->movieclip);
-	lb[a++] = &(main->screen);
-	lb[a++] = &(main->object);
-	lb[a++] = &(main->linestyle); /* referenced by scenes */
-	lb[a++] = &(main->scene);
-	lb[a++] = &(main->wm);
-	lb[a++] = &(main->mask);
+	lb[INDEX_ID_WO]  = &(main->world);
+	lb[INDEX_ID_MC]  = &(main->movieclip);
+	lb[INDEX_ID_SCR] = &(main->screen);
+	lb[INDEX_ID_OB]  = &(main->object);
+	lb[INDEX_ID_LS]  = &(main->linestyle); /* referenced by scenes */
+	lb[INDEX_ID_SCE] = &(main->scene);
+	lb[INDEX_ID_WM]  = &(main->wm);
+	lb[INDEX_ID_MSK] = &(main->mask);
 	
-	lb[a] = NULL;
+	lb[INDEX_ID_NULL] = NULL;
 
-	BLI_assert(a + 1 == MAX_LIBARRAY);
-
-	return a;
+	return (MAX_LIBARRAY - 1);
 }
 
 /* *********** ALLOC AND FREE *****************
@@ -912,6 +922,9 @@ void *BKE_libblock_alloc_notest(short type)
 			break;
 		case ID_PC:
 			id = MEM_callocN(sizeof(PaintCurve), "Paint Curve");
+			break;
+		case ID_CF:
+			id = MEM_callocN(sizeof(CacheFile), "Cache File");
 			break;
 	}
 	return id;
@@ -1038,6 +1051,9 @@ void BKE_libblock_init_empty(ID *id)
 			break;
 		case ID_LS:
 			BKE_linestyle_init((FreestyleLineStyle *)id);
+			break;
+		case ID_CF:
+			BKE_cachefile_init((CacheFile *)id);
 			break;
 		case ID_KE:
 			/* Shapekeys are a complex topic too - they depend on their 'user' data type...
@@ -1226,6 +1242,7 @@ void BKE_main_free(Main *mainvar)
 				case  31: BKE_libblock_free_ex(mainvar, id, false); break;
 				case  32: BKE_libblock_free_ex(mainvar, id, false); break;
 				case  33: BKE_libblock_free_ex(mainvar, id, false); break;
+				case  34: BKE_libblock_free_ex(mainvar, id, false); break;
 				default:
 					BLI_assert(0);
 					break;
@@ -1639,22 +1656,20 @@ void BKE_library_make_local(Main *bmain, const Library *lib, const bool untagged
 	for (a = set_listbasepointers(bmain, lbarray); a--; ) {
 		id = lbarray[a]->first;
 
-		if (!id || !BKE_idcode_is_linkable(GS(id->name))) {
-			/* Do not explicitly make local non-linkable IDs (shapekeys, in fact), they are assumed to be handled
-			 * by real datablocks responsible of them. */
-			continue;
-		}
+		/* Do not explicitly make local non-linkable IDs (shapekeys, in fact), they are assumed to be handled
+		 * by real datablocks responsible of them. */
+		const bool do_skip = (id && !BKE_idcode_is_linkable(GS(id->name)));
 
 		for (; id; id = id_next) {
 			id->newid = NULL;
 			id_next = id->next;  /* id is possibly being inserted again */
-			
+
 			/* The check on the second line (LIB_TAG_PRE_EXISTING) is done so its
 			 * possible to tag data you don't want to be made local, used for
 			 * appending data, so any libdata already linked wont become local
 			 * (very nasty to discover all your links are lost after appending)  
 			 * */
-			if (id->tag & (LIB_TAG_EXTERN | LIB_TAG_INDIRECT | LIB_TAG_NEW) &&
+			if (!do_skip && id->tag & (LIB_TAG_EXTERN | LIB_TAG_INDIRECT | LIB_TAG_NEW) &&
 			    ((untagged_only == false) || !(id->tag & LIB_TAG_PRE_EXISTING)))
 			{
 				if (lib == NULL || id->lib == lib) {

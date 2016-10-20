@@ -59,6 +59,7 @@
 #include "DNA_actuator_types.h"
 #include "DNA_brush_types.h"
 #include "DNA_camera_types.h"
+#include "DNA_cachefile_types.h"
 #include "DNA_cloth_types.h"
 #include "DNA_controller_types.h"
 #include "DNA_constraint_types.h"
@@ -114,6 +115,7 @@
 #include "BKE_action.h"
 #include "BKE_armature.h"
 #include "BKE_brush.h"
+#include "BKE_cachefile.h"
 #include "BKE_cloth.h"
 #include "BKE_constraint.h"
 #include "BKE_context.h"
@@ -2691,6 +2693,38 @@ static void direct_link_animdata(FileData *fd, AnimData *adt)
 	adt->actstrip = newdataadr(fd, adt->actstrip);
 }	
 
+/* ************ READ CACHEFILES *************** */
+
+static void lib_link_cachefiles(FileData *fd, Main *bmain)
+{
+	CacheFile *cache_file;
+
+	/* only link ID pointers */
+	for (cache_file = bmain->cachefiles.first; cache_file; cache_file = cache_file->id.next) {
+		if (cache_file->id.tag & LIB_TAG_NEED_LINK) {
+			cache_file->id.tag &= ~LIB_TAG_NEED_LINK;
+		}
+
+		BLI_listbase_clear(&cache_file->object_paths);
+		cache_file->handle = NULL;
+		cache_file->handle_mutex = NULL;
+
+		if (cache_file->adt) {
+			lib_link_animdata(fd, &cache_file->id, cache_file->adt);
+		}
+	}
+}
+
+static void direct_link_cachefile(FileData *fd, CacheFile *cache_file)
+{
+	cache_file->handle = NULL;
+	cache_file->handle_mutex = NULL;
+
+	/* relink animdata */
+	cache_file->adt = newdataadr(fd, cache_file->adt);
+	direct_link_animdata(fd, cache_file->adt);
+}
+
 /* ************ READ MOTION PATHS *************** */
 
 /* direct data for cache */
@@ -4743,7 +4777,7 @@ static void lib_link_object(FileData *fd, Main *main)
 				/* Only expand so as not to loose any object materials that might be set. */
 				if (totcol_data && (*totcol_data > ob->totcol)) {
 					/* printf("'%s' %d -> %d\n", ob->id.name, ob->totcol, *totcol_data); */
-					BKE_material_resize_object(ob, *totcol_data, false);
+					BKE_material_resize_object(main, ob, *totcol_data, false);
 				}
 			}
 			
@@ -5276,6 +5310,9 @@ static void direct_link_object(FileData *fd, Object *ob)
 	 * time when file was saved.
 	 */
 	ob->recalc = 0;
+
+	/* XXX This should not be needed - but seems like it can happen in some cases, so for now play safe... */
+	ob->proxy_from = NULL;
 
 	/* loading saved files with editmode enabled works, but for undo we like
 	 * to stay in object mode during undo presses so keep editmode disabled.
@@ -6675,10 +6712,13 @@ void blo_lib_link_screen_restore(Main *newmain, bScreen *curscreen, Scene *cursc
 					 * since it gets initialized later */
 					sima->iuser.scene = NULL;
 					
-					sima->scopes.waveform_1 = NULL;
-					sima->scopes.waveform_2 = NULL;
-					sima->scopes.waveform_3 = NULL;
-					sima->scopes.vecscope = NULL;
+#if 0
+					/* Those are allocated and freed by space code, no need to handle them here. */
+					MEM_SAFE_FREE(sima->scopes.waveform_1);
+					MEM_SAFE_FREE(sima->scopes.waveform_2);
+					MEM_SAFE_FREE(sima->scopes.waveform_3);
+					MEM_SAFE_FREE(sima->scopes.vecscope);
+#endif
 					sima->scopes.ok = 0;
 					
 					/* NOTE: pre-2.5, this was local data not lib data, but now we need this as lib data
@@ -7464,7 +7504,7 @@ static void direct_link_movieclip(FileData *fd, MovieClip *clip)
 	clip->tracking_context = NULL;
 	clip->tracking.stats = NULL;
 
-	clip->tracking.stabilization.ok = 0;
+	/* Needed for proper versioning, will be NULL for all newer files anyway. */
 	clip->tracking.stabilization.rot_track = newdataadr(fd, clip->tracking.stabilization.rot_track);
 
 	clip->tracking.dopesheet.ok = 0;
@@ -7930,6 +7970,7 @@ static const char *dataname(short id_code)
 		case ID_MC: return "Data from MC";
 		case ID_MSK: return "Data from MSK";
 		case ID_LS: return "Data from LS";
+		case ID_CF: return "Data from CF";
 	}
 	return "Data from Lib Block";
 	
@@ -8181,6 +8222,9 @@ static BHead *read_libblock(FileData *fd, Main *main, BHead *bhead, const short 
 		case ID_PC:
 			direct_link_paint_curve(fd, (PaintCurve *)id);
 			break;
+		case ID_CF:
+			direct_link_cachefile(fd, (CacheFile *)id);
+			break;
 	}
 	
 	oldnewmap_free_unused(fd->datamap);
@@ -8374,6 +8418,7 @@ static void lib_link_all(FileData *fd, Main *main)
 	lib_link_mask(fd, main);
 	lib_link_linestyle(fd, main);
 	lib_link_gpencil(fd, main);
+	lib_link_cachefiles(fd, main);
 
 	lib_link_mesh(fd, main);		/* as last: tpage images with users at zero */
 	
@@ -9484,6 +9529,13 @@ static void expand_camera(FileData *fd, Main *mainvar, Camera *ca)
 		expand_animdata(fd, mainvar, ca->adt);
 }
 
+static void expand_cachefile(FileData *fd, Main *mainvar, CacheFile *cache_file)
+{
+	if (cache_file->adt) {
+		expand_animdata(fd, mainvar, cache_file->adt);
+	}
+}
+
 static void expand_speaker(FileData *fd, Main *mainvar, Speaker *spk)
 {
 	expand_doit(fd, mainvar, spk->sound);
@@ -9678,6 +9730,9 @@ void BLO_expand_main(void *fdhandle, Main *mainvar)
 						break;
 					case ID_GD:
 						expand_gpencil(fd, mainvar, (bGPdata *)id);
+						break;
+					case ID_CF:
+						expand_cachefile(fd, mainvar, (CacheFile *)id);
 						break;
 					}
 					

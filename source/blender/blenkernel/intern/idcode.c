@@ -60,6 +60,7 @@ static IDType idtypes[] = {
 	{ ID_AR,   "Armature",           "armatures",       BLT_I18NCONTEXT_ID_ARMATURE,           IDTYPE_FLAGS_ISLINKABLE },
 	{ ID_BR,   "Brush",              "brushes",         BLT_I18NCONTEXT_ID_BRUSH,              IDTYPE_FLAGS_ISLINKABLE },
 	{ ID_CA,   "Camera",             "cameras",         BLT_I18NCONTEXT_ID_CAMERA,             IDTYPE_FLAGS_ISLINKABLE },
+	{ ID_CF,   "CacheFile",          "cache_files",     BLT_I18NCONTEXT_ID_CACHEFILE,          IDTYPE_FLAGS_ISLINKABLE },
 	{ ID_CU,   "Curve",              "curves",          BLT_I18NCONTEXT_ID_CURVE,              IDTYPE_FLAGS_ISLINKABLE },
 	{ ID_GD,   "GPencil",            "grease_pencil",   BLT_I18NCONTEXT_ID_GPENCIL,            IDTYPE_FLAGS_ISLINKABLE }, /* rename gpencil */
 	{ ID_GR,   "Group",              "groups",          BLT_I18NCONTEXT_ID_GROUP,              IDTYPE_FLAGS_ISLINKABLE },
@@ -184,6 +185,7 @@ int BKE_idcode_to_idfilter(const short idcode)
 		CASE_IDFILTER(AR);
 		CASE_IDFILTER(BR);
 		CASE_IDFILTER(CA);
+		CASE_IDFILTER(CF);
 		CASE_IDFILTER(CU);
 		CASE_IDFILTER(GD);
 		CASE_IDFILTER(GR);
@@ -227,6 +229,7 @@ short BKE_idcode_from_idfilter(const int idfilter)
 		CASE_IDFILTER(AR);
 		CASE_IDFILTER(BR);
 		CASE_IDFILTER(CA);
+		CASE_IDFILTER(CF);
 		CASE_IDFILTER(CU);
 		CASE_IDFILTER(GD);
 		CASE_IDFILTER(GR);
@@ -256,6 +259,56 @@ short BKE_idcode_from_idfilter(const int idfilter)
 	}
 
 #undef CASE_IDFILTER
+}
+
+/**
+ * Convert an idcode into an index (e.g. ID_OB -> INDEX_ID_OB).
+ */
+int BKE_idcode_to_index(const short idcode)
+{
+#define CASE_IDINDEX(_id) case ID_##_id: return INDEX_ID_##_id
+
+	switch ((ID_Type)idcode) {
+		CASE_IDINDEX(AC);
+		CASE_IDINDEX(AR);
+		CASE_IDINDEX(BR);
+		CASE_IDINDEX(CA);
+		CASE_IDINDEX(CF);
+		CASE_IDINDEX(CU);
+		CASE_IDINDEX(GD);
+		CASE_IDINDEX(GR);
+		CASE_IDINDEX(IM);
+		CASE_IDINDEX(KE);
+		CASE_IDINDEX(IP);
+		CASE_IDINDEX(LA);
+		CASE_IDINDEX(LI);
+		CASE_IDINDEX(LS);
+		CASE_IDINDEX(LT);
+		CASE_IDINDEX(MA);
+		CASE_IDINDEX(MB);
+		CASE_IDINDEX(MC);
+		CASE_IDINDEX(ME);
+		CASE_IDINDEX(MSK);
+		CASE_IDINDEX(NT);
+		CASE_IDINDEX(OB);
+		CASE_IDINDEX(PA);
+		CASE_IDINDEX(PAL);
+		CASE_IDINDEX(PC);
+		CASE_IDINDEX(SCE);
+		CASE_IDINDEX(SCR);
+		CASE_IDINDEX(SPK);
+		CASE_IDINDEX(SO);
+		CASE_IDINDEX(TE);
+		CASE_IDINDEX(TXT);
+		CASE_IDINDEX(VF);
+		CASE_IDINDEX(WM);
+		CASE_IDINDEX(WO);
+	}
+
+	BLI_assert(0);
+	return -1;
+
+#undef CASE_IDINDEX
 }
 
 /**

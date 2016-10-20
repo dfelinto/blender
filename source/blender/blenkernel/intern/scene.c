@@ -65,6 +65,7 @@
 #include "BKE_animsys.h"
 #include "BKE_action.h"
 #include "BKE_armature.h"
+#include "BKE_cachefile.h"
 #include "BKE_colortools.h"
 #include "BKE_depsgraph.h"
 #include "BKE_editmesh.h"
@@ -161,7 +162,6 @@ Scene *BKE_scene_copy(Main *bmain, Scene *sce, int type)
 	
 	if (type == SCE_COPY_EMPTY) {
 		ListBase rl, rv;
-		/* XXX. main should become an arg */
 		scen = BKE_scene_add(bmain, sce->id.name + 2);
 		
 		rl = scen->r.layers;
@@ -290,7 +290,7 @@ Scene *BKE_scene_copy(Main *bmain, Scene *sce, int type)
 		/* duplicate Grease Pencil Drawing Brushes */
 		BLI_listbase_clear(&ts->gp_brushes);
 		for (bGPDbrush *brush = sce->toolsettings->gp_brushes.first; brush; brush = brush->next) {
-			bGPDbrush *newbrush = gpencil_brush_duplicate(brush);
+			bGPDbrush *newbrush = BKE_gpencil_brush_duplicate(brush);
 			BLI_addtail(&ts->gp_brushes, newbrush);
 		}
 
@@ -342,7 +342,7 @@ Scene *BKE_scene_copy(Main *bmain, Scene *sce, int type)
 	/* grease pencil */
 	if (scen->gpd) {
 		if (type == SCE_COPY_FULL) {
-			scen->gpd = gpencil_data_duplicate(bmain, scen->gpd, false);
+			scen->gpd = BKE_gpencil_data_duplicate(bmain, scen->gpd, false);
 		}
 		else if (type == SCE_COPY_EMPTY) {
 			scen->gpd = NULL;
@@ -441,7 +441,7 @@ void BKE_scene_free(Scene *sce)
 			MEM_freeN(sce->toolsettings->uvsculpt);
 		}
 		/* free Grease Pencil Drawing Brushes */
-		free_gpencil_brushes(&sce->toolsettings->gp_brushes);
+		BKE_gpencil_free_brushes(&sce->toolsettings->gp_brushes);
 		BLI_freelistN(&sce->toolsettings->gp_brushes);
 
 		BKE_paint_free(&sce->toolsettings->imapaint.paint);
@@ -1559,10 +1559,11 @@ static void print_threads_statistics(ThreadedObjectUpdateState *state)
 #else
 	finish_time = PIL_check_seconds_timer();
 	tot_thread = BLI_system_thread_count();
+	int total_objects = 0;
 
 	for (i = 0; i < tot_thread; i++) {
-		int total_objects = 0;
-		double total_time = 0.0;
+		int thread_total_objects = 0;
+		double thread_total_time = 0.0;
 		StatisicsEntry *entry;
 
 		if (state->has_updated_objects) {
@@ -1571,11 +1572,14 @@ static void print_threads_statistics(ThreadedObjectUpdateState *state)
 			     entry;
 			     entry = entry->next)
 			{
-				total_objects++;
-				total_time += entry->duration;
+				thread_total_objects++;
+				thread_total_time += entry->duration;
 			}
 
-			printf("Thread %d: total %d objects in %f sec.\n", i, total_objects, total_time);
+			printf("Thread %d: total %d objects in %f sec.\n",
+			       i,
+			       thread_total_objects,
+			       thread_total_time);
 
 			for (entry = state->statistics[i].first;
 			     entry;
@@ -1583,12 +1587,16 @@ static void print_threads_statistics(ThreadedObjectUpdateState *state)
 			{
 				printf("  %s in %f sec\n", entry->object->id.name + 2, entry->duration);
 			}
+
+			total_objects += thread_total_objects;
 		}
 
 		BLI_freelistN(&state->statistics[i]);
 	}
 	if (state->has_updated_objects) {
-		printf("Scene update in %f sec\n", finish_time - state->base_time);
+		printf("Scene updated %d objects in %f sec\n",
+		       total_objects,
+		       finish_time - state->base_time);
 	}
 #endif
 }
@@ -1925,6 +1933,9 @@ void BKE_scene_update_for_newframe_ex(EvaluationContext *eval_ctx, Main *bmain, 
 #endif
 
 	BKE_mask_evaluate_all_masks(bmain, ctime, true);
+
+	/* Update animated cache files for modifiers. */
+	BKE_cachefile_update_frame(bmain, sce, ctime, (((double)sce->r.frs_sec) / (double)sce->r.frs_sec_base));
 
 #ifdef POSE_ANIMATION_WORKAROUND
 	scene_armature_depsgraph_workaround(bmain);

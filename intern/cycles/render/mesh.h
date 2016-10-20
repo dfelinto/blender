@@ -39,7 +39,9 @@ class Progress;
 class Scene;
 class SceneParams;
 class AttributeRequest;
+struct SubdParams;
 class DiagSplit;
+struct PackedPatchTable;
 
 /* Mesh */
 
@@ -110,13 +112,9 @@ public:
 		int num_ptex_faces() const { return num_corners == 4 ? 1 : num_corners; }
 	};
 
-	/* Displacement */
-	enum DisplacementMethod {
-		DISPLACE_BUMP = 0,
-		DISPLACE_TRUE = 1,
-		DISPLACE_BOTH = 2,
-
-		DISPLACE_NUM_METHODS,
+	struct SubdEdgeCrease {
+		int v[2];
+		float crease;
 	};
 
 	enum SubdivisionType {
@@ -157,6 +155,10 @@ public:
 	array<int> subd_face_corners;
 	int num_ngons;
 
+	array<SubdEdgeCrease> subd_creases;
+
+	SubdParams *subd_params;
+
 	vector<Shader*> used_shaders;
 	AttributeSet attributes;
 	AttributeSet curve_attributes;
@@ -166,7 +168,8 @@ public:
 	bool transform_applied;
 	bool transform_negative_scaled;
 	Transform transform_normal;
-	DisplacementMethod displacement_method;
+
+	PackedPatchTable *patch_table;
 
 	uint motion_steps;
 	bool use_motion_blur;
@@ -184,6 +187,7 @@ public:
 	size_t curvekey_offset;
 
 	size_t patch_offset;
+	size_t patch_table_offset;
 	size_t face_offset;
 	size_t corner_offset;
 
@@ -211,6 +215,7 @@ public:
 	void compute_bounds();
 	void add_face_normals();
 	void add_vertex_normals();
+	void add_undisplaced();
 
 	void pack_normals(Scene *scene, uint *shader, float4 *vnormal);
 	void pack_verts(const vector<uint>& tri_prim_index,
@@ -234,6 +239,7 @@ public:
 	void tag_update(Scene *scene, bool rebuild);
 
 	bool has_motion_blur() const;
+	bool has_true_displacement() const;
 
 	/* Check whether the mesh should have own BVH built separately. Briefly,
 	 * own BVH is needed for mesh, if:

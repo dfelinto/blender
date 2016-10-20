@@ -52,6 +52,7 @@ EnumPropertyItem rna_enum_id_type_items[] = {
 	{ID_AR, "ARMATURE", ICON_ARMATURE_DATA, "Armature", ""},
 	{ID_BR, "BRUSH", ICON_BRUSH_DATA, "Brush", ""},
 	{ID_CA, "CAMERA", ICON_CAMERA_DATA, "Camera", ""},
+	{ID_CF, "CACHEFILE", ICON_FILE, "Cache File", ""},
 	{ID_CU, "CURVE", ICON_CURVE_DATA, "Curve", ""},
 	{ID_VF, "FONT", ICON_FONT_DATA, "Font", ""},
 	{ID_GD, "GREASEPENCIL", ICON_GREASEPENCIL, "Grease Pencil", ""},
@@ -139,6 +140,7 @@ short RNA_type_to_ID_code(StructRNA *type)
 	if (RNA_struct_is_a(type, &RNA_Action)) return ID_AC;
 	if (RNA_struct_is_a(type, &RNA_Armature)) return ID_AR;
 	if (RNA_struct_is_a(type, &RNA_Brush)) return ID_BR;
+	if (RNA_struct_is_a(type, &RNA_CacheFile)) return ID_CF;
 	if (RNA_struct_is_a(type, &RNA_Camera)) return ID_CA;
 	if (RNA_struct_is_a(type, &RNA_Curve)) return ID_CU;
 	if (RNA_struct_is_a(type, &RNA_GreasePencil)) return ID_GD;
@@ -179,6 +181,7 @@ StructRNA *ID_code_to_RNA_type(short idcode)
 		case ID_AR: return &RNA_Armature;
 		case ID_BR: return &RNA_Brush;
 		case ID_CA: return &RNA_Camera;
+		case ID_CF: return &RNA_CacheFile;
 		case ID_CU: return &RNA_Curve;
 		case ID_GD: return &RNA_GreasePencil;
 		case ID_GR: return &RNA_Group;
@@ -383,15 +386,15 @@ int rna_IDMaterials_assign_int(PointerRNA *ptr, int key, const PointerRNA *assig
 	}
 }
 
-static void rna_IDMaterials_append_id(ID *id, Material *ma)
+static void rna_IDMaterials_append_id(ID *id, Main *bmain, Material *ma)
 {
-	BKE_material_append_id(id, ma);
+	BKE_material_append_id(bmain, id, ma);
 
 	WM_main_add_notifier(NC_OBJECT | ND_DRAW, id);
 	WM_main_add_notifier(NC_OBJECT | ND_OB_SHADING, id);
 }
 
-static Material *rna_IDMaterials_pop_id(ID *id, ReportList *reports, int index_i, int remove_material_slot)
+static Material *rna_IDMaterials_pop_id(ID *id, Main *bmain, ReportList *reports, int index_i, int remove_material_slot)
 {
 	Material *ma;
 	short *totcol = give_totcolp_id(id);
@@ -405,7 +408,7 @@ static Material *rna_IDMaterials_pop_id(ID *id, ReportList *reports, int index_i
 		return NULL;
 	}
 
-	ma = BKE_material_pop_id(id, index_i, remove_material_slot);
+	ma = BKE_material_pop_id(bmain, id, index_i, remove_material_slot);
 
 	if (*totcol == totcol_orig) {
 		BKE_report(reports, RPT_ERROR, "No material to removed");
@@ -421,7 +424,7 @@ static Material *rna_IDMaterials_pop_id(ID *id, ReportList *reports, int index_i
 
 static void rna_IDMaterials_clear_id(ID *id, int remove_material_slot)
 {
-	BKE_material_clear_id(id, remove_material_slot);
+	BKE_material_clear_id(G.main, id, remove_material_slot);
 
 	DAG_id_tag_update(id, OB_RECALC_DATA);
 	WM_main_add_notifier(NC_OBJECT | ND_DRAW, id);
@@ -817,12 +820,13 @@ static void rna_def_ID_materials(BlenderRNA *brna)
 	RNA_def_struct_ui_text(srna, "ID Materials", "Collection of materials");
 
 	func = RNA_def_function(srna, "append", "rna_IDMaterials_append_id");
+	RNA_def_function_flag(func, FUNC_USE_MAIN);
 	RNA_def_function_ui_description(func, "Add a new material to the data block");
 	parm = RNA_def_pointer(func, "material", "Material", "", "Material to add");
 	RNA_def_property_flag(parm, PROP_REQUIRED);
 
 	func = RNA_def_function(srna, "pop", "rna_IDMaterials_pop_id");
-	RNA_def_function_flag(func, FUNC_USE_REPORTS);
+	RNA_def_function_flag(func, FUNC_USE_REPORTS | FUNC_USE_MAIN);
 	RNA_def_function_ui_description(func, "Remove a material from the data block");
 	parm = RNA_def_int(func, "index", -1, -MAXMAT, MAXMAT, "", "Index of material to remove", 0, MAXMAT);
 	RNA_def_boolean(func, "update_data", 0, "", "Update data by re-adjusting the material slots assigned");
