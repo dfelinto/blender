@@ -120,21 +120,21 @@ static GPUTexture *GPU_texture_create_nD(
 
 	if (!tex->bindcode) {
 		if (err_out) {
-			BLI_snprintf(err_out, 256, "GPUTexture: texture create failed: %d",
-				(int)glGetError());
+			BLI_snprintf(err_out, 256, "GPUTexture: texture create failed");
 		}
 		else {
-			fprintf(stderr, "GPUTexture: texture create failed: %d\n",
-				(int)glGetError());
+			fprintf(stderr, "GPUTexture: texture create failed");
 		}
 		GPU_texture_free(tex);
 		return NULL;
 	}
 
+#if 0 /* this should be a compile-time check */
 	if (!GPU_full_non_power_of_two_support()) {
 		tex->w = power_of_2_max_i(tex->w);
 		tex->h = power_of_2_max_i(tex->h);
 	}
+#endif
 
 	tex->number = 0;
 	glBindTexture(tex->target, tex->bindcode);
@@ -366,16 +366,13 @@ GPUTexture *GPU_texture_create_3D(int w, int h, int depth, int channels, const f
 	glGenTextures(1, &tex->bindcode);
 
 	if (!tex->bindcode) {
-		fprintf(stderr, "GPUTexture: texture create failed: %d\n",
-			(int)glGetError());
+		fprintf(stderr, "GPUTexture: texture create failed");
 		GPU_texture_free(tex);
 		return NULL;
 	}
 
 	tex->number = 0;
 	glBindTexture(tex->target, tex->bindcode);
-
-	GPU_ASSERT_NO_GL_ERRORS("3D glBindTexture");
 
 	type = GL_FLOAT;
 	if (channels == 4) {
@@ -418,8 +415,6 @@ GPUTexture *GPU_texture_create_3D(int w, int h, int depth, int channels, const f
 		pixels = GPU_texture_convert_pixels(w*h*depth, fpixels);
 #endif
 
-	GPU_ASSERT_NO_GL_ERRORS("3D glTexImage3D");
-
 	/* hardcore stuff, 3D texture rescaling - warning, this is gonna hurt your performance a lot, but we need it
 	 * for gooseberry */
 	if (rescale && fpixels) {
@@ -456,13 +451,9 @@ GPUTexture *GPU_texture_create_3D(int w, int h, int depth, int channels, const f
 
 		MEM_freeN(tex3d);
 	}
-	else {
-		if (fpixels) {
-			glTexImage3D(tex->target, 0, internalformat, tex->w, tex->h, tex->depth, 0, format, type, fpixels);
-			GPU_ASSERT_NO_GL_ERRORS("3D glTexSubImage3D");
-		}
+	else if (fpixels) {
+		glTexImage3D(tex->target, 0, internalformat, tex->w, tex->h, tex->depth, 0, format, type, fpixels);
 	}
-
 
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -510,7 +501,7 @@ GPUTexture *GPU_texture_from_blender(Image *ima, ImageUser *iuser, int textarget
 	ima->gputexture[gputt] = tex;
 
 	if (!glIsTexture(tex->bindcode)) {
-		GPU_ASSERT_NO_GL_ERRORS("Blender Texture Not Loaded");
+		GPU_print_error_debug("Blender Texture Not Loaded");
 	}
 	else {
 		GLint w, h, border;
@@ -564,7 +555,7 @@ GPUTexture *GPU_texture_from_preview(PreviewImage *prv, int mipmap)
 	prv->gputexture[0] = tex;
 	
 	if (!glIsTexture(tex->bindcode)) {
-		GPU_ASSERT_NO_GL_ERRORS("Blender Texture Not Loaded");
+		GPU_print_error_debug("Blender Texture Not Loaded");
 	}
 	else {
 		GLint w, h;
@@ -915,8 +906,6 @@ void GPU_texture_bind(GPUTexture *tex, int number)
 	if (number < 0)
 		return;
 
-	GPU_ASSERT_NO_GL_ERRORS("Pre Texture Bind");
-
 	GLenum arbnumber = (GLenum)((GLuint)GL_TEXTURE0 + number);
 	if (number != 0) glActiveTexture(arbnumber);
 	if (tex->bindcode != 0) {
@@ -928,8 +917,6 @@ void GPU_texture_bind(GPUTexture *tex, int number)
 	if (number != 0) glActiveTexture(GL_TEXTURE0);
 
 	tex->number = number;
-
-	GPU_ASSERT_NO_GL_ERRORS("Post Texture Bind");
 }
 
 void GPU_texture_unbind(GPUTexture *tex)
@@ -941,8 +928,6 @@ void GPU_texture_unbind(GPUTexture *tex)
 
 	if (tex->number == -1)
 		return;
-	
-	GPU_ASSERT_NO_GL_ERRORS("Pre Texture Unbind");
 
 	GLenum arbnumber = (GLenum)((GLuint)GL_TEXTURE0 + tex->number);
 	if (tex->number != 0) glActiveTexture(arbnumber);
@@ -951,8 +936,6 @@ void GPU_texture_unbind(GPUTexture *tex)
 	if (tex->number != 0) glActiveTexture(GL_TEXTURE0);
 
 	tex->number = -1;
-
-	GPU_ASSERT_NO_GL_ERRORS("Post Texture Unbind");
 }
 
 int GPU_texture_bound_number(GPUTexture *tex)
@@ -969,8 +952,6 @@ void GPU_texture_filter_mode(GPUTexture *tex, bool compare, bool use_filter)
 
 	if (tex->number == -1)
 		return;
-
-	GPU_ASSERT_NO_GL_ERRORS("Pre Texture Unbind");
 
 	GLenum arbnumber = (GLenum)((GLuint)GL_TEXTURE0 + tex->number);
 	if (tex->number != 0) glActiveTexture(arbnumber);
@@ -991,8 +972,6 @@ void GPU_texture_filter_mode(GPUTexture *tex, bool compare, bool use_filter)
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 	}
 	if (tex->number != 0) glActiveTexture(GL_TEXTURE0);
-
-	GPU_ASSERT_NO_GL_ERRORS("Post Texture Unbind");
 }
 
 void GPU_texture_free(GPUTexture *tex)

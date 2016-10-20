@@ -50,11 +50,14 @@ typedef struct TreeStore {
 } TreeStore;
 
 /* TreeStoreElem->flag */
-#define TSE_CLOSED		1
-#define TSE_SELECTED	2
-#define TSE_TEXTBUT		4
-#define TSE_CHILDSEARCH 8
-#define TSE_SEARCHMATCH 16
+enum {
+	TSE_CLOSED      = (1 << 0),
+	TSE_SELECTED    = (1 << 1),
+	TSE_TEXTBUT     = (1 << 2),
+	TSE_CHILDSEARCH = (1 << 3),
+	TSE_SEARCHMATCH = (1 << 4),
+	TSE_HIGHLIGHTED = (1 << 5),
+};
 
 /* TreeStoreElem->types */
 #define TSE_NLA             1  /* NO ID */
@@ -87,7 +90,7 @@ typedef struct TreeStore {
 #define TSE_SEQUENCE        26  /* NO ID */
 #define TSE_SEQ_STRIP       27  /* NO ID */
 #define TSE_SEQUENCE_DUP    28  /* NO ID */
-#define TSE_LINKED_PSYS     29
+/* #define TSE_LINKED_PSYS     29 */ /* DEPRECATED */
 #define TSE_RNA_STRUCT      30  /* NO ID */
 #define TSE_RNA_PROPERTY    31  /* NO ID */
 #define TSE_RNA_ARRAY_ELEM  32  /* NO ID */

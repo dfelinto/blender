@@ -123,11 +123,6 @@ struct GPUMaterial {
 	int obcolloc, obautobumpscaleloc;
 	int cameratexcofacloc;
 
-	int partscalarpropsloc;
-	int partcoloc;
-	int partvel;
-	int partangvel;
-
 	/* Probe binding */
 	int brdfsamplesloc, lutsamplesloc, jitterloc;
 	int ltcmatloc, ltcmagloc;
@@ -334,45 +329,37 @@ static int GPU_material_construct_end(GPUMaterial *material, const char *passnam
 			material->obautobumpscaleloc = GPU_shader_get_uniform(shader, GPU_builtin_name(GPU_AUTO_BUMPSCALE));
 		if (material->builtins & GPU_CAMERA_TEXCO_FACTORS)
 			material->cameratexcofacloc = GPU_shader_get_uniform(shader, GPU_builtin_name(GPU_CAMERA_TEXCO_FACTORS));
-		if (material->builtins & GPU_PARTICLE_SCALAR_PROPS)
-			material->partscalarpropsloc = GPU_shader_get_uniform(shader, GPU_builtin_name(GPU_PARTICLE_SCALAR_PROPS));
-		if (material->builtins & GPU_PARTICLE_LOCATION)
-			material->partcoloc = GPU_shader_get_uniform(shader, GPU_builtin_name(GPU_PARTICLE_LOCATION));
-		if (material->builtins & GPU_PARTICLE_VELOCITY)
-			material->partvel = GPU_shader_get_uniform(shader, GPU_builtin_name(GPU_PARTICLE_VELOCITY));
-		if (material->builtins & GPU_PARTICLE_ANG_VELOCITY)
-			material->partangvel = GPU_shader_get_uniform(shader, GPU_builtin_name(GPU_PARTICLE_ANG_VELOCITY));
 
 		if (material->builtins & GPU_PBR) {
-			material->brdfsamplesloc	= GPU_shader_get_uniform(shader, "unfbsdfsamples");
-			material->ltcmatloc			= GPU_shader_get_uniform(shader, "unfltcmat");
-			material->ltcmagloc			= GPU_shader_get_uniform(shader, "unfltcmag");
-			material->jitterloc			= GPU_shader_get_uniform(shader, "unfjitter");
-			material->lutsamplesloc 	= GPU_shader_get_uniform(shader, "unflutsamples");
-			material->probeloc 			= GPU_shader_get_uniform(shader, "unfprobe");
-			material->reflectloc 		= GPU_shader_get_uniform(shader, "unfreflect");
-			material->refractloc 		= GPU_shader_get_uniform(shader, "unfrefract");
-			material->lodfactorloc 		= GPU_shader_get_uniform(shader, "unflodfactor");
-			material->shloc[0] 			= GPU_shader_get_uniform(shader, "unfsh0");
-			material->shloc[1] 			= GPU_shader_get_uniform(shader, "unfsh1");
-			material->shloc[2] 			= GPU_shader_get_uniform(shader, "unfsh2");
-			material->shloc[3] 			= GPU_shader_get_uniform(shader, "unfsh3");
-			material->shloc[4] 			= GPU_shader_get_uniform(shader, "unfsh4");
-			material->shloc[5] 			= GPU_shader_get_uniform(shader, "unfsh5");
-			material->shloc[6] 			= GPU_shader_get_uniform(shader, "unfsh6");
-			material->shloc[7] 			= GPU_shader_get_uniform(shader, "unfsh7");
-			material->shloc[8] 			= GPU_shader_get_uniform(shader, "unfsh8");
-			material->correcmatloc 		= GPU_shader_get_uniform(shader, "unfprobecorrectionmat");
-			material->planarreflloc 	= GPU_shader_get_uniform(shader, "unfplanarreflectmat");
-			material->probecoloc 		= GPU_shader_get_uniform(shader, "unfprobepos");
-			material->planarvecloc 		= GPU_shader_get_uniform(shader, "unfplanarvec");
-			material->scenebufloc 		= GPU_shader_get_uniform(shader, "unfscenebuf");
-			material->depthbufloc 		= GPU_shader_get_uniform(shader, "unfdepthbuf");
-			material->backfacebufloc 	= GPU_shader_get_uniform(shader, "unfbackfacebuf");
-			material->ssrparamsloc 		= GPU_shader_get_uniform(shader, "unfssrparam");
-			material->pixelprojmatloc 	= GPU_shader_get_uniform(shader, "unfpixelprojmat");
-			material->ssaoparamsloc 	= GPU_shader_get_uniform(shader, "unfssaoparam");
-			material->clipinfoloc 		= GPU_shader_get_uniform(shader, "unfclip");
+			material->brdfsamplesloc= GPU_shader_get_uniform(shader, "unfbsdfsamples");
+			material->ltcmatloc= GPU_shader_get_uniform(shader, "unfltcmat");
+			material->ltcmagloc= GPU_shader_get_uniform(shader, "unfltcmag");
+			material->jitterloc= GPU_shader_get_uniform(shader, "unfjitter");
+			material->lutsamplesloc = GPU_shader_get_uniform(shader, "unflutsamples");
+			material->probeloc = GPU_shader_get_uniform(shader, "unfprobe");
+			material->reflectloc = GPU_shader_get_uniform(shader, "unfreflect");
+			material->refractloc = GPU_shader_get_uniform(shader, "unfrefract");
+			material->lodfactorloc = GPU_shader_get_uniform(shader, "unflodfactor");
+			material->shloc[0] = GPU_shader_get_uniform(shader, "unfsh0");
+			material->shloc[1] = GPU_shader_get_uniform(shader, "unfsh1");
+			material->shloc[2] = GPU_shader_get_uniform(shader, "unfsh2");
+			material->shloc[3] = GPU_shader_get_uniform(shader, "unfsh3");
+			material->shloc[4] = GPU_shader_get_uniform(shader, "unfsh4");
+			material->shloc[5] = GPU_shader_get_uniform(shader, "unfsh5");
+			material->shloc[6] = GPU_shader_get_uniform(shader, "unfsh6");
+			material->shloc[7] = GPU_shader_get_uniform(shader, "unfsh7");
+			material->shloc[8] = GPU_shader_get_uniform(shader, "unfsh8");
+			material->correcmatloc = GPU_shader_get_uniform(shader, "unfprobecorrectionmat");
+			material->planarreflloc = GPU_shader_get_uniform(shader, "unfplanarreflectmat");
+			material->probecoloc = GPU_shader_get_uniform(shader, "unfprobepos");
+			material->planarvecloc = GPU_shader_get_uniform(shader, "unfplanarvec");
+			material->scenebufloc = GPU_shader_get_uniform(shader, "unfscenebuf");
+			material->depthbufloc = GPU_shader_get_uniform(shader, "unfdepthbuf");
+			material->backfacebufloc = GPU_shader_get_uniform(shader, "unfbackfacebuf");
+			material->ssrparamsloc = GPU_shader_get_uniform(shader, "unfssrparam");
+			material->pixelprojmatloc = GPU_shader_get_uniform(shader, "unfpixelprojmat");
+			material->ssaoparamsloc = GPU_shader_get_uniform(shader, "unfssaoparam");
+			material->clipinfoloc = GPU_shader_get_uniform(shader, "unfclip");
 		}
 
 		return 1;
@@ -522,7 +509,7 @@ void GPU_material_bind(
 
 void GPU_material_bind_uniforms(
         GPUMaterial *material, float obmat[4][4], float viewmat[4][4], float obcol[4],
-        float autobumpscale, GPUParticleInfo *pi)
+        float autobumpscale)
 {
 	if (material->pass) {
 		GPUShader *shader = GPU_pass_shader(material->pass);
@@ -558,18 +545,6 @@ void GPU_material_bind_uniforms(
 		}
 		if (material->builtins & GPU_AUTO_BUMPSCALE) {
 			GPU_shader_uniform_vector(shader, material->obautobumpscaleloc, 1, 1, &autobumpscale);
-		}
-		if (material->builtins & GPU_PARTICLE_SCALAR_PROPS) {
-			GPU_shader_uniform_vector(shader, material->partscalarpropsloc, 4, 1, pi->scalprops);
-		}
-		if (material->builtins & GPU_PARTICLE_LOCATION) {
-			GPU_shader_uniform_vector(shader, material->partcoloc, 3, 1, pi->location);
-		}
-		if (material->builtins & GPU_PARTICLE_VELOCITY) {
-			GPU_shader_uniform_vector(shader, material->partvel, 3, 1, pi->velocity);
-		}
-		if (material->builtins & GPU_PARTICLE_ANG_VELOCITY) {
-			GPU_shader_uniform_vector(shader, material->partangvel, 3, 1, pi->angular_velocity);
 		}
 	}
 }
@@ -3463,7 +3438,7 @@ GPULamp *GPU_lamp_from_blender(Scene *scene, Object *ob, Object *par, bool use_r
 				return lamp;
 			}
 		
-			if (!GPU_framebuffer_texture_attach(lamp->fb, lamp->depthtex, 0, NULL)) {
+			if (!GPU_framebuffer_texture_attach(lamp->fb, lamp->depthtex, 0)) {
 				gpu_lamp_shadow_free(lamp);
 				return lamp;
 			}
@@ -3475,7 +3450,7 @@ GPULamp *GPU_lamp_from_blender(Scene *scene, Object *ob, Object *par, bool use_r
 				return lamp;
 			}
 
-			if (!GPU_framebuffer_texture_attach(lamp->fb, lamp->tex, 0, NULL)) {
+			if (!GPU_framebuffer_texture_attach(lamp->fb, lamp->tex, 0)) {
 				gpu_lamp_shadow_free(lamp);
 				return lamp;
 			}
@@ -3498,7 +3473,7 @@ GPULamp *GPU_lamp_from_blender(Scene *scene, Object *ob, Object *par, bool use_r
 				return lamp;
 			}
 		
-			if (!GPU_framebuffer_texture_attach(lamp->blurfb, lamp->blurtex, 0, NULL)) {
+			if (!GPU_framebuffer_texture_attach(lamp->blurfb, lamp->blurtex, 0)) {
 				gpu_lamp_shadow_free(lamp);
 				return lamp;
 			}
@@ -3520,7 +3495,7 @@ GPULamp *GPU_lamp_from_blender(Scene *scene, Object *ob, Object *par, bool use_r
 				return lamp;
 			}
 
-			if (!GPU_framebuffer_texture_attach(lamp->fb, lamp->tex, 0, NULL)) {
+			if (!GPU_framebuffer_texture_attach(lamp->fb, lamp->tex, 0)) {
 				gpu_lamp_shadow_free(lamp);
 				return lamp;
 			}

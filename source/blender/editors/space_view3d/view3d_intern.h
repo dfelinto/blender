@@ -143,10 +143,15 @@ void draw_motion_paths_cleanup(View3D *v3d);
 
 /* drawobject.c */
 void draw_object(Scene *scene, struct ARegion *ar, View3D *v3d, Base *base, const short dflag);
+void draw_mesh_object_outline(View3D *v3d, Object *ob, struct DerivedMesh *dm);
+
 bool draw_glsl_material(Scene *scene, struct Object *ob, View3D *v3d, const char dt);
 void draw_object_instance(Scene *scene, View3D *v3d, RegionView3D *rv3d, struct Object *ob, const char dt, int outline);
 void draw_object_backbufsel(Scene *scene, View3D *v3d, RegionView3D *rv3d, struct Object *ob);
-void drawaxes(const float viewmat_local[4][4], float size, char drawtype);
+void drawaxes(const float viewmat_local[4][4], float size, char drawtype, const unsigned char color[4]);
+void drawlamp(Scene *scene, View3D *v3d, RegionView3D *rv3d, Base *base,
+              const char dt, const short dflag, const unsigned char ob_wire_col[4],
+              const bool is_obact);
 
 void view3d_cached_text_draw_begin(void);
 void view3d_cached_text_draw_add(const float co[3],
@@ -193,11 +198,13 @@ void draw_sim_debug_data(Scene *scene, View3D *v3d, ARegion *ar);
 
 /* view3d_draw.c */
 void view3d_main_region_draw(const struct bContext *C, struct ARegion *ar);
+
+/* view3d_draw_legacy.c */
+void view3d_main_region_draw_legacy(const struct bContext *C, struct ARegion *ar);
 void ED_view3d_draw_depth(Scene *scene, struct ARegion *ar, View3D *v3d, bool alphaoverride);
 void ED_view3d_draw_depth_gpencil(Scene *scene, ARegion *ar, View3D *v3d);
 void ED_view3d_after_add(ListBase *lb, Base *base, const short dflag);
 
-void circf(float x, float y, float rad);
 void circ(float x, float y, float rad);
 void view3d_update_depths_rect(struct ARegion *ar, struct ViewDepths *d, struct rcti *rect);
 float view3d_depth_near(struct ViewDepths *d);
@@ -266,7 +273,7 @@ void ED_view3d_cameracontrol_update(
 void ED_view3d_cameracontrol_release(
         struct View3DCameraControl *vctrl,
         const bool restore);
-Object *ED_view3d_cameracontrol_object_get(
+struct Object *ED_view3d_cameracontrol_object_get(
         struct View3DCameraControl *vctrl);
 
 /* view3d_toolbar.c */
@@ -315,5 +322,18 @@ extern unsigned char view3d_camera_border_hack_col[3];
 extern bool view3d_camera_border_hack_test;
 #endif
 
-#endif /* __VIEW3D_INTERN_H__ */
+/* temporary test for blender 2.8 viewport */
+#define IS_VIEWPORT_LEGACY(v3d) ((v3d->tmp_compat_flag & V3D_NEW_VIEWPORT) == 0)
 
+/* temporary for legacy viewport to work */
+void VP_legacy_drawgrid(UnitSettings *unit, ARegion *ar, View3D *v3d, const char **grid_unit);
+void VP_legacy_drawfloor(Scene *scene, View3D *v3d, const char **grid_unit, bool write_depth);
+void VP_legacy_view3d_main_region_setup_view(Scene *scene, View3D *v3d, ARegion *ar, float viewmat[4][4], float winmat[4][4]);
+bool VP_legacy_view3d_stereo3d_active(const struct bContext *C, Scene *scene, View3D *v3d, RegionView3D *rv3d);
+void VP_legacy_view3d_stereo3d_setup(Scene *scene, View3D *v3d, ARegion *ar);
+void draw_dupli_objects(Scene *scene, ARegion *ar, View3D *v3d, Base *base);
+bool VP_legacy_use_depth(Scene *scene, View3D *v3d);
+void VP_drawviewborder(Scene *scene, ARegion *ar, View3D *v3d);
+void VP_drawrenderborder(ARegion *ar, View3D *v3d);
+
+#endif /* __VIEW3D_INTERN_H__ */

@@ -98,7 +98,6 @@
 #include "BKE_node.h"
 #include "BKE_object.h"
 #include "BKE_paint.h"
-#include "BKE_particle.h"
 #include "BKE_sca.h"
 #include "BKE_speaker.h"
 #include "BKE_sound.h"
@@ -796,9 +795,6 @@ void BKE_libblock_free_ex(Main *bmain, void *idv, const bool do_id_user)
 			break;
 		case ID_BR:
 			BKE_brush_free((Brush *)id);
-			break;
-		case ID_PA:
-			BKE_particlesettings_free((ParticleSettings *)id);
 			break;
 		case ID_WM:
 			if (free_windowmanager_cb)

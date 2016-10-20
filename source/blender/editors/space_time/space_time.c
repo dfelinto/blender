@@ -50,7 +50,6 @@
 #include "BKE_main.h"
 #include "BKE_modifier.h"
 #include "BKE_screen.h"
-#include "BKE_pointcache.h"
 
 #include "ED_anim_api.h"
 #include "ED_keyframes_draw.h"
@@ -69,6 +68,8 @@
 #include "ED_space_api.h"
 #include "ED_markers.h"
 
+#include "GPU_immediate.h"
+
 #include "time_intern.h"
 
 /* ************************ main time area region *********************** */
@@ -80,177 +81,36 @@ static void time_draw_sfra_efra(Scene *scene, View2D *v2d)
 	 */
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	glEnable(GL_BLEND);
-	glColor4f(0.0f, 0.0f, 0.0f, 0.4f);
-		
+
+	VertexFormat *format = immVertexFormat();
+	unsigned pos = add_attrib(format, "pos", GL_FLOAT, 2, KEEP_FLOAT);
+
+	immBindBuiltinProgram(GPU_SHADER_2D_UNIFORM_COLOR);
+	immUniformColor4f(0.0f, 0.0f, 0.0f, 0.4f);
+
 	if (PSFRA < PEFRA) {
-		glRectf(v2d->cur.xmin, v2d->cur.ymin, (float)PSFRA, v2d->cur.ymax);
-		glRectf((float)PEFRA, v2d->cur.ymin, v2d->cur.xmax, v2d->cur.ymax);
+		immRectf(pos, v2d->cur.xmin, v2d->cur.ymin, (float)PSFRA, v2d->cur.ymax);
+		immRectf(pos, (float)PEFRA, v2d->cur.ymin, v2d->cur.xmax, v2d->cur.ymax);
 	}
 	else {
-		glRectf(v2d->cur.xmin, v2d->cur.ymin, v2d->cur.xmax, v2d->cur.ymax);
+		immRectf(pos, v2d->cur.xmin, v2d->cur.ymin, v2d->cur.xmax, v2d->cur.ymax);
 	}
+
 	glDisable(GL_BLEND);
 
-	UI_ThemeColorShade(TH_BACK, -60);
 	/* thin lines where the actual frames are */
-	fdrawline((float)PSFRA, v2d->cur.ymin, (float)PSFRA, v2d->cur.ymax);
-	fdrawline((float)PEFRA, v2d->cur.ymin, (float)PEFRA, v2d->cur.ymax);
-}
+	immUniformThemeColorShade(TH_BACK, -60);
 
-static void time_draw_cache(SpaceTime *stime, Object *ob, Scene *scene)
-{
-	PTCacheID *pid;
-	ListBase pidlist;
-	SpaceTimeCache *stc = stime->caches.first;
-	const float cache_draw_height = (4.0f * UI_DPI_FAC * U.pixelsize);
-	float yoffs = 0.f;
-	
-	if (!(stime->cache_display & TIME_CACHE_DISPLAY) || (!ob))
-		return;
+	immBegin(GL_LINES, 4);
 
-	BKE_ptcache_ids_from_object(&pidlist, ob, scene, 0);
+	immVertex2f(pos, (float)PSFRA, v2d->cur.ymin);
+	immVertex2f(pos, (float)PSFRA, v2d->cur.ymax);
 
-	/* iterate over pointcaches on the active object, 
-	 * add spacetimecache and vertex array for each */
-	for (pid = pidlist.first; pid; pid = pid->next) {
-		float col[4], *fp;
-		int i, sta = pid->cache->startframe, end = pid->cache->endframe;
-		int len = (end - sta + 1) * 4;
+	immVertex2f(pos, (float)PEFRA, v2d->cur.ymin);
+	immVertex2f(pos, (float)PEFRA, v2d->cur.ymax);
 
-		switch (pid->type) {
-			case PTCACHE_TYPE_SOFTBODY:
-				if (!(stime->cache_display & TIME_CACHE_SOFTBODY)) continue;
-				break;
-			case PTCACHE_TYPE_PARTICLES:
-				if (!(stime->cache_display & TIME_CACHE_PARTICLES)) continue;
-				break;
-			case PTCACHE_TYPE_CLOTH:
-				if (!(stime->cache_display & TIME_CACHE_CLOTH)) continue;
-				break;
-			case PTCACHE_TYPE_SMOKE_DOMAIN:
-			case PTCACHE_TYPE_SMOKE_HIGHRES:
-				if (!(stime->cache_display & TIME_CACHE_SMOKE)) continue;
-				break;
-			case PTCACHE_TYPE_DYNAMICPAINT:
-				if (!(stime->cache_display & TIME_CACHE_DYNAMICPAINT)) continue;
-				break;
-			case PTCACHE_TYPE_RIGIDBODY:
-				if (!(stime->cache_display & TIME_CACHE_RIGIDBODY)) continue;
-				break;
-		}
-
-		if (pid->cache->cached_frames == NULL)
-			continue;
-
-		/* make sure we have stc with correct array length */
-		if (stc == NULL || MEM_allocN_len(stc->array) != len * 2 * sizeof(float)) {
-			if (stc) {
-				MEM_freeN(stc->array);
-			}
-			else {
-				stc = MEM_callocN(sizeof(SpaceTimeCache), "spacetimecache");
-				BLI_addtail(&stime->caches, stc);
-			}
-
-			stc->array = MEM_callocN(len * 2 * sizeof(float), "SpaceTimeCache array");
-		}
-
-		/* fill the vertex array with a quad for each cached frame */
-		for (i = sta, fp = stc->array; i <= end; i++) {
-			if (pid->cache->cached_frames[i - sta]) {
-				fp[0] = (float)i - 0.5f;
-				fp[1] = 0.0;
-				fp += 2;
-				
-				fp[0] = (float)i - 0.5f;
-				fp[1] = 1.0;
-				fp += 2;
-				
-				fp[0] = (float)i + 0.5f;
-				fp[1] = 1.0;
-				fp += 2;
-				
-				fp[0] = (float)i + 0.5f;
-				fp[1] = 0.0;
-				fp += 2;
-			}
-		}
-		
-		glPushMatrix();
-		glTranslatef(0.0, (float)V2D_SCROLL_HEIGHT + yoffs, 0.0);
-		glScalef(1.0, cache_draw_height, 0.0);
-		
-		switch (pid->type) {
-			case PTCACHE_TYPE_SOFTBODY:
-				col[0] = 1.0;   col[1] = 0.4;   col[2] = 0.02;
-				col[3] = 0.1;
-				break;
-			case PTCACHE_TYPE_PARTICLES:
-				col[0] = 1.0;   col[1] = 0.1;   col[2] = 0.02;
-				col[3] = 0.1;
-				break;
-			case PTCACHE_TYPE_CLOTH:
-				col[0] = 0.1;   col[1] = 0.1;   col[2] = 0.75;
-				col[3] = 0.1;
-				break;
-			case PTCACHE_TYPE_SMOKE_DOMAIN:
-			case PTCACHE_TYPE_SMOKE_HIGHRES:
-				col[0] = 0.2;   col[1] = 0.2;   col[2] = 0.2;
-				col[3] = 0.1;
-				break;
-			case PTCACHE_TYPE_DYNAMICPAINT:
-				col[0] = 1.0;   col[1] = 0.1;   col[2] = 0.75;
-				col[3] = 0.1;
-				break;
-			case PTCACHE_TYPE_RIGIDBODY:
-				col[0] = 1.0;   col[1] = 0.6;   col[2] = 0.0;
-				col[3] = 0.1;
-				break;
-			default:
-				col[0] = 1.0;   col[1] = 0.0;   col[2] = 1.0;
-				col[3] = 0.1;
-				BLI_assert(0);
-				break;
-		}
-		glColor4fv(col);
-		
-		glEnable(GL_BLEND);
-		
-		glRectf((float)sta, 0.0, (float)end, 1.0);
-		
-		col[3] = 0.4f;
-		if (pid->cache->flag & PTCACHE_BAKED) {
-			col[0] -= 0.4f; col[1] -= 0.4f; col[2] -= 0.4f;
-		}
-		else if (pid->cache->flag & PTCACHE_OUTDATED) {
-			col[0] += 0.4f; col[1] += 0.4f; col[2] += 0.4f;
-		}
-		glColor4fv(col);
-		
-		glEnableClientState(GL_VERTEX_ARRAY);
-		glVertexPointer(2, GL_FLOAT, 0, stc->array);
-		glDrawArrays(GL_QUADS, 0, (fp - stc->array) / 2);
-		glDisableClientState(GL_VERTEX_ARRAY);
-		
-		glDisable(GL_BLEND);
-		
-		glPopMatrix();
-		
-		yoffs += cache_draw_height;
-
-		stc = stc->next;
-	}
-
-	BLI_freelistN(&pidlist);
-
-	/* free excessive caches */
-	while (stc) {
-		SpaceTimeCache *tmp = stc->next;
-		BLI_remlink(&stime->caches, stc);
-		MEM_freeN(stc->array);
-		MEM_freeN(stc);
-		stc = tmp;
-	}
+	immEnd();
+	immUnbindProgram();
 }
 
 static void time_cache_free(SpaceTime *stime)
@@ -296,7 +156,7 @@ static ActKeyColumn *time_cfra_find_ak(ActKeyColumn *ak, float cframe)
 }
 
 /* helper for time_draw_keyframes() */
-static void time_draw_idblock_keyframes(View2D *v2d, ID *id, short onlysel)
+static void time_draw_idblock_keyframes(View2D *v2d, ID *id, short onlysel, const unsigned char color[3])
 {
 	bDopeSheet ads = {NULL};
 	DLRBT_Tree keys;
@@ -339,21 +199,42 @@ static void time_draw_idblock_keyframes(View2D *v2d, ID *id, short onlysel)
 	 *	  the first visible keyframe (last one can then be easily checked)
 	 *	- draw within a single GL block to be faster
 	 */
-	glBegin(GL_LINES);
-	for (ak = time_cfra_find_ak(keys.root, v2d->cur.xmin);
-	     (ak) && (ak->cfra <= v2d->cur.xmax);
-	     ak = ak->next)
-	{
-		glVertex2f(ak->cfra, ymin);
-		glVertex2f(ak->cfra, ymax);
+
+	ActKeyColumn *link;
+	int max_len = 0;
+
+	ak = time_cfra_find_ak(keys.root, v2d->cur.xmin);
+
+	for (link = ak; link; link = link->next) {
+		max_len++;
 	}
-	glEnd(); // GL_LINES
-		
+
+	if (max_len > 0) {
+
+		VertexFormat *format = immVertexFormat();
+		unsigned pos = add_attrib(format, "pos", GL_FLOAT, 2, KEEP_FLOAT);
+
+		immBindBuiltinProgram(GPU_SHADER_2D_UNIFORM_COLOR);
+		immUniformColor3ubv(color);
+
+		immBeginAtMost(GL_LINES, max_len * 2);
+
+		for (; (ak) && (ak->cfra <= v2d->cur.xmax);
+			ak = ak->next)
+		{
+			immVertex2f(pos, ak->cfra, ymin);
+			immVertex2f(pos, ak->cfra, ymax);
+		}
+
+		immEnd();
+		immUnbindProgram();
+	}
+
 	/* free temp stuff */
 	BLI_dlrbTree_free(&keys);
 }
 
-static void time_draw_caches_keyframes(Main *bmain, Scene *scene, View2D *v2d, bool onlysel)
+static void time_draw_caches_keyframes(Main *bmain, Scene *scene, View2D *v2d, bool onlysel, const unsigned char color[3])
 {
 	CacheFile *cache_file;
 
@@ -380,7 +261,7 @@ static void time_draw_caches_keyframes(Main *bmain, Scene *scene, View2D *v2d, b
 
 			cache_file->draw_flag |= CACHEFILE_KEYFRAME_DRAWN;
 
-			time_draw_idblock_keyframes(v2d, (ID *)cache_file, onlysel);
+			time_draw_idblock_keyframes(v2d, (ID *)cache_file, onlysel, color);
 		}
 
 		for (bConstraint *con = ob->constraints.first; con; con = con->next) {
@@ -398,7 +279,7 @@ static void time_draw_caches_keyframes(Main *bmain, Scene *scene, View2D *v2d, b
 
 			cache_file->draw_flag |= CACHEFILE_KEYFRAME_DRAWN;
 
-			time_draw_idblock_keyframes(v2d, (ID *)cache_file, onlysel);
+			time_draw_idblock_keyframes(v2d, (ID *)cache_file, onlysel, color);
 		}
 	}
 }
@@ -410,21 +291,23 @@ static void time_draw_keyframes(const bContext *C, ARegion *ar)
 	Object *ob = CTX_data_active_object(C);
 	View2D *v2d = &ar->v2d;
 	bool onlysel = ((scene->flag & SCE_KEYS_NO_SELONLY) == 0);
+	unsigned char color[3];
 	
 	/* set this for all keyframe lines once and for all */
 	glLineWidth(1.0);
 
 	/* draw cache files keyframes (if available) */
-	UI_ThemeColor(TH_TIME_KEYFRAME);
-	time_draw_caches_keyframes(CTX_data_main(C), scene, v2d, onlysel);
+	UI_GetThemeColor3ubv(TH_TIME_KEYFRAME, color);
+	time_draw_caches_keyframes(CTX_data_main(C), scene, v2d, onlysel, color);
 
 	/* draw grease pencil keyframes (if available) */	
-	UI_ThemeColor(TH_TIME_GP_KEYFRAME);
+	UI_GetThemeColor3ubv(TH_TIME_GP_KEYFRAME, color);
+
 	if (scene->gpd) {
-		time_draw_idblock_keyframes(v2d, (ID *)scene->gpd, onlysel);
+		time_draw_idblock_keyframes(v2d, (ID *)scene->gpd, onlysel, color);
 	}
 	if (ob && ob->gpd) {
-		time_draw_idblock_keyframes(v2d, (ID *)ob->gpd, onlysel);
+		time_draw_idblock_keyframes(v2d, (ID *)ob->gpd, onlysel, color);
 	}
 	
 	/* draw scene keyframes first 
@@ -433,8 +316,8 @@ static void time_draw_keyframes(const bContext *C, ARegion *ar)
 	 */
 	if (onlysel == 0) {
 		/* set draw color */
-		UI_ThemeColorShade(TH_TIME_KEYFRAME, -50);
-		time_draw_idblock_keyframes(v2d, (ID *)scene, onlysel);
+		UI_GetThemeColorShade3ubv(TH_TIME_KEYFRAME, -50, color);
+		time_draw_idblock_keyframes(v2d, (ID *)scene, onlysel, color);
 	}
 	
 	/* draw keyframes from selected objects 
@@ -442,11 +325,11 @@ static void time_draw_keyframes(const bContext *C, ARegion *ar)
 	 *    OR the onlysel flag was set, which means that only active object's keyframes should
 	 *    be considered
 	 */
-	UI_ThemeColor(TH_TIME_KEYFRAME);
-	
+	UI_GetThemeColor3ubv(TH_TIME_KEYFRAME, color);
+
 	if (ob && ((ob->mode == OB_MODE_POSE) || onlysel)) {
 		/* draw keyframes for active object only */
-		time_draw_idblock_keyframes(v2d, (ID *)ob, onlysel);
+		time_draw_idblock_keyframes(v2d, (ID *)ob, onlysel, color);
 	}
 	else {
 		bool active_done = false;
@@ -455,7 +338,7 @@ static void time_draw_keyframes(const bContext *C, ARegion *ar)
 		CTX_DATA_BEGIN (C, Object *, obsel, selected_objects)
 		{
 			/* last arg is 0, since onlysel doesn't apply here... */
-			time_draw_idblock_keyframes(v2d, (ID *)obsel, 0);
+			time_draw_idblock_keyframes(v2d, (ID *)obsel, 0, color);
 			
 			/* if this object is the active one, set flag so that we don't draw again */
 			if (obsel == ob)
@@ -465,7 +348,7 @@ static void time_draw_keyframes(const bContext *C, ARegion *ar)
 		
 		/* if active object hasn't been done yet, draw it... */
 		if (ob && (active_done == 0))
-			time_draw_idblock_keyframes(v2d, (ID *)ob, 0);
+			time_draw_idblock_keyframes(v2d, (ID *)ob, 0, color);
 	}
 }
 
@@ -494,7 +377,6 @@ static void time_listener(bScreen *UNUSED(sc), ScrArea *sa, wmNotifier *wmn)
 				case ND_BONE_ACTIVE:
 				case ND_POINTCACHE:
 				case ND_MODIFIER:
-				case ND_PARTICLE:
 				case ND_KEYS:
 					ED_area_tag_refresh(sa);
 					ED_area_tag_redraw(sa);
@@ -569,7 +451,6 @@ static void time_main_region_draw(const bContext *C, ARegion *ar)
 	/* draw entirely, view changes should be handled here */
 	Scene *scene = CTX_data_scene(C);
 	SpaceTime *stime = CTX_wm_space_time(C);
-	Object *obact = CTX_data_active_object(C);
 	View2D *v2d = &ar->v2d;
 	View2DGrid *grid;
 	View2DScrollers *scrollers;
@@ -606,9 +487,6 @@ static void time_main_region_draw(const bContext *C, ARegion *ar)
 	/* markers */
 	UI_view2d_view_orthoSpecial(ar, v2d, 1);
 	ED_markers_draw(C, 0);
-	
-	/* caches */
-	time_draw_cache(stime, obact, scene);
 	
 	/* callback */
 	UI_view2d_view_ortho(v2d);

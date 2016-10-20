@@ -148,8 +148,95 @@ TreeElement *outliner_dropzone_find(const SpaceOops *soops, const float fmval[2]
 	return NULL;
 }
 
+/**
+ * Try to find an item under y-coordinate \a view_co_y (view-space).
+ * \note Recursive
+ */
+TreeElement *outliner_find_item_at_y(const SpaceOops *soops, const ListBase *tree, float view_co_y)
+{
+	for (TreeElement *te_iter = tree->first; te_iter; te_iter = te_iter->next) {
+		if (view_co_y < (te_iter->ys + UI_UNIT_Y)) {
+			if (view_co_y > te_iter->ys) {
+				/* co_y is inside this element */
+				return te_iter;
+			}
+			else if (TSELEM_OPEN(te_iter->store_elem, soops)) {
+				/* co_y is lower than current element, possibly inside children */
+				TreeElement *te_sub = outliner_find_item_at_y(soops, &te_iter->subtree, view_co_y);
+				if (te_sub) {
+					return te_sub;
+				}
+			}
+		}
+	}
+
+	return NULL;
+}
+
+/**
+ * Collapsed items can show their children as click-able icons. This function tries to find
+ * such an icon that represents the child item at x-coordinate \a view_co_x (view-space).
+ *
+ * \return a hovered child item or \a parent_te (if no hovered child found).
+ */
+TreeElement *outliner_find_item_at_x_in_row(const SpaceOops *soops, const TreeElement *parent_te, float view_co_x)
+{
+	if (!TSELEM_OPEN(TREESTORE(parent_te), soops)) { /* if parent_te is opened, it doesn't show childs in row */
+		/* no recursion, items can only display their direct children in the row */
+		for (TreeElement *child_te = parent_te->subtree.first;
+		     child_te && view_co_x >= child_te->xs; /* don't look further if co_x is smaller than child position*/
+		     child_te = child_te->next)
+		{
+			if ((child_te->flag & TE_ICONROW) && (view_co_x > child_te->xs) && (view_co_x < child_te->xend)) {
+				return child_te;
+			}
+		}
+	}
+
+	/* return parent if no child is hovered */
+	return (TreeElement *)parent_te;
+}
+
+
 /* ************************************************************** */
-/* Click Activated */
+
+/* Highlight --------------------------------------------------- */
+
+static int outliner_highlight_update(bContext *C, wmOperator *UNUSED(op), const wmEvent *event)
+{
+	ARegion *ar = CTX_wm_region(C);
+	SpaceOops *soops = CTX_wm_space_outliner(C);
+	const float my = UI_view2d_region_to_view_y(&ar->v2d, event->mval[1]);
+
+	TreeElement *hovered_te = outliner_find_item_at_y(soops, &soops->tree, my);
+	bool changed = false;
+
+	if (!hovered_te || !(hovered_te->store_elem->flag & TSE_HIGHLIGHTED)) {
+		changed = outliner_set_flag(&soops->tree, TSE_HIGHLIGHTED, false);
+		if (hovered_te) {
+			hovered_te->store_elem->flag |= TSE_HIGHLIGHTED;
+			changed = true;
+		}
+	}
+
+	if (changed) {
+		soops->storeflag |= SO_TREESTORE_REDRAW; /* only needs to redraw, no rebuild */
+		ED_region_tag_redraw(ar);
+	}
+
+	return (OPERATOR_FINISHED | OPERATOR_PASS_THROUGH);
+}
+
+void OUTLINER_OT_highlight_update(wmOperatorType *ot)
+{
+	ot->name = "Update Highlight";
+	ot->idname = "OUTLINER_OT_highlight_update";
+	ot->description = "Update the item highlight based on the current mouse position";
+
+	ot->invoke = outliner_highlight_update;
+
+	ot->poll = ED_operator_outliner_active;
+}
 
 /* Toggle Open/Closed ------------------------------------------- */
 
@@ -740,17 +827,34 @@ int outliner_has_one_flag(ListBase *lb, short flag, const int curlevel)
 	return 0;
 }
 
-void outliner_set_flag(ListBase *lb, short flag, short set)
+/**
+ * Set or unset \a flag for all outliner elements in \a lb and sub-trees.
+ * \return if any flag was modified.
+ */
+bool outliner_set_flag(ListBase *lb, short flag, short set)
 {
 	TreeElement *te;
 	TreeStoreElem *tselem;
-	
+	bool changed = false;
+	bool has_flag;
+
 	for (te = lb->first; te; te = te->next) {
 		tselem = TREESTORE(te);
-		if (set == 0) tselem->flag &= ~flag;
-		else tselem->flag |= flag;
-		outliner_set_flag(&te->subtree, flag, set);
+		has_flag = (tselem->flag & flag);
+		if (set == 0) {
+			if (has_flag) {
+				tselem->flag &= ~flag;
+				changed = true;
+			}
+		}
+		else if (!has_flag){
+			tselem->flag |= flag;
+			changed = true;
+		}
+		changed |= outliner_set_flag(&te->subtree, flag, set);
 	}
+
+	return changed;
 }
 
 /* Restriction Columns ------------------------------- */

@@ -1272,7 +1272,6 @@ void UI_ThemeColor4(int colorid)
 	
 	cp = UI_ThemeGetColorPtr(theme_active, theme_spacetype, colorid);
 	glColor4ubv(cp);
-
 }
 
 /* set the color with offset for shades */
@@ -1280,7 +1279,7 @@ void UI_ThemeColorShade(int colorid, int offset)
 {
 	int r, g, b;
 	const unsigned char *cp;
-	
+
 	cp = UI_ThemeGetColorPtr(theme_active, theme_spacetype, colorid);
 	r = offset + (int) cp[0];
 	CLAMP(r, 0, 255);
@@ -1304,6 +1303,7 @@ void UI_ThemeColorShadeAlpha(int colorid, int coloffset, int alphaoffset)
 	CLAMP(b, 0, 255);
 	a = alphaoffset + (int) cp[3];
 	CLAMP(a, 0, 255);
+
 	glColor4ub(r, g, b, a);
 }
 
@@ -1468,6 +1468,53 @@ void UI_GetThemeColorShade3ubv(int colorid, int offset, unsigned char col[3])
 	col[0] = r;
 	col[1] = g;
 	col[2] = b;
+}
+
+void UI_GetThemeColorShadeAlpha4fv(int colorid, int coloffset, int alphaoffset, float col[4])
+{
+	int r, g, b, a;
+	const unsigned char *cp;
+
+	cp = UI_ThemeGetColorPtr(theme_active, theme_spacetype, colorid);
+
+	r = coloffset + (int) cp[0];
+	CLAMP(r, 0, 255);
+	g = coloffset + (int) cp[1];
+	CLAMP(g, 0, 255);
+	b = coloffset + (int) cp[2];
+	CLAMP(b, 0, 255);
+	a = alphaoffset + (int) cp[3];
+	CLAMP(b, 0, 255);
+
+	col[0] = ((float)r) / 255.0f;
+	col[1] = ((float)g) / 255.0f;
+	col[2] = ((float)b) / 255.0f;
+	col[3] = ((float)a) / 255.0f;
+}
+
+void UI_GetThemeColorBlendShade4fv(int colorid1, int colorid2, float fac, int offset, float col[4])
+{
+	int r, g, b, a;
+	const unsigned char *cp1, *cp2;
+
+	cp1 = UI_ThemeGetColorPtr(theme_active, theme_spacetype, colorid1);
+	cp2 = UI_ThemeGetColorPtr(theme_active, theme_spacetype, colorid2);
+
+	CLAMP(fac, 0.0f, 1.0f);
+
+	r = offset + floorf((1.0f - fac) * cp1[0] + fac * cp2[0]);
+	CLAMP(r, 0, 255);
+	g = offset + floorf((1.0f - fac) * cp1[1] + fac * cp2[1]);
+	CLAMP(g, 0, 255);
+	b = offset + floorf((1.0f - fac) * cp1[2] + fac * cp2[2]);
+	CLAMP(b, 0, 255);
+	a = offset + floorf((1.0f - fac) * cp1[3] + fac * cp2[3]);
+	CLAMP(a, 0, 255);
+
+	col[0] = ((float)r) / 255.0f;
+	col[1] = ((float)g) / 255.0f;
+	col[2] = ((float)b) / 255.0f;
+	col[3] = ((float)a) / 255.0f;
 }
 
 /* get the color, in char pointer */
@@ -1664,6 +1711,8 @@ void init_userdef_do_versions(void)
 		U.tw_size = 25;          /* percentage of window size */
 		U.tw_handlesize = 16;    /* percentage of widget radius */
 	}
+	if (U.manipulator_scale == 0)
+		U.manipulator_scale = 75;
 	if (U.pad_rot_angle == 0.0f)
 		U.pad_rot_angle = 15.0f;
 	

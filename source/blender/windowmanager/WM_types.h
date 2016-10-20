@@ -119,6 +119,7 @@ struct ImBuf;
 /* exported types for WM */
 #include "wm_cursors.h"
 #include "wm_event_types.h"
+#include "manipulators/WM_manipulator_types.h"
 
 /* ************** wmOperatorType ************************ */
 
@@ -298,7 +299,7 @@ typedef struct wmNotifier {
 #define ND_MODIFIER			(24<<16)
 #define ND_KEYS				(25<<16)
 #define ND_CONSTRAINT		(26<<16)
-#define ND_PARTICLE			(27<<16)
+/*#define ND_PARTICLE			(27<<16)*/ /* DEPRECATED */
 #define ND_POINTCACHE		(28<<16)
 #define ND_PARENT			(29<<16)
 #define ND_LOD				(30<<16)
@@ -565,6 +566,9 @@ typedef struct wmOperatorType {
 
 	/* pointer to modal keymap, do not free! */
 	struct wmKeyMap *modalkeymap;
+
+	/* manipulator-group that is accessible while operator runs */
+	wmManipulatorGroupType *mgrouptype;
 
 	/* python needs the operator type as well */
 	int (*pyop_poll)(struct bContext *, struct wmOperatorType *ot) ATTR_WARN_UNUSED_RESULT;

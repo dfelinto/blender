@@ -59,7 +59,6 @@ extern "C" {
 #include "DNA_mesh_types.h"
 #include "DNA_meta_types.h"
 #include "DNA_node_types.h"
-#include "DNA_particle_types.h"
 #include "DNA_object_types.h"
 #include "DNA_rigidbody_types.h"
 #include "DNA_scene_types.h"
@@ -84,7 +83,6 @@ extern "C" {
 #include "BKE_modifier.h"
 #include "BKE_node.h"
 #include "BKE_object.h"
-#include "BKE_particle.h"
 #include "BKE_rigidbody.h"
 #include "BKE_sound.h"
 #include "BKE_texture.h"
@@ -291,30 +289,15 @@ void DepsgraphRelationBuilder::add_collision_relations(const OperationKey &key, 
 		MEM_freeN(collobjs);
 }
 
-void DepsgraphRelationBuilder::add_forcefield_relations(const OperationKey &key, Scene *scene, Object *ob, ParticleSystem *psys, EffectorWeights *eff, bool add_absorption, const char *name)
+void DepsgraphRelationBuilder::add_forcefield_relations(const OperationKey &key, Scene *scene, Object *ob, EffectorWeights *eff, bool add_absorption, const char *name)
 {
-	ListBase *effectors = pdInitEffectors(scene, ob, psys, eff, false);
+	ListBase *effectors = pdInitEffectors(scene, ob, eff, false);
 
 	if (effectors) {
 		for (EffectorCache *eff = (EffectorCache *)effectors->first; eff; eff = eff->next) {
 			if (eff->ob != ob) {
 				ComponentKey eff_key(&eff->ob->id, DEPSNODE_TYPE_TRANSFORM);
 				add_relation(eff_key, key, DEPSREL_TYPE_STANDARD, name);
-			}
-
-			if (eff->psys) {
-				if (eff->ob != ob) {
-					ComponentKey eff_key(&eff->ob->id, DEPSNODE_TYPE_EVAL_PARTICLES);
-					add_relation(eff_key, key, DEPSREL_TYPE_STANDARD, name);
-
-					/* TODO: remove this when/if EVAL_PARTICLES is sufficient for up to date particles */
-					ComponentKey mod_key(&eff->ob->id, DEPSNODE_TYPE_GEOMETRY);
-					add_relation(mod_key, key, DEPSREL_TYPE_STANDARD, name);
-				}
-				else if (eff->psys != psys) {
-					OperationKey eff_key(&eff->ob->id, DEPSNODE_TYPE_EVAL_PARTICLES, DEG_OPCODE_PSYS_EVAL, eff->psys->name);
-					add_relation(eff_key, key, DEPSREL_TYPE_STANDARD, name);
-				}
 			}
 
 			if (eff->pd->forcefield == PFIELD_SMOKEFLOW && eff->pd->f_source) {
@@ -550,11 +533,6 @@ void DepsgraphRelationBuilder::build_object(Main *bmain, Scene *scene, Object *o
 			ComponentKey key_key(&key->id, DEPSNODE_TYPE_GEOMETRY);
 			add_relation(key_key, geometry_key, DEPSREL_TYPE_GEOMETRY_EVAL, "Shapekeys");
 		}
-	}
-
-	/* particle systems */
-	if (ob->particlesystem.first) {
-		build_particles(scene, ob);
 	}
 
 	/* grease pencil */
@@ -1161,127 +1139,6 @@ void DepsgraphRelationBuilder::build_rigidbody(Scene *scene)
 			add_relation(trans_key, sim_key, DEPSREL_TYPE_TRANSFORM, "RigidBodyConstraint Transform -> RB Simulation");
 		}
 	}
-}
-
-void DepsgraphRelationBuilder::build_particles(Scene *scene, Object *ob)
-{
-	TimeSourceKey time_src_key;
-	OperationKey obdata_ubereval_key(&ob->id,
-	                                 DEPSNODE_TYPE_GEOMETRY,
-	                                 DEG_OPCODE_GEOMETRY_UBEREVAL);
-
-	/* particle systems */
-	for (ParticleSystem *psys = (ParticleSystem *)ob->particlesystem.first; psys; psys = psys->next) {
-		ParticleSettings *part = psys->part;
-
-		/* particle settings */
-		build_animdata(&part->id);
-
-		/* this particle system */
-		OperationKey psys_key(&ob->id, DEPSNODE_TYPE_EVAL_PARTICLES, DEG_OPCODE_PSYS_EVAL, psys->name);
-
-		/* XXX: if particle system is later re-enabled, we must do full rebuild? */
-		if (!psys_check_enabled(ob, psys, G.is_rendering))
-			continue;
-
-		/* TODO(sergey): Are all particle systems depends on time?
-		 * Hair without dynamics i.e.
-		 */
-		add_relation(time_src_key, psys_key,
-		             DEPSREL_TYPE_TIME,
-		             "TimeSrc -> PSys");
-
-		/* TODO(sergey): Currently particle update is just a placeholder,
-		 * hook it to the ubereval node so particle system is getting updated
-		 * on playback.
-		 */
-		add_relation(psys_key,
-		             obdata_ubereval_key,
-		             DEPSREL_TYPE_OPERATION,
-		             "PSys -> UberEval");
-
-#if 0
-		if (ELEM(part->phystype, PART_PHYS_KEYED, PART_PHYS_BOIDS)) {
-			ParticleTarget *pt;
-
-			for (pt = psys->targets.first; pt; pt = pt->next) {
-				if (pt->ob && BLI_findlink(&pt->ob->particlesystem, pt->psys - 1)) {
-					node2 = dag_get_node(dag, pt->ob);
-					dag_add_relation(dag, node2, node, DAG_RL_DATA_DATA | DAG_RL_OB_DATA, "Particle Targets");
-				}
-			}
-		}
-
-		if (part->ren_as == PART_DRAW_OB && part->dup_ob) {
-			node2 = dag_get_node(dag, part->dup_ob);
-			/* note that this relation actually runs in the wrong direction, the problem
-			 * is that dupli system all have this (due to parenting), and the render
-			 * engine instancing assumes particular ordering of objects in list */
-			dag_add_relation(dag, node, node2, DAG_RL_OB_OB, "Particle Object Visualization");
-			if (part->dup_ob->type == OB_MBALL)
-				dag_add_relation(dag, node, node2, DAG_RL_DATA_DATA, "Particle Object Visualization");
-		}
-
-		if (part->ren_as == PART_DRAW_GR && part->dup_group) {
-			for (go = part->dup_group->gobject.first; go; go = go->next) {
-				node2 = dag_get_node(dag, go->ob);
-				dag_add_relation(dag, node2, node, DAG_RL_OB_OB, "Particle Group Visualization");
-			}
-		}
-#endif
-
-		/* collisions */
-		if (part->type != PART_HAIR) {
-			add_collision_relations(psys_key, scene, ob, part->collision_group, ob->lay, true, "Particle Collision");
-		}
-
-		/* effectors */
-		add_forcefield_relations(psys_key, scene, ob, psys, part->effector_weights, part->type == PART_HAIR, "Particle Field");
-
-		/* boids */
-		if (part->boids) {
-			BoidRule *rule = NULL;
-			BoidState *state = NULL;
-
-			for (state = (BoidState *)part->boids->states.first; state; state = state->next) {
-				for (rule = (BoidRule *)state->rules.first; rule; rule = rule->next) {
-					Object *ruleob = NULL;
-					if (rule->type == eBoidRuleType_Avoid)
-						ruleob = ((BoidRuleGoalAvoid *)rule)->ob;
-					else if (rule->type == eBoidRuleType_FollowLeader)
-						ruleob = ((BoidRuleFollowLeader *)rule)->ob;
-
-					if (ruleob) {
-						ComponentKey ruleob_key(&ruleob->id, DEPSNODE_TYPE_TRANSFORM);
-						add_relation(ruleob_key, psys_key, DEPSREL_TYPE_TRANSFORM, "Boid Rule");
-					}
-				}
-			}
-		}
-
-		if (part->ren_as == PART_DRAW_OB && part->dup_ob) {
-			ComponentKey dup_ob_key(&part->dup_ob->id, DEPSNODE_TYPE_TRANSFORM);
-			add_relation(dup_ob_key,
-			             psys_key,
-			             DEPSREL_TYPE_TRANSFORM,
-			             "Particle Object Visualization");
-		}
-	}
-
-	/* Particle depends on the object transform, so that channel is to be ready
-	 * first.
-	 *
-	 * TODO(sergey): This relation should be altered once real granular update
-	 * is implemented.
-	 */
-	ComponentKey transform_key(&ob->id, DEPSNODE_TYPE_TRANSFORM);
-	add_relation(transform_key,
-	             obdata_ubereval_key,
-	             DEPSREL_TYPE_GEOMETRY_EVAL,
-	             "Partcile Eval");
-
-	/* pointcache */
-	// TODO...
 }
 
 /* IK Solver Eval Steps */

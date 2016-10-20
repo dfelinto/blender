@@ -42,6 +42,9 @@
 #include "WM_keymap.h"
 #include "BLI_compiler_attrs.h"
 
+/* Include external manipulator API's */
+#include "manipulators/WM_manipulator_api.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -64,12 +67,16 @@ struct wmDrag;
 struct ImBuf;
 struct ImageFormatData;
 struct ARegion;
+struct ScrArea;
 
 #ifdef WITH_INPUT_NDOF
 struct wmNDOFMotionData;
 #endif
 
 typedef struct wmJob wmJob;
+typedef struct wmManipulator wmManipulator;
+typedef struct wmManipulatorMap wmManipulatorMap;
+typedef struct wmManipulatorMapType wmManipulatorMapType;
 
 /* general API */
 void		WM_init_state_size_set		(int stax, int stay, int sizx, int sizy);
@@ -171,6 +178,9 @@ void WM_event_free_ui_handler_all(
         wmUIHandlerFunc ui_handle, wmUIHandlerRemoveFunc ui_remove);
 
 struct wmEventHandler *WM_event_add_modal_handler(struct bContext *C, struct wmOperator *op);
+void WM_event_modal_handler_area_replace(wmWindow *win, const struct ScrArea *old_area, struct ScrArea *new_area);
+void WM_event_modal_handler_region_replace(wmWindow *win, const struct ARegion *old_region, struct ARegion *new_region);
+
 void		WM_event_remove_handlers(struct bContext *C, ListBase *handlers);
 
 /* handler flag */

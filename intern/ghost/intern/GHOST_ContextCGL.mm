@@ -63,6 +63,23 @@ GHOST_ContextCGL::GHOST_ContextCGL(
       m_debug(contextFlags)
 {
 	assert(openGLView != nil);
+
+	// for now be very strict about OpenGL version requested
+	switch (contextMajorVersion) {
+		case 2:
+			assert(contextMinorVersion == 1);
+			assert(contextProfileMask == 0);
+			m_coreProfile = false;
+			break;
+		case 3:
+			// Apple didn't implement 3.0 or 3.1
+			assert(contextMinorVersion == 2);
+			assert(contextProfileMask == GL_CONTEXT_CORE_PROFILE_BIT);
+			m_coreProfile = true;
+			break;
+		default:
+			assert(false);
+	}
 }
 
 
@@ -170,6 +187,7 @@ GHOST_TSuccess GHOST_ContextCGL::updateDrawingContext()
 
 static void makeAttribList(
         std::vector<NSOpenGLPixelFormatAttribute>& attribs,
+        bool coreProfile, 
         bool stereoVisual,
         int numOfAASamples,
         bool needAlpha,
@@ -178,6 +196,9 @@ static void makeAttribList(
 {
 	attribs.clear();
 
+	attribs.push_back(NSOpenGLPFAOpenGLProfile);
+	attribs.push_back(coreProfile ? NSOpenGLProfileVersion3_2Core : NSOpenGLProfileVersionLegacy);
+	
 	// Pixel Format Attributes for the windowed NSOpenGLContext
 	attribs.push_back(NSOpenGLPFADoubleBuffer);
 
@@ -190,8 +211,7 @@ static void makeAttribList(
 		attribs.push_back(NSOpenGLPFANoRecovery);
 	}
 
-	/* Removed to allow 10.4 builds, and 2 GPUs rendering is not used anyway */
-	//attribs.push_back(NSOpenGLPFAAllowOfflineRenderers);
+	attribs.push_back(NSOpenGLPFAAllowOfflineRenderers); // for automatic GPU switching
 
 	attribs.push_back(NSOpenGLPFADepthSize);
 	attribs.push_back((NSOpenGLPixelFormatAttribute) 32);
@@ -263,7 +283,7 @@ GHOST_TSuccess GHOST_ContextCGL::initializeDrawingContext()
 	NSOpenGLPixelFormat *pixelFormat;
 	// TODO: keep pixel format for subsequent windows/contexts instead of recreating each time
 
-	makeAttribList(attribs, m_stereoVisual, m_numOfAASamples, needAlpha, needStencil, softwareGL);
+	makeAttribList(attribs, m_coreProfile, m_stereoVisual, m_numOfAASamples, needAlpha, needStencil, softwareGL);
 
 	pixelFormat = [[NSOpenGLPixelFormat alloc] initWithAttributes:&attribs[0]];
 
@@ -274,7 +294,7 @@ GHOST_TSuccess GHOST_ContextCGL::initializeDrawingContext()
 		// (Now that I think about it, does WGL really require the code that it has for finding a lesser match?)
 
 		attribs.clear();
-		makeAttribList(attribs, m_stereoVisual, 0, needAlpha, needStencil, softwareGL);
+		makeAttribList(attribs, m_coreProfile, m_stereoVisual, 0, needAlpha, needStencil, softwareGL);
 		pixelFormat = [[NSOpenGLPixelFormat alloc] initWithAttributes:&attribs[0]];
 	}
 
@@ -316,7 +336,7 @@ GHOST_TSuccess GHOST_ContextCGL::initializeDrawingContext()
 		[m_openGLContext release];
 
 		// create software GL context
-		makeAttribList(attribs, m_stereoVisual, m_numOfAASamples, needAlpha, needStencil, softwareGL);
+		makeAttribList(attribs, m_coreProfile, m_stereoVisual, m_numOfAASamples, needAlpha, needStencil, softwareGL);
 		pixelFormat = [[NSOpenGLPixelFormat alloc] initWithAttributes:&attribs[0]];
 		m_openGLContext = [[NSOpenGLContext alloc] initWithFormat:pixelFormat shareContext:s_sharedOpenGLContext];
 		[pixelFormat release];

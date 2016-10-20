@@ -53,6 +53,9 @@
 #include "BIF_gl.h"
 #include "BIF_glutil.h"
 
+#include "GPU_draw.h"
+#include "GPU_immediate.h"
+
 #include "RNA_access.h"
 #include "RNA_define.h"
 
@@ -62,6 +65,7 @@
 #include "WM_types.h"
 
 #include "UI_resources.h"
+#include "UI_view2d.h"
 
 #include "IMB_colormanagement.h"
 #include "IMB_imbuf_types.h"
@@ -79,49 +83,6 @@ static void node_socket_button_label(bContext *UNUSED(C), uiLayout *layout, Poin
 {
 	uiItemL(layout, text, 0);
 }
-
-
-/* ****************** BASE DRAW FUNCTIONS FOR NEW OPERATOR NODES ***************** */
-
-#if 0 /* UNUSED */
-static void node_draw_socket_new(bNodeSocket *sock, float size)
-{
-	float x = sock->locx, y = sock->locy;
-	
-	/* 16 values of sin function */
-	static float si[16] = {
-		0.00000000f, 0.39435585f, 0.72479278f, 0.93775213f,
-		0.99871650f, 0.89780453f, 0.65137248f, 0.29936312f,
-		-0.10116832f, -0.48530196f, -0.79077573f, -0.96807711f,
-		-0.98846832f, -0.84864425f, -0.57126821f, -0.20129852f
-	};
-	/* 16 values of cos function */
-	static float co[16] = {
-		1.00000000f, 0.91895781f, 0.68896691f, 0.34730525f,
-		-0.05064916f, -0.44039415f, -0.75875812f, -0.95413925f,
-		-0.99486932f, -0.87434661f, -0.61210598f, -0.25065253f,
-		0.15142777f, 0.52896401f, 0.82076344f, 0.97952994f,
-	};
-	int a;
-	
-	glColor3ub(180, 180, 180);
-	
-	glBegin(GL_POLYGON);
-	for (a = 0; a < 16; a++)
-		glVertex2f(x + size * si[a], y + size * co[a]);
-	glEnd();
-	
-	glColor4ub(0, 0, 0, 150);
-	glEnable(GL_BLEND);
-	glEnable(GL_LINE_SMOOTH);
-	glBegin(GL_LINE_LOOP);
-	for (a = 0; a < 16; a++)
-		glVertex2f(x + size * si[a], y + size * co[a]);
-	glEnd();
-	glDisable(GL_LINE_SMOOTH);
-	glDisable(GL_BLEND);
-}
-#endif
 
 /* ****************** BUTTON CALLBACKS FOR ALL TREES ***************** */
 
@@ -465,7 +426,7 @@ static void node_draw_frame(const bContext *C, ARegion *ar, SpaceNode *snode,
 {
 	rctf *rct = &node->totr;
 	int color_id = node_get_colorid(node);
-	unsigned char color[4];
+	float color[4];
 	float alpha;
 	
 	/* skip if out of view */
@@ -475,8 +436,8 @@ static void node_draw_frame(const bContext *C, ARegion *ar, SpaceNode *snode,
 		return;
 	}
 
-	UI_GetThemeColor4ubv(TH_NODE_FRAME, color);
-	alpha = (float)(color[3]) / 255.0f;
+	UI_GetThemeColor4fv(TH_NODE_FRAME, color);
+	alpha = color[3];
 	
 	/* shadow */
 	node_draw_shadow(snode, node, BASIS_RAD, alpha);
@@ -495,16 +456,16 @@ static void node_draw_frame(const bContext *C, ARegion *ar, SpaceNode *snode,
 	if (node->flag & SELECT) {
 		glEnable(GL_BLEND);
 		glEnable(GL_LINE_SMOOTH);
-		
+				
 		if (node->flag & NODE_ACTIVE)
-			UI_ThemeColorShadeAlpha(TH_ACTIVE, 0, -40);
+			UI_GetThemeColorShadeAlpha4fv(TH_ACTIVE, 0, -40, color);
 		else
-			UI_ThemeColorShadeAlpha(TH_SELECT, 0, -40);
+			UI_GetThemeColorShadeAlpha4fv(TH_SELECT, 0, -40, color);
+
 		UI_draw_roundbox_corner_set(UI_CNR_ALL);
-		UI_draw_roundbox_gl_mode(GL_LINE_LOOP,
-		          rct->xmin, rct->ymin,
-		          rct->xmax, rct->ymax, BASIS_RAD);
-		
+		UI_draw_roundbox_gl_mode(GL_LINE_LOOP, rct->xmin, rct->ymin, rct->xmax, rct->ymax, BASIS_RAD, color);
+
+
 		glDisable(GL_LINE_SMOOTH);
 		glDisable(GL_BLEND);
 	}
@@ -580,14 +541,12 @@ static void node_draw_reroute_prepare(const bContext *UNUSED(C), bNodeTree *UNUS
 static void node_draw_reroute(const bContext *C, ARegion *ar, SpaceNode *UNUSED(snode),
                               bNodeTree *ntree, bNode *node, bNodeInstanceKey UNUSED(key))
 {
-	bNodeSocket *sock;
 	char showname[128]; /* 128 used below */
 	rctf *rct = &node->totr;
 
 #if 0   /* UNUSED */
 	float size = NODE_REROUTE_SIZE;
 #endif
-	float socket_size = NODE_SOCKSIZE;
 
 	/* skip if out of view */
 	if (node->totr.xmax < ar->v2d.cur.xmin || node->totr.xmin > ar->v2d.cur.xmax ||
@@ -637,9 +596,7 @@ static void node_draw_reroute(const bContext *C, ARegion *ar, SpaceNode *UNUSED(
 	/* only draw input socket. as they all are placed on the same position.
 	 * highlight also if node itself is selected, since we don't display the node body separately!
 	 */
-	for (sock = node->inputs.first; sock; sock = sock->next) {
-		node_socket_circle_draw(C, ntree, node, sock, socket_size, (sock->flag & SELECT) || (node->flag & SELECT));
-	}
+	node_draw_sockets(&ar->v2d, C, ntree, node, false, node->flag & SELECT);
 
 	UI_block_end(C, node->block);
 	UI_block_draw(C, node->block);

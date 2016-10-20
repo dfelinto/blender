@@ -58,6 +58,7 @@
 #include "interface_intern.h"
 
 #include "GPU_basic_shader.h"
+#include "GPU_immediate.h"
 
 #ifdef WITH_INPUT_IME
 #  include "WM_types.h"
@@ -217,16 +218,15 @@ void ui_draw_anti_roundbox(int mode, float minx, float miny, float maxx, float m
 	int j;
 	
 	glEnable(GL_BLEND);
-	glGetFloatv(GL_CURRENT_COLOR, color);
+	glGetFloatv(GL_CURRENT_COLOR, color);  // I will make the change in a futur patch, use as it is for now
 	if (use_alpha) {
 		color[3] = 0.5f;
 	}
 	color[3] *= 0.125f;
-	glColor4fv(color);
 	
 	for (j = 0; j < WIDGET_AA_JITTER; j++) {
 		glTranslate2fv(jit[j]);
-		UI_draw_roundbox_gl_mode(mode, minx, miny, maxx, maxy, rad);
+		UI_draw_roundbox_gl_mode(mode, minx, miny, maxx, maxy, rad, color);
 		glTranslatef(-jit[j][0], -jit[j][1], 0.0f);
 	}
 
@@ -1461,37 +1461,40 @@ static void widget_draw_text(uiFontStyle *fstyle, uiWidgetColors *wcol, uiBut *b
 		/* for underline drawing */
 		float font_xofs, font_yofs;
 
-		UI_fontstyle_draw_ex(fstyle, rect, drawstr + but->ofs,
-		                   drawstr_left_len - but->ofs, &font_xofs, &font_yofs);
+		int drawlen = (drawstr_left_len == INT_MAX) ? strlen(drawstr + but->ofs) : (drawstr_left_len - but->ofs);
 
-		if (but->menu_key != '\0') {
-			char fixedbuf[128];
-			const char *str;
+		if (drawlen > 0) {
+			UI_fontstyle_draw_ex(fstyle, rect, drawstr + but->ofs, drawlen, &font_xofs, &font_yofs);
 
-			BLI_strncpy(fixedbuf, drawstr + but->ofs, min_ii(sizeof(fixedbuf), drawstr_left_len));
+			if (but->menu_key != '\0') {
+				char fixedbuf[128];
+				const char *str;
 
-			str = strchr(fixedbuf, but->menu_key - 32); /* upper case */
-			if (str == NULL)
-				str = strchr(fixedbuf, but->menu_key);
+				BLI_strncpy(fixedbuf, drawstr + but->ofs, min_ii(sizeof(fixedbuf), drawlen));
 
-			if (str) {
-				int ul_index = -1;
-				float ul_advance;
+				str = strchr(fixedbuf, but->menu_key - 32); /* upper case */
+				if (str == NULL)
+					str = strchr(fixedbuf, but->menu_key);
 
-				ul_index = (int)(str - fixedbuf);
+				if (str) {
+					int ul_index = -1;
+					float ul_advance;
 
-				if (fstyle->kerning == 1) {
-					BLF_enable(fstyle->uifont_id, BLF_KERNING_DEFAULT);
-				}
+					ul_index = (int)(str - fixedbuf);
 
-				fixedbuf[ul_index] = '\0';
-				ul_advance = BLF_width(fstyle->uifont_id, fixedbuf, ul_index);
+					if (fstyle->kerning == 1) {
+						BLF_enable(fstyle->uifont_id, BLF_KERNING_DEFAULT);
+					}
 
-				BLF_position(fstyle->uifont_id, rect->xmin + font_xofs + ul_advance, rect->ymin + font_yofs, 0.0f);
-				BLF_draw(fstyle->uifont_id, "_", 2);
+					fixedbuf[ul_index] = '\0';
+					ul_advance = BLF_width(fstyle->uifont_id, fixedbuf, ul_index);
 
-				if (fstyle->kerning == 1) {
-					BLF_disable(fstyle->uifont_id, BLF_KERNING_DEFAULT);
+					BLF_position(fstyle->uifont_id, rect->xmin + font_xofs + ul_advance, rect->ymin + font_yofs, 0.0f);
+					BLF_draw(fstyle->uifont_id, "_", 2);
+
+					if (fstyle->kerning == 1) {
+						BLF_disable(fstyle->uifont_id, BLF_KERNING_DEFAULT);
+					}
 				}
 			}
 		}
@@ -2266,18 +2269,17 @@ void ui_hsvcircle_pos_from_vals(uiBut *but, const rcti *rect, float *hsv, float 
 
 static void ui_draw_but_HSVCIRCLE(uiBut *but, uiWidgetColors *wcol, const rcti *rect)
 {
+	/* TODO(merwin): reimplement as shader for pixel-perfect colors */
+
 	const int tot = 64;
 	const float radstep = 2.0f * (float)M_PI / (float)tot;
 	const float centx = BLI_rcti_cent_x_fl(rect);
 	const float centy = BLI_rcti_cent_y_fl(rect);
 	float radius = (float)min_ii(BLI_rcti_size_x(rect), BLI_rcti_size_y(rect)) / 2.0f;
 
-	/* gouraud triangle fan */
 	ColorPicker *cpicker = but->custom_data;
 	const float *hsv_ptr = cpicker->color_data;
-	float xpos, ypos, ang = 0.0f;
 	float rgb[3], hsvo[3], hsv[3], col[3], colcent[3];
-	int a;
 	bool color_profile = ui_but_is_colorpicker_display_space(but);
 		
 	/* color */
@@ -2308,11 +2310,18 @@ static void ui_draw_but_HSVCIRCLE(uiBut *but, uiWidgetColors *wcol, const rcti *
 	
 	ui_color_picker_to_rgb(0.0f, 0.0f, hsv[2], colcent, colcent + 1, colcent + 2);
 
-	glBegin(GL_TRIANGLE_FAN);
-	glColor3fv(colcent);
-	glVertex2f(centx, centy);
+	VertexFormat* format = immVertexFormat();
+	unsigned pos = add_attrib(format, "pos", GL_FLOAT, 2, KEEP_FLOAT);
+	unsigned color = add_attrib(format, "color", GL_FLOAT, 3, KEEP_FLOAT);
+
+	immBindBuiltinProgram(GPU_SHADER_2D_SMOOTH_COLOR);
+
+	immBegin(GL_TRIANGLE_FAN, tot + 2);
+	immAttrib3fv(color, colcent);
+	immVertex2f(pos, centx, centy);
 	
-	for (a = 0; a <= tot; a++, ang += radstep) {
+	float ang = 0.0f;
+	for (int a = 0; a <= tot; a++, ang += radstep) {
 		float si = sinf(ang);
 		float co = cosf(ang);
 		
@@ -2320,25 +2329,32 @@ static void ui_draw_but_HSVCIRCLE(uiBut *but, uiWidgetColors *wcol, const rcti *
 
 		ui_color_picker_to_rgb_v(hsv, col);
 
-		glColor3fv(col);
-		glVertex2f(centx + co * radius, centy + si * radius);
+		immAttrib3fv(color, col);
+		immVertex2f(pos, centx + co * radius, centy + si * radius);
 	}
-	glEnd();
-	
+	immEnd();
+	immUnbindProgram();
+
 	/* fully rounded outline */
-	glPushMatrix();
-	glTranslatef(centx, centy, 0.0f);
+	format = immVertexFormat();
+	pos = add_attrib(format, "pos", GL_FLOAT, 2, KEEP_FLOAT);
+
+	immBindBuiltinProgram(GPU_SHADER_2D_UNIFORM_COLOR);
+
 	glEnable(GL_BLEND);
 	glEnable(GL_LINE_SMOOTH);
-	glColor3ubv((unsigned char *)wcol->outline);
-	glutil_draw_lined_arc(0.0f, M_PI * 2.0, radius, tot + 1);
+
+	immUniformColor3ubv((unsigned char *)wcol->outline);
+	imm_draw_lined_circle(pos, centx, centy, radius, tot);
+
 	glDisable(GL_BLEND);
 	glDisable(GL_LINE_SMOOTH);
-	glPopMatrix();
+
+	immUnbindProgram();
 
 	/* cursor */
+	float xpos, ypos;
 	ui_hsvcircle_pos_from_vals(but, rect, hsvo, &xpos, &ypos);
-
 	ui_hsv_cursor(xpos, ypos);
 }
 

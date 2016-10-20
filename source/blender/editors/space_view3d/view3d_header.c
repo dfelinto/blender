@@ -334,8 +334,10 @@ void uiTemplateHeader3D(uiLayout *layout, struct bContext *C)
 		uiItemMenuEnumO(row, C, "OBJECT_OT_mode_set", "mode", name, icon);
 	}
 
-	/* Draw type */
-	uiItemR(layout, &v3dptr, "viewport_shade", UI_ITEM_R_ICON_ONLY, "", ICON_NONE);
+	if (IS_VIEWPORT_LEGACY(v3d)) {
+		/* Draw type */
+		uiItemR(layout, &v3dptr, "viewport_shade", UI_ITEM_R_ICON_ONLY, "", ICON_NONE);
+	}
 
 	if (obedit == NULL && is_paint) {
 		if (ob->mode & OB_MODE_ALL_PAINT) {
@@ -345,7 +347,7 @@ void uiTemplateHeader3D(uiLayout *layout, struct bContext *C)
 		}
 
 		/* Manipulators aren't used in paint modes */
-		if (!ELEM(ob->mode, OB_MODE_SCULPT, OB_MODE_PARTICLE_EDIT)) {
+		if (ob->mode != OB_MODE_SCULPT) {
 			/* masks aren't used for sculpt and particle painting */
 			PointerRNA meshptr;
 

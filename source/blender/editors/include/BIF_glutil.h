@@ -38,20 +38,11 @@ struct bContext;
 struct ColorManagedViewSettings;
 struct ColorManagedDisplaySettings;
 
-void fdrawbezier(float vec[4][3]);
 void fdrawline(float x1, float y1, float x2, float y2);
 void fdrawbox(float x1, float y1, float x2, float y2);
 void sdrawline(int x1, int y1, int x2, int y2);
-#if 0
-void sdrawtri(int x1, int y1, int x2, int y2);
-void sdrawtrifill(int x1, int y1, int x2, int y2);
-#endif
 void sdrawbox(int x1, int y1, int x2, int y2);
 
-void sdrawXORline(int x0, int y0, int x1, int y1);
-void sdrawXORline4(int nr, int x0, int y0, int x1, int y1);
-
-void fdrawXORellipse(float xofs, float yofs, float hw, float hh);
 void fdrawXORcirc(float xofs, float yofs, float rad);
 
 void fdrawcheckerboard(float x1, float y1, float x2, float y2);
@@ -88,6 +79,48 @@ void glutil_draw_lined_arc(float start, float angle, float radius, int nsegments
  * \param nsegments The number of segments to use in drawing the arc.
  */
 void glutil_draw_filled_arc(float start, float angle, float radius, int nsegments);
+
+/**
+ * Draw a circle outline with the given \a radius.
+ * The circle is centered at \a x, \a y and drawn in the XY plane.
+ *
+ * \param pos The vertex attribute number for position.
+ * \param x Horizontal center.
+ * \param y Vertical center.
+ * \param radius The circle's radius.
+ * \param nsegments The number of segments to use in drawing (more = smoother).
+ */
+void imm_draw_lined_circle(unsigned pos, float x, float y, float radius, int nsegments);
+
+/**
+ * Draw a filled circle with the given \a radius.
+ * The circle is centered at \a x, \a y and drawn in the XY plane.
+ *
+ * \param pos The vertex attribute number for position.
+ * \param x Horizontal center.
+ * \param y Vertical center.
+ * \param radius The circle's radius.
+ * \param nsegments The number of segments to use in drawing (more = smoother).
+ */
+void imm_draw_filled_circle(unsigned pos, float x, float y, float radius, int nsegments);
+
+/**
+* Draw a lined box.
+*
+* \param pos The vertex attribute number for position.
+* \param x1 left.
+* \param y1 bottom.
+* \param x2 right.
+* \param y2 top.
+*/
+void imm_draw_line_box(unsigned pos, float x1, float y1, float x2, float y2);
+
+/**
+* Pack color into 3 bytes
+*
+* \param x color.
+*/
+void imm_cpack(unsigned int x);
 
 /**
  * Returns a float value as obtained by glGetFloatv.
@@ -176,12 +209,11 @@ void glaDrawPixelsTexScaled_clipping(float x, float y, int img_w, int img_h, int
  */
 void glaDefine2DArea(struct rcti *screen_rect);
 
+#if 0  /* UNUSED */
+
 typedef struct gla2DDrawInfo gla2DDrawInfo;
 
-/* UNUSED */
-#if 0
-
-gla2DDrawInfo  *glaBegin2DDraw(struct rcti *screen_rect, struct rctf *world_rect);
+gla2DDrawInfo *glaBegin2DDraw(struct rcti *screen_rect, struct rctf *world_rect);
 void gla2DDrawTranslatePt(gla2DDrawInfo *di, float wo_x, float wo_y, int *r_sc_x, int *r_sc_y);
 void gla2DDrawTranslatePtv(gla2DDrawInfo *di, float world[2], int r_screen[2]);
 
@@ -190,7 +222,8 @@ void glaEnd2DDraw(gla2DDrawInfo *di);
 /** Adjust the transformation mapping of a 2d area */
 void gla2DGetMap(gla2DDrawInfo *di, struct rctf *rect);
 void gla2DSetMap(gla2DDrawInfo *di, struct rctf *rect);
-#endif
+
+#endif /* UNUSED */
 
 void set_inverted_drawing(int enable);
 void setlinestyle(int nr);

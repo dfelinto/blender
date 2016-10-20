@@ -610,97 +610,37 @@ GHOST_TSuccess GHOST_WindowWin32::invalidate()
 GHOST_Context *GHOST_WindowWin32::newDrawingContext(GHOST_TDrawingContextType type)
 {
 	if (type == GHOST_kDrawingContextTypeOpenGL) {
-#if !defined(WITH_GL_EGL)
 
+		const int profile_mask =
 #if defined(WITH_GL_PROFILE_CORE)
-		GHOST_Context *context = new GHOST_ContextWGL(
-		        m_wantStereoVisual,
-		        m_wantAlphaBackground,
-		        m_wantNumOfAASamples,
-		        m_hWnd,
-		        m_hDC,
-		        WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
-		        3, 2,
-		        GHOST_OPENGL_WGL_CONTEXT_FLAGS,
-		        GHOST_OPENGL_WGL_RESET_NOTIFICATION_STRATEGY);
-#elif defined(WITH_GL_PROFILE_ES20)
-		GHOST_Context *context = new GHOST_ContextWGL(
-		        m_wantStereoVisual,
-		        m_wantAlphaBackground,
-		        m_wantNumOfAASamples,
-		        m_hWnd,
-		        m_hDC,
-		        WGL_CONTEXT_ES2_PROFILE_BIT_EXT,
-		        2, 0,
-		        GHOST_OPENGL_WGL_CONTEXT_FLAGS,
-		        GHOST_OPENGL_WGL_RESET_NOTIFICATION_STRATEGY);
+			WGL_CONTEXT_CORE_PROFILE_BIT_ARB;
 #elif defined(WITH_GL_PROFILE_COMPAT)
+			WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB;
+#else
+#  error // must specify either core or compat at build time
+#endif
+
 		GHOST_Context *context = new GHOST_ContextWGL(
 		        m_wantStereoVisual,
 		        m_wantAlphaBackground,
 		        m_wantNumOfAASamples,
 		        m_hWnd,
 		        m_hDC,
-#if 1
-		        0, // profile bit
-		        2, 1, // GL version requested
+		        profile_mask,
+#if 0
+		        3, 3, // specific GL version requested
+		              // AMD gives us exactly this version
+		              // NVIDIA gives at least this version <-- desired behavior
 #else
-		        // switch to this for Blender 2.8 development
-		        WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB,
-		        3, 2,
+		        2, 1, // any GL version >= 2.1 (hopefully the latest)
+		              // we check later to ensure it's >= 3.3 on Windows
+		              // TODO(merwin): fix properly!
+		              //               2.1 ignores the profile bit & is incompatible with core profile
+		              //               query version of initial dummy context, request that + profile + debug
 #endif
 		        (m_debug_context ? WGL_CONTEXT_DEBUG_BIT_ARB : 0),
 		        GHOST_OPENGL_WGL_RESET_NOTIFICATION_STRATEGY);
-#else
-#  error
-#endif
 
-#else
-
-#if defined(WITH_GL_PROFILE_CORE)
-		GHOST_Context *context = new GHOST_ContextEGL(
-		        m_wantStereoVisual,
-		        m_wantNumOfAASamples,
-		        m_hWnd,
-		        m_hDC,
-		        EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT,
-		        3, 2,
-		        GHOST_OPENGL_EGL_CONTEXT_FLAGS,
-		        GHOST_OPENGL_EGL_RESET_NOTIFICATION_STRATEGY,
-		        EGL_OPENGL_API);
-#elif defined(WITH_GL_PROFILE_ES20)
-		GHOST_Context *context = new GHOST_ContextEGL(
-		        m_wantStereoVisual,
-		        m_wantNumOfAASamples,
-		        m_hWnd,
-		        m_hDC,
-		        0, // profile bit
-		        2, 0,
-		        GHOST_OPENGL_EGL_CONTEXT_FLAGS,
-		        GHOST_OPENGL_EGL_RESET_NOTIFICATION_STRATEGY,
-		        EGL_OPENGL_ES_API);
-#elif defined(WITH_GL_PROFILE_COMPAT)
-		GHOST_Context *context = new GHOST_ContextEGL(
-		        m_wantStereoVisual,
-		        m_wantNumOfAASamples,
-		        m_hWnd,
-		        m_hDC,
-#if 1
-		        0, // profile bit
-		        2, 1, // GL version requested
-#else
-		        // switch to this for Blender 2.8 development
-		        EGL_CONTEXT_OPENGL_COMPATIBILITY_PROFILE_BIT,
-		        3, 2,
-#endif
-		        GHOST_OPENGL_EGL_CONTEXT_FLAGS,
-		        GHOST_OPENGL_EGL_RESET_NOTIFICATION_STRATEGY,
-		        EGL_OPENGL_API);
-#else
-#  error
-#endif
-
-#endif
 		if (context->initializeDrawingContext())
 			return context;
 		else

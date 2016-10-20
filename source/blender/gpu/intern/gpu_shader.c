@@ -36,15 +36,49 @@
 #include "GPU_compositing.h"
 #include "GPU_debug.h"
 #include "GPU_extensions.h"
-#include "GPU_glew.h"
 #include "GPU_shader.h"
 #include "GPU_texture.h"
+
+#include "gpu_shader_private.h"
 
 /* TODO(sergey): Find better default values for this constants. */
 #define MAX_DEFINE_LENGTH 1024
 #define MAX_EXT_DEFINE_LENGTH 1024
 
 /* Non-generated shaders */
+extern char datatoc_gpu_shader_depth_only_frag_glsl[];
+extern char datatoc_gpu_shader_uniform_color_frag_glsl[];
+extern char datatoc_gpu_shader_flat_color_frag_glsl[];
+extern char datatoc_gpu_shader_2D_vert_glsl[];
+extern char datatoc_gpu_shader_2D_flat_color_vert_glsl[];
+extern char datatoc_gpu_shader_2D_smooth_color_vert_glsl[];
+extern char datatoc_gpu_shader_2D_smooth_color_frag_glsl[];
+extern char datatoc_gpu_shader_3D_image_vert_glsl[];
+extern char datatoc_gpu_shader_image_modulate_alpha_frag_glsl[];
+extern char datatoc_gpu_shader_image_rect_modulate_alpha_frag_glsl[];
+extern char datatoc_gpu_shader_3D_vert_glsl[];
+extern char datatoc_gpu_shader_3D_flat_color_vert_glsl[];
+extern char datatoc_gpu_shader_3D_smooth_color_vert_glsl[];
+extern char datatoc_gpu_shader_3D_smooth_color_frag_glsl[];
+
+extern char datatoc_gpu_shader_point_uniform_color_frag_glsl[];
+extern char datatoc_gpu_shader_point_uniform_color_smooth_frag_glsl[];
+extern char datatoc_gpu_shader_point_uniform_color_outline_smooth_frag_glsl[];
+extern char datatoc_gpu_shader_point_varying_color_outline_smooth_frag_glsl[];
+extern char datatoc_gpu_shader_point_varying_color_frag_glsl[];
+extern char datatoc_gpu_shader_3D_point_fixed_size_varying_color_vert_glsl[];
+extern char datatoc_gpu_shader_3D_point_varying_size_vert_glsl[];
+extern char datatoc_gpu_shader_3D_point_varying_size_varying_color_vert_glsl[];
+extern char datatoc_gpu_shader_3D_point_uniform_size_smooth_vert_glsl[];
+extern char datatoc_gpu_shader_3D_point_uniform_size_outline_smooth_vert_glsl[];
+extern char datatoc_gpu_shader_2D_point_varying_size_varying_color_vert_glsl[];
+extern char datatoc_gpu_shader_2D_point_uniform_size_smooth_vert_glsl[];
+extern char datatoc_gpu_shader_2D_point_uniform_size_outline_smooth_vert_glsl[];
+extern char datatoc_gpu_shader_2D_point_uniform_size_varying_color_outline_smooth_vert_glsl[];
+
+extern char datatoc_gpu_shader_text_vert_glsl[];
+extern char datatoc_gpu_shader_text_frag_glsl[];
+
 extern char datatoc_gpu_shader_fire_frag_glsl[];
 extern char datatoc_gpu_shader_smoke_vert_glsl[];
 extern char datatoc_gpu_shader_smoke_frag_glsl[];
@@ -81,32 +115,43 @@ static struct GPUShadersGlobal {
 		GPUShader *minz_downsample;
 		/* cache for shader fx. Those can exist in combinations so store them here */
 		GPUShader *fx_shaders[MAX_FX_SHADERS * 2];
+		/* for drawing text */
+		GPUShader *text;
+		/* for drawing images */
+		GPUShader *image_modulate_alpha_3D;
+		GPUShader *image_rect_modulate_alpha_3D;
+		/* for simple 2D drawing */
+		GPUShader *uniform_color_2D;
+		GPUShader *flat_color_2D;
+		GPUShader *smooth_color_2D;
+		/* for simple 3D drawing */
+		GPUShader *uniform_color_3D;
+		GPUShader *flat_color_3D;
+		GPUShader *smooth_color_3D;
+		GPUShader *depth_only_3D;
+		/* points */
+		GPUShader *point_fixed_size_uniform_color_2D;
+		GPUShader *point_varying_size_varying_color_2D;
+		GPUShader *point_uniform_size_uniform_color_smooth_2D;
+		GPUShader *point_uniform_size_uniform_color_outline_smooth_2D;
+		GPUShader *point_uniform_size_varying_color_outline_smooth_2D;
+		GPUShader *point_fixed_size_uniform_color_3D;
+		GPUShader *point_fixed_size_varying_color_3D;
+		GPUShader *point_varying_size_uniform_color_3D;
+		GPUShader *point_varying_size_varying_color_3D;
+		GPUShader *point_uniform_size_uniform_color_smooth_3D;
+		GPUShader *point_uniform_size_uniform_color_outline_smooth_3D;
 	} shaders;
 } GG = {{NULL}};
 
-/* GPUShader */
-
-struct GPUShader {
-	GLuint program;  /* handle for full program (links shader stages below) */
-
-	GLuint vertex;   /* handle for vertex shader */
-	GLuint geometry; /* handle for geometry shader */
-	GLuint fragment; /* handle for fragment shader */
-
-	int totattrib;   /* total number of attributes */
-	int uniforms;    /* required uniforms */
-
-	void *uniform_interface; /* cached uniform interface for shader. Data depends on shader */
-};
 
 static void shader_print_errors(const char *task, const char *log, const char **code, int totcode)
 {
-	int i;
 	int line = 1;
 
 	fprintf(stderr, "GPUShader: %s error:\n", task);
 
-	for (i = 0; i < totcode; i++) {
+	for (int i = 0; i < totcode; i++) {
 		const char *c, *pos, *end = code[i] + strlen(code[i]);
 
 		if (G.debug & G_DEBUG) {
@@ -129,23 +174,13 @@ static void shader_print_errors(const char *task, const char *log, const char **
 
 static const char *gpu_shader_version(void)
 {
-	if (GLEW_VERSION_3_2) {
-		if (GLEW_ARB_compatibility) {
-			return "#version 150 compatibility\n";
+	if (GLEW_VERSION_3_3) {
+		if (GPU_legacy_support()) {
+			return "#version 330 compatibility\n";
 			/* highest version that is widely supported
 			 * gives us native geometry shaders!
 			 * use compatibility profile so we can continue using builtin shader input/output names
 			 */
-		}
-		else {
-			return "#version 130\n";
-			/* latest version that is compatible with existing shaders */
-		}
-	}
-	else if (GLEW_VERSION_3_1) {
-		if (GLEW_ARB_compatibility) {
-			return "#version 140\n";
-			/* also need the ARB_compatibility extension, handled below */
 		}
 		else {
 			return "#version 130\n";
@@ -193,9 +228,8 @@ static void gpu_shader_standard_extensions(char defines[MAX_EXT_DEFINE_LENGTH], 
 			strcat(defines, "#extension GL_ARB_draw_instanced: enable\n");
 		}
 
-		if (!GLEW_VERSION_3_0 && GLEW_EXT_gpu_shader4) {
-			strcat(defines, "#extension GL_EXT_gpu_shader4: enable\n");
-			/* TODO: maybe require this? shaders become so much nicer */
+		if (!GLEW_VERSION_3_0) {
+			strcat(defines, "#extension GL_EXT_gpu_shader4: require\n");
 		}
 	}
 }
@@ -507,20 +541,20 @@ GPUShader *GPU_shader_create_ex(const char *vertexcode,
 
 void GPU_shader_bind(GPUShader *shader)
 {
-	GPU_ASSERT_NO_GL_ERRORS("Pre Shader Bind");
+	BLI_assert(shader && shader->program);
+
 	glUseProgram(shader->program);
-	GPU_ASSERT_NO_GL_ERRORS("Post Shader Bind");
 }
 
 void GPU_shader_unbind(void)
 {
-	GPU_ASSERT_NO_GL_ERRORS("Pre Shader Unbind");
 	glUseProgram(0);
-	GPU_ASSERT_NO_GL_ERRORS("Post Shader Unbind");
 }
 
 void GPU_shader_free(GPUShader *shader)
 {
+	BLI_assert(shader);
+
 	if (shader->vertex)
 		glDeleteShader(shader->vertex);
 	if (shader->geometry)
@@ -538,6 +572,8 @@ void GPU_shader_free(GPUShader *shader)
 
 int GPU_shader_get_uniform(GPUShader *shader, const char *name)
 {
+	BLI_assert(shader && shader->program);
+
 	return glGetUniformLocation(shader->program, name);
 }
 
@@ -556,16 +592,12 @@ void GPU_shader_uniform_vector(GPUShader *UNUSED(shader), int location, int leng
 	if (location == -1 || value == NULL)
 		return;
 
-	GPU_ASSERT_NO_GL_ERRORS("Pre Uniform Vector");
-
 	if (length == 1) glUniform1fv(location, arraysize, value);
 	else if (length == 2) glUniform2fv(location, arraysize, value);
 	else if (length == 3) glUniform3fv(location, arraysize, value);
 	else if (length == 4) glUniform4fv(location, arraysize, value);
 	else if (length == 9) glUniformMatrix3fv(location, arraysize, 0, value);
 	else if (length == 16) glUniformMatrix4fv(location, arraysize, 0, value);
-
-	GPU_ASSERT_NO_GL_ERRORS("Post Uniform Vector");
 }
 
 void GPU_shader_uniform_vector_int(GPUShader *UNUSED(shader), int location, int length, int arraysize, const int *value)
@@ -573,14 +605,10 @@ void GPU_shader_uniform_vector_int(GPUShader *UNUSED(shader), int location, int 
 	if (location == -1)
 		return;
 
-	GPU_ASSERT_NO_GL_ERRORS("Pre Uniform Vector");
-
 	if (length == 1) glUniform1iv(location, arraysize, value);
 	else if (length == 2) glUniform2iv(location, arraysize, value);
 	else if (length == 3) glUniform3iv(location, arraysize, value);
 	else if (length == 4) glUniform4iv(location, arraysize, value);
-
-	GPU_ASSERT_NO_GL_ERRORS("Post Uniform Vector");
 }
 
 void GPU_shader_uniform_int(GPUShader *UNUSED(shader), int location, int value)
@@ -588,7 +616,7 @@ void GPU_shader_uniform_int(GPUShader *UNUSED(shader), int location, int value)
 	if (location == -1)
 		return;
 
-	GPU_CHECK_ERRORS_AROUND(glUniform1i(location, value));
+	glUniform1i(location, value);
 }
 
 void GPU_shader_geometry_stage_primitive_io(GPUShader *shader, int input, int output, int number)
@@ -619,8 +647,6 @@ void GPU_shader_uniform_texture(GPUShader *UNUSED(shader), int location, GPUText
 	if (location == -1)
 		return;
 
-	GPU_ASSERT_NO_GL_ERRORS("Pre Uniform Texture");
-
 	arbnumber = (GLenum)((GLuint)GL_TEXTURE0 + number);
 
 	if (number != 0) glActiveTexture(arbnumber);
@@ -631,17 +657,13 @@ void GPU_shader_uniform_texture(GPUShader *UNUSED(shader), int location, GPUText
 	glUniform1i(location, number);
 	glEnable(target);
 	if (number != 0) glActiveTexture(GL_TEXTURE0);
-
-	GPU_ASSERT_NO_GL_ERRORS("Post Uniform Texture");
 }
 
 int GPU_shader_get_attribute(GPUShader *shader, const char *name)
 {
-	int index;
-	
-	GPU_CHECK_ERRORS_AROUND(index = glGetAttribLocation(shader->program, name));
+	BLI_assert(shader && shader->program);
 
-	return index;
+	return glGetAttribLocation(shader->program, name);
 }
 
 GPUShader *GPU_shader_get_builtin_shader(GPUBuiltinShader shader)
@@ -659,64 +681,215 @@ GPUShader *GPU_shader_get_builtin_shader(GPUBuiltinShader shader)
 			sprintf(buf, "#define CUBEMAP_RES %d \n", samples);
 
 			GG.shaders.compute_sh[shadn] = GPU_shader_create(
-			        datatoc_gpu_shader_probe_sh_compute_vert_glsl, datatoc_gpu_shader_probe_sh_compute_frag_glsl,
+			        datatoc_gpu_shader_probe_sh_compute_vert_glsl,
+			        datatoc_gpu_shader_probe_sh_compute_frag_glsl,
 			        NULL, NULL, buf, 0, 0, 0);
 		}
 		retval = GG.shaders.compute_sh[shadn];
-	}
-	else {
-		switch (shader) {
-			case GPU_SHADER_VSM_STORE:
-				if (!GG.shaders.vsm_store)
-					GG.shaders.vsm_store = GPU_shader_create(
-					        datatoc_gpu_shader_vsm_store_vert_glsl, datatoc_gpu_shader_vsm_store_frag_glsl,
-					        NULL, NULL, NULL, 0, 0, 0);
-				retval = GG.shaders.vsm_store;
-				break;
-			case GPU_SHADER_SEP_GAUSSIAN_BLUR:
-				if (!GG.shaders.sep_gaussian_blur)
-					GG.shaders.sep_gaussian_blur = GPU_shader_create(
-					        datatoc_gpu_shader_sep_gaussian_blur_vert_glsl,
-					        datatoc_gpu_shader_sep_gaussian_blur_frag_glsl,
-					        NULL, NULL, NULL, 0, 0, 0);
-				retval = GG.shaders.sep_gaussian_blur;
-				break;
-			case GPU_SHADER_SMOKE:
-				if (!GG.shaders.smoke)
-					GG.shaders.smoke = GPU_shader_create(
-					        datatoc_gpu_shader_smoke_vert_glsl, datatoc_gpu_shader_smoke_frag_glsl,
-					        NULL, NULL, NULL, 0, 0, 0);
-				retval = GG.shaders.smoke;
-				break;
-			case GPU_SHADER_SMOKE_FIRE:
-				if (!GG.shaders.smoke_fire)
-					GG.shaders.smoke_fire = GPU_shader_create(
-					        datatoc_gpu_shader_smoke_vert_glsl, datatoc_gpu_shader_fire_frag_glsl,
-					        NULL, NULL, NULL, 0, 0, 0);
-				retval = GG.shaders.smoke_fire;
-				break;
-			case GPU_SHADER_DISPLAY_SH:
-				if (!GG.shaders.display_sh)
-					GG.shaders.display_sh = GPU_shader_create(
-					        datatoc_gpu_shader_display_sh_vert_glsl, datatoc_gpu_shader_display_sh_frag_glsl,
-					        NULL, NULL, NULL, 0, 0, 0);
-				retval = GG.shaders.display_sh;
-				break;
-			case GPU_SHADER_MAXZ_DOWNSAMPLE:
-				if (!GG.shaders.maxz_downsample)
-					GG.shaders.maxz_downsample = GPU_shader_create(
-					        datatoc_gpu_shader_downsample_maxz_vert_glsl, datatoc_gpu_shader_downsample_maxz_frag_glsl,
-					        NULL, NULL, NULL, 0, 0, 0);
-			case GPU_SHADER_MINZ_DOWNSAMPLE:
-				if (!GG.shaders.minz_downsample)
-					GG.shaders.minz_downsample = GPU_shader_create(
-					        datatoc_gpu_shader_downsample_maxz_vert_glsl, datatoc_gpu_shader_downsample_maxz_frag_glsl,
-					        NULL, NULL, "#define MIN;\n", 0, 0, 0);
-				retval = GG.shaders.minz_downsample;
-				break;
-		}
+		goto exit;
 	}
 
+	switch (shader) {
+		case GPU_SHADER_VSM_STORE:
+			if (!GG.shaders.vsm_store)
+				GG.shaders.vsm_store = GPU_shader_create(
+				        datatoc_gpu_shader_vsm_store_vert_glsl, datatoc_gpu_shader_vsm_store_frag_glsl,
+				        NULL, NULL, NULL, 0, 0, 0);
+			retval = GG.shaders.vsm_store;
+			break;
+		case GPU_SHADER_SEP_GAUSSIAN_BLUR:
+			if (!GG.shaders.sep_gaussian_blur)
+				GG.shaders.sep_gaussian_blur = GPU_shader_create(
+				        datatoc_gpu_shader_sep_gaussian_blur_vert_glsl,
+				        datatoc_gpu_shader_sep_gaussian_blur_frag_glsl,
+				        NULL, NULL, NULL, 0, 0, 0);
+			retval = GG.shaders.sep_gaussian_blur;
+			break;
+		case GPU_SHADER_SMOKE:
+			if (!GG.shaders.smoke)
+				GG.shaders.smoke = GPU_shader_create(
+				        datatoc_gpu_shader_smoke_vert_glsl, datatoc_gpu_shader_smoke_frag_glsl,
+				        NULL, NULL, NULL, 0, 0, 0);
+			retval = GG.shaders.smoke;
+			break;
+		case GPU_SHADER_SMOKE_FIRE:
+			if (!GG.shaders.smoke_fire)
+				GG.shaders.smoke_fire = GPU_shader_create(
+				        datatoc_gpu_shader_smoke_vert_glsl, datatoc_gpu_shader_smoke_frag_glsl,
+				        NULL, NULL, NULL, 0, 0, 0);
+			retval = GG.shaders.smoke_fire;
+			break;
+		case GPU_SHADER_TEXT:
+			if (!GG.shaders.text)
+				GG.shaders.text = GPU_shader_create(
+				        datatoc_gpu_shader_text_vert_glsl,
+				        datatoc_gpu_shader_text_frag_glsl,
+				        NULL, NULL, NULL, 0, 0, 0);
+			retval = GG.shaders.text;
+			break;
+		case GPU_SHADER_3D_IMAGE_MODULATE_ALPHA:
+			if (!GG.shaders.image_modulate_alpha_3D)
+				GG.shaders.image_modulate_alpha_3D = GPU_shader_create(
+				        datatoc_gpu_shader_3D_image_vert_glsl,
+				        datatoc_gpu_shader_image_modulate_alpha_frag_glsl,
+				        NULL, NULL, NULL, 0, 0, 0);
+			retval = GG.shaders.image_modulate_alpha_3D;
+			break;
+		case GPU_SHADER_3D_IMAGE_RECT_MODULATE_ALPHA:
+			if (!GG.shaders.image_rect_modulate_alpha_3D)
+				GG.shaders.image_rect_modulate_alpha_3D = GPU_shader_create(
+				datatoc_gpu_shader_3D_image_vert_glsl,
+				datatoc_gpu_shader_image_rect_modulate_alpha_frag_glsl,
+				NULL, NULL, NULL, 0, 0, 0);
+			retval = GG.shaders.image_rect_modulate_alpha_3D;
+			break;
+		case GPU_SHADER_2D_UNIFORM_COLOR:
+			if (!GG.shaders.uniform_color_2D)
+				GG.shaders.uniform_color_2D = GPU_shader_create(
+				        datatoc_gpu_shader_2D_vert_glsl,
+				        datatoc_gpu_shader_uniform_color_frag_glsl,
+				        NULL, NULL, NULL, 0, 0, 0);
+			retval = GG.shaders.uniform_color_2D;
+			break;
+		case GPU_SHADER_2D_FLAT_COLOR:
+			if (!GG.shaders.flat_color_2D)
+				GG.shaders.flat_color_2D = GPU_shader_create(
+				        datatoc_gpu_shader_2D_flat_color_vert_glsl,
+				        datatoc_gpu_shader_flat_color_frag_glsl,
+				        NULL, NULL, NULL, 0, 0, 0);
+			retval = GG.shaders.flat_color_2D;
+			break;
+		case GPU_SHADER_2D_SMOOTH_COLOR:
+			if (!GG.shaders.smooth_color_2D)
+				GG.shaders.smooth_color_2D = GPU_shader_create(
+				        datatoc_gpu_shader_2D_smooth_color_vert_glsl,
+				        datatoc_gpu_shader_2D_smooth_color_frag_glsl,
+				        NULL, NULL, NULL, 0, 0, 0);
+			retval = GG.shaders.smooth_color_2D;
+			break;
+		case GPU_SHADER_3D_UNIFORM_COLOR:
+			if (!GG.shaders.uniform_color_3D)
+				GG.shaders.uniform_color_3D = GPU_shader_create(
+				        datatoc_gpu_shader_3D_vert_glsl,
+				        datatoc_gpu_shader_uniform_color_frag_glsl,
+				        NULL, NULL, NULL, 0, 0, 0);
+			retval = GG.shaders.uniform_color_3D;
+			break;
+		case GPU_SHADER_3D_FLAT_COLOR:
+			if (!GG.shaders.flat_color_3D)
+				GG.shaders.flat_color_3D = GPU_shader_create(
+				        datatoc_gpu_shader_3D_flat_color_vert_glsl,
+				        datatoc_gpu_shader_flat_color_frag_glsl,
+				        NULL, NULL, NULL, 0, 0, 0);
+			retval = GG.shaders.flat_color_3D;
+			break;
+		case GPU_SHADER_3D_SMOOTH_COLOR:
+			if (!GG.shaders.smooth_color_3D)
+				GG.shaders.smooth_color_3D = GPU_shader_create(
+				        datatoc_gpu_shader_3D_smooth_color_vert_glsl,
+				        datatoc_gpu_shader_3D_smooth_color_frag_glsl,
+				        NULL, NULL, NULL, 0, 0, 0);
+			retval = GG.shaders.smooth_color_3D;
+			break;
+		case GPU_SHADER_3D_DEPTH_ONLY:
+			if (!GG.shaders.depth_only_3D)
+				GG.shaders.depth_only_3D = GPU_shader_create(
+				        datatoc_gpu_shader_3D_vert_glsl,
+				        datatoc_gpu_shader_depth_only_frag_glsl,
+				        NULL, NULL, NULL, 0, 0, 0);
+			retval = GG.shaders.depth_only_3D;
+			break;
+		case GPU_SHADER_2D_POINT_FIXED_SIZE_UNIFORM_COLOR:
+			if (!GG.shaders.point_fixed_size_uniform_color_2D)
+				GG.shaders.point_fixed_size_uniform_color_2D = GPU_shader_create(
+				        datatoc_gpu_shader_2D_vert_glsl,
+				        datatoc_gpu_shader_point_uniform_color_frag_glsl,
+				        NULL, NULL, NULL, 0, 0, 0);
+			retval = GG.shaders.point_fixed_size_uniform_color_2D;
+			break;
+		case GPU_SHADER_2D_POINT_VARYING_SIZE_VARYING_COLOR:
+			if (!GG.shaders.point_varying_size_varying_color_2D)
+				GG.shaders.point_varying_size_varying_color_2D = GPU_shader_create(
+				        datatoc_gpu_shader_2D_point_varying_size_varying_color_vert_glsl,
+				        datatoc_gpu_shader_point_varying_color_frag_glsl,
+				        NULL, NULL, NULL, 0, 0, 0);
+			retval = GG.shaders.point_varying_size_varying_color_2D;
+			break;
+		case GPU_SHADER_2D_POINT_UNIFORM_SIZE_UNIFORM_COLOR_SMOOTH:
+			if (!GG.shaders.point_uniform_size_uniform_color_smooth_2D)
+				GG.shaders.point_uniform_size_uniform_color_smooth_2D = GPU_shader_create(
+				        datatoc_gpu_shader_2D_point_uniform_size_smooth_vert_glsl,
+				        datatoc_gpu_shader_point_uniform_color_smooth_frag_glsl,
+				        NULL, NULL, NULL, 0, 0, 0);
+			retval = GG.shaders.point_uniform_size_uniform_color_smooth_2D;
+			break;
+		case GPU_SHADER_2D_POINT_UNIFORM_SIZE_UNIFORM_COLOR_OUTLINE_SMOOTH:
+			if (!GG.shaders.point_uniform_size_uniform_color_outline_smooth_2D)
+				GG.shaders.point_uniform_size_uniform_color_outline_smooth_2D = GPU_shader_create(
+				        datatoc_gpu_shader_2D_point_uniform_size_outline_smooth_vert_glsl,
+				        datatoc_gpu_shader_point_uniform_color_outline_smooth_frag_glsl,
+				        NULL, NULL, NULL, 0, 0, 0);
+			retval = GG.shaders.point_uniform_size_uniform_color_outline_smooth_2D;
+			break;
+		case GPU_SHADER_2D_POINT_UNIFORM_SIZE_VARYING_COLOR_OUTLINE_SMOOTH:
+			if (!GG.shaders.point_uniform_size_varying_color_outline_smooth_2D)
+				GG.shaders.point_uniform_size_varying_color_outline_smooth_2D = GPU_shader_create(
+				        datatoc_gpu_shader_2D_point_uniform_size_varying_color_outline_smooth_vert_glsl,
+				        datatoc_gpu_shader_point_varying_color_outline_smooth_frag_glsl,
+				        NULL, NULL, NULL, 0, 0, 0);
+			retval = GG.shaders.point_uniform_size_varying_color_outline_smooth_2D;
+			break;
+		case GPU_SHADER_3D_POINT_FIXED_SIZE_UNIFORM_COLOR:
+			if (!GG.shaders.point_fixed_size_uniform_color_3D)
+				GG.shaders.point_fixed_size_uniform_color_3D = GPU_shader_create(
+				        datatoc_gpu_shader_3D_vert_glsl,
+				        datatoc_gpu_shader_point_uniform_color_frag_glsl,
+				        NULL, NULL, NULL, 0, 0, 0);
+			retval = GG.shaders.point_fixed_size_uniform_color_3D;
+			break;
+		case GPU_SHADER_3D_POINT_FIXED_SIZE_VARYING_COLOR:
+			if (!GG.shaders.point_fixed_size_varying_color_3D)
+				GG.shaders.point_fixed_size_varying_color_3D = GPU_shader_create(
+				        datatoc_gpu_shader_3D_point_fixed_size_varying_color_vert_glsl,
+				        datatoc_gpu_shader_point_varying_color_frag_glsl,
+				        NULL, NULL, NULL, 0, 0, 0);
+			retval = GG.shaders.point_fixed_size_varying_color_3D;
+			break;
+		case GPU_SHADER_3D_POINT_VARYING_SIZE_UNIFORM_COLOR:
+			if (!GG.shaders.point_varying_size_uniform_color_3D)
+				GG.shaders.point_varying_size_uniform_color_3D = GPU_shader_create(
+				        datatoc_gpu_shader_3D_point_varying_size_vert_glsl,
+				        datatoc_gpu_shader_point_uniform_color_frag_glsl,
+				        NULL, NULL, NULL, 0, 0, 0);
+			retval = GG.shaders.point_varying_size_uniform_color_3D;
+			break;
+		case GPU_SHADER_3D_POINT_VARYING_SIZE_VARYING_COLOR:
+			if (!GG.shaders.point_varying_size_varying_color_3D)
+				GG.shaders.point_varying_size_varying_color_3D = GPU_shader_create(
+				        datatoc_gpu_shader_3D_point_varying_size_varying_color_vert_glsl,
+				        datatoc_gpu_shader_point_varying_color_frag_glsl,
+				        NULL, NULL, NULL, 0, 0, 0);
+			retval = GG.shaders.point_varying_size_varying_color_3D;
+			break;
+		case GPU_SHADER_3D_POINT_UNIFORM_SIZE_UNIFORM_COLOR_SMOOTH:
+			if (!GG.shaders.point_uniform_size_uniform_color_smooth_3D)
+				GG.shaders.point_uniform_size_uniform_color_smooth_3D = GPU_shader_create(
+				        datatoc_gpu_shader_3D_point_uniform_size_smooth_vert_glsl,
+				        datatoc_gpu_shader_point_uniform_color_smooth_frag_glsl,
+				        NULL, NULL, NULL, 0, 0, 0);
+			retval = GG.shaders.point_uniform_size_uniform_color_smooth_3D;
+			break;
+		case GPU_SHADER_3D_POINT_UNIFORM_SIZE_UNIFORM_COLOR_OUTLINE_SMOOTH:
+			if (!GG.shaders.point_uniform_size_uniform_color_outline_smooth_3D)
+				GG.shaders.point_uniform_size_uniform_color_outline_smooth_3D = GPU_shader_create(
+				        datatoc_gpu_shader_3D_point_uniform_size_outline_smooth_vert_glsl,
+				        datatoc_gpu_shader_point_uniform_color_outline_smooth_frag_glsl,
+				        NULL, NULL, NULL, 0, 0, 0);
+			retval = GG.shaders.point_uniform_size_uniform_color_outline_smooth_3D;
+			break;
+	}
+
+exit:
 	if (retval == NULL)
 		printf("Unable to create a GPUShader for builtin shader: %u\n", shader);
 
@@ -808,8 +981,6 @@ GPUShader *GPU_shader_get_builtin_fx_shader(int effect, bool persp)
 
 void GPU_shader_free_builtin_shaders(void)
 {
-	int i;
-
 	if (GG.shaders.vsm_store) {
 		GPU_shader_free(GG.shaders.vsm_store);
 		GG.shaders.vsm_store = NULL;
@@ -830,13 +1001,6 @@ void GPU_shader_free_builtin_shaders(void)
 		GG.shaders.smoke_fire = NULL;
 	}
 
-	for (i = 0; i < MAX_SH_SAMPLES; ++i) {
-		if (GG.shaders.compute_sh[i]) {
-			GPU_shader_free(GG.shaders.compute_sh[i]);
-			GG.shaders.compute_sh[i] = NULL;
-		}
-	}
-
 	if (GG.shaders.display_sh) {
 		GPU_shader_free(GG.shaders.display_sh);
 		GG.shaders.display_sh = NULL;
@@ -852,12 +1016,117 @@ void GPU_shader_free_builtin_shaders(void)
 		GG.shaders.minz_downsample = NULL;
 	}
 
-	for (i = 0; i < 2 * MAX_FX_SHADERS; ++i) {
+	if (GG.shaders.text) {
+		GPU_shader_free(GG.shaders.text);
+		GG.shaders.text = NULL;
+	}
+
+	if (GG.shaders.image_modulate_alpha_3D) {
+		GPU_shader_free(GG.shaders.image_modulate_alpha_3D);
+		GG.shaders.image_modulate_alpha_3D = NULL;
+	}
+
+	if (GG.shaders.image_rect_modulate_alpha_3D) {
+		GPU_shader_free(GG.shaders.image_rect_modulate_alpha_3D);
+		GG.shaders.image_rect_modulate_alpha_3D = NULL;
+	}
+
+	if (GG.shaders.uniform_color_2D) {
+		GPU_shader_free(GG.shaders.uniform_color_2D);
+		GG.shaders.uniform_color_2D = NULL;
+	}
+
+	if (GG.shaders.flat_color_2D) {
+		GPU_shader_free(GG.shaders.flat_color_2D);
+		GG.shaders.flat_color_2D = NULL;
+	}
+
+	if (GG.shaders.smooth_color_2D) {
+		GPU_shader_free(GG.shaders.smooth_color_2D);
+		GG.shaders.smooth_color_2D = NULL;
+	}
+
+	if (GG.shaders.uniform_color_3D) {
+		GPU_shader_free(GG.shaders.uniform_color_3D);
+		GG.shaders.uniform_color_3D = NULL;
+	}
+
+	if (GG.shaders.flat_color_3D) {
+		GPU_shader_free(GG.shaders.flat_color_3D);
+		GG.shaders.flat_color_3D = NULL;
+	}
+
+	if (GG.shaders.smooth_color_3D) {
+		GPU_shader_free(GG.shaders.smooth_color_3D);
+		GG.shaders.smooth_color_3D = NULL;
+	}
+
+	if (GG.shaders.point_fixed_size_uniform_color_2D) {
+		GPU_shader_free(GG.shaders.point_fixed_size_uniform_color_2D);
+		GG.shaders.point_fixed_size_uniform_color_2D = NULL;
+	}
+
+	if (GG.shaders.point_varying_size_varying_color_2D) {
+		GPU_shader_free(GG.shaders.point_varying_size_varying_color_2D);
+		GG.shaders.point_varying_size_varying_color_2D = NULL;
+	}
+
+	if (GG.shaders.point_uniform_size_uniform_color_smooth_2D) {
+		GPU_shader_free(GG.shaders.point_uniform_size_uniform_color_smooth_2D);
+		GG.shaders.point_uniform_size_uniform_color_smooth_2D = NULL;
+	}
+
+	if (GG.shaders.point_uniform_size_uniform_color_outline_smooth_2D) {
+		GPU_shader_free(GG.shaders.point_uniform_size_uniform_color_outline_smooth_2D);
+		GG.shaders.point_uniform_size_uniform_color_outline_smooth_2D = NULL;
+	}
+
+	if (GG.shaders.point_uniform_size_varying_color_outline_smooth_2D) {
+		GPU_shader_free(GG.shaders.point_uniform_size_varying_color_outline_smooth_2D);
+		GG.shaders.point_uniform_size_varying_color_outline_smooth_2D = NULL;
+	}
+
+	if (GG.shaders.point_fixed_size_uniform_color_3D) {
+		GPU_shader_free(GG.shaders.point_fixed_size_uniform_color_3D);
+		GG.shaders.point_fixed_size_uniform_color_3D = NULL;
+	}
+
+	if (GG.shaders.point_fixed_size_varying_color_3D) {
+		GPU_shader_free(GG.shaders.point_fixed_size_varying_color_3D);
+		GG.shaders.point_fixed_size_varying_color_3D = NULL;
+	}
+
+	if (GG.shaders.point_varying_size_uniform_color_3D) {
+		GPU_shader_free(GG.shaders.point_varying_size_uniform_color_3D);
+		GG.shaders.point_varying_size_uniform_color_3D = NULL;
+	}
+
+	if (GG.shaders.point_varying_size_varying_color_3D) {
+		GPU_shader_free(GG.shaders.point_varying_size_varying_color_3D);
+		GG.shaders.point_varying_size_varying_color_3D = NULL;
+	}
+
+	if (GG.shaders.point_uniform_size_uniform_color_smooth_3D) {
+		GPU_shader_free(GG.shaders.point_uniform_size_uniform_color_smooth_3D);
+		GG.shaders.point_uniform_size_uniform_color_smooth_3D = NULL;
+	}
+
+	if (GG.shaders.point_uniform_size_uniform_color_outline_smooth_3D) {
+		GPU_shader_free(GG.shaders.point_uniform_size_uniform_color_outline_smooth_3D);
+		GG.shaders.point_uniform_size_uniform_color_outline_smooth_3D = NULL;
+	}
+
+	for (int i = 0; i < MAX_SH_SAMPLES; ++i) {
+		if (GG.shaders.compute_sh[i]) {
+			GPU_shader_free(GG.shaders.compute_sh[i]);
+			GG.shaders.compute_sh[i] = NULL;
+		}
+	}
+
+	for (int i = 0; i < 2 * MAX_FX_SHADERS; ++i) {
 		if (GG.shaders.fx_shaders[i]) {
 			GPU_shader_free(GG.shaders.fx_shaders[i]);
 			GG.shaders.fx_shaders[i] = NULL;
 		}
 	}
 }
-
-

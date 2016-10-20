@@ -56,7 +56,6 @@
 #include "DNA_object_fluidsim.h"
 #include "DNA_object_force.h"
 #include "DNA_object_types.h"
-#include "DNA_particle_types.h"
 #include "DNA_sequence_types.h"
 #include "DNA_sound_types.h"
 #include "DNA_text_types.h"
@@ -463,20 +462,6 @@ void BKE_bpath_traverse_id(Main *bmain, ID *id, BPathVisitor visit_cb, const int
 		{
 			Object *ob = (Object *)id;
 			ModifierData *md;
-			ParticleSystem *psys;
-
-#define BPATH_TRAVERSE_POINTCACHE(ptcaches)                                    \
-	{                                                                          \
-		PointCache *cache;                                                     \
-		for (cache = (ptcaches).first; cache; cache = cache->next) {           \
-			if (cache->flag & PTCACHE_DISK_CACHE) {                            \
-				rewrite_path_fixed(cache->path,                                \
-				                   visit_cb,                                   \
-				                   absbase,                                    \
-				                   bpath_user_data);                           \
-			}                                                                  \
-		}                                                                      \
-	} (void)0
 
 			/* do via modifiers instead */
 #if 0
@@ -492,16 +477,6 @@ void BKE_bpath_traverse_id(Main *bmain, ID *id, BPathVisitor visit_cb, const int
 						rewrite_path_fixed(fluidmd->fss->surfdataPath, visit_cb, absbase, bpath_user_data);
 					}
 				}
-				else if (md->type == eModifierType_Smoke) {
-					SmokeModifierData *smd = (SmokeModifierData *)md;
-					if (smd->type & MOD_SMOKE_TYPE_DOMAIN) {
-						BPATH_TRAVERSE_POINTCACHE(smd->domain->ptcaches[0]);
-					}
-				}
-				else if (md->type == eModifierType_Cloth) {
-					ClothModifierData *clmd = (ClothModifierData *) md;
-					BPATH_TRAVERSE_POINTCACHE(clmd->ptcaches);
-				}
 				else if (md->type == eModifierType_Ocean) {
 					OceanModifierData *omd = (OceanModifierData *) md;
 					rewrite_path_fixed(omd->cachepath, visit_cb, absbase, bpath_user_data);
@@ -511,16 +486,6 @@ void BKE_bpath_traverse_id(Main *bmain, ID *id, BPathVisitor visit_cb, const int
 					rewrite_path_fixed(mcmd->filepath, visit_cb, absbase, bpath_user_data);
 				}
 			}
-
-			if (ob->soft) {
-				BPATH_TRAVERSE_POINTCACHE(ob->soft->ptcaches);
-			}
-
-			for (psys = ob->particlesystem.first; psys; psys = psys->next) {
-				BPATH_TRAVERSE_POINTCACHE(psys->ptcaches);
-			}
-
-#undef BPATH_TRAVERSE_POINTCACHE
 
 			break;
 		}

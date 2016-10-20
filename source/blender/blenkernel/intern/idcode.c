@@ -78,7 +78,6 @@ static IDType idtypes[] = {
 	{ ID_MSK,  "Mask",               "masks",           BLT_I18NCONTEXT_ID_MASK,               IDTYPE_FLAGS_ISLINKABLE },
 	{ ID_NT,   "NodeTree",           "node_groups",     BLT_I18NCONTEXT_ID_NODETREE,           IDTYPE_FLAGS_ISLINKABLE },
 	{ ID_OB,   "Object",             "objects",         BLT_I18NCONTEXT_ID_OBJECT,             IDTYPE_FLAGS_ISLINKABLE },
-	{ ID_PA,   "ParticleSettings",   "particles",       BLT_I18NCONTEXT_ID_PARTICLESETTINGS,   IDTYPE_FLAGS_ISLINKABLE },
 	{ ID_PAL,  "Palettes",           "palettes",        BLT_I18NCONTEXT_ID_PALETTE,            IDTYPE_FLAGS_ISLINKABLE },
 	{ ID_PC,   "PaintCurve",         "paint_curves",    BLT_I18NCONTEXT_ID_PAINTCURVE,         IDTYPE_FLAGS_ISLINKABLE },
 	{ ID_SCE,  "Scene",              "scenes",          BLT_I18NCONTEXT_ID_SCENE,              IDTYPE_FLAGS_ISLINKABLE },
@@ -200,7 +199,6 @@ int BKE_idcode_to_idfilter(const short idcode)
 		CASE_IDFILTER(MSK);
 		CASE_IDFILTER(NT);
 		CASE_IDFILTER(OB);
-		CASE_IDFILTER(PA);
 		CASE_IDFILTER(PAL);
 		CASE_IDFILTER(PC);
 		CASE_IDFILTER(SCE);
@@ -244,7 +242,6 @@ short BKE_idcode_from_idfilter(const int idfilter)
 		CASE_IDFILTER(MSK);
 		CASE_IDFILTER(NT);
 		CASE_IDFILTER(OB);
-		CASE_IDFILTER(PA);
 		CASE_IDFILTER(PAL);
 		CASE_IDFILTER(PC);
 		CASE_IDFILTER(SCE);
@@ -291,7 +288,6 @@ int BKE_idcode_to_index(const short idcode)
 		CASE_IDINDEX(MSK);
 		CASE_IDINDEX(NT);
 		CASE_IDINDEX(OB);
-		CASE_IDINDEX(PA);
 		CASE_IDINDEX(PAL);
 		CASE_IDINDEX(PC);
 		CASE_IDINDEX(SCE);

@@ -60,6 +60,7 @@
 #include "GPU_material.h"
 #include "GPU_probe.h"
 #include "GPU_pbr.h"
+#include "GPU_viewport.h"
 
 #include "BIF_gl.h"
 
@@ -603,6 +604,11 @@ static void view3d_main_region_exit(wmWindowManager *wm, ARegion *ar)
 		GPU_fx_compositor_destroy(rv3d->compositor);
 		rv3d->compositor = NULL;
 	}
+
+	if (rv3d->viewport) {
+		GPU_viewport_free(rv3d->viewport);
+		rv3d->viewport = NULL;
+	}
 }
 
 static int view3d_ob_drop_poll(bContext *UNUSED(C), wmDrag *drag, const wmEvent *UNUSED(event))
@@ -760,6 +766,9 @@ static void view3d_main_region_free(ARegion *ar)
 		if (rv3d->compositor) {
 			GPU_fx_compositor_destroy(rv3d->compositor);
 		}
+		if (rv3d->viewport) {
+			GPU_viewport_free(rv3d->viewport);
+		}
 
 		MEM_freeN(rv3d);
 		ar->regiondata = NULL;
@@ -784,6 +793,7 @@ static void *view3d_main_region_duplicate(void *poin)
 		new->sms = NULL;
 		new->smooth_timer = NULL;
 		new->compositor = NULL;
+		new->viewport = NULL;
 		
 		return new;
 	}
@@ -936,7 +946,6 @@ static void view3d_main_region_listener(bScreen *sc, ScrArea *sa, ARegion *ar, w
 				case ND_MODIFIER:
 				case ND_CONSTRAINT:
 				case ND_KEYS:
-				case ND_PARTICLE:
 				case ND_LOD:
 					view3d_tag_probes_update(ar, wmn, scene);
 					ED_region_tag_redraw(ar);

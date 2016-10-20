@@ -414,16 +414,8 @@ const char *GPU_builtin_name(GPUBuiltin builtin)
 		return "unfobautobumpscale";
 	else if (builtin == GPU_CAMERA_TEXCO_FACTORS)
 		return "unfcameratexfactors";
-	else if (builtin == GPU_PARTICLE_SCALAR_PROPS)
-		return "unfparticlescalarprops";
-	else if (builtin == GPU_PARTICLE_LOCATION)
-		return "unfparticleco";
-	else if (builtin == GPU_PARTICLE_VELOCITY)
-		return "unfparticlevel";
-	else if (builtin == GPU_PARTICLE_ANG_VELOCITY)
-		return "unfparticleangvel";
 	else if (builtin == GPU_PBR)
-		return "unfpbr"; /* Placeholder : does not actualy contains data */
+		return "unfpbr"; /* Placeholder : does not actualy contain data */
 	else
 		return "";
 }

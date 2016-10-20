@@ -68,6 +68,8 @@
 #include "BIF_gl.h"
 #include "BIF_glutil.h"
 
+#include "GPU_immediate.h"
+
 #include "UI_interface.h"
 #include "UI_interface_icons.h"
 #include "UI_resources.h"
@@ -1078,8 +1080,6 @@ static void tselem_draw_icon(uiBlock *block, int xmax, float x, float y, TreeSto
 				UI_icon_draw(x, y, ICON_MODIFIER); break;
 			case TSE_LINKED_OB:
 				UI_icon_draw(x, y, ICON_OBJECT_DATA); break;
-			case TSE_LINKED_PSYS:
-				UI_icon_draw(x, y, ICON_PARTICLES); break;
 			case TSE_MODIFIER:
 			{
 				Object *ob = (Object *)tselem->id;
@@ -1107,10 +1107,6 @@ static void tselem_draw_icon(uiBlock *block, int xmax, float x, float y, TreeSto
 						UI_icon_draw(x, y, ICON_MOD_SOFT); break;
 					case eModifierType_Boolean: 
 						UI_icon_draw(x, y, ICON_MOD_BOOLEAN); break;
-					case eModifierType_ParticleSystem: 
-						UI_icon_draw(x, y, ICON_MOD_PARTICLES); break;
-					case eModifierType_ParticleInstance:
-						UI_icon_draw(x, y, ICON_MOD_PARTICLES); break;
 					case eModifierType_EdgeSplit:
 						UI_icon_draw(x, y, ICON_MOD_EDGESPLIT); break;
 					case eModifierType_Array:
@@ -1415,11 +1411,14 @@ static void outliner_draw_iconrow(bContext *C, uiBlock *block, Scene *scene, Spa
 static void outliner_set_coord_tree_element(TreeElement *te, int startx, int starty)
 {
 	TreeElement *ten;
-	
-	/* store coord and continue, we need coordinates for elements outside view too */
-	te->xs = startx;
-	te->ys = starty;
-	
+
+	/* closed items may be displayed in row of parent, don't change their coordinate! */
+	if ((te->flag & TE_ICONROW) == 0) {
+		/* store coord and continue, we need coordinates for elements outside view too */
+		te->xs = startx;
+		te->ys = starty;
+	}
+
 	for (ten = te->subtree.first; ten; ten = ten->next) {
 		outliner_set_coord_tree_element(ten, startx + UI_UNIT_X, starty);
 	}
@@ -1452,23 +1451,8 @@ static void outliner_draw_tree_element(
 		
 		glEnable(GL_BLEND);
 
-		/* start by highlighting search matches 
-		 *	we don't expand items when searching in the datablocks but we 
-		 *	still want to highlight any filter matches. 
-		 */
-		if ((SEARCHING_OUTLINER(soops) || (soops->outlinevis == SO_DATABLOCKS && soops->search_string[0] != 0)) &&
-		    (tselem->flag & TSE_SEARCHMATCH))
-		{
-			char col[4];
-			UI_GetThemeColorType4ubv(TH_MATCH, SPACE_OUTLINER, col);
-			col[3] = alpha;
-			glColor4ubv((GLubyte *)col);
-			glRecti(startx, *starty + 1, ar->v2d.cur.xmax, *starty + UI_UNIT_Y - 1);
-		}
-
 		/* colors for active/selected data */
 		if (tselem->type == 0) {
-			
 			if (te->idcode == ID_SCE) {
 				if (tselem->id == (ID *)scene) {
 					glColor4ub(255, 255, 255, alpha);
@@ -1654,7 +1638,7 @@ static void outliner_draw_tree_element(
 	}
 }
 
-static void outliner_draw_hierarchy(SpaceOops *soops, ListBase *lb, int startx, int *starty)
+static void outliner_draw_hierarchy_lines(SpaceOops *soops, ListBase *lb, int startx, int *starty)
 {
 	TreeElement *te;
 	TreeStoreElem *tselem;
@@ -1674,7 +1658,7 @@ static void outliner_draw_hierarchy(SpaceOops *soops, ListBase *lb, int startx, 
 		*starty -= UI_UNIT_Y;
 		
 		if (TSELEM_OPEN(tselem, soops))
-			outliner_draw_hierarchy(soops, &te->subtree, startx + UI_UNIT_X, starty);
+			outliner_draw_hierarchy_lines(soops, &te->subtree, startx + UI_UNIT_X, starty);
 	}
 	
 	/* vertical line */
@@ -1710,34 +1694,73 @@ static void outliner_draw_struct_marks(ARegion *ar, SpaceOops *soops, ListBase *
 	}
 }
 
-static void outliner_draw_selection(ARegion *ar, SpaceOops *soops, ListBase *lb, int *starty)
+static void outliner_draw_highlights_recursive(
+        const ARegion *ar, const SpaceOops *soops, const ListBase *lb,
+        const float col_selection[4], const float col_highlight[4], const float col_searchmatch[4],
+        int start_x, int *io_start_y)
 {
-	TreeElement *te;
-	TreeStoreElem *tselem;
-	
-	for (te = lb->first; te; te = te->next) {
-		tselem = TREESTORE(te);
-		
+	const bool is_searching = SEARCHING_OUTLINER(soops) ||
+	                          (soops->outlinevis == SO_DATABLOCKS && soops->search_string[0] != 0);
+
+	for (TreeElement *te = lb->first; te; te = te->next) {
+		const TreeStoreElem *tselem = TREESTORE(te);
+		const int start_y = *io_start_y;
+
 		/* selection status */
 		if (tselem->flag & TSE_SELECTED) {
-			glRecti(0, *starty + 1, (int)ar->v2d.cur.xmax, *starty + UI_UNIT_Y - 1);
+			glColor4fv(col_selection);
+			glRecti(0, start_y + 1, (int)ar->v2d.cur.xmax, start_y + UI_UNIT_Y - 1);
 		}
-		*starty -= UI_UNIT_Y;
-		if (TSELEM_OPEN(tselem, soops)) outliner_draw_selection(ar, soops, &te->subtree, starty);
+
+		/* search match highlights
+		 *   we don't expand items when searching in the datablocks but we
+		 *   still want to highlight any filter matches. */
+		if (is_searching && (tselem->flag & TSE_SEARCHMATCH)) {
+			glColor4fv(col_searchmatch);
+			glRecti(start_x, start_y + 1, ar->v2d.cur.xmax, start_y + UI_UNIT_Y - 1);
+		}
+
+		/* mouse hover highlights */
+		if (tselem->flag & TSE_HIGHLIGHTED) {
+			glColor4fv(col_highlight);
+			glRecti(0, start_y + 1, (int)ar->v2d.cur.xmax, start_y + UI_UNIT_Y - 1);
+		}
+
+		*io_start_y -= UI_UNIT_Y;
+		if (TSELEM_OPEN(tselem, soops)) {
+			outliner_draw_highlights_recursive(
+			            ar, soops, &te->subtree, col_selection, col_highlight, col_searchmatch,
+			            start_x + UI_UNIT_X, io_start_y);
+		}
 	}
 }
 
+static void outliner_draw_highlights(ARegion *ar, SpaceOops *soops, int startx, int *starty)
+{
+	const float col_highlight[4] = {1.0f, 1.0f, 1.0f, 0.13f};
+	float col_selection[4], col_searchmatch[4];
 
-static void outliner_draw_tree(bContext *C, uiBlock *block, Scene *scene, ARegion *ar,
-                               SpaceOops *soops, TreeElement **te_edit)
+	UI_GetThemeColor3fv(TH_SELECT_HIGHLIGHT, col_selection);
+	col_selection[3] = 1.0f; /* no alpha */
+	UI_GetThemeColor4fv(TH_MATCH, col_searchmatch);
+	col_searchmatch[3] = 0.5f;
+
+	glEnable(GL_BLEND);
+	outliner_draw_highlights_recursive(ar, soops, &soops->tree, col_selection, col_highlight, col_searchmatch,
+	                                   startx, starty);
+	glDisable(GL_BLEND);
+}
+
+static void outliner_draw_tree(
+        bContext *C, uiBlock *block, Scene *scene, ARegion *ar,
+        SpaceOops *soops, const bool has_restrict_icons,
+        TreeElement **te_edit)
 {
 	const uiFontStyle *fstyle = UI_FSTYLE_WIDGET;
-	TreeElement *te;
 	int starty, startx;
-	float col[3];
-		
+
 	glBlendFunc(GL_SRC_ALPHA,  GL_ONE_MINUS_SRC_ALPHA); // only once
-	
+
 	if (ELEM(soops->outlinevis, SO_DATABLOCKS, SO_USERDEF)) {
 		/* struct marks */
 		UI_ThemeColorShadeAlpha(TH_BACK, -15, -200);
@@ -1745,24 +1768,38 @@ static void outliner_draw_tree(bContext *C, uiBlock *block, Scene *scene, ARegio
 		starty = (int)ar->v2d.tot.ymax - UI_UNIT_Y - OL_Y_OFFSET;
 		outliner_draw_struct_marks(ar, soops, &soops->tree, &starty);
 	}
-	
-	/* always draw selection fill before hierarchy */
-	UI_GetThemeColor3fv(TH_SELECT_HIGHLIGHT, col);
-	glColor3fv(col);
+
+	/* draw highlights before hierarchy */
 	starty = (int)ar->v2d.tot.ymax - UI_UNIT_Y - OL_Y_OFFSET;
-	outliner_draw_selection(ar, soops, &soops->tree, &starty);
-	
+	startx = 0;
+	outliner_draw_highlights(ar, soops, startx, &starty);
+
+	/* set scissor so tree elements or lines can't overlap restriction icons */
+	GLfloat scissor[4] = {0};
+	if (has_restrict_icons) {
+		int mask_x = BLI_rcti_size_x(&ar->v2d.mask) - (int)OL_TOGW + 1;
+		CLAMP_MIN(mask_x, 0);
+
+		glGetFloatv(GL_SCISSOR_BOX, scissor);
+		glScissor(ar->winrct.xmin, ar->winrct.ymin, mask_x, ar->winy);
+	}
+
 	// gray hierarchy lines
 	UI_ThemeColorBlend(TH_BACK, TH_TEXT, 0.4f);
 	starty = (int)ar->v2d.tot.ymax - UI_UNIT_Y / 2 - OL_Y_OFFSET;
 	startx = 6;
-	outliner_draw_hierarchy(soops, &soops->tree, startx, &starty);
-	
+	outliner_draw_hierarchy_lines(soops, &soops->tree, startx, &starty);
+
 	// items themselves
 	starty = (int)ar->v2d.tot.ymax - UI_UNIT_Y - OL_Y_OFFSET;
 	startx = 0;
-	for (te = soops->tree.first; te; te = te->next) {
+	for (TreeElement *te = soops->tree.first; te; te = te->next) {
 		outliner_draw_tree_element(C, block, fstyle, scene, ar, soops, te, startx, &starty, te_edit);
+	}
+
+	if (has_restrict_icons) {
+		/* reset scissor */
+		glScissor(UNPACK4(scissor));
 	}
 }
 
@@ -1771,34 +1808,36 @@ static void outliner_back(ARegion *ar)
 {
 	int ystart;
 	
-	UI_ThemeColorShade(TH_BACK, 6);
 	ystart = (int)ar->v2d.tot.ymax;
 	ystart = UI_UNIT_Y * (ystart / (UI_UNIT_Y)) - OL_Y_OFFSET;
-	
-	while (ystart + 2 * UI_UNIT_Y > ar->v2d.cur.ymin) {
-		glRecti(0, ystart, (int)ar->v2d.cur.xmax, ystart + UI_UNIT_Y);
-		ystart -= 2 * UI_UNIT_Y;
+
+	VertexFormat *format = immVertexFormat();
+	unsigned pos = add_attrib(format, "pos", GL_FLOAT, 2, KEEP_FLOAT);
+
+	immBindBuiltinProgram(GPU_SHADER_2D_UNIFORM_COLOR);
+	immUniformThemeColorShade(TH_BACK, 6);
+
+	const float x1 = 0.0f, x2 = ar->v2d.cur.xmax;
+	float y1 = ystart, y2;
+	int tot = (int)floor(ystart - ar->v2d.cur.ymin + 2 * UI_UNIT_Y) / (2 * UI_UNIT_Y);
+
+	if (tot > 0) {
+		immBegin(GL_QUADS, 4 * tot);
+		while (tot--) {
+			y1 -= 2 * UI_UNIT_Y;
+			y2 = y1 + UI_UNIT_Y;
+			immVertex2f(pos, x1, y1);
+			immVertex2f(pos, x2, y1);
+			immVertex2f(pos, x2, y2);
+			immVertex2f(pos, x1, y2);
+		}
+		immEnd();
 	}
+	immUnbindProgram();
 }
 
 static void outliner_draw_restrictcols(ARegion *ar)
 {
-	int ystart;
-	
-	/* background underneath */
-	UI_ThemeColor(TH_BACK);
-	glRecti((int)(ar->v2d.cur.xmax - OL_TOGW),
-	        (int)(ar->v2d.cur.ymin - 1), (int)ar->v2d.cur.xmax, (int)ar->v2d.cur.ymax);
-	
-	UI_ThemeColorShade(TH_BACK, 6);
-	ystart = (int)ar->v2d.tot.ymax;
-	ystart = UI_UNIT_Y * (ystart / (UI_UNIT_Y)) - OL_Y_OFFSET;
-	
-	while (ystart + 2 * UI_UNIT_Y > ar->v2d.cur.ymin) {
-		glRecti((int)ar->v2d.cur.xmax - OL_TOGW, ystart, (int)ar->v2d.cur.xmax, ystart + UI_UNIT_Y);
-		ystart -= 2 * UI_UNIT_Y;
-	}
-	
 	UI_ThemeColorShadeAlpha(TH_BACK, -15, -200);
 
 	/* view */
@@ -1833,6 +1872,7 @@ void draw_outliner(const bContext *C)
 	uiBlock *block;
 	int sizey = 0, sizex = 0, sizex_rna = 0;
 	TreeElement *te_edit = NULL;
+	bool has_restrict_icons;
 
 	outliner_build_tree(mainvar, scene, soops); // always
 	
@@ -1854,6 +1894,7 @@ void draw_outliner(const bContext *C)
 		
 		/* get width of data (for setting 'tot' rect, this is column 1 + column 2 + a bit extra) */
 		sizex = sizex_rna + OL_RNA_COL_SIZEX + 50;
+		has_restrict_icons = false;
 	}
 	else {
 		/* width must take into account restriction columns (if visible) so that entries will still be visible */
@@ -1865,7 +1906,8 @@ void draw_outliner(const bContext *C)
 		// XXX this isn't that great yet...
 		if ((soops->flag & SO_HIDE_RESTRICTCOLS) == 0)
 			sizex += OL_TOGW * 3;
-		
+
+		has_restrict_icons = !(soops->flag & SO_HIDE_RESTRICTCOLS);
 	}
 	
 	/* adds vertical offset */
@@ -1882,19 +1924,19 @@ void draw_outliner(const bContext *C)
 	/* draw outliner stuff (background, hierarchy lines and names) */
 	outliner_back(ar);
 	block = UI_block_begin(C, ar, __func__, UI_EMBOSS);
-	outliner_draw_tree((bContext *)C, block, scene, ar, soops, &te_edit);
+	outliner_draw_tree((bContext *)C, block, scene, ar, soops, has_restrict_icons, &te_edit);
 	
 	if (ELEM(soops->outlinevis, SO_DATABLOCKS, SO_USERDEF)) {
 		/* draw rna buttons */
 		outliner_draw_rnacols(ar, sizex_rna);
 		outliner_draw_rnabuts(block, ar, soops, sizex_rna, &soops->tree);
 	}
-	else if ((soops->outlinevis == SO_ID_ORPHANS) && !(soops->flag & SO_HIDE_RESTRICTCOLS)) {
+	else if ((soops->outlinevis == SO_ID_ORPHANS) && has_restrict_icons) {
 		/* draw user toggle columns */
 		outliner_draw_restrictcols(ar);
 		outliner_draw_userbuts(block, ar, soops, &soops->tree);
 	}
-	else if (!(soops->flag & SO_HIDE_RESTRICTCOLS)) {
+	else if (has_restrict_icons) {
 		/* draw restriction columns */
 		outliner_draw_restrictcols(ar);
 		outliner_draw_restrictbuts(block, scene, ar, soops, &soops->tree);

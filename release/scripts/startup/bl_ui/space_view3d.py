@@ -49,12 +49,9 @@ class VIEW3D_HT_header(Header):
 
         if obj:
             mode = obj.mode
-            # Particle edit
-            if mode == 'PARTICLE_EDIT':
-                row.prop(toolsettings.particle_edit, "select_mode", text="", expand=True)
 
             # Occlude geometry
-            if ((view.viewport_shade not in {'BOUNDBOX', 'WIREFRAME'} and (mode == 'PARTICLE_EDIT' or (mode == 'EDIT' and obj.type == 'MESH'))) or
+            if ((view.viewport_shade not in {'BOUNDBOX', 'WIREFRAME'} and (mode == 'EDIT' and obj.type == 'MESH')) or
                     (mode == 'WEIGHT_PAINT')):
                 row.prop(view, "use_occlude_geometry", text="")
 
@@ -64,7 +61,7 @@ class VIEW3D_HT_header(Header):
                 row.prop(toolsettings, "proportional_edit", icon_only=True)
                 if toolsettings.proportional_edit != 'DISABLED':
                     row.prop(toolsettings, "proportional_edit_falloff", icon_only=True)
-            elif mode in {'EDIT', 'PARTICLE_EDIT'}:
+            elif mode == 'EDIT':
                 row = layout.row(align=True)
                 row.prop(toolsettings, "proportional_edit", icon_only=True)
                 if toolsettings.proportional_edit != 'DISABLED':
@@ -701,35 +698,6 @@ class VIEW3D_MT_select_pose(Menu):
 
         layout.operator_menu_enum("pose.select_grouped", "type", text="Grouped")
         layout.operator("object.select_pattern", text="Select Pattern...")
-
-
-class VIEW3D_MT_select_particle(Menu):
-    bl_label = "Select"
-
-    def draw(self, context):
-        layout = self.layout
-
-        layout.operator("view3d.select_border")
-
-        layout.separator()
-
-        layout.operator("particle.select_all").action = 'TOGGLE'
-        layout.operator("particle.select_linked")
-        layout.operator("particle.select_all", text="Inverse").action = 'INVERT'
-
-        layout.separator()
-
-        layout.operator("particle.select_more")
-        layout.operator("particle.select_less")
-
-        layout.separator()
-
-        layout.operator("particle.select_random")
-
-        layout.separator()
-
-        layout.operator("particle.select_roots", text="Roots")
-        layout.operator("particle.select_tips", text="Tips")
 
 
 class VIEW3D_MT_edit_mesh_select_similar(Menu):
@@ -1922,87 +1890,8 @@ class VIEW3D_MT_hide_mask(Menu):
         props = layout.operator("paint.mask_lasso_gesture", text="Lasso Mask")
 
 
-# ********** Particle menu **********
-
-
-class VIEW3D_MT_particle(Menu):
-    bl_label = "Particle"
-
-    def draw(self, context):
-        layout = self.layout
-
-        particle_edit = context.tool_settings.particle_edit
-
-        layout.operator("ed.undo")
-        layout.operator("ed.redo")
-        layout.operator("ed.undo_history")
-
-        layout.separator()
-
-        layout.operator("particle.mirror")
-
-        layout.separator()
-
-        layout.operator("particle.remove_doubles")
-        layout.operator("particle.delete")
-
-        if particle_edit.select_mode == 'POINT':
-            layout.operator("particle.subdivide")
-
         layout.operator("particle.unify_length")
-        layout.operator("particle.rekey")
-        layout.operator("particle.weight_set")
-
-        layout.separator()
-
-        layout.menu("VIEW3D_MT_particle_showhide")
-
-
-class VIEW3D_MT_particle_specials(Menu):
-    bl_label = "Specials"
-
-    def draw(self, context):
-        layout = self.layout
-
-        particle_edit = context.tool_settings.particle_edit
-
-        layout.operator("particle.rekey")
-        layout.operator("particle.delete")
-        layout.operator("particle.remove_doubles")
         layout.operator("particle.unify_length")
-
-        if particle_edit.select_mode == 'POINT':
-            layout.operator("particle.subdivide")
-
-        layout.operator("particle.weight_set")
-        layout.separator()
-
-        layout.operator("particle.mirror")
-
-        if particle_edit.select_mode == 'POINT':
-            layout.separator()
-            layout.operator("particle.select_roots")
-            layout.operator("particle.select_tips")
-
-            layout.separator()
-
-            layout.operator("particle.select_random")
-
-            layout.separator()
-
-            layout.operator("particle.select_more")
-            layout.operator("particle.select_less")
-
-            layout.separator()
-
-            layout.operator("particle.select_all").action = 'TOGGLE'
-            layout.operator("particle.select_linked")
-            layout.operator("particle.select_all", text="Inverse").action = 'INVERT'
-
-
-class VIEW3D_MT_particle_showhide(ShowHideMenu, Menu):
-    _operator_name = "particle"
-
 # ********** Pose Menu **********
 
 
@@ -3088,6 +2977,31 @@ class VIEW3D_MT_edit_gpencil_transform(Menu):
 # ********** Panel **********
 
 
+class VIEW3D_PT_viewport_debug(Panel):
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_label = "Modern Viewport"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    @classmethod
+    def poll(cls, context):
+        view = context.space_data
+        return (view)
+
+    def draw_header(self, context):
+        view = context.space_data
+        self.layout.prop(view, "use_modern_viewport", text="")
+
+    def draw(self, context):
+        layout = self.layout
+        view = context.space_data
+
+        layout.active = view.use_modern_viewport
+
+        col = layout.column()
+        col.label(text="Placeholder for debugging options")
+
+
 class VIEW3D_PT_grease_pencil(GreasePencilDataPanel, Panel):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
@@ -3201,7 +3115,7 @@ class VIEW3D_PT_view3d_display(Panel):
     @classmethod
     def poll(cls, context):
         view = context.space_data
-        return (view)
+        return (view) and not view.use_modern_viewport
 
     def draw(self, context):
         layout = self.layout
@@ -3303,6 +3217,11 @@ class VIEW3D_PT_view3d_shading(Panel):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_label = "Shading"
+
+    @classmethod
+    def poll(cls, context):
+        view = context.space_data
+        return (view) and not view.use_modern_viewport
 
     def draw(self, context):
         layout = self.layout

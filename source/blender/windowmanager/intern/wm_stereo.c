@@ -54,6 +54,7 @@
 
 #include "GPU_glew.h"
 #include "GPU_basic_shader.h"
+#include "GPU_immediate.h"
 
 #include "WM_api.h"
 #include "WM_types.h"
@@ -172,6 +173,13 @@ static void wm_method_draw_stereo3d_sidebyside(wmWindow *win)
 	int soffx;
 	bool cross_eyed = (win->stereo3d_format->flag & S3D_SIDEBYSIDE_CROSSEYED) != 0;
 
+	const int activeTex = GL_TEXTURE0;
+	glActiveTexture(activeTex);
+
+	VertexFormat *format = immVertexFormat();
+	unsigned texcoord = add_attrib(format, "texCoord", GL_FLOAT, 2, KEEP_FLOAT);
+	unsigned pos = add_attrib(format, "pos", GL_FLOAT, 2, KEEP_FLOAT);
+
 	for (view = 0; view < 2; view ++) {
 		drawdata = BLI_findlink(&win->drawdata, (view * 2) + 1);
 		triple = drawdata->triple;
@@ -203,26 +211,32 @@ static void wm_method_draw_stereo3d_sidebyside(wmWindow *win)
 			halfy /= triple->y;
 		}
 
-		glEnable(triple->target);
+		/* TODO: if target is always same for both eyes, bind program & set uniform before loop */
+		immBindBuiltinProgram((triple->target == GL_TEXTURE_2D) ? GPU_SHADER_3D_IMAGE_MODULATE_ALPHA : GPU_SHADER_3D_IMAGE_RECT_MODULATE_ALPHA);
+
 		glBindTexture(triple->target, triple->bind);
 
-		glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
-		glBegin(GL_QUADS);
-		glTexCoord2f(halfx, halfy);
-		glVertex2f(soffx, 0);
+		immUniform1i("image", activeTex);
 
-		glTexCoord2f(ratiox + halfx, halfy);
-		glVertex2f(soffx + (sizex * 0.5f), 0);
+		immBegin(GL_QUADS, 4);
 
-		glTexCoord2f(ratiox + halfx, ratioy + halfy);
-		glVertex2f(soffx + (sizex * 0.5f), sizey);
+		immAttrib2f(texcoord, halfx, halfy);
+		immVertex2f(pos, soffx, 0.0f);
 
-		glTexCoord2f(halfx, ratioy + halfy);
-		glVertex2f(soffx, sizey);
-		glEnd();
+		immAttrib2f(texcoord, ratiox + halfx, halfy);
+		immVertex2f(pos, soffx + (sizex * 0.5f), 0.0f);
 
+		immAttrib2f(texcoord, ratiox + halfx, ratioy + halfy);
+		immVertex2f(pos, soffx + (sizex * 0.5f), sizey);
+
+		immAttrib2f(texcoord, halfx, ratioy + halfy);
+		immVertex2f(pos, soffx, sizey);
+
+		immEnd();
+
+		/* TODO: if target is always same for both eyes, unbind program & texture target after loop */
 		glBindTexture(triple->target, 0);
-		glDisable(triple->target);
+		immUnbindProgram();
 	}
 }
 
@@ -233,6 +247,13 @@ static void wm_method_draw_stereo3d_topbottom(wmWindow *win)
 	float halfx, halfy, ratiox, ratioy;
 	int view;
 	int soffy;
+
+	const int activeTex = GL_TEXTURE0;
+	glActiveTexture(activeTex);
+
+	VertexFormat *format = immVertexFormat();
+	unsigned texcoord = add_attrib(format, "texCoord", GL_FLOAT, 2, KEEP_FLOAT);
+	unsigned pos = add_attrib(format, "pos", GL_FLOAT, 2, KEEP_FLOAT);
 
 	for (view = 0; view < 2; view ++) {
 		drawdata = BLI_findlink(&win->drawdata, (view * 2) + 1);
@@ -262,26 +283,33 @@ static void wm_method_draw_stereo3d_topbottom(wmWindow *win)
 			halfy /= triple->y;
 		}
 
-		glEnable(triple->target);
+		/* TODO: if target is always same for both eyes, bind program & set uniforms before loop */
+		immBindBuiltinProgram((triple->target == GL_TEXTURE_2D) ? GPU_SHADER_3D_IMAGE_MODULATE_ALPHA : GPU_SHADER_3D_IMAGE_RECT_MODULATE_ALPHA);
+
 		glBindTexture(triple->target, triple->bind);
 
-		glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
-		glBegin(GL_QUADS);
-		glTexCoord2f(halfx, halfy);
-		glVertex2f(0, soffy);
+		immUniform1f("alpha", 1.0f);
+		immUniform1i("image", activeTex);
 
-		glTexCoord2f(ratiox + halfx, halfy);
-		glVertex2f(sizex, soffy);
+		immBegin(GL_QUADS, 4);
 
-		glTexCoord2f(ratiox + halfx, ratioy + halfy);
-		glVertex2f(sizex, soffy + (sizey * 0.5f));
+		immAttrib2f(texcoord, halfx, halfy);
+		immVertex2f(pos, 0.0f, soffy);
 
-		glTexCoord2f(halfx, ratioy + halfy);
-		glVertex2f(0, soffy + (sizey * 0.5f));
-		glEnd();
+		immAttrib2f(texcoord, ratiox + halfx, halfy);
+		immVertex2f(pos, sizex, soffy);
 
+		immAttrib2f(texcoord, ratiox + halfx, ratioy + halfy);
+		immVertex2f(pos, sizex, soffy + (sizey * 0.5f));
+
+		immAttrib2f(texcoord, halfx, ratioy + halfy);
+		immVertex2f(pos, 0.0f, soffy + (sizey * 0.5f));
+
+		immEnd();
+
+		/* TODO: if target is always same for both eyes, unbind program & texture target after loop */
+		immUnbindProgram();
 		glBindTexture(triple->target, 0);
-		glDisable(triple->target);
 	}
 }
 

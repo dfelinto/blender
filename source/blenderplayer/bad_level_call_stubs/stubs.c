@@ -165,7 +165,6 @@ struct wmWindowManager;
 #include "../blender/editors/include/ED_mesh.h"
 #include "../blender/editors/include/ED_node.h"
 #include "../blender/editors/include/ED_object.h"
-#include "../blender/editors/include/ED_particle.h"
 #include "../blender/editors/include/ED_render.h"
 #include "../blender/editors/include/ED_screen.h"
 #include "../blender/editors/include/ED_space_api.h"
@@ -179,6 +178,8 @@ struct wmWindowManager;
 #include "../blender/editors/include/UI_resources.h"
 #include "../blender/editors/include/UI_view2d.h"
 #include "../blender/freestyle/FRS_freestyle.h"
+#include "../blender/gpu/GPU_immediate.h"
+#include "../blender/gpu/GPU_matrix.h"
 #include "../blender/python/BPY_extern.h"
 #include "../blender/render/extern/include/RE_engine.h"
 #include "../blender/render/extern/include/RE_pipeline.h"
@@ -410,9 +411,6 @@ void ED_fsmenu_entry_set_path(struct FSMenuEntry *fsentry, const char *name) RET
 char *ED_fsmenu_entry_get_name(struct FSMenuEntry *fsentry) RET_NULL
 void ED_fsmenu_entry_set_name(struct FSMenuEntry *fsentry, const char *name) RET_NONE
 
-struct PTCacheEdit *PE_get_current(struct Scene *scene, struct Object *ob) RET_NULL
-void PE_current_changed(struct Scene *scene, struct Object *ob) RET_NONE
-
 /* rna keymap */
 struct wmKeyMap *WM_keymap_active(struct wmWindowManager *wm, struct wmKeyMap *keymap) RET_NULL
 struct wmKeyMap *WM_keymap_find(struct wmKeyConfig *keyconf, const char *idname, int spaceid, int regionid) RET_NULL
@@ -536,7 +534,6 @@ bool ED_space_image_check_show_maskedit(struct Scene *scene, struct SpaceImage *
 bool ED_texture_context_check_world(const struct bContext *C) RET_ZERO
 bool ED_texture_context_check_material(const struct bContext *C) RET_ZERO
 bool ED_texture_context_check_lamp(const struct bContext *C) RET_ZERO
-bool ED_texture_context_check_particles(const struct bContext *C) RET_ZERO
 bool ED_texture_context_check_others(const struct bContext *C) RET_ZERO
 
 bool ED_text_region_location_from_cursor(SpaceText *st, ARegion *ar, const int cursor_co[2], int r_pixel_co[2]) RET_ZERO
@@ -782,5 +779,14 @@ void COM_execute(RenderData *rd, Scene *scene, bNodeTree *editingtree, int rende
 /*multiview*/
 bool RE_RenderResult_is_stereo(RenderResult *res) RET_ZERO
 void uiTemplateImageViews(uiLayout *layout, struct PointerRNA *imfptr) RET_NONE
+
+/* GPU */
+void gpuMatrixBegin3D_legacy(void) RET_NONE
+void gpuMatrixEnd() RET_NONE
+void gpuMultMatrix3D(const float m[4][4]) RET_NONE
+void gpuTranslate3fv(const float vec[3]) RET_NONE
+void gpuScale3fv(const float vec[3]) RET_NONE
+void gpuRotateAxis(float deg, char axis) RET_NONE
+void immBindBuiltinProgram(GPUBuiltinShader shader_id) RET_NONE
 
 #endif // WITH_GAMEENGINE

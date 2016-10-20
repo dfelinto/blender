@@ -59,6 +59,7 @@
 #include "GPU_extensions.h"
 #include "GPU_glew.h"
 #include "GPU_basic_shader.h"
+#include "GPU_immediate.h"
 
 #include "RE_engine.h"
 
@@ -376,7 +377,7 @@ static void wm_draw_triple_fail(bContext *C, wmWindow *win)
 	wm_method_draw_overlap_all(C, win, 0);
 }
 
-static int wm_triple_gen_textures(wmWindow *win, wmDrawTriple *triple)
+static bool wm_triple_gen_textures(wmWindow *win, wmDrawTriple *triple)
 {
 	const int winsize_x = WM_window_pixels_x(win);
 	const int winsize_y = WM_window_pixels_y(win);
@@ -400,7 +401,7 @@ static int wm_triple_gen_textures(wmWindow *win, wmDrawTriple *triple)
 	if (!triple->bind) {
 		/* not the typical failure case but we handle it anyway */
 		printf("WM: failed to allocate texture for triple buffer drawing (glGenTextures).\n");
-		return 0;
+		return false;
 	}
 
 	/* proxy texture is only guaranteed to test for the cases that
@@ -411,7 +412,7 @@ static int wm_triple_gen_textures(wmWindow *win, wmDrawTriple *triple)
 		glBindTexture(triple->target, 0);
 		printf("WM: failed to allocate texture for triple buffer drawing "
 			   "(texture too large for graphics card).\n");
-		return 0;
+		return false;
 	}
 
 	/* setup actual texture */
@@ -421,13 +422,7 @@ static int wm_triple_gen_textures(wmWindow *win, wmDrawTriple *triple)
 	glTexParameteri(triple->target, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	glBindTexture(triple->target, 0);
 
-	/* not sure if this works everywhere .. */
-	if (glGetError() == GL_OUT_OF_MEMORY) {
-		printf("WM: failed to allocate texture for triple buffer drawing (out of memory).\n");
-		return 0;
-	}
-
-	return 1;
+	return true;
 }
 
 void wm_triple_draw_textures(wmWindow *win, wmDrawTriple *triple, float alpha)
@@ -451,28 +446,36 @@ void wm_triple_draw_textures(wmWindow *win, wmDrawTriple *triple, float alpha)
 		halfy /= triple->y;
 	}
 
-	GPU_basic_shader_bind((triple->target == GL_TEXTURE_2D) ? GPU_SHADER_TEXTURE_2D : GPU_SHADER_TEXTURE_RECT);
+	VertexFormat *format = immVertexFormat();
+	unsigned texcoord = add_attrib(format, "texCoord", GL_FLOAT, 2, KEEP_FLOAT);
+	unsigned pos = add_attrib(format, "pos", GL_FLOAT, 2, KEEP_FLOAT);
 
+	const int activeTex = GL_TEXTURE0;
+	glActiveTexture(activeTex);
 	glBindTexture(triple->target, triple->bind);
 
-	glColor4f(1.0f, 1.0f, 1.0f, alpha);
-	glBegin(GL_QUADS);
-	glTexCoord2f(halfx, halfy);
-	glVertex2f(0, 0);
+	immBindBuiltinProgram((triple->target == GL_TEXTURE_2D) ? GPU_SHADER_3D_IMAGE_MODULATE_ALPHA : GPU_SHADER_3D_IMAGE_RECT_MODULATE_ALPHA);
+	immUniform1f("alpha", alpha);
+	immUniform1i("image", activeTex);
 
-	glTexCoord2f(ratiox + halfx, halfy);
-	glVertex2f(sizex, 0);
+	immBegin(GL_QUADS, 4);
 
-	glTexCoord2f(ratiox + halfx, ratioy + halfy);
-	glVertex2f(sizex, sizey);
+	immAttrib2f(texcoord, halfx, halfy);
+	immVertex2f(pos, 0.0f, 0.0f);
 
-	glTexCoord2f(halfx, ratioy + halfy);
-	glVertex2f(0, sizey);
-	glEnd();
+	immAttrib2f(texcoord, ratiox + halfx, halfy);
+	immVertex2f(pos, sizex, 0.0f);
+
+	immAttrib2f(texcoord, ratiox + halfx, ratioy + halfy);
+	immVertex2f(pos, sizex, sizey);
+
+	immAttrib2f(texcoord, halfx, ratioy + halfy);
+	immVertex2f(pos, 0.0f, sizey);
+
+	immEnd();
+	immUnbindProgram();
 
 	glBindTexture(triple->target, 0);
-
-	GPU_basic_shader_bind(GPU_SHADER_USE_COLOR);
 }
 
 static void wm_triple_copy_textures(wmWindow *win, wmDrawTriple *triple)
