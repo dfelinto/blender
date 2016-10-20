@@ -4278,12 +4278,15 @@ static void direct_link_particlesystems(FileData *fd, ListBase *particles)
 			
 			psys->flag &= ~PSYS_KEYED;
 		}
-		
+
 		if (psys->particles && psys->particles->boid) {
 			pa = psys->particles;
 			pa->boid = newdataadr(fd, pa->boid);
-			for (a=1, pa++; a<psys->totpart; a++, pa++)
-				pa->boid = (pa-1)->boid + 1;
+			pa->boid->ground = NULL;  /* This is purely runtime data, but still can be an issue if left dangling. */
+			for (a = 1, pa++; a < psys->totpart; a++, pa++) {
+				pa->boid = (pa - 1)->boid + 1;
+				pa->boid->ground = NULL;
+			}
 		}
 		else if (psys->particles) {
 			for (a=0, pa=psys->particles; a<psys->totpart; a++, pa++)
@@ -5200,6 +5203,7 @@ static void direct_link_modifiers(FileData *fd, ListBase *lb)
 			collmd->time_x = collmd->time_xnew = -1000;
 			collmd->mvert_num = 0;
 			collmd->tri_num = 0;
+			collmd->is_static = false;
 			collmd->bvhtree = NULL;
 			collmd->tri = NULL;
 			
