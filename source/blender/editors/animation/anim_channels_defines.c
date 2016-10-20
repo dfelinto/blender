@@ -390,7 +390,10 @@ static bool acf_generic_dataexpand_setting_valid(bAnimContext *ac, bAnimListElem
 		/* select is ok for most "ds*" channels (e.g. dsmat) */
 		case ACHANNEL_SETTING_SELECT:
 			return true;
-			
+
+		case ACHANNEL_SETTING_ALWAYS_VISIBLE:
+			return true;
+
 		/* other flags are never supported */
 		default:
 			return false;
@@ -851,7 +854,7 @@ static bool acf_group_setting_valid(bAnimContext *ac, bAnimListElem *UNUSED(ale)
 			return (ac->spacetype == SPACE_IPO);
 
 		case ACHANNEL_SETTING_ALWAYS_VISIBLE:
-			return false;
+			return (ac->spacetype == SPACE_IPO);
 
 		default: /* always supported */
 			return true;
@@ -892,7 +895,10 @@ static int acf_group_setting_flag(bAnimContext *ac, eAnimChannel_Settings settin
 		case ACHANNEL_SETTING_VISIBLE: /* visibility - graph editor */
 			*neg = 1;
 			return AGRP_NOTVISIBLE;
-			
+
+		case ACHANNEL_SETTING_ALWAYS_VISIBLE:
+			return ADT_CURVES_ALWAYS_VISIBLE;
+
 		default:
 			/* this shouldn't happen */
 			return 0;
@@ -1701,7 +1707,10 @@ static int acf_dscam_setting_flag(bAnimContext *UNUSED(ac), eAnimChannel_Setting
 			
 		case ACHANNEL_SETTING_SELECT: /* selected */
 			return ADT_UI_SELECTED;
-		
+
+		case ACHANNEL_SETTING_ALWAYS_VISIBLE:
+			return ADT_CURVES_ALWAYS_VISIBLE;
+
 		default: /* unsupported */
 			return 0;
 	}
@@ -1722,6 +1731,7 @@ static void *acf_dscam_setting_ptr(bAnimListElem *ale, eAnimChannel_Settings set
 		case ACHANNEL_SETTING_SELECT: /* selected */
 		case ACHANNEL_SETTING_MUTE: /* muted (for NLA only) */
 		case ACHANNEL_SETTING_VISIBLE: /* visible (for Graph Editor only) */
+		case ACHANNEL_SETTING_ALWAYS_VISIBLE:
 			if (ca->adt)
 				return GET_ACF_FLAG_PTR(ca->adt->flag, type);
 			return NULL;
@@ -4152,7 +4162,7 @@ static void draw_setting_widget(bAnimContext *ac, bAnimListElem *ale, const bAni
 		case ACHANNEL_SETTING_SOLO: /* NLA Tracks only */
 			//icon = ((enabled) ? ICON_SOLO_OFF : ICON_SOLO_ON);
 			icon = ICON_SOLO_OFF;
-			tooltip = TIP_("NLA Track is the only one evaluated in this Animation Data block, with all others muted");
+			tooltip = TIP_("NLA Track is the only one evaluated in this animation data-block, with all others muted");
 			break;
 		
 		/* --- */

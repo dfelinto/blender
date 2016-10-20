@@ -305,6 +305,8 @@ const unsigned char *UI_ThemeGetColorPtr(bTheme *btheme, int spacetype, int colo
 					cp = ts->vertex; break;
 				case TH_VERTEX_SELECT:
 					cp = ts->vertex_select; break;
+				case TH_VERTEX_BEVEL:
+					cp = ts->vertex_bevel; break;
 				case TH_VERTEX_UNREFERENCED:
 					cp = ts->vertex_unreferenced; break;
 				case TH_VERTEX_SIZE:
@@ -321,6 +323,8 @@ const unsigned char *UI_ThemeGetColorPtr(bTheme *btheme, int spacetype, int colo
 					cp = ts->edge_sharp; break;
 				case TH_EDGE_CREASE:
 					cp = ts->edge_crease; break;
+				case TH_EDGE_BEVEL:
+					cp = ts->edge_bevel; break;
 				case TH_EDITMESH_ACTIVE:
 					cp = ts->editmesh_active; break;
 				case TH_EDGE_FACESEL:
@@ -898,12 +902,14 @@ void ui_theme_init_default(void)
 	rgba_char_args_set(btheme->tv3d.transform, 0xff, 0xff, 0xff, 255);
 	rgba_char_args_set(btheme->tv3d.vertex, 0, 0, 0, 255);
 	rgba_char_args_set(btheme->tv3d.vertex_select, 255, 133, 0, 255);
+	rgba_char_args_set(btheme->tv3d.vertex_bevel, 0, 165, 255, 255);
 	rgba_char_args_set(btheme->tv3d.vertex_unreferenced, 0, 0, 0, 255);
 	btheme->tv3d.vertex_size = 3;
 	btheme->tv3d.outline_width = 1;
 	rgba_char_args_set(btheme->tv3d.edge,       0x0, 0x0, 0x0, 255);
 	rgba_char_args_set(btheme->tv3d.edge_select, 255, 160, 0, 255);
 	rgba_char_args_set(btheme->tv3d.edge_seam, 219, 37, 18, 255);
+	rgba_char_args_set(btheme->tv3d.edge_bevel, 0, 165, 255, 255);
 	rgba_char_args_set(btheme->tv3d.edge_facesel, 75, 75, 75, 255);
 	rgba_char_args_set(btheme->tv3d.face,       0, 0, 0, 18);
 	rgba_char_args_set(btheme->tv3d.face_select, 255, 133, 0, 60);
@@ -1041,10 +1047,8 @@ void ui_theme_init_default(void)
 	rgba_char_args_set(btheme->tfile.text,  250, 250, 250, 255);
 	rgba_char_args_set(btheme->tfile.text_hi, 15, 15, 15, 255);
 //	rgba_char_args_set(btheme->tfile.panel, 145, 145, 145, 255);  /* bookmark/ui regions */
-	rgba_char_args_set(btheme->tfile.active, 130, 130, 130, 255); /* selected files */
 	rgba_char_args_set(btheme->tfile.hilite, 255, 140, 25, 255);  /* selected files */
-	
-	rgba_char_args_set(btheme->tfile.grid,  250, 250, 250, 255);
+
 	rgba_char_args_set(btheme->tfile.image, 250, 250, 250, 255);
 	rgba_char_args_set(btheme->tfile.movie, 250, 250, 250, 255);
 	rgba_char_args_set(btheme->tfile.scene, 250, 250, 250, 255);
@@ -2731,6 +2735,14 @@ void init_userdef_do_versions(void)
 		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
 			if (btheme->tact.keyframe_scale_fac < 0.1f)
 				btheme->tact.keyframe_scale_fac = 1.0f;
+		}
+	}
+
+	if (!USER_VERSION_ATLEAST(278, 1)) {
+		bTheme *btheme;
+		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
+			rgba_char_args_set(btheme->tv3d.vertex_bevel, 0, 165, 255, 255);
+			rgba_char_args_set(btheme->tv3d.edge_bevel, 0, 165, 255, 255);
 		}
 	}
 

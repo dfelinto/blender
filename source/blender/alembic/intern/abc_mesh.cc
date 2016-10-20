@@ -146,19 +146,6 @@ static void get_topology(DerivedMesh *dm,
 	}
 }
 
-static void get_material_indices(DerivedMesh *dm, std::vector<int32_t> &indices)
-{
-	indices.clear();
-	indices.reserve(dm->getNumTessFaces(dm));
-
-	MPoly *mpolys = dm->getPolyArray(dm);
-
-	for (int i = 1, e = dm->getNumPolys(dm); i < e; ++i) {
-		MPoly *mpoly = &mpolys[i];
-		indices.push_back(mpoly->mat_nr);
-	}
-}
-
 static void get_creases(DerivedMesh *dm,
                         std::vector<int32_t> &indices,
                         std::vector<int32_t> &lengths,
@@ -309,7 +296,6 @@ AbcMeshWriter::AbcMeshWriter(Scene *scene,
 {
 	m_is_animated = isAnimated();
 	m_subsurf_mod = NULL;
-	m_has_per_face_materials = false;
 	m_is_subd = false;
 
 	/* If the object is static, use the default static time sampling. */
@@ -406,8 +392,8 @@ void AbcMeshWriter::writeMesh(DerivedMesh *dm)
 	get_vertices(dm, points);
 	get_topology(dm, poly_verts, loop_counts, smooth_normal);
 
-	if (m_first_frame) {
-		writeCommonData(dm, m_mesh_schema);
+	if (m_first_frame && m_settings.export_face_sets) {
+		writeFaceSets(dm, m_mesh_schema);
 	}
 
 	m_mesh_sample = OPolyMeshSchema::Sample(V3fArraySample(points),
@@ -475,9 +461,8 @@ void AbcMeshWriter::writeSubD(DerivedMesh *dm)
 	get_topology(dm, poly_verts, loop_counts, smooth_normal);
 	get_creases(dm, crease_indices, crease_lengths, crease_sharpness);
 
-	if (m_first_frame) {
-		/* create materials' face_sets */
-		writeCommonData(dm, m_subdiv_schema);
+	if (m_first_frame && m_settings.export_face_sets) {
+		writeFaceSets(dm, m_subdiv_schema);
 	}
 
 	m_subdiv_sample = OSubDSchema::Sample(V3fArraySample(points),
@@ -514,7 +499,7 @@ void AbcMeshWriter::writeSubD(DerivedMesh *dm)
 }
 
 template <typename Schema>
-void AbcMeshWriter::writeCommonData(DerivedMesh *dm, Schema &schema)
+void AbcMeshWriter::writeFaceSets(DerivedMesh *dm, Schema &schema)
 {
 	std::map< std::string, std::vector<int32_t> > geo_groups;
 	getGeoGroups(dm, geo_groups);
@@ -586,18 +571,6 @@ void AbcMeshWriter::writeArbGeoParams(DerivedMesh *dm)
 		}
 		else {
 			write_custom_data(m_mesh_schema.getArbGeomParams(), m_custom_data_config, &dm->loopData, CD_MLOOPCOL);
-		}
-	}
-
-	if (m_first_frame && m_has_per_face_materials) {
-		std::vector<int32_t> material_indices;
-
-		if (m_settings.export_face_sets) {
-			get_material_indices(dm, material_indices);
-
-			OFaceSetSchema::Sample samp;
-			samp.setFaces(Int32ArraySample(material_indices));
-			m_face_set.getSchema().set(samp);
 		}
 	}
 }
@@ -873,7 +846,10 @@ static void read_mverts(CDStreamConfig &config, const AbcMeshData &mesh_data)
 	const P3fArraySamplePtr &positions = mesh_data.positions;
 	const N3fArraySamplePtr &normals = mesh_data.vertex_normals;
 
-	if (config.weight != 0.0f && mesh_data.ceil_positions) {
+	if (   config.weight != 0.0f
+	    && mesh_data.ceil_positions != NULL
+	    && mesh_data.ceil_positions->size() == positions->size())
+	{
 		read_mverts_interp(mverts, positions, mesh_data.ceil_positions, config.weight);
 		return;
 	}
@@ -1104,44 +1080,20 @@ void AbcMeshReader::readFaceSetsSample(Main *bmain, Mesh *mesh, size_t poly_star
 	utils::assign_materials(bmain, m_object, mat_map);
 }
 
-typedef std::pair<Alembic::AbcCoreAbstract::index_t, float> index_time_pair_t;
-
 static void get_weight_and_index(CDStreamConfig &config,
                                  Alembic::AbcCoreAbstract::TimeSamplingPtr time_sampling,
                                  size_t samples_number)
 {
-	if (samples_number == 0) {
-		samples_number = 1;
-	}
+	Alembic::AbcGeom::index_t i0, i1;
 
-	index_time_pair_t floor_index = time_sampling->getFloorIndex(config.time, samples_number);
+	config.weight = get_weight_and_index(config.time,
+	                                     time_sampling,
+	                                     samples_number,
+	                                     i0,
+	                                     i1);
 
-	config.index = floor_index.first;
-	config.ceil_index = config.index;
-
-	if (fabs(config.time - floor_index.second) < 0.0001f) {
-		config.weight = 0.0f;
-		return;
-	}
-
-	index_time_pair_t ceil_index = time_sampling->getCeilIndex(config.time, samples_number);
-
-	if (config.index == ceil_index.first) {
-		config.weight = 0.0f;
-		return;
-	}
-
-	config.ceil_index = ceil_index.first;
-
-	float alpha = (config.time - floor_index.second) / (ceil_index.second - floor_index.second);
-
-	/* Since we so closely match the ceiling, we'll just use it. */
-	if (fabs(1.0f - alpha) < 0.0001f) {
-		config.index = config.ceil_index;
-		alpha = 0.0f;
-	}
-
-	config.weight = alpha;
+	config.index = i0;
+	config.ceil_index = i1;
 }
 
 void read_mesh_sample(ImportSettings *settings,

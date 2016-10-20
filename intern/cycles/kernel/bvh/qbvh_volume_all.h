@@ -1,8 +1,5 @@
 /*
- * Adapted from code Copyright 2009-2010 NVIDIA Corporation,
- * and code copyright 2009-2012 Intel Corporation
- *
- * Modifications Copyright 2011-2014, Blender Foundation.
+ * Copyright 2011-2013 Blender Foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -69,7 +66,7 @@ ccl_device uint BVH_FUNCTION_FULL_NAME(QBVH)(KernelGlobals *kg,
 
 #ifndef __KERNEL_SSE41__
 	if(!isfinite(P.x)) {
-		return false;
+		return 0;
 	}
 #endif
 
@@ -107,8 +104,9 @@ ccl_device uint BVH_FUNCTION_FULL_NAME(QBVH)(KernelGlobals *kg,
 		do {
 			/* Traverse internal nodes. */
 			while(node_addr >= 0 && node_addr != ENTRYPOINT_SENTINEL) {
-#ifdef __VISIBILITY_FLAG__
 				float4 inodes = kernel_tex_fetch(__bvh_nodes, node_addr+0);
+
+#ifdef __VISIBILITY_FLAG__
 				if((__float_as_uint(inodes.x) & visibility) == 0) {
 					/* Pop. */
 					node_addr = traversal_stack[stack_ptr].addr;
@@ -405,7 +403,6 @@ ccl_device uint BVH_FUNCTION_FULL_NAME(QBVH)(KernelGlobals *kg,
 #  else
 				bvh_instance_pop_factor(kg, object, ray, &P, &dir, &idir, &t_fac);
 #  endif
-				triangle_intersect_precalc(dir, &isect_precalc);
 				/* Scale isect->t to adjust for instancing. */
 				for(int i = 0; i < num_hits_in_instance; i++) {
 					(isect_array-i-1)->t *= t_fac;
@@ -418,8 +415,10 @@ ccl_device uint BVH_FUNCTION_FULL_NAME(QBVH)(KernelGlobals *kg,
 #  else
 				bvh_instance_pop(kg, object, ray, &P, &dir, &idir, &ignore_t);
 #  endif
-				triangle_intersect_precalc(dir, &isect_precalc);
 			}
+
+			isect_t = tmax;
+			isect_array->t = isect_t;
 
 			if(idir.x >= 0.0f) { near_x = 0; far_x = 1; } else { near_x = 1; far_x = 0; }
 			if(idir.y >= 0.0f) { near_y = 2; far_y = 3; } else { near_y = 3; far_y = 2; }
@@ -438,8 +437,6 @@ ccl_device uint BVH_FUNCTION_FULL_NAME(QBVH)(KernelGlobals *kg,
 #  endif
 
 			triangle_intersect_precalc(dir, &isect_precalc);
-			isect_t = tmax;
-			isect_array->t = isect_t;
 
 			object = OBJECT_NONE;
 			node_addr = traversal_stack[stack_ptr].addr;

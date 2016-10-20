@@ -1306,13 +1306,11 @@ static void write_particlesettings(WriteData *wd, ListBase *idbase)
 
 			dw = part->dupliweights.first;
 			for (; dw; dw = dw->next) {
-				/* update indices */
-				dw->index = 0;
-				if (part->dup_group) { /* can be NULL if lining fails or set to None */
-					go = part->dup_group->gobject.first;
-					while (go && go->ob != dw->ob) {
-						go = go->next;
-						dw->index++;
+				/* update indices, but only if dw->ob is set (can be NULL after loading e.g.) */
+				if (dw->ob != NULL) {
+					dw->index = 0;
+					if (part->dup_group) { /* can be NULL if lining fails or set to None */
+						for (go = part->dup_group->gobject.first; go && go->ob != dw->ob; go = go->next, dw->index++);
 					}
 				}
 				writestruct(wd, DATA, ParticleDupliWeight, 1, dw);
@@ -3960,7 +3958,7 @@ static void write_libraries(WriteData *wd, Main *main)
 				for (id = lbarray[a]->first; id; id = id->next) {
 					if (id->us > 0 && (id->tag & LIB_TAG_EXTERN)) {
 						if (!BKE_idcode_is_linkable(GS(id->name))) {
-							printf("ERROR: write file: datablock '%s' from lib '%s' is not linkable "
+							printf("ERROR: write file: data-block '%s' from lib '%s' is not linkable "
 							       "but is flagged as directly linked", id->name, main->curlib->filepath);
 							BLI_assert(0);
 						}

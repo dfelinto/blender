@@ -952,6 +952,9 @@ static bAnimListElem *make_new_animlistelem(void *data, short datatype, ID *owne
  */
 static bool skip_fcurve_selected_data(bDopeSheet *ads, FCurve *fcu, ID *owner_id, int filter_mode)
 {
+	if (fcu->grp != NULL && fcu->grp->flag & ADT_CURVES_ALWAYS_VISIBLE) {
+		return false;
+	}
 	/* hidden items should be skipped if we only care about visible data, but we aren't interested in hidden stuff */
 	const bool skip_hidden = (filter_mode & ANIMFILTER_DATA_VISIBLE) && !(ads->filterflag & ADS_FILTER_INCL_HIDDEN);
 	
@@ -2829,6 +2832,19 @@ static bool animdata_filter_base_is_ok(bDopeSheet *ads, Scene *scene, Base *base
 	/* Pinned curves are visible regardless of selection flags. */
 	if ((ob->adt) && (ob->adt->flag & ADT_CURVES_ALWAYS_VISIBLE)) {
 		return true;
+	}
+
+	/* Special case.
+	 * We don't do recursive checks for pin, but we need to deal with tricky
+	 * setup like animated camera lens without animated camera location.
+	 * Without such special handle here we wouldn't be able to bin such
+	 * camera data only animation to the editor.
+	 */
+	if (ob->adt == NULL && ob->data != NULL) {
+		AnimData *data_adt = BKE_animdata_from_id(ob->data);
+		if (data_adt != NULL && (data_adt->flag & ADT_CURVES_ALWAYS_VISIBLE)) {
+			return true;
+		}
 	}
 
 	/* check selection and object type filters */
