@@ -152,7 +152,7 @@ static void gpu_probe_from_blender(Scene *scene, World *wo, Object *ob, GPUProbe
 			return;
 		}
 
-		if (!GPU_framebuffer_cubeface_attach(probe->fb, probe->tex, 0, 0, NULL)) {
+		if (!GPU_framebuffer_cubeface_attach(probe->fb, probe->tex, 0, 0)) {
 			gpu_probe_buffers_free(probe);
 			return;
 		}
@@ -164,7 +164,7 @@ static void gpu_probe_from_blender(Scene *scene, World *wo, Object *ob, GPUProbe
 			return;
 		}
 
-		if (!GPU_framebuffer_texture_attach(probe->fb, probe->depthtex, 0, NULL)) {
+		if (!GPU_framebuffer_texture_attach(probe->fb, probe->depthtex, 0)) {
 			gpu_probe_buffers_free(probe);
 			return;
 		}
@@ -188,7 +188,7 @@ static void gpu_probe_from_blender(Scene *scene, World *wo, Object *ob, GPUProbe
 			return;
 		}
 
-		if (!GPU_framebuffer_texture_attach(probe->fbsh, probe->shtex, 0, NULL)) {
+		if (!GPU_framebuffer_texture_attach(probe->fbsh, probe->shtex, 0)) {
 			gpu_probe_buffers_free(probe);
 			return;
 		}
@@ -218,7 +218,7 @@ static void gpu_probe_from_blender(Scene *scene, World *wo, Object *ob, GPUProbe
 			return;
 		}
 
-		if (!GPU_framebuffer_texture_attach(probe->fb, probe->texrefract, 0, NULL)) {
+		if (!GPU_framebuffer_texture_attach(probe->fb, probe->texrefract, 0)) {
 			gpu_probe_buffers_free(probe);
 			return;
 		}
@@ -232,7 +232,7 @@ static void gpu_probe_from_blender(Scene *scene, World *wo, Object *ob, GPUProbe
 			return;
 		}
 
-		if (!GPU_framebuffer_texture_attach(probe->fb, probe->texreflect, 0, NULL)) {
+		if (!GPU_framebuffer_texture_attach(probe->fb, probe->texreflect, 0)) {
 			gpu_probe_buffers_free(probe);
 			return;
 		}
@@ -244,7 +244,7 @@ static void gpu_probe_from_blender(Scene *scene, World *wo, Object *ob, GPUProbe
 			return;
 		}
 
-		if (!GPU_framebuffer_texture_attach(probe->fb, probe->depthtex, 0, NULL)) {
+		if (!GPU_framebuffer_texture_attach(probe->fb, probe->depthtex, 0)) {
 			gpu_probe_buffers_free(probe);
 			return;
 		}
@@ -377,7 +377,7 @@ void GPU_probe_buffer_bind(GPUProbe *probe)
 void GPU_probe_switch_fb_cubeface(GPUProbe *probe, int cubeface, float viewmat[4][4], int *winsize, float winmat[4][4])
 {
 	gpu_probe_cube_update_buffer_mats(probe, cubeface);
-	GPU_framebuffer_cubeface_attach(probe->fb, probe->tex, 0, cubeface, NULL);
+	GPU_framebuffer_cubeface_attach(probe->fb, probe->tex, 0, cubeface);
 
 	/* set matrices */
 	copy_m4_m4(viewmat, probe->viewmat);
@@ -398,9 +398,9 @@ void GPU_probe_attach_planar_fb(GPUProbe *probe, float camviewmat[4][4], float c
 	float plane[4] = {0.0f, 0.0f, -1.0f, 0.0f};
 
 	if (refraction)
-		GPU_framebuffer_texture_attach(probe->fb, probe->texrefract, 0, NULL);
+		GPU_framebuffer_texture_attach(probe->fb, probe->texrefract, 0);
 	else
-		GPU_framebuffer_texture_attach(probe->fb, probe->texreflect, 0, NULL);
+		GPU_framebuffer_texture_attach(probe->fb, probe->texreflect, 0);
 
 	/* opengl buffer is range 0.0..1.0 instead of -1.0..1.0 in blender */
 	unit_m4(rangemat);
@@ -585,7 +585,7 @@ void GPU_probe_update_ref_plane(GPUProbe *probe, float obmat[4][4])
 
 /* Spherical Harmonics : Diffuse lighting */
 
-void gpu_compute_sh(GPUProbe *probe)
+static void gpu_compute_sh(GPUProbe *probe)
 {
 	int probe_source_uniform;
 	GPUShader *sh_shader = GPU_shader_get_builtin_shader(GPU_SHADER_COMPUTE_SH + probe->shres);

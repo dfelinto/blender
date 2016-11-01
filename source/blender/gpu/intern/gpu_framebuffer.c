@@ -442,7 +442,7 @@ void GPU_framebuffer_hiz_construction(GPUFrameBuffer* fb, GPUTexture *tex, const
 	lowermip_uniform = GPU_shader_get_uniform(shader, "lowermip");
 	lowermipsize_uniform = GPU_shader_get_uniform(shader, "lowermipsize");
 
-	GPU_framebuffer_texture_attach(fb, tex, 0, NULL);
+	GPU_framebuffer_texture_attach(fb, tex, 0);
 	GPU_texture_bind_as_framebuffer(tex);
 
 	bindcode = GPU_texture_opengl_bindcode(tex);

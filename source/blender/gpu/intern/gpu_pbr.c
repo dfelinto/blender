@@ -103,7 +103,7 @@ static GPUScreenBuffer *gpu_scenebuf_create(int width, int height, bool depth_on
 			return NULL;
 		}
 
-		if (!GPU_framebuffer_texture_attach(buf->fb, buf->tex, 0, NULL)) {
+		if (!GPU_framebuffer_texture_attach(buf->fb, buf->tex, 0)) {
 			GPU_scenebuf_free(buf);
 			return NULL;
 		}
@@ -121,7 +121,7 @@ static GPUScreenBuffer *gpu_scenebuf_create(int width, int height, bool depth_on
 			return NULL;
 		}
 
-		if (!GPU_framebuffer_texture_attach(buf->fb, buf->depth, 0, NULL)) {
+		if (!GPU_framebuffer_texture_attach(buf->fb, buf->depth, 0)) {
 			GPU_scenebuf_free(buf);
 			return NULL;
 		}
@@ -132,7 +132,7 @@ static GPUScreenBuffer *gpu_scenebuf_create(int width, int height, bool depth_on
 			return NULL;
 		}
 
-		if (!GPU_framebuffer_texture_attach(buf->fb, buf->tex, 0, NULL)) {
+		if (!GPU_framebuffer_texture_attach(buf->fb, buf->tex, 0)) {
 			GPU_scenebuf_free(buf);
 			return NULL;
 		}
@@ -222,14 +222,14 @@ void GPU_scenebuf_filter_texture(GPUScreenBuffer* buf)
 		GPU_generate_mipmap(GL_TEXTURE_2D);
 		GPU_texture_unbind(buf->depth);
 		GPU_framebuffer_hiz_construction(buf->downsamplingfb, buf->depth, false);
-		GPU_framebuffer_texture_attach(buf->fb, buf->depth, 0, NULL);
+		GPU_framebuffer_texture_attach(buf->fb, buf->depth, 0);
 	}
 	else {
 		GPU_texture_bind(buf->tex, 0);
 		GPU_generate_mipmap(GL_TEXTURE_2D);
 		GPU_texture_unbind(buf->tex);
 		GPU_framebuffer_hiz_construction(buf->downsamplingfb, buf->tex, true);
-		GPU_framebuffer_texture_attach(buf->fb, buf->tex, 0, NULL);
+		GPU_framebuffer_texture_attach(buf->fb, buf->tex, 0);
 	}
 
 	GPU_framebuffer_restore();
