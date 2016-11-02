@@ -887,6 +887,20 @@ GPUShader *GPU_shader_get_builtin_shader(GPUBuiltinShader shader)
 				        NULL, NULL, NULL, 0, 0, 0);
 			retval = GG.shaders.point_uniform_size_uniform_color_outline_smooth_3D;
 			break;
+		case GPU_SHADER_MAXZ_DOWNSAMPLE:
+			if (!GG.shaders.maxz_downsample)
+				GG.shaders.maxz_downsample = GPU_shader_create(
+				        datatoc_gpu_shader_downsample_maxz_vert_glsl, datatoc_gpu_shader_downsample_maxz_frag_glsl,
+				        NULL, NULL, NULL, 0, 0, 0);
+			retval = GG.shaders.maxz_downsample;
+			break;
+		case GPU_SHADER_MINZ_DOWNSAMPLE:
+			if (!GG.shaders.minz_downsample)
+				GG.shaders.minz_downsample = GPU_shader_create(
+				        datatoc_gpu_shader_downsample_maxz_vert_glsl, datatoc_gpu_shader_downsample_maxz_frag_glsl,
+				        NULL, NULL, "#define MIN;\n", 0, 0, 0);
+			retval = GG.shaders.minz_downsample;
+			break;
 	}
 
 exit:
