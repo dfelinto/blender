@@ -2625,97 +2625,11 @@ void ED_view3d_draw_offscreen_init(Scene *scene, View3D *v3d, ARegion *ar)
  */
 static void view3d_main_region_clear(Scene *scene, View3D *v3d, ARegion *ar)
 {
-	GPUFXSettings *fx_settings = &v3d->fx_settings;
-	bool use_color_correction = (fx_settings->fx_flag2 && (fx_settings->fx_flag2 & GPU_FX_FLAG_COLORMANAGEMENT)) ? false : true;
-
 	if (scene->world && (v3d->flag3 & V3D_SHOW_WORLD)) {
-		RegionView3D *rv3d = ar->regiondata;
-		GPUMaterial *gpumat;
-		GPUProbe *gpuprobe;
-		bool material_not_bound;
-
-		if (v3d->flag3 & V3D_SHOW_WORLD_DIFFUSE) {
-			gpuprobe = GPU_probe_world(scene, scene->world);
-			GPU_probe_sh_shader_bind(gpuprobe);
-		}
-		else {
-			gpumat = GPU_material_world(scene, scene->world);
-
-			/* calculate full shader for background */
-			GPU_material_bind(gpumat, 1, 1, 1.0, false, rv3d->viewmat, rv3d->viewinv, rv3d->viewcamtexcofac, (v3d->scenelock != 0));
-
-			material_not_bound = !GPU_material_bound(gpumat);
-
-			if (material_not_bound) {
-				glMatrixMode(GL_PROJECTION);
-				glPushMatrix();
-				glLoadIdentity();
-				glMatrixMode(GL_MODELVIEW);
-				glPushMatrix();
-				glLoadIdentity();
-				glColor4f(0.0f, 0.0f, 0.0f, 1.0f);
-			}
-		}
-
-		/* Draw world */
-		glEnable(GL_DEPTH_TEST);
-		glDepthFunc(GL_ALWAYS);
-		glBegin(GL_TRIANGLE_STRIP);
-		glVertex3f(-1.0, -1.0, 1.0);
-		glVertex3f(1.0, -1.0, 1.0);
-		glVertex3f(-1.0, 1.0, 1.0);
-		glVertex3f(1.0, 1.0, 1.0);
-		glEnd();
-
-		if (v3d->flag3 & V3D_SHOW_WORLD_DIFFUSE) {
-			GPU_probe_sh_shader_unbind();
-		}
-		else {
-			if (material_not_bound) {
-				glMatrixMode(GL_PROJECTION);
-				glPopMatrix();
-				glMatrixMode(GL_MODELVIEW);
-				glPopMatrix();
-			}
-
-			GPU_material_unbind(gpumat);
-		}
-
-		glDepthFunc(GL_LEQUAL);
-		glDisable(GL_DEPTH_TEST);
+		VP_view3d_draw_background_world(scene, v3d, ar->regiondata);
 	}
 	else {
-		if (UI_GetThemeValue(TH_SHOW_BACK_GRAD)) {
-			glMatrixMode(GL_PROJECTION);
-			glPushMatrix();
-			glLoadIdentity();
-			glMatrixMode(GL_MODELVIEW);
-			glPushMatrix();
-			glLoadIdentity();
-
-			glEnable(GL_DEPTH_TEST);
-			glDepthFunc(GL_ALWAYS);
-			glBegin(GL_QUADS);
-			UI_ThemeColor(TH_LOW_GRAD);
-			glVertex3f(-1.0, -1.0, 1.0);
-			glVertex3f(1.0, -1.0, 1.0);
-			UI_ThemeColor(TH_HIGH_GRAD);
-			glVertex3f(1.0, 1.0, 1.0);
-			glVertex3f(-1.0, 1.0, 1.0);
-			glEnd();
-			glDepthFunc(GL_LEQUAL);
-			glDisable(GL_DEPTH_TEST);
-
-			glMatrixMode(GL_PROJECTION);
-			glPopMatrix();
-
-			glMatrixMode(GL_MODELVIEW);
-			glPopMatrix();
-		}
-		else {
-			UI_ThemeClearColorAlpha(TH_HIGH_GRAD, 1.0f);
-			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-		}
+		VP_view3d_draw_background_none();
 	}
 }
 

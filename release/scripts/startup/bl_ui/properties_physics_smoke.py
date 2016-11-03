@@ -298,21 +298,17 @@ class PHYSICS_PT_smoke_cache(PhysicButtonsPanel, Panel):
     def draw(self, context):
         layout = self.layout
 
+        if not bpy.app.build_options.openvdb:
+            layout.label("Built without OpenVDB support")
+            return
+
         domain = context.smoke.domain_settings
-        cache_file_format = domain.cache_file_format
 
-        layout.prop(domain, "cache_file_format")
-
-        if cache_file_format == 'OPENVDB':
-            if not bpy.app.build_options.openvdb:
-                layout.label("Built without OpenVDB support")
-                return
-
-            layout.label(text="Compression:")
-            layout.prop(domain, "openvdb_cache_compress_type", expand=True)
-            row = layout.row()
-            row.label("Data Depth:")
-            row.prop(domain, "data_depth", expand=True, text="Data Depth")
+        layout.label(text="Compression:")
+        layout.prop(domain, "openvdb_cache_compress_type", expand=True)
+        row = layout.row()
+        row.label("Data Depth:")
+        row.prop(domain, "data_depth", expand=True, text="Data Depth")
 
 
 class PHYSICS_PT_smoke_field_weights(PhysicButtonsPanel, Panel):
@@ -377,6 +373,14 @@ class PHYSICS_PT_smoke_display_settings(PhysicButtonsPanel, Panel):
         col.enabled = domain.draw_velocity
         col.prop(domain, "vector_draw_type")
         col.prop(domain, "vector_scale")
+
+        layout.separator()
+        layout.label(text="Color Mapping:")
+        layout.prop(domain, "use_color_ramp")
+        col = layout.column();
+        col.enabled = domain.use_color_ramp
+        col.prop(domain, "coba_field")
+        col.template_color_ramp(domain, "color_ramp", expand=True)
 
 
 if __name__ == "__main__":  # only for live edit.

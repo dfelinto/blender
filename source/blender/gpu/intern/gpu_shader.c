@@ -49,6 +49,7 @@
 extern char datatoc_gpu_shader_depth_only_frag_glsl[];
 extern char datatoc_gpu_shader_uniform_color_frag_glsl[];
 extern char datatoc_gpu_shader_flat_color_frag_glsl[];
+extern char datatoc_gpu_shader_flat_color_alpha_test_0_frag_glsl[];
 extern char datatoc_gpu_shader_2D_vert_glsl[];
 extern char datatoc_gpu_shader_2D_flat_color_vert_glsl[];
 extern char datatoc_gpu_shader_2D_smooth_color_vert_glsl[];
@@ -56,6 +57,7 @@ extern char datatoc_gpu_shader_2D_smooth_color_frag_glsl[];
 extern char datatoc_gpu_shader_3D_image_vert_glsl[];
 extern char datatoc_gpu_shader_image_modulate_alpha_frag_glsl[];
 extern char datatoc_gpu_shader_image_rect_modulate_alpha_frag_glsl[];
+extern char datatoc_gpu_shader_image_depth_linear_frag_glsl[];
 extern char datatoc_gpu_shader_3D_vert_glsl[];
 extern char datatoc_gpu_shader_3D_flat_color_vert_glsl[];
 extern char datatoc_gpu_shader_3D_smooth_color_vert_glsl[];
@@ -76,6 +78,8 @@ extern char datatoc_gpu_shader_2D_point_uniform_size_smooth_vert_glsl[];
 extern char datatoc_gpu_shader_2D_point_uniform_size_outline_smooth_vert_glsl[];
 extern char datatoc_gpu_shader_2D_point_uniform_size_varying_color_outline_smooth_vert_glsl[];
 
+extern char datatoc_gpu_shader_edges_front_back_persp_vert_glsl[];
+extern char datatoc_gpu_shader_edges_front_back_ortho_vert_glsl[];
 extern char datatoc_gpu_shader_text_vert_glsl[];
 extern char datatoc_gpu_shader_text_frag_glsl[];
 
@@ -109,17 +113,17 @@ static struct GPUShadersGlobal {
 		GPUShader *sep_gaussian_blur;
 		GPUShader *smoke;
 		GPUShader *smoke_fire;
-		GPUShader *compute_sh[MAX_SH_SAMPLES];
-		GPUShader *display_sh;
-		GPUShader *maxz_downsample;
-		GPUShader *minz_downsample;
+		GPUShader *smoke_coba;
 		/* cache for shader fx. Those can exist in combinations so store them here */
 		GPUShader *fx_shaders[MAX_FX_SHADERS * 2];
-		/* for drawing text */
+		/* specialized drawing */
 		GPUShader *text;
+		GPUShader *edges_front_back_persp;
+		GPUShader *edges_front_back_ortho;
 		/* for drawing images */
 		GPUShader *image_modulate_alpha_3D;
 		GPUShader *image_rect_modulate_alpha_3D;
+		GPUShader *image_depth_3D;
 		/* for simple 2D drawing */
 		GPUShader *uniform_color_2D;
 		GPUShader *flat_color_2D;
@@ -141,6 +145,11 @@ static struct GPUShadersGlobal {
 		GPUShader *point_varying_size_varying_color_3D;
 		GPUShader *point_uniform_size_uniform_color_smooth_3D;
 		GPUShader *point_uniform_size_uniform_color_outline_smooth_3D;
+		/* pbr */
+		GPUShader *compute_sh[MAX_SH_SAMPLES];
+		GPUShader *display_sh;
+		GPUShader *maxz_downsample;
+		GPUShader *minz_downsample;
 	} shaders;
 } GG = {{NULL}};
 
@@ -631,7 +640,6 @@ void GPU_shader_geometry_stage_primitive_io(GPUShader *shader, int input, int ou
 
 void GPU_shader_uniform_texture(GPUShader *UNUSED(shader), int location, GPUTexture *tex)
 {
-	GLenum arbnumber;
 	int number = GPU_texture_bound_number(tex);
 	int bindcode = GPU_texture_opengl_bindcode(tex);
 	int target = GPU_texture_target(tex);
@@ -647,16 +655,18 @@ void GPU_shader_uniform_texture(GPUShader *UNUSED(shader), int location, GPUText
 	if (location == -1)
 		return;
 
-	arbnumber = (GLenum)((GLuint)GL_TEXTURE0 + number);
+	if (number != 0)
+		glActiveTexture(GL_TEXTURE0 + number);
 
-	if (number != 0) glActiveTexture(arbnumber);
 	if (bindcode != 0)
 		glBindTexture(target, bindcode);
 	else
 		GPU_invalid_tex_bind(target);
+
 	glUniform1i(location, number);
-	glEnable(target);
-	if (number != 0) glActiveTexture(GL_TEXTURE0);
+
+	if (number != 0)
+		glActiveTexture(GL_TEXTURE0);
 }
 
 int GPU_shader_get_attribute(GPUShader *shader, const char *name)
@@ -719,6 +729,13 @@ GPUShader *GPU_shader_get_builtin_shader(GPUBuiltinShader shader)
 				        NULL, NULL, NULL, 0, 0, 0);
 			retval = GG.shaders.smoke_fire;
 			break;
+		case GPU_SHADER_SMOKE_COBA:
+			if (!GG.shaders.smoke_coba)
+				GG.shaders.smoke_coba = GPU_shader_create(
+				        datatoc_gpu_shader_smoke_vert_glsl, datatoc_gpu_shader_smoke_frag_glsl,
+				        NULL, NULL, "#define USE_COBA;\n", 0, 0, 0);
+			retval = GG.shaders.smoke_coba;
+			break;
 		case GPU_SHADER_TEXT:
 			if (!GG.shaders.text)
 				GG.shaders.text = GPU_shader_create(
@@ -726,6 +743,22 @@ GPUShader *GPU_shader_get_builtin_shader(GPUBuiltinShader shader)
 				        datatoc_gpu_shader_text_frag_glsl,
 				        NULL, NULL, NULL, 0, 0, 0);
 			retval = GG.shaders.text;
+			break;
+		case GPU_SHADER_EDGES_FRONT_BACK_PERSP:
+			if (!GG.shaders.edges_front_back_persp)
+				GG.shaders.edges_front_back_persp = GPU_shader_create(
+				        datatoc_gpu_shader_edges_front_back_persp_vert_glsl,
+				        datatoc_gpu_shader_flat_color_alpha_test_0_frag_glsl,
+				        NULL, NULL, NULL, 0, 0, 0);
+			retval = GG.shaders.edges_front_back_persp;
+			break;
+		case GPU_SHADER_EDGES_FRONT_BACK_ORTHO:
+			if (!GG.shaders.edges_front_back_ortho)
+				GG.shaders.edges_front_back_ortho = GPU_shader_create(
+				        datatoc_gpu_shader_edges_front_back_ortho_vert_glsl,
+				        datatoc_gpu_shader_flat_color_frag_glsl,
+				        NULL, NULL, NULL, 0, 0, 0);
+			retval = GG.shaders.edges_front_back_ortho;
 			break;
 		case GPU_SHADER_3D_IMAGE_MODULATE_ALPHA:
 			if (!GG.shaders.image_modulate_alpha_3D)
@@ -742,6 +775,14 @@ GPUShader *GPU_shader_get_builtin_shader(GPUBuiltinShader shader)
 				datatoc_gpu_shader_image_rect_modulate_alpha_frag_glsl,
 				NULL, NULL, NULL, 0, 0, 0);
 			retval = GG.shaders.image_rect_modulate_alpha_3D;
+			break;
+		case GPU_SHADER_3D_IMAGE_DEPTH:
+			if (!GG.shaders.image_depth_3D)
+				GG.shaders.image_depth_3D = GPU_shader_create(
+				        datatoc_gpu_shader_3D_image_vert_glsl,
+				        datatoc_gpu_shader_image_depth_linear_frag_glsl,
+				        NULL, NULL, NULL, 0, 0, 0);
+			retval = GG.shaders.image_depth_3D;
 			break;
 		case GPU_SHADER_2D_UNIFORM_COLOR:
 			if (!GG.shaders.uniform_color_2D)
@@ -1015,24 +1056,24 @@ void GPU_shader_free_builtin_shaders(void)
 		GG.shaders.smoke_fire = NULL;
 	}
 
-	if (GG.shaders.display_sh) {
-		GPU_shader_free(GG.shaders.display_sh);
-		GG.shaders.display_sh = NULL;
-	}
-
-	if (GG.shaders.maxz_downsample) {
-		GPU_shader_free(GG.shaders.maxz_downsample);
-		GG.shaders.maxz_downsample = NULL;
-	}
-
-	if (GG.shaders.minz_downsample) {
-		GPU_shader_free(GG.shaders.minz_downsample);
-		GG.shaders.minz_downsample = NULL;
+	if (GG.shaders.smoke_coba) {
+		GPU_shader_free(GG.shaders.smoke_coba);
+		GG.shaders.smoke_coba = NULL;
 	}
 
 	if (GG.shaders.text) {
 		GPU_shader_free(GG.shaders.text);
 		GG.shaders.text = NULL;
+	}
+
+	if (GG.shaders.edges_front_back_persp) {
+		GPU_shader_free(GG.shaders.edges_front_back_persp);
+		GG.shaders.edges_front_back_persp = NULL;
+	}
+
+	if (GG.shaders.edges_front_back_ortho) {
+		GPU_shader_free(GG.shaders.edges_front_back_ortho);
+		GG.shaders.edges_front_back_ortho = NULL;
 	}
 
 	if (GG.shaders.image_modulate_alpha_3D) {
@@ -1043,6 +1084,11 @@ void GPU_shader_free_builtin_shaders(void)
 	if (GG.shaders.image_rect_modulate_alpha_3D) {
 		GPU_shader_free(GG.shaders.image_rect_modulate_alpha_3D);
 		GG.shaders.image_rect_modulate_alpha_3D = NULL;
+	}
+
+	if (GG.shaders.image_depth_3D) {
+		GPU_shader_free(GG.shaders.image_depth_3D);
+		GG.shaders.image_depth_3D = NULL;
 	}
 
 	if (GG.shaders.uniform_color_2D) {
@@ -1073,6 +1119,11 @@ void GPU_shader_free_builtin_shaders(void)
 	if (GG.shaders.smooth_color_3D) {
 		GPU_shader_free(GG.shaders.smooth_color_3D);
 		GG.shaders.smooth_color_3D = NULL;
+	}
+
+	if (GG.shaders.depth_only_3D) {
+		GPU_shader_free(GG.shaders.depth_only_3D);
+		GG.shaders.depth_only_3D = NULL;
 	}
 
 	if (GG.shaders.point_fixed_size_uniform_color_2D) {
@@ -1128,6 +1179,21 @@ void GPU_shader_free_builtin_shaders(void)
 	if (GG.shaders.point_uniform_size_uniform_color_outline_smooth_3D) {
 		GPU_shader_free(GG.shaders.point_uniform_size_uniform_color_outline_smooth_3D);
 		GG.shaders.point_uniform_size_uniform_color_outline_smooth_3D = NULL;
+	}
+
+	if (GG.shaders.display_sh) {
+		GPU_shader_free(GG.shaders.display_sh);
+		GG.shaders.display_sh = NULL;
+	}
+
+	if (GG.shaders.maxz_downsample) {
+		GPU_shader_free(GG.shaders.maxz_downsample);
+		GG.shaders.maxz_downsample = NULL;
+	}
+
+	if (GG.shaders.minz_downsample) {
+		GPU_shader_free(GG.shaders.minz_downsample);
+		GG.shaders.minz_downsample = NULL;
 	}
 
 	for (int i = 0; i < MAX_SH_SAMPLES; ++i) {
