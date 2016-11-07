@@ -67,7 +67,17 @@ struct GPUViewport;
 /* The near/far thing is a Win EXCEPTION. Thus, leave near/far in the
  * code, and patch for windows. */
 
+typedef struct DrawLayer {
+	struct DrawLayer *next, *prev;
+
+	char name[64];  /* MAX_NAME */
+	short flag;
+	short draw_mode;
+	float pad[5];
+} DrawLayer;
+
 typedef struct View3DDebug {
+	ListBase layers;
 	float znear, zfar;
 	char background;
 	char pad[7];
@@ -258,7 +268,6 @@ typedef struct View3D {
 	View3DDebug debug;
 } View3D;
 
-
 /* View3D->stereo_flag (short) */
 #define V3D_S3D_DISPCAMERAS		(1 << 0)
 #define V3D_S3D_DISPPLANE		(1 << 1)
@@ -344,6 +353,18 @@ enum {
 	V3D_DEBUG_BACKGROUND_NONE     = (1 << 0),
 	V3D_DEBUG_BACKGROUND_GRADIENT = (1 << 1),
 	V3D_DEBUG_BACKGROUND_WORLD    = (1 << 2),
+};
+
+/* View3D->debug.layers.draw_mode (short) */
+enum {
+	V3D_GEOMETRY_SHADE_SOLID      = 0,
+	V3D_GEOMETRY_SHADE_WIRE       = 1,
+	V3D_GEOMETRY_SHADE_SILHOUETTE = 2,
+};
+
+/* View3D->debug.layers.flag (short) */
+enum {
+	V3D_DRAW_LAYER_ISOLATION = (1 << 0),
 };
 
 /* View3D->around */

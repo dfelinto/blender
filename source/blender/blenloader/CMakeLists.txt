@@ -29,6 +29,7 @@ set(INC
 	../blenkernel
 	../blenlib
 	../blentranslation
+	../editors/include
 	../imbuf
 	../makesdna
 	../makesrna

@@ -2317,6 +2317,37 @@ static void rna_def_backgroundImages(BlenderRNA *brna, PropertyRNA *cprop)
 	RNA_def_function_ui_description(func, "Remove all background images");
 }
 
+static void rna_def_draw_layers(BlenderRNA *brna)
+{
+	static EnumPropertyItem geometry_shade_items[] = {
+	    {V3D_GEOMETRY_SHADE_WIRE, "WIRE", ICON_WIRE, "Wire", ""},
+	    {V3D_GEOMETRY_SHADE_SOLID, "SOLID", ICON_SMOOTH, "Solid", ""},
+	    {V3D_GEOMETRY_SHADE_SILHOUETTE, "SILHOUETTE", ICON_MATCAP_24, "Silhouette", ""},
+	    {0, NULL, 0, NULL, NULL}
+	};
+
+	StructRNA *srna;
+	PropertyRNA *prop;
+
+	srna = RNA_def_struct(brna, "DrawLayer", NULL);
+	RNA_def_struct_ui_text(srna, "Draw Layer", "");
+
+	prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
+	RNA_def_property_ui_text(prop, "Name", "");
+	RNA_def_property_string_sdna(prop, NULL, "name");
+	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
+
+	prop = RNA_def_property(srna, "drawing_mode", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_sdna(prop, NULL, "draw_mode");
+	RNA_def_property_enum_items(prop, geometry_shade_items);
+	RNA_def_property_ui_text(prop, "Draw Mode", "Shade used in this layer");
+	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
+
+	prop = RNA_def_property(srna, "use_isolation", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "flag", V3D_DRAW_LAYER_ISOLATION);
+	RNA_def_property_ui_text(prop, "Isolate", "Isolate this layer for inspection");
+	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
+}
 
 static void rna_def_space_view3d(BlenderRNA *brna)
 {
@@ -2813,6 +2844,13 @@ static void rna_def_space_view3d(BlenderRNA *brna)
 	RNA_def_property_enum_items(prop, debug_background_items);
 	RNA_def_property_ui_text(prop, "Background", "");
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
+
+	/* layers */
+	rna_def_draw_layers(brna);
+	prop = RNA_def_property(srna, "draw_layers", PROP_COLLECTION, PROP_NONE);
+	RNA_def_property_collection_sdna(prop, NULL, "debug.layers", NULL);
+	RNA_def_property_struct_type(prop, "DrawLayer");
+	RNA_def_property_ui_text(prop, "Draw Layers", "All draw layers");
 
 	/* *** Animated *** */
 	RNA_define_animate_sdna(true);

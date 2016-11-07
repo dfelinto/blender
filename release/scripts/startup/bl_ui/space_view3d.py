@@ -3017,6 +3017,14 @@ class VIEW3D_PT_viewport_debug(Panel):
         col.label(text="Background:")
         col.row(align=True).prop(view, "debug_background", expand=True)
 
+        col.separator()
+        col.label(text="Draw Layers:")
+        for layer in view.draw_layers:
+            row = col.row()
+            row.label(text=layer.name)
+            row.prop(layer, "drawing_mode", text="")
+            row.prop(layer, "use_isolation", text="", icon='META_EMPTY')
+
 
 class VIEW3D_PT_grease_pencil(GreasePencilDataPanel, Panel):
     bl_space_type = 'VIEW_3D'

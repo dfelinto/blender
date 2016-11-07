@@ -311,6 +311,28 @@ void ED_view3d_shade_update(Main *bmain, Scene *scene, View3D *v3d, ScrArea *sa)
 
 /* ******************** default callbacks for view3d space ***************** */
 
+void ED_view3d_draw_layers_init(View3D *v3d)
+{
+	const char *names[6];
+	names[0]= "Camera";
+	names[1] = "Torus";
+	names[2] = "Plane";
+	names[3] = "Monkeys";
+	names[4] = "Lights";
+	names[5] = "Sun";
+
+	for (int i=0; i < 6; i++) {
+		DrawLayer *drawlayer = MEM_callocN(sizeof(DrawLayer), "DrawLayer");
+
+		/* setup this layer */
+		drawlayer->draw_mode = V3D_GEOMETRY_SHADE_SOLID;
+		BLI_strncpy_utf8(drawlayer->name, names[i], sizeof(drawlayer->name));
+
+		/* add to the stack */
+		BLI_addtail(&v3d->debug.layers, drawlayer);
+	}
+}
+
 static SpaceLink *view3d_new(const bContext *C)
 {
 	Scene *scene = CTX_data_scene(C);
@@ -353,6 +375,9 @@ static SpaceLink *view3d_new(const bContext *C)
 	v3d->stereo3d_flag |= V3D_S3D_DISPPLANE;
 	v3d->stereo3d_convergence_alpha = 0.15f;
 	v3d->stereo3d_volume_alpha = 0.05f;
+
+	/* draw layers */
+	ED_view3d_draw_layers_init(v3d);
 
 	/* header */
 	ar = MEM_callocN(sizeof(ARegion), "header for view3d");
@@ -433,6 +458,8 @@ static void view3d_free(SpaceLink *sl)
 		MEM_freeN(vd->fx_settings.ssao);
 	if (vd->fx_settings.dof)
 		MEM_freeN(vd->fx_settings.dof);
+
+	BLI_freelistN(&vd->debug.layers);
 }
 
 
