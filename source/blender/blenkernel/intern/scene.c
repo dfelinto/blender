@@ -155,22 +155,25 @@ static void remove_sequencer_fcurves(Scene *sce)
 Scene *BKE_scene_copy(Main *bmain, Scene *sce, int type)
 {
 	Scene *scen;
+	SceneLayer *sl, *new_sl;
 	SceneRenderLayer *srl, *new_srl;
 	FreestyleLineSet *lineset;
 	ToolSettings *ts;
 	Base *base, *obase;
 	
 	if (type == SCE_COPY_EMPTY) {
-		ListBase rl, rv;
+		ListBase rl, rv, sl;
 		scen = BKE_scene_add(bmain, sce->id.name + 2);
 		
 		rl = scen->r.layers;
 		rv = scen->r.views;
+		sl = scen->layers;
 		curvemapping_free_data(&scen->r.mblur_shutter_curve);
 		scen->r = sce->r;
 		scen->r.layers = rl;
 		scen->r.actlay = 0;
 		scen->r.views = rv;
+		scen->layers = sl;
 		scen->unit = sce->unit;
 		scen->physics_settings = sce->physics_settings;
 		scen->gm = sce->gm;
@@ -243,6 +246,36 @@ Scene *BKE_scene_copy(Main *bmain, Scene *sce, int type)
 				}
 			}
 			new_srl = new_srl->next;
+		}
+
+		BLI_duplicatelist(&(scen->layers), &(sce->layers));
+		new_sl = scen->layers.first;
+		for (sl = sce->layers.first; sl; sl->next) {
+			sl->obedit = NULL;
+
+			BLI_duplicatelist(&(new_sl->base), &(sl->base));
+
+			obase = sl->base.first;
+			base = new_sl->base.first;
+
+			while (base) {
+				id_us_plus(&base->object->id);
+				if (obase == sl->basact) new_sl->basact = base;
+
+				obase = obase->next;
+				base = base->next;
+			}
+
+			BLI_duplicatelist(&(new_sl->collections), &(sl->collections));
+
+			LayerCollection *lcn = new_sl->collections.first;
+			for (LayerCollection *lc = sl->collections.first; lc; lc = lc->next) {
+				BLI_duplicatelist(&(lcn->elements), &(lc->elements));
+				BLI_duplicatelist(&(lcn->overrides), &(lc->overrides));
+				lcn = lcn->next;
+			}
+
+			new_sl = new_sl->next;
 		}
 	}
 
@@ -372,6 +405,7 @@ void BKE_scene_make_local(Main *bmain, Scene *sce, const bool lib_local)
 /** Free (or release) any data used by this scene (does not free the scene itself). */
 void BKE_scene_free(Scene *sce)
 {
+	SceneLayer *sl;
 	SceneRenderLayer *srl;
 
 	BKE_animdata_free((ID *)sce, false);
@@ -462,6 +496,18 @@ void BKE_scene_free(Scene *sce)
 
 	BKE_previewimg_free(&sce->preview);
 	curvemapping_free_data(&sce->r.mblur_shutter_curve);
+
+	for (sl = sce->layers.first; sl; sl = sl->next) {
+		sl->basact = NULL;
+		BLI_freelistN(&sl->base);
+
+		for (LayerCollection *lc = sl->collections.first; lc; lc = lc->next) {
+			BLI_freelistN(&lc->elements);
+			BLI_freelistN(&lc->overrides);
+		}
+		BLI_freelistN(&sl->collections);
+	}
+	BLI_freelistN(&sce->layers);
 }
 
 void BKE_scene_init(Scene *sce)
@@ -792,6 +838,8 @@ void BKE_scene_init(Scene *sce)
 	sce->toolsettings->gpencil_v2d_align = GP_PROJECT_VIEWSPACE;
 	sce->toolsettings->gpencil_seq_align = GP_PROJECT_VIEWSPACE;
 	sce->toolsettings->gpencil_ima_align = GP_PROJECT_VIEWSPACE;
+
+	BKE_scene_add_layer(sce, NULL);
 }
 
 Scene *BKE_scene_add(Main *bmain, const char *name)
@@ -1984,6 +2032,93 @@ void BKE_scene_update_for_newframe_ex(EvaluationContext *eval_ctx, Main *bmain, 
 #ifdef DETAILED_ANALYSIS_OUTPUT
 	fprintf(stderr, "frame update start_time %f duration %f\n", start_time, PIL_check_seconds_timer() - start_time);
 #endif
+}
+
+LayerCollection *BKE_scene_add_collection(SceneLayer *sl, const char *name)
+{
+	LayerCollection *lc;
+
+	lc = MEM_callocN(sizeof(LayerCollection), "new layer collection");
+	BLI_strncpy(lc->name, name, sizeof(lc->name));
+	BLI_uniquename(&sl->collections, lc, DATA_("Collection"), '.', offsetof(LayerCollection, name), sizeof(lc->name));
+	BLI_addtail(&sl->collections, lc);
+
+	return lc;
+}
+
+
+bool BKE_scene_remove_collection(Main *bmain, SceneLayer *sl, LayerCollection *lc)
+{
+	const int act = BLI_findindex(&sl->collections, lc);
+	if (act == -1) {
+		return false;
+	}
+	else if ( (sl->collections.first == sl->collections.last) &&
+	          (sl->collections.first == lc))
+	{
+		/* ensure 1 layer is kept */
+		return false;
+	}
+
+	BLI_remlink(&sl->collections, lc);
+
+	BLI_freelistN(&lc->elements);
+	BLI_freelistN(&lc->overrides);
+	MEM_freeN(lc);
+
+	/* TODO only change active_collection if necessary */
+	sl->active_collection = 0;
+
+	return true;
+}
+
+/* return default layer */
+SceneLayer *BKE_scene_add_layer(Scene *sce, const char *name)
+{
+	SceneLayer *sl;
+
+	if (!name)
+		name = DATA_("SceneLayer");
+
+	sl = MEM_callocN(sizeof(SceneLayer), "new scene layer");
+	BLI_strncpy(sl->name, name, sizeof(sl->name));
+	BLI_uniquename(&sce->layers, sl, DATA_("Layer"), '.', offsetof(SceneLayer, name), sizeof(sl->name));
+
+	/* Initial collection */
+	BKE_scene_add_collection(sl, "Collection");
+	BLI_addtail(&sce->layers, sl);
+	return sl;
+}
+
+bool BKE_scene_remove_layer(Main *bmain, Scene *scene, SceneLayer *sl)
+{
+	const int act = BLI_findindex(&scene->layers, sl);
+	if (act == -1) {
+		return false;
+	}
+	else if ( (scene->layers.first == scene->layers.last) &&
+	          (scene->layers.first == sl))
+	{
+		/* ensure 1 layer is kept */
+		return false;
+	}
+
+	BLI_remlink(&scene->layers, sl);
+
+	BLI_freelistN(&sl->base);
+
+	for (LayerCollection *lc = sl->collections.first; lc; lc = lc->next) {
+		BLI_freelistN(&lc->elements);
+		BLI_freelistN(&lc->overrides);
+	}
+
+	BLI_freelistN(&sl->collections);
+	MEM_freeN(sl);
+
+	/* TODO only change active_layer if necessary */
+	scene->active_layer = 0;
+
+	return true;
 }
 
 /* return default layer, also used to patch old files */

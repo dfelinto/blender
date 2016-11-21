@@ -5234,6 +5234,7 @@ static void lib_link_scene(FileData *fd, Main *main)
 	Scene *sce;
 	Base *base, *next;
 	Sequence *seq;
+	SceneLayer *sl;
 	SceneRenderLayer *srl;
 	FreestyleModuleConfig *fmc;
 	FreestyleLineSet *fls;
@@ -5358,6 +5359,22 @@ static void lib_link_scene(FileData *fd, Main *main)
 				lib_link_ntree(fd, &sce->id, sce->nodetree);
 				sce->nodetree->id.lib = sce->id.lib;
 				composite_patch(sce->nodetree, sce);
+			}
+
+			for (sl = sce->layers.first; sl; sl = sl->next) {
+				for (base = sl->base.first; base; base = next) {
+					next = base->next;
+
+					base->object = newlibadr_us(fd, sce->id.lib, base->object);
+
+					if (base->object == NULL) {
+						blo_reportf_wrap(fd->reports, RPT_WARNING, TIP_("LIB: object lost from scene: '%s'"),
+						                 sce->id.name + 2);
+						BLI_remlink(&sl->base, base);
+						if (base == sl->basact) sl->basact = NULL;
+						MEM_freeN(base);
+					}
+				}
 			}
 			
 			for (srl = sce->r.layers.first; srl; srl = srl->next) {
@@ -5486,6 +5503,7 @@ static void direct_link_scene(FileData *fd, Scene *sce)
 	Sequence *seq;
 	MetaStack *ms;
 	RigidBodyWorld *rbw;
+	SceneLayer *sl;
 	SceneRenderLayer *srl;
 	
 	sce->theDag = NULL;
@@ -5719,6 +5737,20 @@ static void direct_link_scene(FileData *fd, Scene *sce)
 	sce->preview = direct_link_preview_image(fd, sce->preview);
 
 	direct_link_curvemapping(fd, &sce->r.mblur_shutter_curve);
+
+	link_list(fd, &(sce->layers));
+
+	for (sl = sce->layers.first; sl; sl = sl->next) {
+		sl->obedit = NULL;
+		link_list(fd, &(sl->base));
+		sl->basact = newdataadr(fd, sl->basact);
+		link_list(fd, &(sl->collections));
+
+		for (LayerCollection *lc = sl->collections.first; lc; lc = lc->next) {
+			link_list(fd, &(lc->elements));
+			link_list(fd, &(lc->overrides));
+		}
+	}
 }
 
 /* ************ READ WM ***************** */
@@ -7959,6 +7991,7 @@ static void do_versions(FileData *fd, Library *lib, Main *main)
 	blo_do_versions_250(fd, lib, main);
 	blo_do_versions_260(fd, lib, main);
 	blo_do_versions_270(fd, lib, main);
+	blo_do_versions_280(fd, lib, main);
 
 	/* WATCH IT!!!: pointers from libdata have not been converted yet here! */
 	/* WATCH IT 2!: Userdef struct init see do_versions_userdef() above! */
@@ -8988,6 +9021,7 @@ static void expand_object(FileData *fd, Main *mainvar, Object *ob)
 static void expand_scene(FileData *fd, Main *mainvar, Scene *sce)
 {
 	Base *base;
+	SceneLayer *sl;
 	SceneRenderLayer *srl;
 	FreestyleModuleConfig *module;
 	FreestyleLineSet *lineset;
@@ -9054,6 +9088,12 @@ static void expand_scene(FileData *fd, Main *mainvar, Scene *sce)
 	}
 
 	expand_doit(fd, mainvar, sce->clip);
+
+	for (sl = sce->layers.first; sl; sl = sl->next) {
+		for (base = sl->base.first; base; base = base->next) {
+			expand_doit(fd, mainvar, base->object);
+		}
+	}
 }
 
 static void expand_camera(FileData *fd, Main *mainvar, Camera *ca)

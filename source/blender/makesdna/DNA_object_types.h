@@ -142,8 +142,8 @@ typedef struct Object {
 	ListBase defbase;   /* list of bDeformGroup (vertex groups) names and flag only */
 	ListBase modifiers; /* list of ModifierData structures */
 
-	int mode;           /* Local object mode */
-	int restore_mode;   /* Keep track of what mode to return to after toggling a mode */
+	int mode DNA_DEPRECATED; /* Local object mode - deprecated in 2.8 */
+	int restore_mode DNA_DEPRECATED; /* Keep track of what mode to return to after toggling a mode - deprecated in 2.8 */
 
 	/* materials */
 	struct Material **mat;	/* material slots */

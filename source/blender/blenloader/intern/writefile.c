@@ -2407,10 +2407,12 @@ static void write_scenes(WriteData *wd, ListBase *scebase)
 	Base *base;
 	Editing *ed;
 	Sequence *seq;
+	LayerCollection *lc;
 	MetaStack *ms;
 	Strip *strip;
 	TimeMarker *marker;
 	TransformOrientation *ts;
+	SceneLayer *sl;
 	SceneRenderLayer *srl;
 	SceneRenderView *srv;
 	ToolSettings *tos;
@@ -2583,6 +2585,29 @@ static void write_scenes(WriteData *wd, ListBase *scebase)
 		/* writing dynamic list of TransformOrientations to the blend file */
 		for (ts = sce->transform_spaces.first; ts; ts = ts->next) {
 			writestruct(wd, DATA, TransformOrientation, 1, ts);
+		}
+
+		/* writing scene layers to the blend file */
+		for (sl = sce->layers.first; sl; sl = sl->next) {
+			writestruct(wd, DATA, SceneLayer, 1, sl);
+
+			base = sl->base.first;
+			while (base) {
+				writestruct(wd, DATA, Base, 1, base);
+				base = base->next;
+			}
+
+			for (lc = sl->collections.first; lc; lc = lc->next) {
+				writestruct(wd, DATA, LayerCollection, 1, lc);
+
+				for (LinkData *link = lc->elements.first; link; link = link->next) {
+					writestruct(wd, DATA, LinkData, 1, link);
+				}
+
+				for (CollectionOverride *ov = lc->overrides.first; ov; ov = ov->next) {
+					writestruct(wd, DATA, CollectionOverride, 1, ov);
+				}
+			}
 		}
 
 		for (srl = sce->r.layers.first; srl; srl = srl->next) {

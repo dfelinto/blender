@@ -25,6 +25,9 @@
  *  \ingroup blenloader
  */
 
+/* allow readfile to use deprecated functionality */
+#define DNA_DEPRECATED_ALLOW
+
 #include "BLI_utildefines.h"
 #include "BLI_listbase.h"
 #include "BLI_math.h"

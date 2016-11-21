@@ -69,14 +69,57 @@ struct ColorSpace;
 /* ************************************************************* */
 /* Scene Data */
 
-/* Base - Wrapper for referencing Objects in a Scene */
+/* Base - Wrapper for referencing Objects in a SceneLayer */
 typedef struct Base {
 	struct Base *next, *prev;
-	unsigned int lay, selcol;
+	unsigned int lay DNA_DEPRECATED;	/* deprecated in 2.8 */
+	unsigned int selcol;
 	int flag;
 	short sx, sy;
 	struct Object *object;
 } Base;
+
+/* ************************************************************* */
+
+typedef struct CollectionOverride {
+	struct CollectionOverride *next, *prev;
+	char name[64];		/* MAX_NAME */
+	/* TODO - proper data */
+} CollectionOverride;
+
+/* Layers Data */
+typedef struct LayerCollection {
+	struct LayerCollection *next, *prev;
+	char name[64];		/* MAX_NAME */
+	short flag;
+	short pad[3];
+	ListBase elements;
+	ListBase overrides;
+	/* TODO nesting */
+	/* TODO dynamic adding of elements (name based) */
+} LayerCollection;
+
+/* Render Layer */
+typedef struct SceneLayer {
+	struct SceneLayer *next, *prev;
+
+	char name[64];			/* MAX_NAME */
+
+	char engine[32];		/* render engine */
+
+	int mode;				/* active object mode */
+	int restore_mode;		/* Keep track of what mode to return to after toggling a mode */
+	int pad;
+	short active_collection;
+	short pad2;
+
+	ListBase base;
+	struct Base *basact;	/* active base */
+	struct Object *obedit;	/* name replaces old G.obedit */
+
+	ListBase collections;
+} SceneLayer;
+
 
 /* ************************************************************* */
 /* Output Format Data */
@@ -665,8 +708,8 @@ typedef struct RenderData {
 	rcti disprect;
 	
 	/* information on different layers to be rendered */
-	ListBase layers;
-	short actlay;
+	ListBase layers DNA_DEPRECATED; /* deprecated in 2.8 */
+	short actlay DNA_DEPRECATED; /* deprecated in 2.8 */
 	
 	/* number of mblur samples */
 	short mblur_samples;
@@ -748,7 +791,7 @@ typedef struct RenderData {
 	float unit_line_thickness; /* in pixels */
 
 	/* render engine */
-	char engine[32];
+	char engine[32] DNA_DEPRECATED; /* deprecated in 2.8 */
 
 	/* Cycles baking */
 	struct BakeData bake;
@@ -1549,9 +1592,9 @@ typedef struct Scene {
 	
 	struct Scene *set;
 	
-	ListBase base;
-	struct Base *basact;		/* active base */
-	struct Object *obedit;		/* name replaces old G.obedit */
+	ListBase base DNA_DEPRECATED;
+	struct Base *basact DNA_DEPRECATED;		/* active base - deprecated in 2.8 */
+	struct Object *obedit DNA_DEPRECATED;	/* name replaces old G.obedit - deprecated in 2.8 */
 	
 	float cursor[3];			/* 3d cursor location */
 	float twcent[3];			/* center for transform widget */
@@ -1594,7 +1637,9 @@ typedef struct Scene {
 	void *pad1;
 	struct  DagForest *theDag;
 	short dagflags;
-	short pad3;
+
+	/* to be named (workflow layers, view layers, render layers, ...) */
+	short active_layer;
 
 	/* User-Defined KeyingSets */
 	int active_keyingset;			/* index of the active KeyingSet. first KeyingSet has index 1, 'none' active is 0, 'add new' is -1 */
@@ -1628,6 +1673,9 @@ typedef struct Scene {
 	struct RigidBodyWorld *rigidbody_world;
 
 	struct PreviewImage *preview;
+
+	/* to be named (workflow layers, view layers, render layers, ...) */
+	ListBase layers;
 } Scene;
 
 /* **************** RENDERDATA ********************* */
@@ -2218,6 +2266,11 @@ typedef enum eGPencil_Placement_Flags {
 /* UnitSettings->flag */
 #define	USER_UNIT_OPT_SPLIT		1
 #define USER_UNIT_ROT_RADIANS	2
+
+/* Collection */
+/* Collection->flag */
+#define COLLECTION_VISIBLE		(1 << 0)
+#define COLLECTION_SELECTABLE	(1 << 1)
 
 #ifdef __cplusplus
 }

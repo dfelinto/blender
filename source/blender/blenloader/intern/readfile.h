@@ -34,6 +34,8 @@
 #define __READFILE_H__
 
 #include "zlib.h"
+#include "DNA_sdna_types.h"
+#include "DNA_space_types.h"
 #include "DNA_windowmanager_types.h"  /* for ReportType */
 
 struct OldNewMap;
@@ -169,6 +171,7 @@ void blo_do_versions_pre250(struct FileData *fd, struct Library *lib, struct Mai
 void blo_do_versions_250(struct FileData *fd, struct Library *lib, struct Main *main);
 void blo_do_versions_260(struct FileData *fd, struct Library *lib, struct Main *main);
 void blo_do_versions_270(struct FileData *fd, struct Library *lib, struct Main *main);
+void blo_do_versions_280(struct FileData *fd, struct Library *lib, struct Main *main);
 
 #endif
 
