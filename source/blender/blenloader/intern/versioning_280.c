@@ -51,11 +51,13 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *main)
 {
 	if (!DNA_struct_elem_find(fd->filesdna, "Scene", "ListBase", "layers")) {
 		for (Scene *scene = main->scene.first; scene; scene = scene->id.next) {
-			SceneLayer *layer = MEM_callocN(sizeof(SceneLayer), "initial scene layer");
+			SceneLayer *sl = MEM_callocN(sizeof(SceneLayer), "initial scene layer");
+			BLI_strncpy(sl->name, "Layer", sizeof(sl->name));
+
 			LayerCollection *collections[20] = {NULL};
 			scene->active_layer = 0;
 
-			BLI_addhead(&scene->layers, layer);
+			BLI_addhead(&scene->layers, sl);
 			int lay_used = 0;
 
 			for (int i = 0; i < 20; i++) {
@@ -73,10 +75,10 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *main)
 			Base *base = scene->base.first;
 			while (base) {
 				Base *base_new = MEM_dupallocN(base);
-				BLI_addtail(&layer->base, base_new);
+				BLI_addtail(&sl->base, base_new);
 
 				if (base == scene->basact) {
-					layer->basact = base_new;
+					sl->basact = base_new;
 				}
 
 				lay_used |= base->lay & ((1 << 20) - 1); /* ignore localview */
@@ -99,7 +101,7 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *main)
 			/* Cleanup */
 			for (int i = 0; i < 20; i++) {
 				if ((lay_used & (1 << i)) != 0) {
-					BLI_addtail(&layer->collections, collections[i]);
+					BLI_addtail(&sl->collections, collections[i]);
 				}
 				else {
 					MEM_freeN(collections[i]);
