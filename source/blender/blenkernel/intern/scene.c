@@ -2047,7 +2047,7 @@ LayerCollection *BKE_scene_add_collection(SceneLayer *sl, const char *name)
 }
 
 
-bool BKE_scene_remove_collection(Main *bmain, SceneLayer *sl, LayerCollection *lc)
+bool BKE_scene_remove_collection(SceneLayer *sl, LayerCollection *lc)
 {
 	const int act = BLI_findindex(&sl->collections, lc);
 	if (act == -1) {
@@ -2117,6 +2117,20 @@ bool BKE_scene_remove_layer(Main *bmain, Scene *scene, SceneLayer *sl)
 
 	/* TODO only change active_layer if necessary */
 	scene->active_layer = 0;
+
+	for (Scene *sce = bmain->scene.first; sce; sce = sce->id.next) {
+		if (sce->nodetree) {
+			bNode *node;
+			for (node = sce->nodetree->nodes.first; node; node = node->next) {
+				if (node->type == CMP_NODE_R_LAYERS && (Scene *)node->id == scene) {
+					if (node->custom1 == act)
+						node->custom1 = 0;
+					else if (node->custom1 > act)
+						node->custom1--;
+				}
+			}
+		}
+	}
 
 	return true;
 }
