@@ -1335,6 +1335,72 @@ static void rna_FFmpegSettings_codec_settings_update(Main *UNUSED(bmain), Scene 
 }
 #endif
 
+static int rna_Layer_active_collection_index_get(PointerRNA *ptr)
+{
+	SceneLayer *sl = (SceneLayer *)ptr->data;
+	return sl->active_collection;
+}
+
+static void rna_Layer_active_collection_index_set(PointerRNA *ptr, int value)
+{
+	SceneLayer *sl = (SceneLayer *)ptr->data;
+	int num_collections = BLI_listbase_count(&sl->collections);
+	sl->active_collection = min_ff(value, num_collections - 1);
+}
+
+static void rna_Layer_active_collection_index_range(
+        PointerRNA *ptr, int *min, int *max, int *UNUSED(softmin), int *UNUSED(softmax))
+{
+	SceneLayer *sl = (SceneLayer *)ptr->data;
+
+	*min = 0;
+	*max = max_ii(0, BLI_listbase_count(&sl->collections) - 1);
+}
+
+static PointerRNA rna_Layer_active_collection_get(PointerRNA *ptr)
+{
+	SceneLayer *sl = (SceneLayer *)ptr->data;
+	LayerCollection *lc = BLI_findlink(&sl->collections, sl->active_collection);
+
+	return rna_pointer_inherit_refine(ptr, &RNA_LayerCollection, lc);
+}
+
+static void rna_Layer_active_collection_set(PointerRNA *ptr, PointerRNA value)
+{
+	SceneLayer *sl = (SceneLayer *)ptr->data;
+	LayerCollection *lc = (LayerCollection *)value.data;
+	const int index = BLI_findindex(&sl->collections, lc);
+	if (index != -1) sl->active_collection = index;
+}
+
+static LayerCollection *rna_LayerCollection_new(ID *id, SceneLayer *sl, const char *name)
+{
+	LayerCollection *lc = BKE_scene_add_collection(sl, name);
+
+	DAG_id_tag_update(id, 0);
+	WM_main_add_notifier(NC_SCENE | ND_LAYER, NULL);
+
+	return lc;
+}
+
+static void rna_LayerCollection_remove(
+        ID *id, SceneLayer *sl, ReportList *reports, PointerRNA *lc_ptr)
+{
+	Scene *scene = (Scene *)id;
+	LayerCollection *lc = lc_ptr->data;
+
+	if (!BKE_scene_remove_collection(sl, lc)) {
+		BKE_reportf(reports, RPT_ERROR, "Layer collection '%s' could not be removed from layer '%s'",
+		            lc->name, sl->name );
+		return;
+	}
+
+	RNA_POINTER_INVALIDATE(lc_ptr);
+
+	DAG_id_tag_update(&scene->id, 0);
+	WM_main_add_notifier(NC_SCENE | ND_LAYER, NULL);
+}
+
 static int rna_Scene_active_scene_layer_index_get(PointerRNA *ptr)
 {
 	Scene *scene = (Scene *)ptr->data;
@@ -1387,8 +1453,8 @@ static SceneLayer *rna_SceneLayer_new(ID *id, Scene *UNUSED(sce), const char *na
 static void rna_SceneLayer_remove(
         ID *id, Scene *UNUSED(sce), Main *bmain, ReportList *reports, PointerRNA *sl_ptr)
 {
-	SceneLayer *sl = sl_ptr->data;
 	Scene *scene = (Scene *)id;
+	SceneLayer *sl = sl_ptr->data;
 
 	if (!BKE_scene_remove_layer(bmain, scene, sl)) {
 		BKE_reportf(reports, RPT_ERROR, "Scene layer '%s' could not be removed from scene '%s'",
@@ -1600,6 +1666,18 @@ static void rna_Scene_use_view_map_cache_update(Main *UNUSED(bmain), Scene *UNUS
 #ifdef WITH_FREESTYLE
 	FRS_free_view_map_cache();
 #endif
+}
+
+static void rna_LayerCollection_name_set(PointerRNA *ptr, const char *value)
+{
+	SceneLayer *sl = (SceneLayer *)ptr->id.data;
+	LayerCollection *lc = (LayerCollection *)ptr->data;
+	char oldname[sizeof(lc->name)];
+
+	BLI_strncpy(oldname, lc->name, sizeof(lc->name));
+
+	BLI_strncpy_utf8(lc->name, value, sizeof(lc->name));
+	BLI_uniquename(&sl->collections, sl, DATA_("LayerCollection"), '.', offsetof(LayerCollection, name), sizeof(lc->name));
 }
 
 static void rna_SceneLayer_name_set(PointerRNA *ptr, const char *value)
@@ -4995,6 +5073,82 @@ static void rna_def_gpu_fx(BlenderRNA *brna)
 }
 
 /* Scene Layers */
+static void rna_def_layer_collection(BlenderRNA *brna)
+{
+	StructRNA *srna;
+	PropertyRNA *prop;
+
+	srna = RNA_def_struct(brna, "LayerCollection", NULL);
+	RNA_def_struct_ui_text(srna, "Collection", "Layer collection");
+
+	prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
+	RNA_def_property_string_funcs(prop, NULL, NULL, "rna_LayerCollection_name_set");
+	RNA_def_property_ui_text(prop, "Name", "Layer collection name");
+	RNA_def_struct_name_property(srna, prop);
+	RNA_def_property_update(prop, NC_SCENE | ND_LAYER_CONTENT, NULL);
+
+	/* TODO baselist (selected objects, ...) */
+	/* TODO overrides */
+	/* TODO nested collections */
+
+	/* Flags */
+	prop = RNA_def_property(srna, "hide", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_negative_sdna(prop, NULL, "flag", COLLECTION_VISIBLE);
+	RNA_def_property_ui_icon(prop, ICON_RESTRICT_VIEW_OFF, 0);
+	RNA_def_property_ui_text(prop, "Hide", "Restrict visiblity");
+	RNA_def_property_update(prop, NC_SCENE | ND_LAYER_CONTENT, NULL);
+
+	prop = RNA_def_property(srna, "hide_select", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_negative_sdna(prop, NULL, "flag", COLLECTION_SELECTABLE);
+	RNA_def_property_ui_icon(prop, ICON_RESTRICT_SELECT_OFF, 0);
+	RNA_def_property_ui_text(prop, "Hide Selectable", "Restrict selection");
+	RNA_def_property_update(prop, NC_SCENE | ND_LAYER_CONTENT, NULL);
+}
+
+static void rna_def_layer_collections(BlenderRNA *brna, PropertyRNA *cprop)
+{
+	StructRNA *srna;
+	PropertyRNA *prop;
+
+	FunctionRNA *func;
+	PropertyRNA *parm;
+
+	RNA_def_property_srna(cprop, "LayerCollections");
+	srna = RNA_def_struct(brna, "LayerCollections", NULL);
+	RNA_def_struct_sdna(srna, "SceneLayer");
+	RNA_def_struct_ui_text(srna, "Layer Collections", "Collection of layer collections");
+
+	prop = RNA_def_property(srna, "active_index", PROP_INT, PROP_UNSIGNED);
+	RNA_def_property_int_sdna(prop, NULL, "active_collection");
+	RNA_def_property_int_funcs(prop, "rna_Layer_active_collection_index_get",
+	                           "rna_Layer_active_collection_index_set",
+	                           "rna_Layer_active_collection_index_range");
+	RNA_def_property_ui_text(prop, "Active Collection Index", "Active index in layer collection array");
+	RNA_def_property_update(prop, NC_SCENE | ND_LAYER, NULL);
+
+	prop = RNA_def_property(srna, "active", PROP_POINTER, PROP_NONE);
+	RNA_def_property_struct_type(prop, "LayerCollection");
+	RNA_def_property_pointer_funcs(prop, "rna_Layer_active_collection_get",
+	                               "rna_Layer_active_collection_set", NULL, NULL);
+	RNA_def_property_flag(prop, PROP_EDITABLE | PROP_NEVER_NULL);
+	RNA_def_property_ui_text(prop, "Active Layer Collection", "Active Layer Collection");
+	RNA_def_property_update(prop, NC_SCENE | ND_LAYER, NULL);
+
+	func = RNA_def_function(srna, "new", "rna_LayerCollection_new");
+	RNA_def_function_ui_description(func, "Add a layer collection to layer");
+	RNA_def_function_flag(func, FUNC_USE_SELF_ID);
+	parm = RNA_def_string(func, "name", "LayerCollection", 0, "", "New name for the layer collection (not unique)");
+	RNA_def_property_flag(parm, PROP_REQUIRED);
+	parm = RNA_def_pointer(func, "result", "LayerCollection", "", "Newly created layer collection");
+	RNA_def_function_return(func, parm);
+
+	func = RNA_def_function(srna, "remove", "rna_LayerCollection_remove");
+	RNA_def_function_ui_description(func, "Remove a layer collection");
+	RNA_def_function_flag(func, FUNC_USE_REPORTS | FUNC_USE_SELF_ID);
+	parm = RNA_def_pointer(func, "collection", "LayerCollection", "", "Layer collection to remove");
+	RNA_def_property_flag(parm, PROP_REQUIRED | PROP_NEVER_NULL | PROP_RNAPTR);
+	RNA_def_property_clear_flag(parm, PROP_THICK_WRAP);
+}
 
 static void rna_def_scene_layer(BlenderRNA *brna)
 {
@@ -5011,10 +5165,18 @@ static void rna_def_scene_layer(BlenderRNA *brna)
 	RNA_def_struct_name_property(srna, prop);
 	RNA_def_property_update(prop, NC_SCENE | ND_LAYER_CONTENT, NULL);
 
-	/* TODO collections */
+	prop = RNA_def_property(srna, "collections", PROP_COLLECTION, PROP_NONE);
+	RNA_def_property_collection_sdna(prop, NULL, "collections", NULL);
+	RNA_def_property_struct_type(prop, "LayerCollection");
+	RNA_def_property_ui_text(prop, "Layer Collections", "");
+	rna_def_layer_collections(brna, prop);
+
 	/* TODO engine */
 	/* TODO mode */
 	/* TODO baselist (selected objects, ...) */
+
+	/* Nestled Data */
+	rna_def_layer_collection(brna);
 }
 
 static void rna_def_scene_layers(BlenderRNA *brna, PropertyRNA *cprop)
