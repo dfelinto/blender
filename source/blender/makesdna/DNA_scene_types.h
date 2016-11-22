@@ -2269,8 +2269,10 @@ typedef enum eGPencil_Placement_Flags {
 
 /* Collection */
 /* Collection->flag */
-#define COLLECTION_VISIBLE		(1 << 0)
-#define COLLECTION_SELECTABLE	(1 << 1)
+enum {
+	COLLECTION_VISIBLE    = (1 << 0),
+	COLLECTION_SELECTABLE = (1 << 1),
+};
 
 #ifdef __cplusplus
 }
