@@ -72,7 +72,7 @@ struct ColorSpace;
 /* Base - Wrapper for referencing Objects in a SceneLayer */
 typedef struct Base {
 	struct Base *next, *prev;
-	unsigned int lay DNA_DEPRECATED;	/* deprecated in 2.8 */
+	unsigned int lay DNA_DEPRECATED_LAYERS;	/* deprecated in 2.8 */
 	unsigned int selcol;
 	int flag;
 	short sx, sy;
@@ -708,8 +708,8 @@ typedef struct RenderData {
 	rcti disprect;
 	
 	/* information on different layers to be rendered */
-	ListBase layers DNA_DEPRECATED; /* deprecated in 2.8 */
-	short actlay DNA_DEPRECATED; /* deprecated in 2.8 */
+	ListBase layers DNA_DEPRECATED_LAYERS; /* deprecated in 2.8 */
+	short actlay DNA_DEPRECATED_LAYERS; /* deprecated in 2.8 */
 	
 	/* number of mblur samples */
 	short mblur_samples;
@@ -791,7 +791,7 @@ typedef struct RenderData {
 	float unit_line_thickness; /* in pixels */
 
 	/* render engine */
-	char engine[32] DNA_DEPRECATED; /* deprecated in 2.8 */
+	char engine[32] DNA_DEPRECATED_LAYERS; /* deprecated in 2.8 */
 
 	/* Cycles baking */
 	struct BakeData bake;
@@ -1592,9 +1592,9 @@ typedef struct Scene {
 	
 	struct Scene *set;
 	
-	ListBase base DNA_DEPRECATED;
-	struct Base *basact DNA_DEPRECATED;		/* active base - deprecated in 2.8 */
-	struct Object *obedit DNA_DEPRECATED;	/* name replaces old G.obedit - deprecated in 2.8 */
+	ListBase base DNA_DEPRECATED_LAYERS;
+	struct Base *basact DNA_DEPRECATED_LAYERS;		/* active base - deprecated in 2.8 */
+	struct Object *obedit DNA_DEPRECATED_LAYERS;	/* name replaces old G.obedit - deprecated in 2.8 */
 	
 	float cursor[3];			/* 3d cursor location */
 	float twcent[3];			/* center for transform widget */

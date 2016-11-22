@@ -58,6 +58,15 @@
 #endif
 
 
+/* 2.8: Allow toggling warnings for members that'll be deprecated during layer system rewrite. */
+#define DNA_DEPRECATED_LAYERS_ALLOW
+
+#ifdef DNA_DEPRECATED_LAYERS_ALLOW
+#  define DNA_DEPRECATED_LAYERS
+#else
+#  define DNA_DEPRECATED_LAYERS DNA_DEPRECATED
+#endif
+
 /* hrmf, we need a better include then this */
 #include "../blenlib/BLI_sys_types.h" /* needed for int64_t only! */
 
