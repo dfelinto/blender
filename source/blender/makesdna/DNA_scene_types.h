@@ -95,7 +95,7 @@ typedef struct LayerCollection {
 	short pad[3];
 	ListBase elements;
 	ListBase overrides;
-	/* TODO nesting */
+	ListBase collections;	/* nested collections */
 	/* TODO dynamic adding of elements (name based) */
 } LayerCollection;
 

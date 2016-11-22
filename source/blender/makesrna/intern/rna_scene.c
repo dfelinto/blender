@@ -1335,14 +1335,47 @@ static void rna_FFmpegSettings_codec_settings_update(Main *UNUSED(bmain), Scene 
 }
 #endif
 
+static LayerCollection *rna_LayerNestedCollection_new(ID *id, LayerCollection *lc, const char *name)
+{
+	Scene *scene = (Scene *)id;
+	SceneLayer *sl = BKE_scene_layer_from_collection(scene, lc);
+	LayerCollection *lc_new = BKE_scene_add_nested_collection(sl, lc, name);
+
+	DAG_id_tag_update(id, 0);
+	WM_main_add_notifier(NC_SCENE | ND_LAYER, NULL);
+
+	return lc_new;
+}
+
+static void rna_LayerNestedCollection_remove(
+        ID *id, LayerCollection *lc_parent, ReportList *reports, PointerRNA *lc_ptr)
+{
+	Scene *scene = (Scene *)id;
+	SceneLayer *sl = BKE_scene_layer_from_collection(scene, lc_parent);
+	LayerCollection *lc = lc_ptr->data;
+
+	if (!BKE_scene_remove_nested_collection(sl, lc_parent, lc)) {
+		BKE_reportf(reports, RPT_ERROR, "Nested collection '%s' could not be removed from collection '%s'",
+		            lc->name, lc_parent->name );
+		return;
+	}
+
+	RNA_POINTER_INVALIDATE(lc_ptr);
+
+	DAG_id_tag_update(&scene->id, 0);
+	WM_main_add_notifier(NC_SCENE | ND_LAYER, NULL);
+}
+
 static int rna_Layer_active_collection_index_get(PointerRNA *ptr)
 {
+	/* TODO account for nested collections */
 	SceneLayer *sl = (SceneLayer *)ptr->data;
 	return sl->active_collection;
 }
 
 static void rna_Layer_active_collection_index_set(PointerRNA *ptr, int value)
 {
+	/* TODO account for nested collections */
 	SceneLayer *sl = (SceneLayer *)ptr->data;
 	int num_collections = BLI_listbase_count(&sl->collections);
 	sl->active_collection = min_ff(value, num_collections - 1);
@@ -1351,6 +1384,7 @@ static void rna_Layer_active_collection_index_set(PointerRNA *ptr, int value)
 static void rna_Layer_active_collection_index_range(
         PointerRNA *ptr, int *min, int *max, int *UNUSED(softmin), int *UNUSED(softmax))
 {
+	/* TODO account for nested collections */
 	SceneLayer *sl = (SceneLayer *)ptr->data;
 
 	*min = 0;
@@ -1359,6 +1393,7 @@ static void rna_Layer_active_collection_index_range(
 
 static PointerRNA rna_Layer_active_collection_get(PointerRNA *ptr)
 {
+	/* TODO account for nested collections */
 	SceneLayer *sl = (SceneLayer *)ptr->data;
 	LayerCollection *lc = BLI_findlink(&sl->collections, sl->active_collection);
 
@@ -1367,6 +1402,7 @@ static PointerRNA rna_Layer_active_collection_get(PointerRNA *ptr)
 
 static void rna_Layer_active_collection_set(PointerRNA *ptr, PointerRNA value)
 {
+	/* TODO account for nested collections */
 	SceneLayer *sl = (SceneLayer *)ptr->data;
 	LayerCollection *lc = (LayerCollection *)value.data;
 	const int index = BLI_findindex(&sl->collections, lc);
@@ -5073,6 +5109,36 @@ static void rna_def_gpu_fx(BlenderRNA *brna)
 }
 
 /* Scene Layers */
+
+static void rna_def_layer_nested_collections(BlenderRNA *brna, PropertyRNA *cprop)
+{
+	StructRNA *srna;
+	PropertyRNA *prop;
+
+	FunctionRNA *func;
+	PropertyRNA *parm;
+
+	RNA_def_property_srna(cprop, "LayerNestedCollections");
+	srna = RNA_def_struct(brna, "LayerNestedCollections", NULL);
+	RNA_def_struct_sdna(srna, "LayerCollection");
+	RNA_def_struct_ui_text(srna, "Layer Collections", "Collection of layer collections");
+
+	func = RNA_def_function(srna, "new", "rna_LayerNestedCollection_new");
+	RNA_def_function_ui_description(func, "Add a nested layer collection to collection ");
+	RNA_def_function_flag(func, FUNC_USE_SELF_ID);
+	parm = RNA_def_string(func, "name", "LayerCollection", 0, "", "New name for the layer collection (not unique)");
+	RNA_def_property_flag(parm, PROP_REQUIRED);
+	parm = RNA_def_pointer(func, "result", "LayerCollection", "", "Newly created layer collection");
+	RNA_def_function_return(func, parm);
+
+	func = RNA_def_function(srna, "remove", "rna_LayerNestedCollection_remove");
+	RNA_def_function_ui_description(func, "Remove a layer collection");
+	RNA_def_function_flag(func, FUNC_USE_REPORTS | FUNC_USE_SELF_ID);
+	parm = RNA_def_pointer(func, "collection", "LayerCollection", "", "Layer collection to remove");
+	RNA_def_property_flag(parm, PROP_REQUIRED | PROP_NEVER_NULL | PROP_RNAPTR);
+	RNA_def_property_clear_flag(parm, PROP_THICK_WRAP);
+}
+
 static void rna_def_layer_collection(BlenderRNA *brna)
 {
 	StructRNA *srna;
@@ -5089,7 +5155,12 @@ static void rna_def_layer_collection(BlenderRNA *brna)
 
 	/* TODO baselist (selected objects, ...) */
 	/* TODO overrides */
-	/* TODO nested collections */
+
+	prop = RNA_def_property(srna, "collections", PROP_COLLECTION, PROP_NONE);
+	RNA_def_property_collection_sdna(prop, NULL, "collections", NULL);
+	RNA_def_property_struct_type(prop, "LayerCollection");
+	RNA_def_property_ui_text(prop, "Layer Collections", "");
+	rna_def_layer_nested_collections(brna, prop);
 
 	/* Flags */
 	prop = RNA_def_property(srna, "hide", PROP_BOOLEAN, PROP_NONE);
