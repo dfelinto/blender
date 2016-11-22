@@ -674,20 +674,6 @@ static void rna_Scene_set_set(PointerRNA *ptr, PointerRNA value)
 	scene->set = set;
 }
 
-static void rna_Scene_layer_set(PointerRNA *ptr, const int *values)
-{
-	Scene *scene = (Scene *)ptr->data;
-
-	scene->lay = ED_view3d_scene_layer_set(scene->lay, values, &scene->layact);
-}
-
-static int rna_Scene_active_layer_get(PointerRNA *ptr)
-{
-	Scene *scene = (Scene *)ptr->data;
-
-	return (int)(log(scene->layact) / M_LN2);
-}
-
 static void rna_Scene_view3d_update(Main *bmain, Scene *UNUSED(scene_unused), PointerRNA *ptr)
 {
 	Scene *scene = (Scene *)ptr->data;
@@ -1335,6 +1321,73 @@ static void rna_FFmpegSettings_codec_settings_update(Main *UNUSED(bmain), Scene 
 }
 #endif
 
+static int rna_Scene_active_layer_index_get(PointerRNA *ptr)
+{
+	Scene *scene = (Scene *)ptr->data;
+	return scene->active_layer;
+}
+
+static void rna_Scene_active_layer_index_set(PointerRNA *ptr, int value)
+{
+	Scene *scene = (Scene *)ptr->data;
+	int num_layers = BLI_listbase_count(&scene->layers);
+	scene->active_layer = min_ff(value, num_layers - 1);
+}
+
+static void rna_Scene_active_layer_index_range(
+        PointerRNA *ptr, int *min, int *max, int *UNUSED(softmin), int *UNUSED(softmax))
+{
+	Scene *scene = (Scene *)ptr->data;
+
+	*min = 0;
+	*max = max_ii(0, BLI_listbase_count(&scene->layers) - 1);
+}
+
+static PointerRNA rna_Scene_active_layer_get(PointerRNA *ptr)
+{
+	Scene *scene = (Scene *)ptr->data;
+	SceneLayer *sl = BLI_findlink(&scene->layers, scene->active_layer);
+
+	return rna_pointer_inherit_refine(ptr, &RNA_SceneLayer, sl);
+}
+
+static void rna_Scene_active_layer_set(PointerRNA *ptr, PointerRNA value)
+{
+	Scene *scene = (Scene *)ptr->data;
+	SceneLayer *sl = (SceneLayer *)value.data;
+	const int index = BLI_findindex(&scene->layers, sl);
+	if (index != -1) scene->active_layer = index;
+}
+
+static SceneLayer *rna_SceneLayer_new(ID *id, Scene *UNUSED(sce), const char *name)
+{
+	Scene *scene = (Scene *)id;
+	SceneLayer *sl = BKE_scene_add_layer(scene, name);
+
+	DAG_id_tag_update(&scene->id, 0);
+	WM_main_add_notifier(NC_SCENE | ND_LAYER, NULL);
+
+	return sl;
+}
+
+static void rna_SceneLayer_remove(
+        ID *id, Scene *UNUSED(sce), Main *bmain, ReportList *reports, PointerRNA *sl_ptr)
+{
+	SceneLayer *sl = sl_ptr->data;
+	Scene *scene = (Scene *)id;
+
+	if (!BKE_scene_remove_layer(bmain, scene, sl)) {
+		BKE_reportf(reports, RPT_ERROR, "Scene layer '%s' could not be removed from scene '%s'",
+		            sl->name, scene->id.name + 2);
+		return;
+	}
+
+	RNA_POINTER_INVALIDATE(sl_ptr);
+
+	DAG_id_tag_update(&scene->id, 0);
+	WM_main_add_notifier(NC_SCENE | ND_LAYER, NULL);
+}
+
 static int rna_RenderSettings_active_layer_index_get(PointerRNA *ptr)
 {
 	RenderData *rd = (RenderData *)ptr->data;
@@ -1533,6 +1586,30 @@ static void rna_Scene_use_view_map_cache_update(Main *UNUSED(bmain), Scene *UNUS
 #ifdef WITH_FREESTYLE
 	FRS_free_view_map_cache();
 #endif
+}
+
+static void rna_SceneLayer_name_set(PointerRNA *ptr, const char *value)
+{
+	Scene *scene = (Scene *)ptr->id.data;
+	SceneLayer *sl = (SceneLayer *)ptr->data;
+	char oldname[sizeof(sl->name)];
+
+	BLI_strncpy(oldname, sl->name, sizeof(sl->name));
+
+	BLI_strncpy_utf8(sl->name, value, sizeof(sl->name));
+	BLI_uniquename(&scene->layers, sl, DATA_("SceneLayer"), '.', offsetof(SceneLayer, name), sizeof(sl->name));
+
+	if (scene->nodetree) {
+		bNode *node;
+		int index = BLI_findindex(&scene->layers, sl);
+
+		for (node = scene->nodetree->nodes.first; node; node = node->next) {
+			if (node->type == CMP_NODE_R_LAYERS && node->id == NULL) {
+				if (node->custom1 == index)
+					BLI_strncpy(node->name, sl->name, NODE_MAXSTR);
+			}
+		}
+	}
 }
 
 static void rna_SceneRenderLayer_name_set(PointerRNA *ptr, const char *value)
@@ -4903,6 +4980,73 @@ static void rna_def_gpu_fx(BlenderRNA *brna)
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, "rna_GPUFXSettings_fx_update");
 }
 
+/* Scene Layers */
+
+static void rna_def_scene_layer(BlenderRNA *brna)
+{
+	StructRNA *srna;
+	PropertyRNA *prop;
+
+	srna = RNA_def_struct(brna, "SceneLayer", NULL);
+	RNA_def_struct_ui_text(srna, "Layer", "Scene layer");
+	RNA_def_struct_ui_icon(srna, ICON_RENDERLAYERS);
+
+	prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
+	RNA_def_property_string_funcs(prop, NULL, NULL, "rna_SceneLayer_name_set");
+	RNA_def_property_ui_text(prop, "Name", "Scene layer name");
+	RNA_def_struct_name_property(srna, prop);
+	RNA_def_property_update(prop, NC_SCENE | ND_LAYER_CONTENT, NULL);
+
+	/* TODO collections */
+	/* TODO engine */
+	/* TODO mode */
+	/* TODO baselist (selected objects, ...) */
+}
+
+static void rna_def_scene_layers(BlenderRNA *brna, PropertyRNA *cprop)
+{
+	StructRNA *srna;
+	PropertyRNA *prop;
+
+	FunctionRNA *func;
+	PropertyRNA *parm;
+
+	RNA_def_property_srna(cprop, "SceneLayers");
+	srna = RNA_def_struct(brna, "SceneLayers", NULL);
+	RNA_def_struct_sdna(srna, "Scene");
+	RNA_def_struct_ui_text(srna, "Scene Layers", "Collection of scene layers");
+
+	prop = RNA_def_property(srna, "active_index", PROP_INT, PROP_UNSIGNED);
+	RNA_def_property_int_sdna(prop, NULL, "active_layer");
+	RNA_def_property_int_funcs(prop, "rna_Scene_active_layer_index_get",
+	                           "rna_Scene_active_layer_index_set",
+	                           "rna_Scene_active_layer_index_range");
+	RNA_def_property_ui_text(prop, "Active Layer Index", "Active index in scene layer array");
+	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
+	prop = RNA_def_property(srna, "active", PROP_POINTER, PROP_NONE);
+	RNA_def_property_struct_type(prop, "SceneLayer");
+	RNA_def_property_pointer_funcs(prop, "rna_Scene_active_layer_get",
+	                               "rna_Scene_active_layer_set", NULL, NULL);
+	RNA_def_property_flag(prop, PROP_EDITABLE | PROP_NEVER_NULL);
+	RNA_def_property_ui_text(prop, "Active Scene Layer", "Active Scene Layer");
+	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
+	func = RNA_def_function(srna, "new", "rna_SceneLayer_new");
+	RNA_def_function_ui_description(func, "Add a scene layer to scene");
+	RNA_def_function_flag(func, FUNC_USE_SELF_ID);
+	parm = RNA_def_string(func, "name", "SceneLayer", 0, "", "New name for the scene layer (not unique)");
+	RNA_def_property_flag(parm, PROP_REQUIRED);
+	parm = RNA_def_pointer(func, "result", "SceneLayer", "", "Newly created scene layer");
+	RNA_def_function_return(func, parm);
+
+	func = RNA_def_function(srna, "remove", "rna_SceneLayer_remove");
+	RNA_def_function_ui_description(func, "Remove a scene layer");
+	RNA_def_function_flag(func, FUNC_USE_MAIN | FUNC_USE_REPORTS | FUNC_USE_SELF_ID);
+	parm = RNA_def_pointer(func, "layer", "SceneLayer", "", "Scene layer to remove");
+	RNA_def_property_flag(parm, PROP_REQUIRED | PROP_NEVER_NULL | PROP_RNAPTR);
+	RNA_def_property_clear_flag(parm, PROP_THICK_WRAP);
+}
 
 static void rna_def_scene_render_layer(BlenderRNA *brna)
 {
@@ -6900,22 +7044,6 @@ void RNA_def_scene(BlenderRNA *brna)
 	RNA_def_property_collection_funcs(prop, NULL, NULL, NULL, "rna_Scene_objects_get", NULL, NULL, NULL, NULL);
 	rna_def_scene_objects(brna, prop);
 
-	/* Layers */
-	prop = RNA_def_property(srna, "layers", PROP_BOOLEAN, PROP_LAYER_MEMBER);
-	/* this seems to be too much trouble with depsgraph updates/etc. currently (20110420) */
-	RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
-	RNA_def_property_boolean_sdna(prop, NULL, "lay", 1);
-	RNA_def_property_array(prop, 20);
-	RNA_def_property_boolean_funcs(prop, NULL, "rna_Scene_layer_set");
-	RNA_def_property_ui_text(prop, "Layers", "Visible layers - Shift-Click/Drag to select multiple layers");
-	RNA_def_property_update(prop, NC_SCENE | ND_LAYER, "rna_Scene_layer_update");
-
-	/* active layer */
-	prop = RNA_def_property(srna, "active_layer", PROP_INT, PROP_NONE);
-	RNA_def_property_clear_flag(prop, PROP_ANIMATABLE | PROP_EDITABLE);
-	RNA_def_property_int_funcs(prop, "rna_Scene_active_layer_get", NULL, NULL);
-	RNA_def_property_ui_text(prop, "Active Layer", "Active scene layer index");
-
 	/* Frame Range Stuff */
 	prop = RNA_def_property(srna, "frame_current", PROP_INT, PROP_TIME);
 	RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
@@ -7231,6 +7359,13 @@ void RNA_def_scene(BlenderRNA *brna)
 	RNA_def_property_struct_type(prop, "Depsgraph");
 	RNA_def_property_ui_text(prop, "Dependency Graph", "Dependencies in the scene data");
 
+	/* Layers */
+	prop = RNA_def_property(srna, "layers", PROP_COLLECTION, PROP_NONE);
+	RNA_def_property_collection_sdna(prop, NULL, "layers", NULL);
+	RNA_def_property_struct_type(prop, "SceneLayer");
+	RNA_def_property_ui_text(prop, "Scene Layers", "");
+	rna_def_scene_layers(brna, prop);
+
 	/* Nestled Data  */
 	/* *** Non-Animated *** */
 	RNA_define_animate_sdna(false);
@@ -7246,6 +7381,7 @@ void RNA_def_scene(BlenderRNA *brna)
 	rna_def_selected_uv_element(brna);
 	rna_def_display_safe_areas(brna);
 	RNA_define_animate_sdna(true);
+	rna_def_scene_layer(brna);
 	/* *** Animated *** */
 	rna_def_scene_render_data(brna);
 	rna_def_scene_render_layer(brna);
