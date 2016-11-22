@@ -2034,6 +2034,64 @@ void BKE_scene_update_for_newframe_ex(EvaluationContext *eval_ctx, Main *bmain, 
 #endif
 }
 
+/* Recursively check if collection is inside the collection ListBase */
+static bool collection_in_collections(ListBase *lb, LayerCollection *lc)
+{
+	for (LayerCollection *laycol = lb->first; laycol; laycol = laycol->next) {
+		if (laycol == lc)
+			return true;
+
+		if (collection_in_collections(&laycol->collections, lc))
+			return true;
+	}
+	return false;
+}
+
+SceneLayer *BKE_scene_layer_from_collection(Scene *scene, LayerCollection *lc)
+{
+	for (SceneLayer *sl = scene->layers.first; sl; sl = sl->next) {
+		if (collection_in_collections(&sl->collections, lc)) {
+			return sl;
+		}
+	}
+	return NULL;
+}
+
+LayerCollection *BKE_scene_add_nested_collection(SceneLayer *sl, LayerCollection *lc, const char *name)
+{
+	LayerCollection *lc_new;
+
+	lc_new = MEM_callocN(sizeof(LayerCollection), "new layer collection");
+	BLI_strncpy(lc_new->name, name, sizeof(lc_new->name));
+	BLI_uniquename(&sl->collections, lc_new, DATA_("Collection"), '.', offsetof(LayerCollection, name), sizeof(lc_new->name));
+	BLI_addtail(&lc->collections, lc_new);
+
+	return lc_new;
+}
+
+static void free_collection(LayerCollection *lc)
+{
+	BLI_freelistN(&lc->elements);
+	BLI_freelistN(&lc->overrides);
+}
+
+bool BKE_scene_remove_nested_collection(SceneLayer *sl, LayerCollection *lc_parent, LayerCollection *lc)
+{
+	const int act = BLI_findindex(&lc_parent->collections, lc);
+	if (act == -1) {
+		return false;
+	}
+
+	BLI_remlink(&lc_parent->collections, lc);
+	free_collection(lc);
+	MEM_freeN(lc);
+
+	/* TODO only change active_collection if necessary */
+	sl->active_collection = 0;
+
+	return true;
+}
+
 LayerCollection *BKE_scene_add_collection(SceneLayer *sl, const char *name)
 {
 	LayerCollection *lc;
@@ -2045,7 +2103,6 @@ LayerCollection *BKE_scene_add_collection(SceneLayer *sl, const char *name)
 
 	return lc;
 }
-
 
 bool BKE_scene_remove_collection(SceneLayer *sl, LayerCollection *lc)
 {
@@ -2061,6 +2118,8 @@ bool BKE_scene_remove_collection(SceneLayer *sl, LayerCollection *lc)
 	}
 
 	BLI_remlink(&sl->collections, lc);
+	free_collection(lc);
+	MEM_freeN(lc);
 
 	BLI_freelistN(&lc->elements);
 	BLI_freelistN(&lc->overrides);
@@ -2108,8 +2167,7 @@ bool BKE_scene_remove_layer(Main *bmain, Scene *scene, SceneLayer *sl)
 	BLI_freelistN(&sl->base);
 
 	for (LayerCollection *lc = sl->collections.first; lc; lc = lc->next) {
-		BLI_freelistN(&lc->elements);
-		BLI_freelistN(&lc->overrides);
+		free_collection(lc);
 	}
 
 	BLI_freelistN(&sl->collections);
