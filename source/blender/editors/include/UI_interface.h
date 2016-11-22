@@ -308,7 +308,7 @@ typedef enum {
  * Functions to draw various shapes, taking theme settings into account.
  * Used for code that draws its own UI style elements. */
 
-void UI_draw_roundbox(float minx, float miny, float maxx, float maxy, float rad, float color[4]);
+void UI_draw_roundbox(float minx, float miny, float maxx, float maxy, float rad, const float color[4]);
 void UI_draw_roundbox_corner_set(int type);
 int  UI_draw_roundbox_corner_get(void);
 void UI_draw_roundbox_unfilled(float minx, float miny, float maxx, float maxy, float rad);
@@ -1052,7 +1052,7 @@ void UI_fontstyle_draw_rotated(const struct uiFontStyle *fs, const struct rcti *
 void UI_fontstyle_draw_simple(const struct uiFontStyle *fs, float x, float y, const char *str);
 void UI_fontstyle_draw_simple_backdrop(
         const struct uiFontStyle *fs, float x, float y, const char *str,
-        const unsigned char fg[4], const unsigned char bg[4]);
+        const float col_fg[4], const float col_bg[4]);
 
 int UI_fontstyle_string_width(const struct uiFontStyle *fs, const char *str);
 int UI_fontstyle_height_max(const struct uiFontStyle *fs);
