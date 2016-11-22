@@ -681,6 +681,20 @@ static void rna_Scene_view3d_update(Main *bmain, Scene *UNUSED(scene_unused), Po
 	BKE_screen_view3d_main_sync(&bmain->screen, scene);
 }
 
+static void rna_Scene_layer_set(PointerRNA *ptr, const int *values)
+{
+	Scene *scene = (Scene *)ptr->data;
+
+	scene->lay = ED_view3d_scene_layer_set(scene->lay, values, &scene->layact);
+}
+
+static int rna_Scene_active_layer_get(PointerRNA *ptr)
+{
+	Scene *scene = (Scene *)ptr->data;
+
+	return (int)(log(scene->layact) / M_LN2);
+}
+
 static void rna_Scene_layer_update(Main *bmain, Scene *scene, PointerRNA *ptr)
 {
 	rna_Scene_view3d_update(bmain, scene, ptr);
@@ -1321,20 +1335,20 @@ static void rna_FFmpegSettings_codec_settings_update(Main *UNUSED(bmain), Scene 
 }
 #endif
 
-static int rna_Scene_active_layer_index_get(PointerRNA *ptr)
+static int rna_Scene_active_scene_layer_index_get(PointerRNA *ptr)
 {
 	Scene *scene = (Scene *)ptr->data;
 	return scene->active_layer;
 }
 
-static void rna_Scene_active_layer_index_set(PointerRNA *ptr, int value)
+static void rna_Scene_active_scene_layer_index_set(PointerRNA *ptr, int value)
 {
 	Scene *scene = (Scene *)ptr->data;
 	int num_layers = BLI_listbase_count(&scene->layers);
 	scene->active_layer = min_ff(value, num_layers - 1);
 }
 
-static void rna_Scene_active_layer_index_range(
+static void rna_Scene_active_scene_layer_index_range(
         PointerRNA *ptr, int *min, int *max, int *UNUSED(softmin), int *UNUSED(softmax))
 {
 	Scene *scene = (Scene *)ptr->data;
@@ -1343,7 +1357,7 @@ static void rna_Scene_active_layer_index_range(
 	*max = max_ii(0, BLI_listbase_count(&scene->layers) - 1);
 }
 
-static PointerRNA rna_Scene_active_layer_get(PointerRNA *ptr)
+static PointerRNA rna_Scene_active_scene_layer_get(PointerRNA *ptr)
 {
 	Scene *scene = (Scene *)ptr->data;
 	SceneLayer *sl = BLI_findlink(&scene->layers, scene->active_layer);
@@ -1351,7 +1365,7 @@ static PointerRNA rna_Scene_active_layer_get(PointerRNA *ptr)
 	return rna_pointer_inherit_refine(ptr, &RNA_SceneLayer, sl);
 }
 
-static void rna_Scene_active_layer_set(PointerRNA *ptr, PointerRNA value)
+static void rna_Scene_active_scene_layer_set(PointerRNA *ptr, PointerRNA value)
 {
 	Scene *scene = (Scene *)ptr->data;
 	SceneLayer *sl = (SceneLayer *)value.data;
@@ -5018,16 +5032,16 @@ static void rna_def_scene_layers(BlenderRNA *brna, PropertyRNA *cprop)
 
 	prop = RNA_def_property(srna, "active_index", PROP_INT, PROP_UNSIGNED);
 	RNA_def_property_int_sdna(prop, NULL, "active_layer");
-	RNA_def_property_int_funcs(prop, "rna_Scene_active_layer_index_get",
-	                           "rna_Scene_active_layer_index_set",
-	                           "rna_Scene_active_layer_index_range");
+	RNA_def_property_int_funcs(prop, "rna_Scene_active_scene_layer_index_get",
+	                           "rna_Scene_active_scene_layer_index_set",
+	                           "rna_Scene_active_scene_layer_index_range");
 	RNA_def_property_ui_text(prop, "Active Layer Index", "Active index in scene layer array");
 	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
 
 	prop = RNA_def_property(srna, "active", PROP_POINTER, PROP_NONE);
 	RNA_def_property_struct_type(prop, "SceneLayer");
-	RNA_def_property_pointer_funcs(prop, "rna_Scene_active_layer_get",
-	                               "rna_Scene_active_layer_set", NULL, NULL);
+	RNA_def_property_pointer_funcs(prop, "rna_Scene_active_scene_layer_get",
+	                               "rna_Scene_active_scene_layer_set", NULL, NULL);
 	RNA_def_property_flag(prop, PROP_EDITABLE | PROP_NEVER_NULL);
 	RNA_def_property_ui_text(prop, "Active Scene Layer", "Active Scene Layer");
 	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
@@ -7044,6 +7058,22 @@ void RNA_def_scene(BlenderRNA *brna)
 	RNA_def_property_collection_funcs(prop, NULL, NULL, NULL, "rna_Scene_objects_get", NULL, NULL, NULL, NULL);
 	rna_def_scene_objects(brna, prop);
 
+	/* Layers */
+	prop = RNA_def_property(srna, "layers", PROP_BOOLEAN, PROP_LAYER_MEMBER);
+	/* this seems to be too much trouble with depsgraph updates/etc. currently (20110420) */
+	RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+	RNA_def_property_boolean_sdna(prop, NULL, "lay", 1);
+	RNA_def_property_array(prop, 20);
+	RNA_def_property_boolean_funcs(prop, NULL, "rna_Scene_layer_set");
+	RNA_def_property_ui_text(prop, "Layers", "Visible layers - Shift-Click/Drag to select multiple layers");
+	RNA_def_property_update(prop, NC_SCENE | ND_LAYER, "rna_Scene_layer_update");
+
+	/* active layer */
+	prop = RNA_def_property(srna, "active_layer", PROP_INT, PROP_NONE);
+	RNA_def_property_clear_flag(prop, PROP_ANIMATABLE | PROP_EDITABLE);
+	RNA_def_property_int_funcs(prop, "rna_Scene_active_layer_get", NULL, NULL);
+	RNA_def_property_ui_text(prop, "Active Layer", "Active scene layer index");
+
 	/* Frame Range Stuff */
 	prop = RNA_def_property(srna, "frame_current", PROP_INT, PROP_TIME);
 	RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
@@ -7360,7 +7390,7 @@ void RNA_def_scene(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Dependency Graph", "Dependencies in the scene data");
 
 	/* Layers */
-	prop = RNA_def_property(srna, "layers", PROP_COLLECTION, PROP_NONE);
+	prop = RNA_def_property(srna, "scene_layers", PROP_COLLECTION, PROP_NONE);
 	RNA_def_property_collection_sdna(prop, NULL, "layers", NULL);
 	RNA_def_property_struct_type(prop, "SceneLayer");
 	RNA_def_property_ui_text(prop, "Scene Layers", "");
