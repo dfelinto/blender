@@ -103,6 +103,9 @@
 
 #include "bmesh.h"
 
+/* prototypes */
+static void layer_collections_free(ListBase *lb);
+
 const char *RE_engine_id_BLENDER_RENDER = "BLENDER_RENDER";
 const char *RE_engine_id_BLENDER_GAME = "BLENDER_GAME";
 const char *RE_engine_id_CYCLES = "CYCLES";
@@ -501,11 +504,7 @@ void BKE_scene_free(Scene *sce)
 		sl->basact = NULL;
 		BLI_freelistN(&sl->base);
 
-		for (LayerCollection *lc = sl->collections.first; lc; lc = lc->next) {
-			BLI_freelistN(&lc->elements);
-			BLI_freelistN(&lc->overrides);
-		}
-		BLI_freelistN(&sl->collections);
+		layer_collections_free(&sl->collections);
 	}
 	BLI_freelistN(&sce->layers);
 }
@@ -873,6 +872,24 @@ Base *BKE_scene_base_find(Scene *scene, Object *ob)
 	return BLI_findptr(&scene->base, ob, offsetof(Base, object));
 }
 
+Base *BKE_scene_layer_base_find_by_name(struct SceneLayer *sl, const char *name)
+{
+	Base *base;
+
+	for (base = sl->base.first; base; base = base->next) {
+		if (STREQ(base->object->id.name + 2, name)) {
+			break;
+		}
+	}
+
+	return base;
+}
+
+Base *BKE_scene_layer_base_find(SceneLayer *sl, Object *ob)
+{
+	return BLI_findptr(&sl->base, ob, offsetof(Base, object));
+}
+
 /**
  * Sets the active scene, mainly used when running in background mode (``--scene`` command line argument).
  * This is also called to set the scene directly, bypassing windowing code.
@@ -1218,6 +1235,25 @@ void BKE_scene_base_select(Scene *sce, Base *selbase)
 
 	sce->basact = selbase;
 }
+
+void BKE_scene_layer_base_deselect_all(SceneLayer *sl)
+{
+	Base *b;
+
+	for (b = sl->base.first; b; b = b->next) {
+		b->flag &= ~SELECT;
+		b->object->flag = b->flag;
+	}
+}
+
+void BKE_scene_layer_base_select(SceneLayer *sl, Base *selbase)
+{
+	selbase->flag |= SELECT;
+	selbase->object->flag = selbase->flag;
+
+	sl->basact = selbase;
+}
+
 
 /* checks for cycle, returns 1 if it's all OK */
 bool BKE_scene_validate_setscene(Main *bmain, Scene *sce)
@@ -2123,72 +2159,47 @@ SceneLayer *BKE_scene_layer_from_collection(Scene *scene, LayerCollection *lc)
 	return NULL;
 }
 
-LayerCollection *BKE_scene_add_nested_collection(SceneLayer *sl, LayerCollection *lc, const char *name)
+/* lc_parent is optional, to be used only for nested collections */
+LayerCollection *BKE_scene_add_collection(SceneLayer *sl, LayerCollection *lc_parent, const char *name)
 {
+	ListBase *lb = (lc_parent ? &lc_parent->collections : &sl->collections);
 	LayerCollection *lc_new;
 
 	lc_new = MEM_callocN(sizeof(LayerCollection), "new layer collection");
 	BLI_strncpy(lc_new->name, name, sizeof(lc_new->name));
 	BLI_uniquename(&sl->collections, lc_new, DATA_("Collection"), '.', offsetof(LayerCollection, name), sizeof(lc_new->name));
-	BLI_addtail(&lc->collections, lc_new);
+	BLI_addtail(lb, lc_new);
 
 	return lc_new;
 }
 
-static void free_collection(LayerCollection *lc)
+static void layer_collection_free(LayerCollection *lc)
 {
 	BLI_freelistN(&lc->elements);
 	BLI_freelistN(&lc->overrides);
+	layer_collections_free(&lc->collections);
 }
 
-bool BKE_scene_remove_nested_collection(SceneLayer *sl, LayerCollection *lc_parent, LayerCollection *lc)
+static void layer_collections_free(ListBase *lb)
 {
-	const int act = BLI_findindex(&lc_parent->collections, lc);
+	for (LayerCollection *lc = lb->first; lc; lc = lc->next) {
+		layer_collection_free(lc);
+	}
+	BLI_freelistN(lb);
+}
+
+/* lc_parent is optional, to be used only for nested collections */
+bool BKE_scene_remove_collection(SceneLayer *sl, LayerCollection *lc_parent, LayerCollection *lc)
+{
+	ListBase *lb = (lc_parent ? &lc_parent->collections : &sl->collections);
+	const int act = BLI_findindex(lb, lc);
+
 	if (act == -1) {
 		return false;
 	}
 
-	BLI_remlink(&lc_parent->collections, lc);
-	free_collection(lc);
-	MEM_freeN(lc);
-
-	/* TODO only change active_collection if necessary */
-	sl->active_collection = 0;
-
-	return true;
-}
-
-LayerCollection *BKE_scene_add_collection(SceneLayer *sl, const char *name)
-{
-	LayerCollection *lc;
-
-	lc = MEM_callocN(sizeof(LayerCollection), "new layer collection");
-	BLI_strncpy(lc->name, name, sizeof(lc->name));
-	BLI_uniquename(&sl->collections, lc, DATA_("Collection"), '.', offsetof(LayerCollection, name), sizeof(lc->name));
-	BLI_addtail(&sl->collections, lc);
-
-	return lc;
-}
-
-bool BKE_scene_remove_collection(SceneLayer *sl, LayerCollection *lc)
-{
-	const int act = BLI_findindex(&sl->collections, lc);
-	if (act == -1) {
-		return false;
-	}
-	else if ( (sl->collections.first == sl->collections.last) &&
-	          (sl->collections.first == lc))
-	{
-		/* ensure 1 layer is kept */
-		return false;
-	}
-
-	BLI_remlink(&sl->collections, lc);
-	free_collection(lc);
-	MEM_freeN(lc);
-
-	BLI_freelistN(&lc->elements);
-	BLI_freelistN(&lc->overrides);
+	BLI_remlink(lb, lc);
+	layer_collection_free(lc);
 	MEM_freeN(lc);
 
 	/* TODO only change active_collection if necessary */
@@ -2210,7 +2221,7 @@ SceneLayer *BKE_scene_add_layer(Scene *sce, const char *name)
 	BLI_uniquename(&sce->layers, sl, DATA_("Layer"), '.', offsetof(SceneLayer, name), sizeof(sl->name));
 
 	/* Initial collection */
-	BKE_scene_add_collection(sl, "Collection");
+	BKE_scene_add_collection(sl, NULL, "Collection");
 	BLI_addtail(&sce->layers, sl);
 	return sl;
 }
@@ -2232,11 +2243,8 @@ bool BKE_scene_remove_layer(Main *bmain, Scene *scene, SceneLayer *sl)
 
 	BLI_freelistN(&sl->base);
 
-	for (LayerCollection *lc = sl->collections.first; lc; lc = lc->next) {
-		free_collection(lc);
-	}
+	layer_collections_free(&sl->collections);
 
-	BLI_freelistN(&sl->collections);
 	MEM_freeN(sl);
 
 	/* TODO only change active_layer if necessary */
@@ -2471,6 +2479,26 @@ void BKE_scene_base_flag_to_objects(struct Scene *scene)
 void BKE_scene_base_flag_from_objects(struct Scene *scene)
 {
 	Base *base = scene->base.first;
+
+	while (base) {
+		base->flag = base->object->flag;
+		base = base->next;
+	}
+}
+
+void BKE_scene_layer_base_flag_to_objects(struct SceneLayer *sl)
+{
+	Base *base = sl->base.first;
+
+	while (base) {
+		base->object->flag = base->flag;
+		base = base->next;
+	}
+}
+
+void BKE_scene_layer_base_flag_from_objects(struct SceneLayer *sl)
+{
+	Base *base = sl->base.first;
 
 	while (base) {
 		base->flag = base->object->flag;

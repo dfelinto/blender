@@ -97,6 +97,15 @@ int BKE_scene_base_iter_next(struct EvaluationContext *eval_ctx, struct SceneBas
 void BKE_scene_base_flag_to_objects(struct Scene *scene);
 void BKE_scene_base_flag_from_objects(struct Scene *scene);
 
+/* base functions */
+struct Base *BKE_scene_layer_base_find_by_name(struct SceneLayer *sl, const char *name);
+struct Base *BKE_scene_layer_base_find(struct SceneLayer *sl, struct Object *ob);
+void         BKE_scene_layer_base_deselect_all(struct SceneLayer *sl);
+void         BKE_scene_layer_base_select(struct SceneLayer *sl, struct Base *selbase);
+
+void BKE_scene_layer_base_flag_to_objects(struct SceneLayer *sl);
+void BKE_scene_layer_base_flag_from_objects(struct SceneLayer *sl);
+
 void BKE_scene_set_background(struct Main *bmain, struct Scene *sce);
 struct Scene *BKE_scene_set_name(struct Main *bmain, const char *name);
 
@@ -126,13 +135,11 @@ void BKE_scene_update_tagged(struct EvaluationContext *eval_ctx, struct Main *bm
 void BKE_scene_update_for_newframe(struct EvaluationContext *eval_ctx, struct Main *bmain, struct Scene *sce, unsigned int lay);
 void BKE_scene_update_for_newframe_ex(struct EvaluationContext *eval_ctx, struct Main *bmain, struct Scene *sce, unsigned int lay, bool do_invisible_flush);
 
+struct SceneLayer *BKE_scene_layer_from_collection(struct Scene *scene, struct LayerCollection *lc);
 struct SceneLayer *BKE_scene_add_layer(struct Scene *sce, const char *name);
 bool BKE_scene_remove_layer(struct Main *main, struct Scene *scene, struct SceneLayer *sl);
-struct LayerCollection *BKE_scene_add_collection(struct SceneLayer *sl, const char *name);
-bool BKE_scene_remove_nested_collection(struct SceneLayer *sl, struct LayerCollection *lc_parent, struct LayerCollection *lc);
-struct SceneLayer *BKE_scene_layer_from_collection(struct Scene *scene, struct LayerCollection *lc);
-bool BKE_scene_remove_collection(struct SceneLayer *sl, struct LayerCollection *lc);
-struct LayerCollection *BKE_scene_add_nested_collection(struct SceneLayer *sl, struct LayerCollection *lc, const char *name);
+struct LayerCollection *BKE_scene_add_collection(struct SceneLayer *sl, struct LayerCollection *lc_parent, const char *name);
+bool BKE_scene_remove_collection(struct SceneLayer *sl, struct LayerCollection *lc_parent, struct LayerCollection *lc);
 
 struct LayerCollection *BKE_scene_layer_collection_active(struct SceneLayer *sl);
 int BKE_scene_layer_collection_count(struct SceneLayer *sl);

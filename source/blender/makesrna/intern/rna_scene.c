@@ -632,6 +632,29 @@ static void rna_Scene_object_unlink(Scene *scene, ReportList *reports, Object *o
 	WM_main_add_notifier(NC_SCENE | ND_OB_ACTIVE, scene);
 }
 
+static int rna_Scene_layer_object_bases_lookup_string(PointerRNA *ptr, const char *key, PointerRNA *r_ptr)
+{
+	SceneLayer *sl = (SceneLayer *)ptr->data;
+	Base *base;
+
+	for (base = sl->base.first; base; base = base->next) {
+		if (STREQLEN(base->object->id.name + 2, key, sizeof(base->object->id.name) - 2)) {
+			*r_ptr = rna_pointer_inherit_refine(ptr, &RNA_ObjectBase, base);
+			return true;
+		}
+	}
+
+	return false;
+}
+
+static PointerRNA rna_Scene_layer_objects_get(CollectionPropertyIterator *iter)
+{
+	ListBaseIterator *internal = &iter->internal.listbase;
+
+	/* we are actually iterating a Base list, so override get */
+	return rna_pointer_inherit_refine(&iter->parent, &RNA_Object, ((Base *)internal->link)->object);
+}
+
 static void rna_Scene_skgen_etch_template_set(PointerRNA *ptr, PointerRNA value)
 {
 	ToolSettings *ts = (ToolSettings *)ptr->data;
@@ -1335,11 +1358,26 @@ static void rna_FFmpegSettings_codec_settings_update(Main *UNUSED(bmain), Scene 
 }
 #endif
 
+static PointerRNA rna_Scene_layer_active_object_get(PointerRNA *ptr)
+{
+	SceneLayer *sl = (SceneLayer *)ptr->data;
+	return rna_pointer_inherit_refine(ptr, &RNA_Object, sl->basact ? sl->basact->object : NULL);
+}
+
+static void rna_Scene_layer_active_object_set(PointerRNA *ptr, PointerRNA value)
+{
+	SceneLayer *sl = (SceneLayer *)ptr->data;
+	if (value.data)
+		sl->basact = BKE_scene_layer_base_find(sl, (Object *)value.data);
+	else
+		sl->basact = NULL;
+}
+
 static LayerCollection *rna_LayerNestedCollection_new(ID *id, LayerCollection *lc, const char *name)
 {
 	Scene *scene = (Scene *)id;
 	SceneLayer *sl = BKE_scene_layer_from_collection(scene, lc);
-	LayerCollection *lc_new = BKE_scene_add_nested_collection(sl, lc, name);
+	LayerCollection *lc_new = BKE_scene_add_collection(sl, lc, name);
 
 	DAG_id_tag_update(id, 0);
 	WM_main_add_notifier(NC_SCENE | ND_LAYER, NULL);
@@ -1354,7 +1392,7 @@ static void rna_LayerNestedCollection_remove(
 	SceneLayer *sl = BKE_scene_layer_from_collection(scene, lc_parent);
 	LayerCollection *lc = lc_ptr->data;
 
-	if (!BKE_scene_remove_nested_collection(sl, lc_parent, lc)) {
+	if (!BKE_scene_remove_collection(sl, lc_parent, lc)) {
 		BKE_reportf(reports, RPT_ERROR, "Nested collection '%s' could not be removed from collection '%s'",
 		            lc->name, lc_parent->name );
 		return;
@@ -1404,7 +1442,7 @@ static void rna_Layer_active_collection_set(PointerRNA *ptr, PointerRNA value)
 
 static LayerCollection *rna_LayerCollection_new(ID *id, SceneLayer *sl, const char *name)
 {
-	LayerCollection *lc = BKE_scene_add_collection(sl, name);
+	LayerCollection *lc = BKE_scene_add_collection(sl, NULL, name);
 
 	DAG_id_tag_update(id, 0);
 	WM_main_add_notifier(NC_SCENE | ND_LAYER, NULL);
@@ -1418,7 +1456,7 @@ static void rna_LayerCollection_remove(
 	Scene *scene = (Scene *)id;
 	LayerCollection *lc = lc_ptr->data;
 
-	if (!BKE_scene_remove_collection(sl, lc)) {
+	if (!BKE_scene_remove_collection(sl, NULL, lc)) {
 		BKE_reportf(reports, RPT_ERROR, "Layer collection '%s' could not be removed from layer '%s'",
 		            lc->name, sl->name );
 		return;
@@ -5103,6 +5141,44 @@ static void rna_def_gpu_fx(BlenderRNA *brna)
 
 /* Scene Layers */
 
+/* layer.bases */
+static void rna_def_layer_bases(BlenderRNA *brna, PropertyRNA *cprop)
+{
+	StructRNA *srna;
+	PropertyRNA *prop;
+
+	RNA_def_property_srna(cprop, "LayerBases");
+	srna = RNA_def_struct(brna, "LayerBases", NULL);
+	RNA_def_struct_sdna(srna, "SceneLayer");
+	RNA_def_struct_ui_text(srna, "Layer Bases", "Collection of layer bases");
+
+	prop = RNA_def_property(srna, "active", PROP_POINTER, PROP_NONE);
+	RNA_def_property_struct_type(prop, "ObjectBase");
+	RNA_def_property_pointer_sdna(prop, NULL, "basact");
+	RNA_def_property_flag(prop, PROP_EDITABLE);
+	RNA_def_property_ui_text(prop, "Active Base", "Active object base in the scene layer");
+	RNA_def_property_update(prop, NC_SCENE | ND_OB_ACTIVE, NULL);
+}
+
+/* layer.objects */
+static void rna_def_layer_objects(BlenderRNA *brna, PropertyRNA *cprop)
+{
+	StructRNA *srna;
+	PropertyRNA *prop;
+
+	RNA_def_property_srna(cprop, "LayerObjects");
+	srna = RNA_def_struct(brna, "LayerObjects", NULL);
+	RNA_def_struct_sdna(srna, "SceneLayer");
+	RNA_def_struct_ui_text(srna, "Layer Objects", "Collection of layer objects");
+
+	prop = RNA_def_property(srna, "active", PROP_POINTER, PROP_NONE);
+	RNA_def_property_struct_type(prop, "Object");
+	RNA_def_property_pointer_funcs(prop, "rna_Scene_layer_active_object_get", "rna_Scene_layer_active_object_set", NULL, NULL);
+	RNA_def_property_flag(prop, PROP_EDITABLE | PROP_NEVER_UNLINK);
+	RNA_def_property_ui_text(prop, "Active Object", "Active object for this scene layer");
+	RNA_def_property_update(prop, NC_SCENE | ND_OB_ACTIVE, NULL);
+}
+
 static void rna_def_layer_nested_collections(BlenderRNA *brna, PropertyRNA *cprop)
 {
 	StructRNA *srna;
@@ -5235,7 +5311,22 @@ static void rna_def_scene_layer(BlenderRNA *brna)
 
 	/* TODO engine */
 	/* TODO mode */
-	/* TODO baselist (selected objects, ...) */
+
+	/* Bases/Objects */
+	prop = RNA_def_property(srna, "object_bases", PROP_COLLECTION, PROP_NONE);
+	RNA_def_property_collection_sdna(prop, NULL, "base", NULL);
+	RNA_def_property_struct_type(prop, "ObjectBase");
+	RNA_def_property_ui_text(prop, "Bases", "");
+	RNA_def_property_collection_funcs(prop, NULL, NULL, NULL, NULL, NULL, NULL,
+	                                  "rna_Scene_layer_object_bases_lookup_string", NULL);
+	rna_def_layer_bases(brna, prop);
+
+	prop = RNA_def_property(srna, "objects", PROP_COLLECTION, PROP_NONE);
+	RNA_def_property_collection_sdna(prop, NULL, "base", NULL);
+	RNA_def_property_struct_type(prop, "Object");
+	RNA_def_property_ui_text(prop, "Objects", "");
+	RNA_def_property_collection_funcs(prop, NULL, NULL, NULL, "rna_Scene_layer_objects_get", NULL, NULL, NULL, NULL);
+	rna_def_layer_objects(brna, prop);
 
 	/* Nestled Data */
 	rna_def_layer_collection(brna);
