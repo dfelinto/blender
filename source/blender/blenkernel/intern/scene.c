@@ -2034,6 +2034,72 @@ void BKE_scene_update_for_newframe_ex(EvaluationContext *eval_ctx, Main *bmain, 
 #endif
 }
 
+/* Scene Layers */
+
+/* Recursively get the collection for a given index */
+static LayerCollection *collection_from_index(ListBase *lb, const int number, int *i)
+{
+	for (LayerCollection *lc = lb->first; lc; lc = lc->next) {
+		if (*i == number) {
+			return lc;
+		}
+
+		(*i)++;
+
+		LayerCollection *lc_nested = collection_from_index(&lc->collections, number, i);
+		if (lc_nested) {
+			return lc_nested;
+		}
+	}
+	return NULL;
+}
+
+LayerCollection *BKE_scene_layer_collection_active(SceneLayer *sl)
+{
+	int i = 0;
+	return collection_from_index(&sl->collections, sl->active_collection, &i);
+}
+
+/* Recursively get the count of collections */
+static int collection_count(ListBase *lb)
+{
+	int i = 0;
+	for (LayerCollection *lc = lb->first; lc; lc = lc->next) {
+		i += collection_count(&lc->collections) + 1;
+	}
+	return i;
+}
+
+int BKE_scene_layer_collection_count(SceneLayer *sl)
+{
+	return collection_count(&sl->collections);
+}
+
+/* Recursively get the index for a given collection */
+static int index_from_collection(ListBase *lb, LayerCollection *lc, int *i)
+{
+	for (LayerCollection *lcol = lb->first; lcol; lcol = lcol->next) {
+		if (lcol == lc) {
+			return *i;
+		}
+
+		(*i)++;
+
+		int i_nested = index_from_collection(&lcol->collections, lc, i);
+		if (i_nested != -1) {
+			return i_nested;
+		}
+	}
+	return -1;
+}
+
+/* return -1 */
+int BKE_scene_layer_collection_findindex(SceneLayer *sl, LayerCollection *lc)
+{
+	int i = 0;
+	return index_from_collection(&sl->collections, lc, &i);
+}
+
 /* Recursively check if collection is inside the collection ListBase */
 static bool collection_in_collections(ListBase *lb, LayerCollection *lc)
 {

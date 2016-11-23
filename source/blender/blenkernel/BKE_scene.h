@@ -129,11 +129,14 @@ void BKE_scene_update_for_newframe_ex(struct EvaluationContext *eval_ctx, struct
 struct SceneLayer *BKE_scene_add_layer(struct Scene *sce, const char *name);
 bool BKE_scene_remove_layer(struct Main *main, struct Scene *scene, struct SceneLayer *sl);
 struct LayerCollection *BKE_scene_add_collection(struct SceneLayer *sl, const char *name);
-
 bool BKE_scene_remove_nested_collection(struct SceneLayer *sl, struct LayerCollection *lc_parent, struct LayerCollection *lc);
 struct SceneLayer *BKE_scene_layer_from_collection(struct Scene *scene, struct LayerCollection *lc);
 bool BKE_scene_remove_collection(struct SceneLayer *sl, struct LayerCollection *lc);
 struct LayerCollection *BKE_scene_add_nested_collection(struct SceneLayer *sl, struct LayerCollection *lc, const char *name);
+
+struct LayerCollection *BKE_scene_layer_collection_active(struct SceneLayer *sl);
+int BKE_scene_layer_collection_count(struct SceneLayer *sl);
+int BKE_scene_layer_collection_findindex(struct SceneLayer *sl, struct LayerCollection *lc);
 
 struct SceneRenderLayer *BKE_scene_add_render_layer(struct Scene *sce, const char *name);
 bool BKE_scene_remove_render_layer(struct Main *main, struct Scene *scene, struct SceneRenderLayer *srl);

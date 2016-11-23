@@ -1368,44 +1368,37 @@ static void rna_LayerNestedCollection_remove(
 
 static int rna_Layer_active_collection_index_get(PointerRNA *ptr)
 {
-	/* TODO account for nested collections */
 	SceneLayer *sl = (SceneLayer *)ptr->data;
 	return sl->active_collection;
 }
 
 static void rna_Layer_active_collection_index_set(PointerRNA *ptr, int value)
 {
-	/* TODO account for nested collections */
 	SceneLayer *sl = (SceneLayer *)ptr->data;
-	int num_collections = BLI_listbase_count(&sl->collections);
+	int num_collections = BKE_scene_layer_collection_count(sl);
 	sl->active_collection = min_ff(value, num_collections - 1);
 }
 
 static void rna_Layer_active_collection_index_range(
         PointerRNA *ptr, int *min, int *max, int *UNUSED(softmin), int *UNUSED(softmax))
 {
-	/* TODO account for nested collections */
 	SceneLayer *sl = (SceneLayer *)ptr->data;
-
 	*min = 0;
-	*max = max_ii(0, BLI_listbase_count(&sl->collections) - 1);
+	*max = max_ii(0, BKE_scene_layer_collection_count(sl) - 1);
 }
 
 static PointerRNA rna_Layer_active_collection_get(PointerRNA *ptr)
 {
-	/* TODO account for nested collections */
 	SceneLayer *sl = (SceneLayer *)ptr->data;
-	LayerCollection *lc = BLI_findlink(&sl->collections, sl->active_collection);
-
+	LayerCollection *lc = BKE_scene_layer_collection_active(sl);
 	return rna_pointer_inherit_refine(ptr, &RNA_LayerCollection, lc);
 }
 
 static void rna_Layer_active_collection_set(PointerRNA *ptr, PointerRNA value)
 {
-	/* TODO account for nested collections */
 	SceneLayer *sl = (SceneLayer *)ptr->data;
 	LayerCollection *lc = (LayerCollection *)value.data;
-	const int index = BLI_findindex(&sl->collections, lc);
+	const int index = BKE_scene_layer_collection_findindex(sl, lc);
 	if (index != -1) sl->active_collection = index;
 }
 
