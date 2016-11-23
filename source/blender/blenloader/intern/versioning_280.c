@@ -68,7 +68,7 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *main)
 					collection->flag |= COLLECTION_VISIBLE;
 				}
 
-				BLI_snprintf(collection->name, sizeof(collection->name), "%d", i);
+				BLI_snprintf(collection->name, sizeof(collection->name), "%d", i + 1);
 				collections[i] = collection;
 			}
 
