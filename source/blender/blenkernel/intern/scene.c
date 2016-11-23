@@ -162,18 +162,18 @@ Scene *BKE_scene_copy(Main *bmain, Scene *sce, int type)
 	Base *base, *obase;
 	
 	if (type == SCE_COPY_EMPTY) {
-		ListBase rl, rv, sl;
+		ListBase rl, rv, scl;
 		scen = BKE_scene_add(bmain, sce->id.name + 2);
 		
 		rl = scen->r.layers;
 		rv = scen->r.views;
-		sl = scen->layers;
+		scl = scen->layers;
 		curvemapping_free_data(&scen->r.mblur_shutter_curve);
 		scen->r = sce->r;
 		scen->r.layers = rl;
 		scen->r.actlay = 0;
 		scen->r.views = rv;
-		scen->layers = sl;
+		scen->layers = scl;
 		scen->unit = sce->unit;
 		scen->physics_settings = sce->physics_settings;
 		scen->gm = sce->gm;
@@ -250,7 +250,7 @@ Scene *BKE_scene_copy(Main *bmain, Scene *sce, int type)
 
 		BLI_duplicatelist(&(scen->layers), &(sce->layers));
 		new_sl = scen->layers.first;
-		for (sl = sce->layers.first; sl; sl->next) {
+		for (sl = sce->layers.first; sl; sl = sl->next) {
 			sl->obedit = NULL;
 
 			BLI_duplicatelist(&(new_sl->base), &(sl->base));
