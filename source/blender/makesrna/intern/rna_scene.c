@@ -655,6 +655,14 @@ static PointerRNA rna_Scene_layer_objects_get(CollectionPropertyIterator *iter)
 	return rna_pointer_inherit_refine(&iter->parent, &RNA_Object, ((Base *)internal->link)->object);
 }
 
+static PointerRNA rna_LayerCollection_objects_get(CollectionPropertyIterator *iter)
+{
+	ListBaseIterator *internal = &iter->internal.listbase;
+
+	/* we are actually iterating a Base list, so override get */
+	return rna_pointer_inherit_refine(&iter->parent, &RNA_Object, ((Base *)((LinkData *)internal->link)->data)->object);
+}
+
 static void rna_Scene_skgen_etch_template_set(PointerRNA *ptr, PointerRNA value)
 {
 	ToolSettings *ts = (ToolSettings *)ptr->data;
@@ -5220,7 +5228,12 @@ static void rna_def_layer_collection(BlenderRNA *brna)
 	RNA_def_struct_name_property(srna, prop);
 	RNA_def_property_update(prop, NC_SCENE | ND_LAYER_CONTENT, NULL);
 
-	/* TODO baselist (selected objects, ...) */
+	prop = RNA_def_property(srna, "objects", PROP_COLLECTION, PROP_NONE);
+	RNA_def_property_collection_sdna(prop, NULL, "elements", NULL);
+	RNA_def_property_struct_type(prop, "Object");
+	RNA_def_property_ui_text(prop, "Objects", "");
+	RNA_def_property_collection_funcs(prop, NULL, NULL, NULL, "rna_LayerCollection_objects_get", NULL, NULL, NULL, NULL);
+
 	/* TODO overrides */
 
 	prop = RNA_def_property(srna, "collections", PROP_COLLECTION, PROP_NONE);
