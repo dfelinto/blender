@@ -5106,8 +5106,6 @@ static void rna_def_gpu_fx(BlenderRNA *brna)
 static void rna_def_layer_nested_collections(BlenderRNA *brna, PropertyRNA *cprop)
 {
 	StructRNA *srna;
-	PropertyRNA *prop;
-
 	FunctionRNA *func;
 	PropertyRNA *parm;
 
