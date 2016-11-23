@@ -5497,6 +5497,18 @@ static void direct_link_view_settings(FileData *fd, ColorManagedViewSettings *vi
 		direct_link_curvemapping(fd, view_settings->curve_mapping);
 }
 
+/* recursively direct link the layer collections */
+static void direct_link_layer_collections(FileData *fd , ListBase *lb)
+{
+	link_list(fd, lb);
+
+	for (LayerCollection *lc = lb->first; lc; lc = lc->next) {
+		link_list(fd, &(lc->elements));
+		link_list(fd, &(lc->overrides));
+		direct_link_layer_collections(fd, &lc->collections);
+	}
+}
+
 static void direct_link_scene(FileData *fd, Scene *sce)
 {
 	Editing *ed;
@@ -5744,12 +5756,9 @@ static void direct_link_scene(FileData *fd, Scene *sce)
 		sl->obedit = NULL;
 		link_list(fd, &(sl->base));
 		sl->basact = newdataadr(fd, sl->basact);
-		link_list(fd, &(sl->collections));
 
-		for (LayerCollection *lc = sl->collections.first; lc; lc = lc->next) {
-			link_list(fd, &(lc->elements));
-			link_list(fd, &(lc->overrides));
-		}
+		/* recursively direct link the layer collections */
+		direct_link_layer_collections(fd, &(sl->collections));
 	}
 }
 

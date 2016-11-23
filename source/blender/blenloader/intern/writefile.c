@@ -2401,13 +2401,30 @@ static void write_paint(WriteData *wd, Paint *p)
 	}
 }
 
+/* recursively write the layer collections structs */
+static void write_layer_collections(WriteData *wd, ListBase *lb)
+{
+	for (LayerCollection *lc = lb->first; lc; lc = lc->next) {
+		writestruct(wd, DATA, LayerCollection, 1, lc);
+
+		for (LinkData *link = lc->elements.first; link; link = link->next) {
+			writestruct(wd, DATA, LinkData, 1, link);
+		}
+
+		for (CollectionOverride *ov = lc->overrides.first; ov; ov = ov->next) {
+			writestruct(wd, DATA, CollectionOverride, 1, ov);
+		}
+
+		write_layer_collections(wd, &(lc->collections));
+	}
+}
+
 static void write_scenes(WriteData *wd, ListBase *scebase)
 {
 	Scene *sce;
 	Base *base;
 	Editing *ed;
 	Sequence *seq;
-	LayerCollection *lc;
 	MetaStack *ms;
 	Strip *strip;
 	TimeMarker *marker;
@@ -2597,17 +2614,8 @@ static void write_scenes(WriteData *wd, ListBase *scebase)
 				base = base->next;
 			}
 
-			for (lc = sl->collections.first; lc; lc = lc->next) {
-				writestruct(wd, DATA, LayerCollection, 1, lc);
-
-				for (LinkData *link = lc->elements.first; link; link = link->next) {
-					writestruct(wd, DATA, LinkData, 1, link);
-				}
-
-				for (CollectionOverride *ov = lc->overrides.first; ov; ov = ov->next) {
-					writestruct(wd, DATA, CollectionOverride, 1, ov);
-				}
-			}
+			/* recursively write the layer collections structs */
+			write_layer_collections(wd, &sl->collections);
 		}
 
 		for (srl = sce->r.layers.first; srl; srl = srl->next) {
