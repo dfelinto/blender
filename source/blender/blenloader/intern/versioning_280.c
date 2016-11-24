@@ -85,9 +85,7 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *main)
 
 				for (int i = 0; i < 20; i++) {
 					if ((base->lay & (1 << i)) != 0) {
-						LinkData *link = MEM_callocN(sizeof(LinkData), "doversion linkdata");
-						link->data = base_new;
-						BLI_addtail(&collections[i]->elements, link);
+						BLI_addtail(&collections[i]->elements, BLI_genericNodeN(base_new));
 					}
 				}
 				base = base->next;
