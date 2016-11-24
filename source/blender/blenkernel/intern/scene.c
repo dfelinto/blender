@@ -890,6 +890,44 @@ Base *BKE_scene_layer_base_find(SceneLayer *sl, Object *ob)
 	return BLI_findptr(&sl->base, ob, offsetof(Base, object));
 }
 
+Base *BKE_scene_layer_collection_base_find(LayerCollection *lc, Object *ob)
+{
+	for (LinkData *link = lc->elements.first; link; link = link->next) {
+		Base *base = link->data;
+
+		if (base->object == ob) {
+			return base;
+		}
+	}
+	return NULL;
+}
+
+static Base *scene_layer_base_add(SceneLayer *sl, Object *ob)
+{
+	Base *b = MEM_callocN(sizeof(*b), __func__);
+	BLI_addhead(&sl->base, b);
+
+	b->object = ob;
+	b->flag = ob->flag;
+	b->lay = ob->lay;
+
+	return b;
+}
+
+Base *BKE_scene_layer_base_add(SceneLayer *sl, LayerCollection *lc, Object *ob)
+{
+	Base *base = BKE_scene_layer_base_find(sl, ob);
+
+	if (base == NULL) {
+		base = scene_layer_base_add(sl, ob);
+	}
+
+	/* only bump id count for collection */
+	id_us_plus(&ob->id);
+	BLI_addtail(&lc->elements, BLI_genericNodeN(base));
+	return base;
+}
+
 /**
  * Sets the active scene, mainly used when running in background mode (``--scene`` command line argument).
  * This is also called to set the scene directly, bypassing windowing code.

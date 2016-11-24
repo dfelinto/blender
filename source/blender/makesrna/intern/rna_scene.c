@@ -632,6 +632,31 @@ static void rna_Scene_object_unlink(Scene *scene, ReportList *reports, Object *o
 	WM_main_add_notifier(NC_SCENE | ND_OB_ACTIVE, scene);
 }
 
+static Base *rna_LayerCollection_object_link(ID *id, LayerCollection *lc, Main *bmain, ReportList *reports, Object *ob)
+{
+	Base *base;
+	Scene *scene = (Scene *)id;
+	SceneLayer *sl = BKE_scene_layer_from_collection(scene, lc);
+
+	if (BKE_scene_layer_collection_base_find(lc, ob)) {
+		BKE_reportf(reports, RPT_ERROR, "Object '%s' is already in collection '%s'", ob->id.name + 2, lc->name);
+		return NULL;
+	}
+
+	base = BKE_scene_layer_base_add(sl, lc, ob);
+
+	/* TODO(sergey): Only update relations for the current scene layer. */
+	DAG_relations_tag_update(bmain);
+	DAG_id_tag_update(&ob->id, OB_RECALC_OB | OB_RECALC_DATA | OB_RECALC_TIME);
+
+	/* slows down importers too much, run scene.update() */
+	/* DAG_srelations_tag_update(G.main); */
+
+	WM_main_add_notifier(NC_SCENE | ND_OB_ACTIVE, scene);
+
+	return base;
+}
+
 static int rna_Scene_layer_object_bases_lookup_string(PointerRNA *ptr, const char *key, PointerRNA *r_ptr)
 {
 	SceneLayer *sl = (SceneLayer *)ptr->data;
@@ -5187,6 +5212,27 @@ static void rna_def_layer_objects(BlenderRNA *brna, PropertyRNA *cprop)
 	RNA_def_property_update(prop, NC_SCENE | ND_OB_ACTIVE, NULL);
 }
 
+/* collection.objects */
+static void rna_def_layer_collection_objects(BlenderRNA *brna, PropertyRNA *cprop)
+{
+	StructRNA *srna;
+	FunctionRNA *func;
+	PropertyRNA *parm;
+
+	RNA_def_property_srna(cprop, "CollectionObjects");
+	srna = RNA_def_struct(brna, "CollectionObjects", NULL);
+	RNA_def_struct_sdna(srna, "LayerCollection");
+	RNA_def_struct_ui_text(srna, "Collection Objects", "Collection of collection objects");
+
+	func = RNA_def_function(srna, "link", "rna_LayerCollection_object_link");
+	RNA_def_function_ui_description(func, "Link object to collection, run scene.update() after");
+	RNA_def_function_flag(func, FUNC_USE_SELF_ID | FUNC_USE_REPORTS | FUNC_USE_MAIN);
+	parm = RNA_def_pointer(func, "object", "Object", "", "Object to add to collection");
+	RNA_def_property_flag(parm, PROP_REQUIRED | PROP_NEVER_NULL);
+	parm = RNA_def_pointer(func, "base", "ObjectBase", "", "The newly created base");
+	RNA_def_function_return(func, parm);
+}
+
 static void rna_def_layer_nested_collections(BlenderRNA *brna, PropertyRNA *cprop)
 {
 	StructRNA *srna;
@@ -5233,6 +5279,7 @@ static void rna_def_layer_collection(BlenderRNA *brna)
 	RNA_def_property_struct_type(prop, "Object");
 	RNA_def_property_ui_text(prop, "Objects", "");
 	RNA_def_property_collection_funcs(prop, NULL, NULL, NULL, "rna_LayerCollection_objects_get", NULL, NULL, NULL, NULL);
+	rna_def_layer_collection_objects(brna, prop);
 
 	/* TODO overrides */
 

@@ -100,6 +100,8 @@ void BKE_scene_base_flag_from_objects(struct Scene *scene);
 /* base functions */
 struct Base *BKE_scene_layer_base_find_by_name(struct SceneLayer *sl, const char *name);
 struct Base *BKE_scene_layer_base_find(struct SceneLayer *sl, struct Object *ob);
+struct Base *BKE_scene_layer_collection_base_find(struct LayerCollection *lc, struct Object *ob);
+struct Base *BKE_scene_layer_base_add(struct SceneLayer *sl, struct LayerCollection *lc, struct Object *ob);
 void         BKE_scene_layer_base_deselect_all(struct SceneLayer *sl);
 void         BKE_scene_layer_base_select(struct SceneLayer *sl, struct Base *selbase);
 
