@@ -75,6 +75,7 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *main)
 			Base *base = scene->base.first;
 			while (base) {
 				Base *base_new = MEM_dupallocN(base);
+				base_new->refcount++;
 				BLI_addtail(&sl->base, base_new);
 
 				if (base == scene->basact) {
@@ -86,6 +87,7 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *main)
 				for (int i = 0; i < 20; i++) {
 					if ((base->lay & (1 << i)) != 0) {
 						BLI_addtail(&collections[i]->elements, BLI_genericNodeN(base_new));
+						base_new->refcount++;
 					}
 				}
 				base = base->next;

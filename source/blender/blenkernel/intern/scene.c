@@ -104,7 +104,7 @@
 #include "bmesh.h"
 
 /* prototypes */
-static void layer_collections_free(ListBase *lb);
+static void layer_collections_free(SceneLayer *sl, ListBase *lb);
 
 const char *RE_engine_id_BLENDER_RENDER = "BLENDER_RENDER";
 const char *RE_engine_id_BLENDER_GAME = "BLENDER_GAME";
@@ -502,9 +502,8 @@ void BKE_scene_free(Scene *sce)
 
 	for (sl = sce->layers.first; sl; sl = sl->next) {
 		sl->basact = NULL;
+		layer_collections_free(sl, &sl->collections);
 		BLI_freelistN(&sl->base);
-
-		layer_collections_free(&sl->collections);
 	}
 	BLI_freelistN(&sce->layers);
 }
@@ -910,6 +909,7 @@ static Base *scene_layer_base_add(SceneLayer *sl, Object *ob)
 	b->object = ob;
 	b->flag = ob->flag;
 	b->lay = ob->lay;
+	b->refcount = 1;
 
 	return b;
 }
@@ -922,10 +922,20 @@ Base *BKE_scene_layer_base_add(SceneLayer *sl, LayerCollection *lc, Object *ob)
 		base = scene_layer_base_add(sl, ob);
 	}
 
-	/* only bump id count for collection */
+	/* Only bump id count for collection, but refcount we do it for both */
 	id_us_plus(&ob->id);
 	BLI_addtail(&lc->elements, BLI_genericNodeN(base));
+	base->refcount++;
 	return base;
+}
+
+void BKE_scene_layer_base_unlink(Scene *scene, LayerCollection *lc, Base *base)
+{
+	SceneLayer *sl = BKE_scene_layer_from_collection(scene, lc);
+	LinkData *ld = BLI_findptr(&lc->elements, base, offsetof(LinkData, data));
+
+	BLI_remlink(&lc->elements, ld);
+	BKE_scene_layer_base_unref(sl, base);
 }
 
 /**
@@ -2211,17 +2221,43 @@ LayerCollection *BKE_scene_add_collection(SceneLayer *sl, LayerCollection *lc_pa
 	return lc_new;
 }
 
-static void layer_collection_free(LayerCollection *lc)
+void BKE_scene_layer_base_unref(SceneLayer* sl, Base *base)
 {
-	BLI_freelistN(&lc->elements);
-	BLI_freelistN(&lc->overrides);
-	layer_collections_free(&lc->collections);
+	base->refcount--;
+	/* It only exists in the SceneLayer */
+	if (base->refcount == 1) {
+
+#ifdef LAYERS_RIGID_BODY
+		/* remove rigid body constraint from world before removing object */
+		if (base->object->rigidbody_constraint)
+			BKE_rigidbody_remove_constraint(sce, base->object);
+		/* remove rigid body object from world before removing object */
+		if (base->object->rigidbody_object)
+			BKE_rigidbody_remove_object(sce, base->object);
+#endif
+		if (sl->basact == base)
+			sl->basact = NULL;
+
+		BLI_remlink(&sl->base, base);
+		MEM_freeN(base);
+	}
 }
 
-static void layer_collections_free(ListBase *lb)
+static void layer_collection_free(SceneLayer *sl, LayerCollection *lc)
+{
+	for (LinkData *ld = lc->elements.first; ld; ld = ld->next) {
+		BKE_scene_layer_base_unref(sl, ld->data);
+	}
+
+	BLI_freelistN(&lc->elements);
+	BLI_freelistN(&lc->overrides);
+	layer_collections_free(sl, &lc->collections);
+}
+
+static void layer_collections_free(SceneLayer *sl, ListBase *lb)
 {
 	for (LayerCollection *lc = lb->first; lc; lc = lc->next) {
-		layer_collection_free(lc);
+		layer_collection_free(sl, lc);
 	}
 	BLI_freelistN(lb);
 }
@@ -2237,7 +2273,7 @@ bool BKE_scene_remove_collection(SceneLayer *sl, LayerCollection *lc_parent, Lay
 	}
 
 	BLI_remlink(lb, lc);
-	layer_collection_free(lc);
+	layer_collection_free(sl, lc);
 	MEM_freeN(lc);
 
 	/* TODO only change active_collection if necessary */
@@ -2281,7 +2317,7 @@ bool BKE_scene_remove_layer(Main *bmain, Scene *scene, SceneLayer *sl)
 
 	BLI_freelistN(&sl->base);
 
-	layer_collections_free(&sl->collections);
+	layer_collections_free(sl, &sl->collections);
 
 	MEM_freeN(sl);
 

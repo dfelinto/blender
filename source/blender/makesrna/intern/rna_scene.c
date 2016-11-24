@@ -657,6 +657,31 @@ static Base *rna_LayerCollection_object_link(ID *id, LayerCollection *lc, Main *
 	return base;
 }
 
+static void rna_LayerCollection_object_unlink(ID *id, LayerCollection *lc, ReportList *reports, Object *ob)
+{
+	Scene *scene = (Scene *)id;
+	SceneLayer *sl = BKE_scene_layer_from_collection(scene, lc);
+	Base *base = BKE_scene_layer_collection_base_find(lc, ob);
+
+	if (!base) {
+		BKE_reportf(reports, RPT_ERROR, "Object '%s' is not in this collection '%s'", ob->id.name + 2, lc->name);
+		return;
+	}
+
+	if (((base->flag & SELECT) != 0) && sl->mode != OB_MODE_OBJECT) {
+		BKE_reportf(reports, RPT_ERROR, "Object '%s' must be in object mode to unlink", ob->id.name + 2);
+		return;
+	}
+
+	BKE_scene_layer_base_unlink(scene, lc, base);
+	id_us_min(&ob->id);
+
+	/* needed otherwise the depgraph will contain freed objects which can crash, see [#20958] */
+	DAG_relations_tag_update(G.main);
+
+	WM_main_add_notifier(NC_SCENE | ND_OB_ACTIVE, scene);
+}
+
 static int rna_Scene_layer_object_bases_lookup_string(PointerRNA *ptr, const char *key, PointerRNA *r_ptr)
 {
 	SceneLayer *sl = (SceneLayer *)ptr->data;
@@ -5231,6 +5256,12 @@ static void rna_def_layer_collection_objects(BlenderRNA *brna, PropertyRNA *cpro
 	RNA_def_property_flag(parm, PROP_REQUIRED | PROP_NEVER_NULL);
 	parm = RNA_def_pointer(func, "base", "ObjectBase", "", "The newly created base");
 	RNA_def_function_return(func, parm);
+
+	func = RNA_def_function(srna, "unlink", "rna_LayerCollection_object_unlink");
+	RNA_def_function_ui_description(func, "Unlink object from collection");
+	RNA_def_function_flag(func, FUNC_USE_SELF_ID | FUNC_USE_REPORTS);
+	parm = RNA_def_pointer(func, "object", "Object", "", "Object to remove from collection");
+	RNA_def_property_flag(parm, PROP_REQUIRED | PROP_NEVER_NULL);
 }
 
 static void rna_def_layer_nested_collections(BlenderRNA *brna, PropertyRNA *cprop)

@@ -74,8 +74,9 @@ typedef struct Base {
 	struct Base *next, *prev;
 	unsigned int lay DNA_DEPRECATED_LAYERS;	/* deprecated in 2.8 */
 	unsigned int selcol;
-	int flag;
+	short flag;
 	short sx, sy;
+	short refcount;
 	struct Object *object;
 } Base;
 

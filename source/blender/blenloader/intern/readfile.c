@@ -5507,6 +5507,7 @@ static void direct_link_layer_collections(FileData *fd , ListBase *lb)
 
 		for (LinkData *ld = lc->elements.first; ld; ld = ld->next) {
 			ld->data = newdataadr(fd, ld->data);
+			((Base *)ld->data)->refcount++;
 		}
 
 		direct_link_layer_collections(fd, &lc->collections);
@@ -5758,7 +5759,11 @@ static void direct_link_scene(FileData *fd, Scene *sce)
 	for (sl = sce->layers.first; sl; sl = sl->next) {
 		sl->obedit = NULL;
 		sl->basact = newdataadr(fd, sl->basact);
+
 		link_list(fd, &(sl->base));
+		for (Base *base = sl->base.first; base; base = base->next) {
+			base->refcount++;
+		}
 
 		/* recursively direct link the layer collections */
 		direct_link_layer_collections(fd, &(sl->collections));
