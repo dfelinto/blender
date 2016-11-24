@@ -2404,17 +2404,10 @@ static void write_paint(WriteData *wd, Paint *p)
 /* recursively write the layer collections structs */
 static void write_layer_collections(WriteData *wd, ListBase *lb)
 {
+	writelist(wd, DATA, LayerCollection, lb);
 	for (LayerCollection *lc = lb->first; lc; lc = lc->next) {
-		writestruct(wd, DATA, LayerCollection, 1, lc);
-
-		for (LinkData *link = lc->elements.first; link; link = link->next) {
-			writestruct(wd, DATA, LinkData, 1, link);
-		}
-
-		for (CollectionOverride *ov = lc->overrides.first; ov; ov = ov->next) {
-			writestruct(wd, DATA, CollectionOverride, 1, ov);
-		}
-
+		writelist(wd, DATA, CollectionOverride, &lc->overrides);
+		writelist(wd, DATA, LinkData, &lc->elements);
 		write_layer_collections(wd, &(lc->collections));
 	}
 }
@@ -2605,14 +2598,9 @@ static void write_scenes(WriteData *wd, ListBase *scebase)
 		}
 
 		/* writing scene layers to the blend file */
+		writelist(wd, DATA, SceneLayer, &sce->layers);
 		for (sl = sce->layers.first; sl; sl = sl->next) {
-			writestruct(wd, DATA, SceneLayer, 1, sl);
-
-			base = sl->base.first;
-			while (base) {
-				writestruct(wd, DATA, Base, 1, base);
-				base = base->next;
-			}
+			writelist(wd, DATA, Base, &sl->base);
 
 			/* recursively write the layer collections structs */
 			write_layer_collections(wd, &sl->collections);

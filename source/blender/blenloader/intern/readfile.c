@@ -5501,10 +5501,14 @@ static void direct_link_view_settings(FileData *fd, ColorManagedViewSettings *vi
 static void direct_link_layer_collections(FileData *fd , ListBase *lb)
 {
 	link_list(fd, lb);
-
 	for (LayerCollection *lc = lb->first; lc; lc = lc->next) {
-		link_list(fd, &(lc->elements));
 		link_list(fd, &(lc->overrides));
+		link_list(fd, &lc->elements);
+
+		for (LinkData *ld = lc->elements.first; ld; ld = ld->next) {
+			ld->data = newdataadr(fd, ld->data);
+		}
+
 		direct_link_layer_collections(fd, &lc->collections);
 	}
 }
@@ -5751,11 +5755,10 @@ static void direct_link_scene(FileData *fd, Scene *sce)
 	direct_link_curvemapping(fd, &sce->r.mblur_shutter_curve);
 
 	link_list(fd, &(sce->layers));
-
 	for (sl = sce->layers.first; sl; sl = sl->next) {
 		sl->obedit = NULL;
-		link_list(fd, &(sl->base));
 		sl->basact = newdataadr(fd, sl->basact);
+		link_list(fd, &(sl->base));
 
 		/* recursively direct link the layer collections */
 		direct_link_layer_collections(fd, &(sl->collections));
