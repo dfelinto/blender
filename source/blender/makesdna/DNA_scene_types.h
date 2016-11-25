@@ -82,6 +82,13 @@ typedef struct Base {
 
 /* ************************************************************* */
 
+typedef struct SceneCollection {
+	struct SceneCollection *next, *prev;
+	char name[64];		/* MAX_NAME */
+	ListBase elements;
+	short refcount;
+} SceneCollection;
+
 typedef struct CollectionOverride {
 	struct CollectionOverride *next, *prev;
 	char name[64];		/* MAX_NAME */
@@ -91,12 +98,11 @@ typedef struct CollectionOverride {
 /* Layers Data */
 typedef struct LayerCollection {
 	struct LayerCollection *next, *prev;
-	char name[64];		/* MAX_NAME */
 	short flag;
 	short pad[3];
-	ListBase elements;
+	struct SceneCollection *data; /* SceneCollection */
 	ListBase overrides;
-	ListBase collections;	/* nested collections */
+	ListBase collections; /* nested collections */
 	/* TODO dynamic adding of elements (name based) */
 } LayerCollection;
 
@@ -115,10 +121,11 @@ typedef struct SceneLayer {
 	short pad2;
 
 	ListBase base;
-	struct Base *basact;	/* active base */
+	struct Object *active_object;	/* active base */
 	struct Object *obedit;	/* name replaces old G.obedit */
 
-	ListBase collections;
+	ListBase collections; /* LayerCollection */
+	ListBase selected_objects;
 } SceneLayer;
 
 
@@ -1677,6 +1684,7 @@ typedef struct Scene {
 
 	/* to be named (workflow layers, view layers, render layers, ...) */
 	ListBase layers;
+	ListBase collections;
 } Scene;
 
 /* **************** RENDERDATA ********************* */

@@ -2262,8 +2262,26 @@ static void layer_collections_free(SceneLayer *sl, ListBase *lb)
 	BLI_freelistN(lb);
 }
 
+bool BKE_scene_collection(Scene *scene, SceneCollection *sc)
+{
+	const int act = BLI_findindex(&scene->collections, sc);
+
+	if (act == -1) {
+		return false;
+	}
+
+	BLI_remlink(&scene->collections, sc);
+	layer_collection_free(sl, lc);
+	MEM_freeN(sc);
+
+	/* TODO only change active_collection if necessary */
+	sl->active_collection = 0;
+
+	return true;
+}
+
 /* lc_parent is optional, to be used only for nested collections */
-bool BKE_scene_remove_collection(SceneLayer *sl, LayerCollection *lc_parent, LayerCollection *lc)
+bool BKE_scene_layer_remove_collection(SceneLayer *sl, LayerCollection *lc_parent, LayerCollection *lc)
 {
 	ListBase *lb = (lc_parent ? &lc_parent->collections : &sl->collections);
 	const int act = BLI_findindex(lb, lc);

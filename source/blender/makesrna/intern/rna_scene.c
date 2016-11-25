@@ -1593,6 +1593,35 @@ static void rna_SceneLayer_remove(
 	WM_main_add_notifier(NC_SCENE | ND_LAYER, NULL);
 }
 
+static SceneCollection *rna_SceneCollection_new(ID *id, Scene *UNUSED(sce), const char *name)
+{
+	Scene *scene = (Scene *)id;
+	SceneCollection *sc = BKE_scene_add_collection(scene, name);
+
+	DAG_id_tag_update(&scene->id, 0);
+	WM_main_add_notifier(NC_SCENE | ND_LAYER, NULL);
+
+	return sc;
+}
+
+static void rna_SceneCollection_remove(
+        ID *id, Scene *UNUSED(sce), Main *bmain, ReportList *reports, PointerRNA *sl_ptr)
+{
+	Scene *scene = (Scene *)id;
+	SceneCollection *sc = sl_ptr->data;
+
+	if (!BKE_scene_remove_collection(bmain, scene, sc)) {
+		BKE_reportf(reports, RPT_ERROR, "Scene collection '%s' could not be removed from scene '%s'",
+		            sl->name, scene->id.name + 2);
+		return;
+	}
+
+	RNA_POINTER_INVALIDATE(sl_ptr);
+
+	DAG_id_tag_update(&scene->id, 0);
+	WM_main_add_notifier(NC_SCENE | ND_LAYER, NULL);
+}
+
 static int rna_RenderSettings_active_layer_index_get(PointerRNA *ptr)
 {
 	RenderData *rd = (RenderData *)ptr->data;
@@ -5423,6 +5452,35 @@ static void rna_def_scene_layer(BlenderRNA *brna)
 	rna_def_layer_collection(brna);
 }
 
+static void rna_def_scene_collections(BlenderRNA *brna, PropertyRNA *cprop)
+{
+	StructRNA *srna;
+	PropertyRNA *prop;
+
+	FunctionRNA *func;
+	PropertyRNA *parm;
+
+	RNA_def_property_srna(cprop, "SceneCollections");
+	srna = RNA_def_struct(brna, "SceneCollections", NULL);
+	RNA_def_struct_sdna(srna, "Scene");
+	RNA_def_struct_ui_text(srna, "Scene Collections", "Collection of scene collections");
+
+	func = RNA_def_function(srna, "new", "rna_SceneCollection_new");
+	RNA_def_function_ui_description(func, "Add a scene collection to scene");
+	RNA_def_function_flag(func, FUNC_USE_SELF_ID);
+	parm = RNA_def_string(func, "name", "SceneCollection", 0, "", "New name for the scene collection (not unique)");
+	RNA_def_property_flag(parm, PROP_REQUIRED);
+	parm = RNA_def_pointer(func, "result", "SceneCollection", "", "Newly created scene collection");
+	RNA_def_function_return(func, parm);
+
+	func = RNA_def_function(srna, "remove", "rna_SceneCollection_remove");
+	RNA_def_function_ui_description(func, "Remove a scene collection");
+	RNA_def_function_flag(func, FUNC_USE_MAIN | FUNC_USE_REPORTS | FUNC_USE_SELF_ID);
+	parm = RNA_def_pointer(func, "collection", "SceneCollection", "", "Scene layer to remove");
+	RNA_def_property_flag(parm, PROP_REQUIRED | PROP_NEVER_NULL | PROP_RNAPTR);
+	RNA_def_property_clear_flag(parm, PROP_THICK_WRAP);
+}
+
 static void rna_def_scene_layers(BlenderRNA *brna, PropertyRNA *cprop)
 {
 	StructRNA *srna;
@@ -7801,6 +7859,12 @@ void RNA_def_scene(BlenderRNA *brna)
 	RNA_def_property_struct_type(prop, "SceneLayer");
 	RNA_def_property_ui_text(prop, "Scene Layers", "");
 	rna_def_scene_layers(brna, prop);
+
+	prop = RNA_def_property(srna, "collections", PROP_COLLECTION, PROP_NONE);
+	RNA_def_property_collection_sdna(prop, NULL, "collections", NULL);
+	RNA_def_property_struct_type(prop, "Scene Collections");
+	RNA_def_property_ui_text(prop, "Scene Collections", "");
+	rna_def_scene_collections(brna, prop);
 
 	/* Nestled Data  */
 	/* *** Non-Animated *** */
