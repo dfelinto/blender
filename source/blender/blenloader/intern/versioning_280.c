@@ -28,6 +28,21 @@
 /* allow readfile to use deprecated functionality */
 #define DNA_DEPRECATED_ALLOW
 
+#include "DNA_object_types.h"
+#include "DNA_scene_types.h"
+#include "DNA_genfile.h"
+
+#include "BKE_main.h"
+#include "BKE_scene.h"
+
+#include "BLI_listbase.h"
+#include "BLI_string.h"
+
+#include "BLO_readfile.h"
+#include "readfile.h"
+
+#include "MEM_guardedalloc.h"
+
 void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *main)
 {
 }

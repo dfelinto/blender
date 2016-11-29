@@ -1628,6 +1628,9 @@ typedef struct Scene {
 	struct RigidBodyWorld *rigidbody_world;
 
 	struct PreviewImage *preview;
+
+	ListBase render_layers;
+	ListBase collections;
 } Scene;
 
 /* **************** RENDERDATA ********************* */

@@ -27,6 +27,61 @@
 #ifndef __DNA_LAYER_TYPES_H__
 #define __DNA_LAYER_TYPES_H__
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#include "DNA_listBase.h"
+
+typedef struct ObjectBase {
+	struct ObjectBase *next, *prev;
+	short refcount;
+	struct Object *object;
+} ObjectBase;
+
+typedef struct CollectionOverride {
+	struct CollectionOverride *next, *prev;
+	char name[64]; /* MAX_NAME */
+	/* TODO proper data */
+} CollectionOverride;
+
+typedef struct CollectionBase {
+	struct CollectionBase *next, *prev;
+	struct Collection *collection;
+	short flag;
+	short pad[3];
+	ListBase collection_bases; /* synced with collection->collections */
+	ListBase object_bases; /* synced with collection->objects */
+	ListBase overrides;
+} CollectionBase;
+
+typedef struct Collection {
+	struct Collection *next, *prev;
+	char name[64]; /* MAX_NAME */
+	char filter[64]; /* MAX_NAME */
+	ListBase collections; /* nested collections */
+	ListBase objects;
+} Collection;
+
+typedef struct Layer {
+	struct Layer *next, prev;
+	char name[64]; /* MAX_NAME */
+	char engine[32]; /* render engine */
+	short active_collection;
+	struct Base *actbase;
+	ListBase object_bases;
+} RenderLayer;
+
+/* CollectionBase->flag */
+enum {
+	COLLECTION_VISIBLE    = (1 << 0),
+	COLLECTION_SELECTABLE = (1 << 1),
+	COLLECTION_FOLDED     = (1 << 2),
+};
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif  /* __DNA_LAYER_TYPES_H__ */
 
