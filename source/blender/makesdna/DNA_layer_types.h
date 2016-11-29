@@ -49,9 +49,9 @@ typedef struct CollectionBase {
 	struct CollectionBase *next, *prev;
 	struct Collection *collection;
 	short flag;
-	short pad[3];
+	short pad[2];
 	ListBase collection_bases; /* synced with collection->collections */
-	ListBase object_bases; /* synced with collection->objects */
+	ListBase object_bases; /* synced with collection->objects and collection->filter_objects */
 	ListBase overrides;
 } CollectionBase;
 
@@ -61,14 +61,16 @@ typedef struct Collection {
 	char filter[64]; /* MAX_NAME */
 	ListBase collections; /* nested collections */
 	ListBase objects;
+	ListBase filter_objects;
 } Collection;
 
-typedef struct Layer {
-	struct Layer *next, prev;
+typedef struct RenderLayer {
+	struct RenderLayer *next, *prev;
 	char name[64]; /* MAX_NAME */
 	char engine[32]; /* render engine */
 	short active_collection;
 	struct Base *actbase;
+	ListBase collection_bases;
 	ListBase object_bases;
 } RenderLayer;
 

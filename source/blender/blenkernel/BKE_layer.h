@@ -27,5 +27,20 @@
  *  \ingroup bke
  */
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#define TODO_LAYER_SYNC
+
+struct RenderLayer;
+struct Scene;
+
+struct RenderLayer *BKE_render_layer_add(struct Scene *scene, const char *name);
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif /* __BKE_LAYER_H__ */
 

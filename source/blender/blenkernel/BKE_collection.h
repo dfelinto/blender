@@ -27,5 +27,23 @@
  *  \ingroup bke
  */
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+struct Collection;
+struct ListBase;
+struct Object;
+struct Scene;
+
+struct Collection *BKE_collection_add(struct Scene *scene, struct ListBase *lb, const char *name);
+void BKE_collection_remove(struct Scene *scene, struct Collection *collection);
+struct Collection *BKE_collection_master(struct Scene *scene);
+void BKE_collection_object_add(struct Scene *scene, struct Collection *collection, struct Object *object);
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif /* __BKE_COLLECTION_H__ */
 

@@ -23,3 +23,41 @@
 /** \file blender/blenkernel/intern/layer.c
  *  \ingroup bke
  */
+
+#include "BKE_collection.h"
+#include "BKE_layer.h"
+
+#include "BLI_listbase.h"
+#include "BLI_string.h"
+
+#include "MEM_guardedalloc.h"
+
+#include "DNA_layer_types.h"
+#include "DNA_scene_types.h"
+
+/* prototype */
+CollectionBase *collection_base_add(RenderLayer *rl, Collection *collection);
+
+RenderLayer *BKE_render_layer_add(Scene *scene, const char *name)
+{
+	RenderLayer *rl = MEM_callocN(sizeof(RenderLayer), "Render Layer");
+	BLI_strncpy(rl->name, name, sizeof(rl->name));
+
+	Collection *collection = BKE_collection_master(scene);
+	CollectionBase *collection_base = collection_base_add(rl, collection);
+	return rl;
+}
+
+CollectionBase *collection_base_add(RenderLayer *rl, Collection *collection)
+{
+	CollectionBase *base = MEM_callocN(sizeof(CollectionBase), "Collection Base");
+	BLI_addhead(&rl->collection_bases, base);
+
+	base->collection = collection;
+	base->flag = COLLECTION_VISIBLE + COLLECTION_SELECTABLE + COLLECTION_FOLDED;
+
+	TODO_LAYER_SYNC;
+	/* TODO: add objects and collections to sl->object_bases, and sl->collection_bases */
+	return base;
+}
+
