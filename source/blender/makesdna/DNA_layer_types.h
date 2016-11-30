@@ -35,6 +35,7 @@ extern "C" {
 
 typedef struct ObjectBase {
 	struct ObjectBase *next, *prev;
+	short flag;
 	short refcount;
 	struct Object *object;
 } ObjectBase;
@@ -49,7 +50,7 @@ typedef struct CollectionBase {
 	struct CollectionBase *next, *prev;
 	struct Collection *collection;
 	short flag;
-	short pad[2];
+	short pad[3];
 	ListBase collection_bases; /* synced with collection->collections */
 	ListBase object_bases; /* synced with collection->objects and collection->filter_objects */
 	ListBase overrides;
@@ -69,7 +70,7 @@ typedef struct RenderLayer {
 	char name[64]; /* MAX_NAME */
 	char engine[32]; /* render engine */
 	short active_collection;
-	struct Base *actbase;
+	struct ObjectBase *basact;
 	ListBase collection_bases;
 	ListBase object_bases;
 } RenderLayer;

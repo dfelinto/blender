@@ -46,4 +46,3 @@ void BKE_collection_object_add(struct Scene *scene, struct Collection *collectio
 #endif
 
 #endif /* __BKE_COLLECTION_H__ */
-

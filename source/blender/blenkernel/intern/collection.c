@@ -32,6 +32,7 @@
 #include "BKE_layer.h"
 #include "BKE_library.h"
 
+#include "DNA_ID.h"
 #include "DNA_layer_types.h"
 #include "DNA_scene_types.h"
 
@@ -39,71 +40,71 @@
 
 Collection *BKE_collection_add(Scene *scene, ListBase *lb, const char *name)
 {
-	Collection *collection = MEM_callocN(sizeof(Collection), "New Collection");
-	BLI_strncpy(collection->name, name, sizeof(collection->name));
-	BLI_uniquename(&scene->collections, collection, DATA_("Collection"), '.', offsetof(Collection, name), sizeof(collection->name));
+	Collection *cl = MEM_callocN(sizeof(Collection), "New Collection");
+	BLI_strncpy(cl->name, name, sizeof(cl->name));
+	BLI_uniquename(&scene->collections, cl, DATA_("Collection"), '.', offsetof(Collection, name), sizeof(cl->name));
 
 	if (lb) {
-		BLI_addtail(lb, collection);
+		BLI_addtail(lb, cl);
 	}
 	else {
-		Collection *collection_master = BKE_collection_master(scene);
-		BLI_addtail(&collection_master->collections, collection);
+		Collection *cl_master = BKE_collection_master(scene);
+		BLI_addtail(&cl_master->collections, cl);
 	}
 
 	TODO_LAYER_SYNC;
-	return collection;
+	return cl;
 }
 
 /* free the collection items recursively */
-static void collection_free(Collection *collection)
+static void collection_free(Collection *cl)
 {
-	for (LinkData *link = collection->objects.first; link; link = link->next) {
+	for (LinkData *link = cl->objects.first; link; link = link->next) {
 		id_us_min(link->data);
 	}
 
-	for (LinkData *link = collection->filter_objects.first; link; link = link->next) {
+	for (LinkData *link = cl->filter_objects.first; link; link = link->next) {
 		id_us_min(link->data);
 	}
 
-	for (Collection *cl = collection->collections.first; cl; cl = cl->next) {
-		collection_free(cl);
+	for (Collection *ncl = cl->collections.first; ncl; ncl = ncl->next) {
+		collection_free(ncl);
 	}
-	BLI_freelistN(&collection->collections);
+	BLI_freelistN(&cl->collections);
 }
 
 /* unlink the collection recursively
  * return true if unlinked */
-static bool collection_unlink(Collection *collection, Collection *gone)
+static bool collection_remlink(Collection *cl, Collection *cl_gone)
 {
-	for (Collection *nc = collection->collections.first; nc; nc = nc->next)
+	for (Collection *ncl = cl->collections.first; ncl; ncl = ncl->next)
 	{
-		if (nc == gone) {
-			BLI_remlink(&collection->collections, gone);
+		if (ncl == cl_gone) {
+			BLI_remlink(&cl->collections, cl_gone);
 			return true;
 		}
 
-		if (collection_unlink(nc, gone)) {
+		if (collection_remlink(ncl, cl_gone)) {
 			return true;
 		}
 	}
 	return false;
 }
 
-void BKE_collection_remove(Scene *scene, Collection *collection)
+void BKE_collection_remove(Scene *scene, Collection *cl)
 {
-	Collection *master = BKE_collection_master(scene);
+	Collection *cl_master = BKE_collection_master(scene);
 
 	/* unlink from the main collection tree */
-	collection_unlink(master, collection);
+	collection_remlink(cl_master, cl);
 
 	/* clear the collection items */
-	collection_free(collection);
+	collection_free(cl);
 
 	/* TODO: check all layers that use this collection and clear them */
 	TODO_LAYER_SYNC;
 
-	MEM_freeN(collection);
+	MEM_freeN(cl);
 }
 
 Collection *BKE_collection_master(Scene *scene)
@@ -111,10 +112,9 @@ Collection *BKE_collection_master(Scene *scene)
 	return scene->collections.first;
 }
 
-void BKE_collection_object_add(struct Scene *scene, struct Collection *collection, struct Object *object)
+void BKE_collection_object_add(struct Scene *scene, struct Collection *cl, struct Object *ob)
 {
-	BLI_addtail(&collection->objects, BLI_genericNodeN(object));
-	id_us_plus((ID *)object);
+	BLI_addtail(&cl->objects, BLI_genericNodeN(ob));
+	id_us_plus((ID *)ob);
 	TODO_LAYER_SYNC;
 }
-

@@ -52,10 +52,6 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *main)
 		for (Scene *scene = main->scene.first; scene; scene = scene->id.next) {
 
 			BKE_collection_add(scene, &scene->collections, "Master Collection");
-			RenderLayer *rl = BKE_render_layer_add(scene, "Render Layer");
-
-			rl->active_collection = 0;
-			rl->actbase = NULL;
 
 			Collection *collections[20] = {NULL};
 			bool is_visible[20];
@@ -80,15 +76,49 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *main)
 				}
 			}
 
-			/* TODO
-			 * we need to go over all the CollectionBases created for this rl, and the original rls,
-			 * and set visibility of collections accordingly
-			 * */
+			if (!BKE_scene_uses_blender_game(scene)) {
+				for (SceneRenderLayer *srl = scene->r.layers.first; srl; srl = srl->next) {
 
-			/* TODO
-			 * handle existing SceneRenderLayer
-			 * for (SceneRenderLayer *srl = scene->r.layers.first; srl; srl = srl->next);
-			 */
+					RenderLayer *rl = BKE_render_layer_add(scene, srl->name);
+					BKE_render_layer_engine_set(rl, scene->r.engine);
+
+					if (srl->mat_override) {
+						BKE_collection_override_datablock_add((CollectionBase *)rl->collection_bases.first, "material", (ID *)srl->mat_override);
+					}
+
+					if (srl->light_override && BKE_scene_uses_blender_internal(scene)) {
+						/* not sure how we handle this, pending until we design the override system */
+						TODO_LAYER_OVERRIDE;
+					}
+
+					if (srl->lay != scene->lay) {
+						/* unlink master collection  */
+						BKE_collection_unlink(rl, rl->collection_bases.first);
+
+						/* add new collection bases */
+						for (int i = 0; i < 20; i++) {
+							if ((srl->lay & (1 << i)) != 0) {
+								BKE_collection_link(rl, collections[i]);
+							}
+						}
+					}
+
+					/* TODO: passes, samples, mask_layesr, exclude, ... */
+				}
+			}
+
+			RenderLayer *rl = BKE_render_layer_add(scene, "Render Layer");
+
+			/* In this particular case we can safely assume the data struct */
+			CollectionBase *cb = ((CollectionBase *)rl->collection_bases.first)->collection_bases.first;
+			for (int i = 0; i < 20; i++) {
+				if (!is_visible[i]) {
+					cb->flag &= ~COLLECTION_VISIBLE;
+				}
+				cb = cb->next;
+			}
+
+			/* TODO: copy scene render data to layer */
 
 			/* Cleanup */
 			for (int i = 0; i < 20; i++) {
