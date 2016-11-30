@@ -42,6 +42,10 @@ CollectionBase *collection_base_add(RenderLayer *rl, ListBase *lb, Collection *c
 
 /* RenderLayer */
 
+/*
+ * Add a new renderlayer
+ * by default, a renderlayer has the master collection
+ */
 RenderLayer *BKE_render_layer_add(Scene *scene, const char *name)
 {
 	RenderLayer *rl = MEM_callocN(sizeof(RenderLayer), "Render Layer");
@@ -52,6 +56,9 @@ RenderLayer *BKE_render_layer_add(Scene *scene, const char *name)
 	return rl;
 }
 
+/*
+ * Set the render engine of a renderlayer
+ */
 void BKE_render_layer_engine_set(struct RenderLayer *rl, const char *engine)
 {
 	BLI_strncpy(rl->engine, engine, sizeof(rl->engine));
@@ -84,6 +91,10 @@ static ObjectBase *object_base_add(RenderLayer *rl, Object *ob)
 
 /* CollectionBase */
 
+/*
+ * Link a collection to a renderlayer
+ * The collection needs to be created separately
+ */
 CollectionBase *BKE_collection_link(RenderLayer *rl, Collection *cl)
 {
 	CollectionBase *base = collection_base_add(rl, &rl->collection_bases, cl);
@@ -102,6 +113,10 @@ static void collection_base_free(RenderLayer *rl, CollectionBase *cb)
 	}
 }
 
+/*
+ * Unlink a collection base from a renderlayer
+ * The corresponding collection is not removed from the master collection
+ */
 void BKE_collection_unlink(RenderLayer *rl, CollectionBase *cb)
 {
 	collection_base_free(rl, cb);
@@ -154,6 +169,9 @@ CollectionBase *collection_base_add(RenderLayer *rl, ListBase *lb, Collection *c
 
 /* Override */
 
+/*
+ * Add a new datablock override
+ */
 void BKE_collection_override_datablock_add(CollectionBase *UNUSED(cb), const char *UNUSED(data_path), ID *UNUSED(id))
 {
 	TODO_LAYER_OVERRIDE;

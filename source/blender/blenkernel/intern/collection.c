@@ -38,6 +38,10 @@
 
 #include "MEM_guardedalloc.h"
 
+/*
+ * Add a collection to a collection ListBase and syncronize all render layers
+ * The ListBase is NULL when the collection is to be added to the master collection
+ */
 Collection *BKE_collection_add(Scene *scene, ListBase *lb, const char *name)
 {
 	Collection *cl = MEM_callocN(sizeof(Collection), "New Collection");
@@ -91,6 +95,9 @@ static bool collection_remlink(Collection *cl, Collection *cl_gone)
 	return false;
 }
 
+/*
+ * Remove a collection from the scene, and syncronize all render layers
+ */
 void BKE_collection_remove(Scene *scene, Collection *cl)
 {
 	Collection *cl_master = BKE_collection_master(scene);
@@ -107,12 +114,18 @@ void BKE_collection_remove(Scene *scene, Collection *cl)
 	MEM_freeN(cl);
 }
 
+/*
+ * Returns the master collection
+ */
 Collection *BKE_collection_master(Scene *scene)
 {
 	return scene->collections.first;
 }
 
-void BKE_collection_object_add(struct Scene *scene, struct Collection *cl, struct Object *ob)
+/*
+ * Add object to collection
+ */
+void BKE_collection_object_add(struct Scene *UNUSED(scene), struct Collection *cl, struct Object *ob)
 {
 	BLI_addtail(&cl->objects, BLI_genericNodeN(ob));
 	id_us_plus((ID *)ob);
