@@ -27,6 +27,8 @@
 
 struct WorkSpace;
 
+struct WorkSpace *BKE_workspace_add(Main *bmain, const char *name);
+struct WorkSpace *BKE_workspace_duplicate(Main *bmain, const struct WorkSpace *from);
 void BKE_workspace_free(struct WorkSpace *ws);
 
 #endif /* __BKE_WORKSPACE_H__ */

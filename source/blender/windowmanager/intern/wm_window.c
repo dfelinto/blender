@@ -55,6 +55,7 @@
 #include "BKE_library.h"
 #include "BKE_global.h"
 #include "BKE_main.h"
+#include "BKE_workspace.h"
 
 
 #include "RNA_access.h"
@@ -257,6 +258,7 @@ wmWindow *wm_window_copy(bContext *C, wmWindow *win_src)
 	
 	/* duplicate assigns to window */
 	win_dst->screen = ED_screen_duplicate(win_dst, win_src->screen);
+	win_dst->workspace = BKE_workspace_duplicate(CTX_data_main(C), win_src->workspace);
 	BLI_strncpy(win_dst->screenname, win_dst->screen->id.name + 2, sizeof(win_dst->screenname));
 	win_dst->screen->winid = win_dst->winid;
 
@@ -653,7 +655,10 @@ wmWindow *WM_window_open_temp(bContext *C, const rcti *rect_init, int type)
 		wm_window_set_size(win, win->sizex, win->sizey);
 		wm_window_raise(win);
 	}
-	
+
+	if (win->workspace == NULL) {
+		win->workspace = BKE_workspace_add(CTX_data_main(C), "Temp");
+	}
 	if (win->screen == NULL) {
 		/* add new screen */
 		win->screen = ED_screen_add(win, scene, "temp");

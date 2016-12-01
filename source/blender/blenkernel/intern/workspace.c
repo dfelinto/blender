@@ -22,9 +22,26 @@
  *  \ingroup bke
  */
 
+#include "BLI_utildefines.h"
+
+#include "BKE_library.h"
+#include "BKE_main.h"
 #include "BKE_workspace.h"
 
 #include "DNA_screen_types.h"
+
+
+WorkSpace *BKE_workspace_add(Main *bmain, const char *name)
+{
+	WorkSpace *new_ws = BKE_libblock_alloc(bmain, ID_WS, name);
+	return new_ws;
+}
+
+WorkSpace *BKE_workspace_duplicate(Main *bmain, const WorkSpace *from)
+{
+	WorkSpace *new_ws = BKE_libblock_alloc(bmain, ID_WS, from->id.name + 2);
+	return new_ws;
+}
 
 void BKE_workspace_free(WorkSpace *ws)
 {

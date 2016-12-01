@@ -1909,6 +1909,14 @@ static void rna_def_window(BlenderRNA *brna)
 
 	rna_def_window_stereo3d(brna);
 
+	prop = RNA_def_property(srna, "workspace", PROP_POINTER, PROP_NONE);
+	RNA_def_property_flag(prop, PROP_NEVER_NULL);
+	RNA_def_property_struct_type(prop, "WorkSpace");
+	RNA_def_property_ui_text(prop, "Workspace", "Active workspace showing in the window");
+	RNA_def_property_flag(prop, PROP_EDITABLE);
+	RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
+//	RNA_def_property_update(prop, 0, NULL); /* TODO own notifier? */
+
 	prop = RNA_def_property(srna, "screen", PROP_POINTER, PROP_NONE);
 	RNA_def_property_flag(prop, PROP_NEVER_NULL);
 	RNA_def_property_struct_type(prop, "Screen");

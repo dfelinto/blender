@@ -420,6 +420,7 @@ void wm_add_default(bContext *C)
 	
 	CTX_wm_manager_set(C, wm);
 	win = wm_window_new(C);
+	win->workspace = G.main->workspaces.last;
 	win->screen = screen;
 	screen->winid = win->winid;
 	BLI_strncpy(win->screenname, screen->id.name + 2, sizeof(win->screenname));

@@ -1396,4 +1396,17 @@ void blo_do_versions_270(FileData *fd, Library *UNUSED(lib), Main *main)
 			}
 		}
 	}
+
+	{
+		if (!DNA_struct_find(fd->filesdna, "WorkSpace")) {
+			BLI_assert(BLI_listbase_is_empty(&main->workspaces));
+
+			/* Add default workspace */
+			for (wmWindowManager *wm = main->wm.first; wm; wm = wm->id.next) {
+				for (wmWindow *win = wm->windows.first; win; win = win->next) {
+					win->workspace = BKE_libblock_alloc(main, ID_WS, "Default");
+				}
+			}
+		}
+	}
 }

@@ -62,6 +62,7 @@
 #include "BKE_editmesh.h"
 #include "BKE_sound.h"
 #include "BKE_mask.h"
+#include "BKE_workspace.h"
 
 #include "WM_api.h"
 #include "WM_types.h"
@@ -1010,7 +1011,8 @@ static int area_dupli_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 	}
 
 	*newwin->stereo3d_format = *win->stereo3d_format;
-	
+
+	newwin->workspace = win->workspace;
 	/* allocs new screen and adds to newly created window, using window size */
 	newsc = ED_screen_add(newwin, CTX_data_scene(C), sc->id.name + 2);
 	newwin->screen = newsc;

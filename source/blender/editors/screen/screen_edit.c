@@ -1266,7 +1266,9 @@ void ED_screens_initialize(wmWindowManager *wm)
 	wmWindow *win;
 	
 	for (win = wm->windows.first; win; win = win->next) {
-		
+		if (win->workspace == NULL) {
+			win->workspace = G.main->workspaces.first;
+		}
 		if (win->screen == NULL)
 			win->screen = G.main->screen.first;
 		
