@@ -29,16 +29,19 @@
 
 #include "BKE_collection.h"
 #include "BKE_layer.h"
+#include "BKE_main.h"
+#include "BKE_node.h"
 
 #include "DNA_ID.h"
 #include "DNA_layer_types.h"
 #include "DNA_object_types.h"
+#include "DNA_node_types.h"
 #include "DNA_scene_types.h"
 
 #include "MEM_guardedalloc.h"
 
 /* prototype */
-CollectionBase *collection_base_add(RenderLayer *rl, ListBase *lb, Collection *collection);
+CollectionBase *collection_base_add(SceneLayer *sl, ListBase *lb, Collection *collection);
 
 /* RenderLayer */
 
@@ -46,46 +49,87 @@ CollectionBase *collection_base_add(RenderLayer *rl, ListBase *lb, Collection *c
  * Add a new renderlayer
  * by default, a renderlayer has the master collection
  */
-RenderLayer *BKE_render_layer_add(Scene *scene, const char *name)
+SceneLayer *BKE_scene_layer_add(Scene *scene, const char *name)
 {
-	RenderLayer *rl = MEM_callocN(sizeof(RenderLayer), "Render Layer");
-	BLI_strncpy(rl->name, name, sizeof(rl->name));
+	SceneLayer *sl = MEM_callocN(sizeof(SceneLayer), "Scene Layer");
+	BLI_strncpy(sl->name, name, sizeof(sl->name));
 
 	Collection *cl = BKE_collection_master(scene);
-	collection_base_add(rl, &rl->collection_bases, cl);
-	return rl;
+	collection_base_add(sl, &sl->collection_bases, cl);
+	return sl;
+}
+
+bool BKE_scene_layer_remove(Main *bmain, Scene *scene, SceneLayer *sl)
+{
+	const int act = BLI_findindex(&scene->render_layers, sl);
+
+	if (act == -1) {
+		return false;
+	}
+	else if ( (scene->render_layers.first == scene->render_layers.last) &&
+	          (scene->render_layers.first == sl))
+	{
+		/* ensure 1 layer is kept */
+		return false;
+	}
+
+	BLI_remlink(&scene->render_layers, sl);
+
+	BLI_freelistN(&sl->object_bases);
+	//layer_collections_free(rl, &rl->collection_bases);
+	BLI_freelistN(&sl->collection_bases);
+
+	MEM_freeN(sl);
+
+	/* TODO WORKSPACE: set active_layer to 0 */
+
+	for (Scene *sce = bmain->scene.first; sce; sce = sce->id.next) {
+		if (sce->nodetree) {
+			bNode *node;
+			for (node = sce->nodetree->nodes.first; node; node = node->next) {
+				if (node->type == CMP_NODE_R_LAYERS && (Scene *)node->id == scene) {
+					if (node->custom1 == act)
+						node->custom1 = 0;
+					else if (node->custom1 > act)
+						node->custom1--;
+				}
+			}
+		}
+	}
+
+	return true;
 }
 
 /*
  * Set the render engine of a renderlayer
  */
-void BKE_render_layer_engine_set(struct RenderLayer *rl, const char *engine)
+void BKE_scene_layer_engine_set(SceneLayer *sl, const char *engine)
 {
-	BLI_strncpy(rl->engine, engine, sizeof(rl->engine));
+	BLI_strncpy(sl->engine, engine, sizeof(sl->engine));
 }
 
 /* ObjectBase */
 
-static void render_layer_object_base_unref(RenderLayer* rl, ObjectBase *base)
+static void scene_layer_object_base_unref(SceneLayer* sl, ObjectBase *base)
 {
 	base->refcount--;
 
 	/* It only exists in the RenderLayer */
 	if (base->refcount == 1) {
-		if (rl->basact == base) {
-			rl->basact = NULL;
+		if (sl->basact == base) {
+			sl->basact = NULL;
 		}
 	}
 
-	BLI_remlink(&rl->object_bases, base);
+	BLI_remlink(&sl->object_bases, base);
 	MEM_freeN(base);
 }
 
-static ObjectBase *object_base_add(RenderLayer *rl, Object *ob)
+static ObjectBase *object_base_add(SceneLayer *sl, Object *ob)
 {
 	ObjectBase *base = MEM_callocN(sizeof(ObjectBase), "Object Base");
 	base->object = ob;
-	BLI_addtail(&rl->object_bases, base);
+	BLI_addtail(&sl->object_bases, base);
 	return base;
 }
 
@@ -95,21 +139,21 @@ static ObjectBase *object_base_add(RenderLayer *rl, Object *ob)
  * Link a collection to a renderlayer
  * The collection needs to be created separately
  */
-CollectionBase *BKE_collection_link(RenderLayer *rl, Collection *cl)
+CollectionBase *BKE_collection_link(SceneLayer *sl, Collection *cl)
 {
-	CollectionBase *base = collection_base_add(rl, &rl->collection_bases, cl);
+	CollectionBase *base = collection_base_add(sl, &sl->collection_bases, cl);
 	return base;
 }
 
-static void collection_base_free(RenderLayer *rl, CollectionBase *cb)
+static void collection_base_free(SceneLayer *sl, CollectionBase *cb)
 {
 	for (CollectionBase *ncb = cb->collection_bases.first; ncb; ncb = ncb->next) {
 		for (LinkData *link = ncb->object_bases.first; link; link = link->data) {
-			render_layer_object_base_unref(rl, link->data);
+			scene_layer_object_base_unref(sl, link->data);
 		}
 
 		BLI_freelistN(&ncb->object_bases);
-		collection_base_free(rl, ncb);
+		collection_base_free(sl, ncb);
 	}
 }
 
@@ -117,21 +161,21 @@ static void collection_base_free(RenderLayer *rl, CollectionBase *cb)
  * Unlink a collection base from a renderlayer
  * The corresponding collection is not removed from the master collection
  */
-void BKE_collection_unlink(RenderLayer *rl, CollectionBase *cb)
+void BKE_collection_unlink(SceneLayer *sl, CollectionBase *cb)
 {
-	collection_base_free(rl, cb);
+	collection_base_free(sl, cb);
 
-	BLI_remlink(&rl->collection_bases, cb);
+	BLI_remlink(&sl->collection_bases, cb);
 	MEM_freeN(cb);
 }
 
-static void object_base_populate(RenderLayer *rl, CollectionBase *cb, ListBase *objects)
+static void object_base_populate(SceneLayer *sl, CollectionBase *cb, ListBase *objects)
 {
 	for (LinkData *link = objects->first; link; link = link->next) {
-		ObjectBase *base = BLI_findptr(&rl->object_bases, link->data, offsetof(ObjectBase, object));
+		ObjectBase *base = BLI_findptr(&sl->object_bases, link->data, offsetof(ObjectBase, object));
 
 		if (base == NULL) {
-			base = object_base_add(rl, link->data);
+			base = object_base_add(sl, link->data);
 		}
 		else {
 			/* only add an object once */
@@ -145,17 +189,17 @@ static void object_base_populate(RenderLayer *rl, CollectionBase *cb, ListBase *
 	}
 }
 
-static void collection_base_populate(RenderLayer *rl, CollectionBase *cb, Collection *cl)
+static void collection_base_populate(SceneLayer *sl, CollectionBase *cb, Collection *cl)
 {
-	object_base_populate(rl, cb, &cl->objects);
-	object_base_populate(rl, cb, &cl->filter_objects);
+	object_base_populate(sl, cb, &cl->objects);
+	object_base_populate(sl, cb, &cl->filter_objects);
 
 	for (Collection *ncl = cl->collections.first; ncl; ncl = ncl->next) {
-		collection_base_add(rl, &cb->collection_bases, ncl);
+		collection_base_add(sl, &cb->collection_bases, ncl);
 	}
 }
 
-CollectionBase *collection_base_add(RenderLayer *rl, ListBase *lb, Collection *cl)
+CollectionBase *collection_base_add(SceneLayer *sl, ListBase *lb, Collection *cl)
 {
 	CollectionBase *cb = MEM_callocN(sizeof(CollectionBase), "Collection Base");
 	BLI_addtail(lb, cb);
@@ -163,7 +207,7 @@ CollectionBase *collection_base_add(RenderLayer *rl, ListBase *lb, Collection *c
 	cb->collection = cl;
 	cb->flag = COLLECTION_VISIBLE + COLLECTION_SELECTABLE + COLLECTION_FOLDED;
 
-	collection_base_populate(rl, cb, cl);
+	collection_base_populate(sl, cb, cl);
 	return cb;
 }
 

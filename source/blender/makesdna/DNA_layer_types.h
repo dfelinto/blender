@@ -65,15 +65,15 @@ typedef struct Collection {
 	ListBase filter_objects;
 } Collection;
 
-typedef struct RenderLayer {
-	struct RenderLayer *next, *prev;
+typedef struct SceneLayer {
+	struct SceneLayer *next, *prev;
 	char name[64]; /* MAX_NAME */
 	char engine[32]; /* render engine */
 	short active_collection;
 	struct ObjectBase *basact;
 	ListBase collection_bases;
 	ListBase object_bases;
-} RenderLayer;
+} SceneLayer;
 
 /* CollectionBase->flag */
 enum {

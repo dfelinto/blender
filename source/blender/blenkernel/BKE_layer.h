@@ -34,18 +34,22 @@ extern "C" {
 #define TODO_LAYER_SYNC
 #define TODO_LAYER_OVERRIDE
 
+struct Collection;
 struct CollectionBase;
 struct ID;
-struct RenderLayer;
+struct Main;
+struct SceneLayer;
 struct Scene;
 
-struct RenderLayer *BKE_render_layer_add(struct Scene *scene, const char *name);
+struct SceneLayer *BKE_scene_layer_add(struct Scene *scene, const char *name);
 
-void BKE_render_layer_engine_set(struct RenderLayer *rl, const char *engine);
+bool BKE_scene_layer_remove(struct Main *bmain, struct Scene *scene, struct SceneLayer *sl);
 
-struct CollectionBase *BKE_collection_link(struct RenderLayer *rl, struct Collection *cl);
+void BKE_scene_layer_engine_set(struct SceneLayer *sl, const char *engine);
 
-void BKE_collection_unlink(struct RenderLayer *rl, struct CollectionBase *cb);
+struct CollectionBase *BKE_collection_link(struct SceneLayer *sl, struct Collection *cl);
+
+void BKE_collection_unlink(struct SceneLayer *sl, struct CollectionBase *cb);
 
 void BKE_collection_override_datablock_add(struct CollectionBase *cb, const char *data_path, struct ID *id);
 

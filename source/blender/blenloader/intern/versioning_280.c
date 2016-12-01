@@ -79,11 +79,11 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *main)
 			if (!BKE_scene_uses_blender_game(scene)) {
 				for (SceneRenderLayer *srl = scene->r.layers.first; srl; srl = srl->next) {
 
-					RenderLayer *rl = BKE_render_layer_add(scene, srl->name);
-					BKE_render_layer_engine_set(rl, scene->r.engine);
+					SceneLayer *sl = BKE_scene_layer_add(scene, srl->name);
+					BKE_scene_layer_engine_set(sl, scene->r.engine);
 
 					if (srl->mat_override) {
-						BKE_collection_override_datablock_add((CollectionBase *)rl->collection_bases.first, "material", (ID *)srl->mat_override);
+						BKE_collection_override_datablock_add((CollectionBase *)sl->collection_bases.first, "material", (ID *)srl->mat_override);
 					}
 
 					if (srl->light_override && BKE_scene_uses_blender_internal(scene)) {
@@ -93,12 +93,12 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *main)
 
 					if (srl->lay != scene->lay) {
 						/* unlink master collection  */
-						BKE_collection_unlink(rl, rl->collection_bases.first);
+						BKE_collection_unlink(sl, sl->collection_bases.first);
 
 						/* add new collection bases */
 						for (int i = 0; i < 20; i++) {
 							if ((srl->lay & (1 << i)) != 0) {
-								BKE_collection_link(rl, collections[i]);
+								BKE_collection_link(sl, collections[i]);
 							}
 						}
 					}
@@ -107,10 +107,10 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *main)
 				}
 			}
 
-			RenderLayer *rl = BKE_render_layer_add(scene, "Render Layer");
+			SceneLayer *sl = BKE_scene_layer_add(scene, "Render Layer");
 
 			/* In this particular case we can safely assume the data struct */
-			CollectionBase *cb = ((CollectionBase *)rl->collection_bases.first)->collection_bases.first;
+			CollectionBase *cb = ((CollectionBase *)sl->collection_bases.first)->collection_bases.first;
 			for (int i = 0; i < 20; i++) {
 				if (!is_visible[i]) {
 					cb->flag &= ~COLLECTION_VISIBLE;
