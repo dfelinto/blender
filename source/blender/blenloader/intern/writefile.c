@@ -3678,6 +3678,13 @@ static void write_cachefiles(WriteData *wd, ListBase *idbase)
 	}
 }
 
+static void write_workspaces(WriteData *wd, ListBase *idbase)
+{
+	for (WorkSpace *ws = idbase->first; ws; ws = ws->id.next) {
+		writestruct(wd, ID_WS, WorkSpace, 1, ws);
+	}
+}
+
 /* Keep it last of write_foodata functions. */
 static void write_libraries(WriteData *wd, Main *main)
 {
@@ -3875,6 +3882,7 @@ static bool write_file_handle(
 	write_gpencils(wd, &mainvar->gpencil);
 	write_linestyles(wd, &mainvar->linestyle);
 	write_cachefiles(wd, &mainvar->cachefiles);
+	write_workspaces(wd, &mainvar->workspaces);
 	write_libraries(wd,  mainvar->next);
 
 	/* So changes above don't cause a 'DNA1' to be detected as changed on undo. */

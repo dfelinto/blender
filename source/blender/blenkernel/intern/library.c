@@ -459,6 +459,7 @@ bool id_make_local(Main *bmain, ID *id, const bool test, const bool lib_local)
 		case ID_SCR:
 		case ID_LI:
 		case ID_KE:
+		case ID_WS:
 		case ID_WM:
 			return false; /* can't be linked */
 		case ID_IP:
@@ -563,6 +564,7 @@ bool id_copy(Main *bmain, ID *id, ID **newid, bool test)
 		case ID_SCE:
 		case ID_LI:
 		case ID_SCR:
+		case ID_WS:
 		case ID_WM:
 			return false;  /* can't be copied from here */
 		case ID_VF:
@@ -673,6 +675,8 @@ ListBase *which_libbase(Main *mainlib, short type)
 			return &(mainlib->paintcurves);
 		case ID_CF:
 			return &(mainlib->cachefiles);
+		case ID_WS:
+			return &(mainlib->workspaces);
 	}
 	return NULL;
 }
@@ -819,7 +823,8 @@ int set_listbasepointers(Main *main, ListBase **lb)
 	lb[INDEX_ID_SCE] = &(main->scene);
 	lb[INDEX_ID_WM]  = &(main->wm);
 	lb[INDEX_ID_MSK] = &(main->mask);
-	
+	lb[INDEX_ID_WS]  = &(main->workspaces);
+
 	lb[INDEX_ID_NULL] = NULL;
 
 	return (MAX_LIBARRAY - 1);
@@ -942,6 +947,9 @@ void *BKE_libblock_alloc_notest(short type)
 			break;
 		case ID_CF:
 			id = MEM_callocN(sizeof(CacheFile), "Cache File");
+			break;
+		case ID_WS:
+			id = MEM_callocN(sizeof(WorkSpace), "Workspace");
 			break;
 	}
 	return id;

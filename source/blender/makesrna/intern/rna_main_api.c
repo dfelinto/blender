@@ -527,6 +527,7 @@ RNA_MAIN_ID_TAG_FUNCS_DEF(masks, mask, ID_MSK)
 RNA_MAIN_ID_TAG_FUNCS_DEF(linestyle, linestyle, ID_LS)
 RNA_MAIN_ID_TAG_FUNCS_DEF(cachefiles, cachefiles, ID_CF)
 RNA_MAIN_ID_TAG_FUNCS_DEF(paintcurves, paintcurves, ID_PC)
+RNA_MAIN_ID_TAG_FUNCS_DEF(workspaces, workspaces, ID_WS)
 
 #undef RNA_MAIN_ID_TAG_FUNCS_DEF
 
@@ -1688,6 +1689,27 @@ void RNA_def_main_linestyles(BlenderRNA *brna, PropertyRNA *cprop)
 	prop = RNA_def_property(srna, "is_updated", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 	RNA_def_property_boolean_funcs(prop, "rna_Main_linestyle_is_updated_get", NULL);
+}
+
+void RNA_def_main_workspaces(BlenderRNA *brna, PropertyRNA *cprop)
+{
+	StructRNA *srna;
+	FunctionRNA *func;
+	PropertyRNA *parm;
+	PropertyRNA *prop;
+
+	RNA_def_property_srna(cprop, "BlendDataWorkSpaces");
+	srna = RNA_def_struct(brna, "BlendDataWorkSpaces", NULL);
+	RNA_def_struct_sdna(srna, "Main");
+	RNA_def_struct_ui_text(srna, "Main Workspaces", "Collection of workspaces");
+
+	func = RNA_def_function(srna, "tag", "rna_Main_workspaces_tag");
+	parm = RNA_def_boolean(func, "value", 0, "Value", "");
+	RNA_def_property_flag(parm, PROP_REQUIRED);
+
+	prop = RNA_def_property(srna, "is_updated", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+	RNA_def_property_boolean_funcs(prop, "rna_Main_workspaces_is_updated_get", NULL);
 }
 
 #endif

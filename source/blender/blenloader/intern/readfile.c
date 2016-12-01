@@ -2730,6 +2730,11 @@ static void direct_link_cachefile(FileData *fd, CacheFile *cache_file)
 	direct_link_animdata(fd, cache_file->adt);
 }
 
+static void direct_link_workspace(FileData *fd, WorkSpace *ws)
+{
+	UNUSED_VARS(fd, ws);
+}
+
 /* ************ READ MOTION PATHS *************** */
 
 /* direct data for cache */
@@ -7572,6 +7577,7 @@ static const char *dataname(short id_code)
 		case ID_MSK: return "Data from MSK";
 		case ID_LS: return "Data from LS";
 		case ID_CF: return "Data from CF";
+		case ID_WS: return "Data from WS";
 	}
 	return "Data from Lib Block";
 	
@@ -7823,6 +7829,9 @@ static BHead *read_libblock(FileData *fd, Main *main, BHead *bhead, const short 
 			break;
 		case ID_CF:
 			direct_link_cachefile(fd, (CacheFile *)id);
+			break;
+		case ID_WS:
+			direct_link_workspace(fd, (WorkSpace *)id);
 			break;
 	}
 	

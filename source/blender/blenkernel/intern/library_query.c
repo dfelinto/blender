@@ -818,6 +818,7 @@ void BKE_library_foreach_ID_link(ID *id, LibraryIDLinkCallback callback, void *u
 			case ID_PAL:
 			case ID_PC:
 			case ID_CF:
+			case ID_WS:
 				break;
 
 			/* Deprecated. */
@@ -925,6 +926,7 @@ bool BKE_library_idtype_can_use_idtype(const short id_type_owner, const short id
 			return ELEM(id_type_used, ID_MC);  /* WARNING! mask->parent.id, not typed. */
 		case ID_LS:
 			return (ELEM(id_type_used, ID_TE, ID_OB) || BKE_library_idtype_can_use_idtype(ID_NT, id_type_used));
+		case ID_WS:
 		case ID_IM:
 		case ID_VF:
 		case ID_TXT:
