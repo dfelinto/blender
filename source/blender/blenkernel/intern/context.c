@@ -66,6 +66,7 @@ struct bContext {
 	struct {
 		struct wmWindowManager *manager;
 		struct wmWindow *window;
+		struct WorkSpace *workspace;
 		struct bScreen *screen;
 		struct ScrArea *area;
 		struct ARegion *region;
@@ -627,6 +628,11 @@ wmWindow *CTX_wm_window(const bContext *C)
 	return ctx_wm_python_context_get(C, "window", &RNA_Window, C->wm.window);
 }
 
+WorkSpace *CTX_wm_workspace(const bContext *C)
+{
+	return ctx_wm_python_context_get(C, "workspace", &RNA_WorkSpace, C->wm.workspace);
+}
+
 bScreen *CTX_wm_screen(const bContext *C)
 {
 	return ctx_wm_python_context_get(C, "screen", &RNA_Screen, C->wm.screen);
@@ -829,6 +835,13 @@ void CTX_wm_window_set(bContext *C, wmWindow *win)
 	C->wm.screen = (win) ? win->screen : NULL;
 	if (C->wm.screen)
 		C->data.scene = C->wm.screen->scene;
+	C->wm.area = NULL;
+	C->wm.region = NULL;
+}
+
+void CTX_wm_workspace_set(bContext *C, WorkSpace *ws)
+{
+	C->wm.workspace = ws;
 	C->wm.area = NULL;
 	C->wm.region = NULL;
 }

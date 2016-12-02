@@ -139,6 +139,7 @@ void CTX_py_dict_set(bContext *C, void *value);
 
 struct wmWindowManager *CTX_wm_manager(const bContext *C);
 struct wmWindow *CTX_wm_window(const bContext *C);
+struct WorkSpace *CTX_wm_workspace(const bContext *C);
 struct bScreen *CTX_wm_screen(const bContext *C);
 struct ScrArea *CTX_wm_area(const bContext *C);
 struct SpaceLink *CTX_wm_space_data(const bContext *C);
@@ -168,6 +169,7 @@ struct SpaceClip *CTX_wm_space_clip(const bContext *C);
 
 void CTX_wm_manager_set(bContext *C, struct wmWindowManager *wm);
 void CTX_wm_window_set(bContext *C, struct wmWindow *win);
+void CTX_wm_workspace_set(bContext *C, struct WorkSpace *ws);
 void CTX_wm_screen_set(bContext *C, struct bScreen *screen); /* to be removed */
 void CTX_wm_area_set(bContext *C, struct ScrArea *sa);
 void CTX_wm_region_set(bContext *C, struct ARegion *region);

@@ -2422,6 +2422,7 @@ void wm_event_do_handlers(bContext *C)
 				if (is_playing_sound != -1) {
 					bool is_playing_screen;
 					CTX_wm_window_set(C, win);
+					CTX_wm_workspace_set(C, win->workspace);
 					CTX_wm_screen_set(C, win->screen);
 					CTX_data_scene_set(C, scene);
 					
@@ -2447,6 +2448,7 @@ void wm_event_do_handlers(bContext *C)
 					
 					CTX_data_scene_set(C, NULL);
 					CTX_wm_screen_set(C, NULL);
+					CTX_wm_workspace_set(C, NULL);
 					CTX_wm_window_set(C, NULL);
 				}
 			}
