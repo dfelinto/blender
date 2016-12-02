@@ -42,53 +42,53 @@
  * Add a collection to a collection ListBase and syncronize all render layers
  * The ListBase is NULL when the collection is to be added to the master collection
  */
-Collection *BKE_collection_add(Scene *scene, ListBase *lb, const char *name)
+SceneCollection *BKE_collection_add(Scene *scene, ListBase *lb, const char *name)
 {
-	Collection *cl = MEM_callocN(sizeof(Collection), "New Collection");
-	BLI_strncpy(cl->name, name, sizeof(cl->name));
-	BLI_uniquename(&scene->collections, cl, DATA_("Collection"), '.', offsetof(Collection, name), sizeof(cl->name));
+	SceneCollection *sc = MEM_callocN(sizeof(SceneCollection), "New Collection");
+	BLI_strncpy(sc->name, name, sizeof(sc->name));
+	BLI_uniquename(&scene->collections, sc, DATA_("Collection"), '.', offsetof(SceneCollection, name), sizeof(sc->name));
 
 	if (lb) {
-		BLI_addtail(lb, cl);
+		BLI_addtail(lb, sc);
 	}
 	else {
-		Collection *cl_master = BKE_collection_master(scene);
-		BLI_addtail(&cl_master->collections, cl);
+		SceneCollection *sc_master = BKE_collection_master(scene);
+		BLI_addtail(&sc_master->collections, sc);
 	}
 
 	TODO_LAYER_SYNC;
-	return cl;
+	return sc;
 }
 
 /* free the collection items recursively */
-static void collection_free(Collection *cl)
+static void collection_free(SceneCollection *sc)
 {
-	for (LinkData *link = cl->objects.first; link; link = link->next) {
+	for (LinkData *link = sc->objects.first; link; link = link->next) {
 		id_us_min(link->data);
 	}
 
-	for (LinkData *link = cl->filter_objects.first; link; link = link->next) {
+	for (LinkData *link = sc->filter_objects.first; link; link = link->next) {
 		id_us_min(link->data);
 	}
 
-	for (Collection *ncl = cl->collections.first; ncl; ncl = ncl->next) {
-		collection_free(ncl);
+	for (SceneCollection *nsc = sc->collections.first; nsc; nsc = nsc->next) {
+		collection_free(nsc);
 	}
-	BLI_freelistN(&cl->collections);
+	BLI_freelistN(&sc->collections);
 }
 
 /* unlink the collection recursively
  * return true if unlinked */
-static bool collection_remlink(Collection *cl, Collection *cl_gone)
+static bool collection_remlink(SceneCollection *sc, SceneCollection *sc_gone)
 {
-	for (Collection *ncl = cl->collections.first; ncl; ncl = ncl->next)
+	for (SceneCollection *nsc = sc->collections.first; nsc; nsc = nsc->next)
 	{
-		if (ncl == cl_gone) {
-			BLI_remlink(&cl->collections, cl_gone);
+		if (nsc == sc_gone) {
+			BLI_remlink(&sc->collections, sc_gone);
 			return true;
 		}
 
-		if (collection_remlink(ncl, cl_gone)) {
+		if (collection_remlink(nsc, sc_gone)) {
 			return true;
 		}
 	}
@@ -98,26 +98,26 @@ static bool collection_remlink(Collection *cl, Collection *cl_gone)
 /*
  * Remove a collection from the scene, and syncronize all render layers
  */
-void BKE_collection_remove(Scene *scene, Collection *cl)
+void BKE_collection_remove(Scene *scene, SceneCollection *sc)
 {
-	Collection *cl_master = BKE_collection_master(scene);
+	SceneCollection *sc_master = BKE_collection_master(scene);
 
 	/* unlink from the main collection tree */
-	collection_remlink(cl_master, cl);
+	collection_remlink(sc_master, sc);
 
 	/* clear the collection items */
-	collection_free(cl);
+	collection_free(sc);
 
 	/* TODO: check all layers that use this collection and clear them */
 	TODO_LAYER_SYNC;
 
-	MEM_freeN(cl);
+	MEM_freeN(sc);
 }
 
 /*
  * Returns the master collection
  */
-Collection *BKE_collection_master(Scene *scene)
+SceneCollection *BKE_collection_master(Scene *scene)
 {
 	return scene->collections.first;
 }
@@ -125,9 +125,9 @@ Collection *BKE_collection_master(Scene *scene)
 /*
  * Add object to collection
  */
-void BKE_collection_object_add(struct Scene *UNUSED(scene), struct Collection *cl, struct Object *ob)
+void BKE_collection_object_add(struct Scene *UNUSED(scene), struct SceneCollection *sc, struct Object *ob)
 {
-	BLI_addtail(&cl->objects, BLI_genericNodeN(ob));
+	BLI_addtail(&sc->objects, BLI_genericNodeN(ob));
 	id_us_plus((ID *)ob);
 	TODO_LAYER_SYNC;
 }

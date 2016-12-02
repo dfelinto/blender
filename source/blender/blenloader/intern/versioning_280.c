@@ -53,7 +53,7 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *main)
 
 			BKE_collection_add(scene, &scene->collections, "Master Collection");
 
-			Collection *collections[20] = {NULL};
+			SceneCollection *collections[20] = {NULL};
 			bool is_visible[20];
 
 			int lay_used = 0;

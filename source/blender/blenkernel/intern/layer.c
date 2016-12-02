@@ -41,7 +41,7 @@
 #include "MEM_guardedalloc.h"
 
 /* prototype */
-CollectionBase *collection_base_add(SceneLayer *sl, ListBase *lb, Collection *collection);
+CollectionBase *collection_base_add(SceneLayer *sl, ListBase *lb, SceneCollection *sc);
 
 /* RenderLayer */
 
@@ -54,8 +54,8 @@ SceneLayer *BKE_scene_layer_add(Scene *scene, const char *name)
 	SceneLayer *sl = MEM_callocN(sizeof(SceneLayer), "Scene Layer");
 	BLI_strncpy(sl->name, name, sizeof(sl->name));
 
-	Collection *cl = BKE_collection_master(scene);
-	collection_base_add(sl, &sl->collection_bases, cl);
+	SceneCollection *sc = BKE_collection_master(scene);
+	collection_base_add(sl, &sl->collection_bases, sc);
 	return sl;
 }
 
@@ -139,9 +139,9 @@ static ObjectBase *object_base_add(SceneLayer *sl, Object *ob)
  * Link a collection to a renderlayer
  * The collection needs to be created separately
  */
-CollectionBase *BKE_collection_link(SceneLayer *sl, Collection *cl)
+CollectionBase *BKE_collection_link(SceneLayer *sl, SceneCollection *sc)
 {
-	CollectionBase *base = collection_base_add(sl, &sl->collection_bases, cl);
+	CollectionBase *base = collection_base_add(sl, &sl->collection_bases, sc);
 	return base;
 }
 
@@ -189,25 +189,25 @@ static void object_base_populate(SceneLayer *sl, CollectionBase *cb, ListBase *o
 	}
 }
 
-static void collection_base_populate(SceneLayer *sl, CollectionBase *cb, Collection *cl)
+static void collection_base_populate(SceneLayer *sl, CollectionBase *cb, SceneCollection *sc)
 {
-	object_base_populate(sl, cb, &cl->objects);
-	object_base_populate(sl, cb, &cl->filter_objects);
+	object_base_populate(sl, cb, &sc->objects);
+	object_base_populate(sl, cb, &sc->filter_objects);
 
-	for (Collection *ncl = cl->collections.first; ncl; ncl = ncl->next) {
-		collection_base_add(sl, &cb->collection_bases, ncl);
+	for (SceneCollection *nsc = sc->collections.first; nsc; nsc = nsc->next) {
+		collection_base_add(sl, &cb->collection_bases, nsc);
 	}
 }
 
-CollectionBase *collection_base_add(SceneLayer *sl, ListBase *lb, Collection *cl)
+CollectionBase *collection_base_add(SceneLayer *sl, ListBase *lb, SceneCollection *sc)
 {
 	CollectionBase *cb = MEM_callocN(sizeof(CollectionBase), "Collection Base");
 	BLI_addtail(lb, cb);
 
-	cb->collection = cl;
+	cb->collection = sc;
 	cb->flag = COLLECTION_VISIBLE + COLLECTION_SELECTABLE + COLLECTION_FOLDED;
 
-	collection_base_populate(sl, cb, cl);
+	collection_base_populate(sl, cb, sc);
 	return cb;
 }
 

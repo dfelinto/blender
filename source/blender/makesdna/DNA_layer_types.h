@@ -49,7 +49,7 @@ typedef struct CollectionOverride {
 
 typedef struct CollectionBase {
 	struct CollectionBase *next, *prev;
-	struct Collection *collection;
+	struct SceneCollection *collection;
 	short flag;
 	short pad[3];
 	ListBase collection_bases; /* synced with collection->collections */
@@ -57,14 +57,14 @@ typedef struct CollectionBase {
 	ListBase overrides;
 } CollectionBase;
 
-typedef struct Collection {
-	struct Collection *next, *prev;
+typedef struct SceneCollection {
+	struct SceneCollection *next, *prev;
 	char name[64]; /* MAX_NAME */
 	char filter[64]; /* MAX_NAME */
 	ListBase collections; /* nested collections */
 	ListBase objects;
 	ListBase filter_objects;
-} Collection;
+} SceneCollection;
 
 typedef struct SceneLayer {
 	struct SceneLayer *next, *prev;

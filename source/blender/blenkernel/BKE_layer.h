@@ -34,7 +34,7 @@ extern "C" {
 #define TODO_LAYER_SYNC
 #define TODO_LAYER_OVERRIDE
 
-struct Collection;
+struct SceneCollection;
 struct CollectionBase;
 struct ID;
 struct Main;
@@ -47,7 +47,7 @@ bool BKE_scene_layer_remove(struct Main *bmain, struct Scene *scene, struct Scen
 
 void BKE_scene_layer_engine_set(struct SceneLayer *sl, const char *engine);
 
-struct CollectionBase *BKE_collection_link(struct SceneLayer *sl, struct Collection *cl);
+struct CollectionBase *BKE_collection_link(struct SceneLayer *sl, struct SceneCollection *sc);
 
 void BKE_collection_unlink(struct SceneLayer *sl, struct CollectionBase *cb);
 
