@@ -47,15 +47,15 @@ typedef struct CollectionOverride {
 	/* TODO proper data */
 } CollectionOverride;
 
-typedef struct CollectionBase {
-	struct CollectionBase *next, *prev;
+typedef struct LayerCollection {
+	struct LayerCollection *next, *prev;
 	struct SceneCollection *collection;
 	short flag;
 	short pad[3];
-	ListBase collection_bases; /* synced with collection->collections */
+	ListBase collections; /* synced with collection->collections */
 	ListBase object_bases; /* synced with collection->objects and collection->filter_objects */
 	ListBase overrides;
-} CollectionBase;
+} LayerCollection;
 
 typedef struct SceneCollection {
 	struct SceneCollection *next, *prev;
@@ -73,7 +73,7 @@ typedef struct SceneLayer {
 	short active_collection;
 	short pad[3];
 	struct ObjectBase *basact;
-	ListBase collection_bases;
+	ListBase collections;
 	ListBase object_bases;
 } SceneLayer;
 

@@ -41,7 +41,7 @@
 #include "MEM_guardedalloc.h"
 
 /* prototype */
-CollectionBase *collection_base_add(SceneLayer *sl, ListBase *lb, SceneCollection *sc);
+LayerCollection *layer_collection_add(SceneLayer *sl, ListBase *lb, SceneCollection *sc);
 
 /* RenderLayer */
 
@@ -55,7 +55,7 @@ SceneLayer *BKE_scene_layer_add(Scene *scene, const char *name)
 	BLI_strncpy(sl->name, name, sizeof(sl->name));
 
 	SceneCollection *sc = BKE_collection_master(scene);
-	collection_base_add(sl, &sl->collection_bases, sc);
+	layer_collection_add(sl, &sl->collections, sc);
 	return sl;
 }
 
@@ -77,7 +77,7 @@ bool BKE_scene_layer_remove(Main *bmain, Scene *scene, SceneLayer *sl)
 
 	BLI_freelistN(&sl->object_bases);
 	//layer_collections_free(rl, &rl->collection_bases);
-	BLI_freelistN(&sl->collection_bases);
+	BLI_freelistN(&sl->collections);
 
 	MEM_freeN(sl);
 
@@ -139,21 +139,21 @@ static ObjectBase *object_base_add(SceneLayer *sl, Object *ob)
  * Link a collection to a renderlayer
  * The collection needs to be created separately
  */
-CollectionBase *BKE_collection_link(SceneLayer *sl, SceneCollection *sc)
+LayerCollection *BKE_collection_link(SceneLayer *sl, SceneCollection *sc)
 {
-	CollectionBase *base = collection_base_add(sl, &sl->collection_bases, sc);
-	return base;
+	LayerCollection *lc = layer_collection_add(sl, &sl->collections, sc);
+	return lc;
 }
 
-static void collection_base_free(SceneLayer *sl, CollectionBase *cb)
+static void layer_collection_free(SceneLayer *sl, LayerCollection *lc)
 {
-	for (CollectionBase *ncb = cb->collection_bases.first; ncb; ncb = ncb->next) {
-		for (LinkData *link = ncb->object_bases.first; link; link = link->next) {
+	for (LayerCollection *nlc = lc->collections.first; nlc; nlc = nlc->next) {
+		for (LinkData *link = nlc->object_bases.first; link; link = link->next) {
 			scene_layer_object_base_unref(sl, link->data);
 		}
 
-		BLI_freelistN(&ncb->object_bases);
-		collection_base_free(sl, ncb);
+		BLI_freelistN(&nlc->object_bases);
+		layer_collection_free(sl, nlc);
 	}
 }
 
@@ -161,15 +161,15 @@ static void collection_base_free(SceneLayer *sl, CollectionBase *cb)
  * Unlink a collection base from a renderlayer
  * The corresponding collection is not removed from the master collection
  */
-void BKE_collection_unlink(SceneLayer *sl, CollectionBase *cb)
+void BKE_collection_unlink(SceneLayer *sl, LayerCollection *lc)
 {
-	collection_base_free(sl, cb);
+	layer_collection_free(sl, lc);
 
-	BLI_remlink(&sl->collection_bases, cb);
-	MEM_freeN(cb);
+	BLI_remlink(&sl->collections, lc);
+	MEM_freeN(lc);
 }
 
-static void object_base_populate(SceneLayer *sl, CollectionBase *cb, ListBase *objects)
+static void object_base_populate(SceneLayer *sl, LayerCollection *lc, ListBase *objects)
 {
 	for (LinkData *link = objects->first; link; link = link->next) {
 		ObjectBase *base = BLI_findptr(&sl->object_bases, link->data, offsetof(ObjectBase, object));
@@ -179,36 +179,36 @@ static void object_base_populate(SceneLayer *sl, CollectionBase *cb, ListBase *o
 		}
 		else {
 			/* only add an object once */
-			if (BLI_findptr(&cb->object_bases, base, offsetof(LinkData, data))) {
+			if (BLI_findptr(&lc->object_bases, base, offsetof(LinkData, data))) {
 				continue;
 			}
 		}
 
 		base->refcount++;
-		BLI_addtail(&cb->object_bases, BLI_genericNodeN(base));
+		BLI_addtail(&lc->object_bases, BLI_genericNodeN(base));
 	}
 }
 
-static void collection_base_populate(SceneLayer *sl, CollectionBase *cb, SceneCollection *sc)
+static void layer_collection_populate(SceneLayer *sl, LayerCollection *lc, SceneCollection *sc)
 {
-	object_base_populate(sl, cb, &sc->objects);
-	object_base_populate(sl, cb, &sc->filter_objects);
+	object_base_populate(sl, lc, &sc->objects);
+	object_base_populate(sl, lc, &sc->filter_objects);
 
 	for (SceneCollection *nsc = sc->collections.first; nsc; nsc = nsc->next) {
-		collection_base_add(sl, &cb->collection_bases, nsc);
+		layer_collection_add(sl, &lc->collections, nsc);
 	}
 }
 
-CollectionBase *collection_base_add(SceneLayer *sl, ListBase *lb, SceneCollection *sc)
+LayerCollection *layer_collection_add(SceneLayer *sl, ListBase *lb, SceneCollection *sc)
 {
-	CollectionBase *cb = MEM_callocN(sizeof(CollectionBase), "Collection Base");
-	BLI_addtail(lb, cb);
+	LayerCollection *lc = MEM_callocN(sizeof(LayerCollection), "Collection Base");
+	BLI_addtail(lb, lc);
 
-	cb->collection = sc;
-	cb->flag = COLLECTION_VISIBLE + COLLECTION_SELECTABLE + COLLECTION_FOLDED;
+	lc->collection = sc;
+	lc->flag = COLLECTION_VISIBLE + COLLECTION_SELECTABLE + COLLECTION_FOLDED;
 
-	collection_base_populate(sl, cb, sc);
-	return cb;
+	layer_collection_populate(sl, lc, sc);
+	return lc;
 }
 
 /* Override */
@@ -216,7 +216,7 @@ CollectionBase *collection_base_add(SceneLayer *sl, ListBase *lb, SceneCollectio
 /*
  * Add a new datablock override
  */
-void BKE_collection_override_datablock_add(CollectionBase *UNUSED(cb), const char *UNUSED(data_path), ID *UNUSED(id))
+void BKE_collection_override_datablock_add(LayerCollection *UNUSED(lc), const char *UNUSED(data_path), ID *UNUSED(id))
 {
 	TODO_LAYER_OVERRIDE;
 }
