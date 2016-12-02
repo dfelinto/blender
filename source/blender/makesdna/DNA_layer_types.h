@@ -37,6 +37,7 @@ typedef struct ObjectBase {
 	struct ObjectBase *next, *prev;
 	short flag;
 	short refcount;
+	short pad[2];
 	struct Object *object;
 } ObjectBase;
 
@@ -70,6 +71,7 @@ typedef struct SceneLayer {
 	char name[64]; /* MAX_NAME */
 	char engine[32]; /* render engine */
 	short active_collection;
+	short pad[3];
 	struct ObjectBase *basact;
 	ListBase collection_bases;
 	ListBase object_bases;
