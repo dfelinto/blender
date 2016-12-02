@@ -123,6 +123,10 @@ void    ED_screens_header_tools_menu_create(struct bContext *C, struct uiLayout 
 bool    ED_screen_stereo3d_required(struct bScreen *screen);
 void    ED_screen_preview_render(const struct bScreen *screen, int size_x, int size_y, unsigned int *r_rect) ATTR_NONNULL();
 
+/* workspaces */
+void ED_workspace_change(struct wmWindow *win, WorkSpace *ws_new);
+bool ED_workspace_delete(struct Main *bmain, struct wmWindow *win, WorkSpace *ws);
+
 /* anim */
 void    ED_update_for_newframe(struct Main *bmain, struct Scene *scene, int mute);
 
@@ -134,6 +138,8 @@ bScreen *ED_screen_animation_no_scrub(const struct wmWindowManager *wm);
 /* screen keymaps */
 void    ED_operatortypes_screen(void);
 void    ED_keymap_screen(struct wmKeyConfig *keyconf);
+/* workspace keymaps */
+void    ED_operatortypes_workspace(void);
 
 /* operators; context poll callbacks */
 int     ED_operator_screenactive(struct bContext *C);

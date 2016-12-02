@@ -4282,58 +4282,6 @@ static void SCREEN_OT_space_context_cycle(wmOperatorType *ot)
 /* **** Workspaces **** */
 /* For now here, should later get its own module */
 
-static int workspace_new_exec(bContext *C, wmOperator *UNUSED(op))
-{
-	wmWindow *win = CTX_wm_window(C);
-	WorkSpace *old_ws = win->workspace;
-
-	/* TODO API function to activate workspace */
-	id_us_min(&old_ws->id);
-	id_us_ensure_real(&old_ws->id);
-	win->workspace = BKE_workspace_duplicate(CTX_data_main(C), old_ws);
-//	WM_event_add_notifier(C, NC_SCREEN | ND_SCREENBROWSE, sc); /* TODO own notifier */
-
-	return OPERATOR_FINISHED;
-}
-
-static void WORKSPACE_OT_workspace_new(wmOperatorType *ot)
-{
-	/* identifiers */
-	ot->name = "New Workspace";
-	ot->description = "Add a new workspace";
-	ot->idname = "WORKSPACE_OT_workspace_new";
-
-	/* api callbacks */
-	ot->exec = workspace_new_exec;
-	ot->poll = WM_operator_winactive;
-}
-
-static int workspace_delete_exec(bContext *C, wmOperator *UNUSED(op))
-{
-	Main *bmain = CTX_data_main(C);
-	wmWindow *win = CTX_wm_window(C);
-
-	/* TODO API function to remove workspace */
-	if (!BLI_listbase_is_single(&bmain->workspaces)) {
-		WorkSpace *ws_next = win->workspace->id.next;
-		BKE_libblock_free(bmain, win->workspace);
-		win->workspace = ws_next ? ws_next : bmain->workspaces.first;
-		id_us_plus(&win->workspace->id);
-	}
-
-	return OPERATOR_FINISHED;
-}
-
-static void WORKSPACE_OT_workspace_delete(wmOperatorType *ot)
-{
-	/* identifiers */
-	ot->name = "Delete Workspace";
-	ot->description = "Delete the active workspace";
-	ot->idname = "WORKSPACE_OT_workspace_delete";
-
-	/* api callbacks */
-	ot->exec = workspace_delete_exec;
-}
 
 /* ****************  Assigning operatortypes to global list, adding handlers **************** */
 
@@ -4386,8 +4334,6 @@ void ED_operatortypes_screen(void)
 	WM_operatortype_append(SCREEN_OT_delete);
 	WM_operatortype_append(SCENE_OT_new);
 	WM_operatortype_append(SCENE_OT_delete);
-	WM_operatortype_append(WORKSPACE_OT_workspace_new);
-	WM_operatortype_append(WORKSPACE_OT_workspace_delete);
 
 	/* tools shared by more space types */
 	WM_operatortype_append(ED_OT_undo);

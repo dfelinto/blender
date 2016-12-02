@@ -461,6 +461,8 @@ EnumPropertyItem rna_enum_wm_report_items[] = {
 
 #include "WM_api.h"
 
+#include "ED_screen.h"
+
 #include "UI_interface.h"
 
 #include "BKE_idprop.h"
@@ -619,6 +621,13 @@ static PointerRNA rna_PieMenu_layout_get(PointerRNA *ptr)
 	RNA_pointer_create(ptr->id.data, &RNA_UILayout, layout, &rptr);
 
 	return rptr;
+}
+
+static void rna_Window_workspace_set(PointerRNA *ptr, PointerRNA value)
+{
+	wmWindow *win = (wmWindow *)ptr->data;
+	WorkSpace *ws_new = value.data;
+	ED_workspace_change(win, ws_new);
 }
 
 static void rna_Window_screen_set(PointerRNA *ptr, PointerRNA value)
@@ -1914,7 +1923,7 @@ static void rna_def_window(BlenderRNA *brna)
 	RNA_def_property_struct_type(prop, "WorkSpace");
 	RNA_def_property_ui_text(prop, "Workspace", "Active workspace showing in the window");
 	RNA_def_property_flag(prop, PROP_EDITABLE);
-	RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
+	RNA_def_property_pointer_funcs(prop, NULL, "rna_Window_workspace_set", NULL, NULL);
 //	RNA_def_property_update(prop, 0, NULL); /* TODO own notifier? */
 
 	prop = RNA_def_property(srna, "screen", PROP_POINTER, PROP_NONE);
