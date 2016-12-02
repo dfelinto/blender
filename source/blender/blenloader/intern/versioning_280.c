@@ -125,7 +125,7 @@ void blo_do_versions_280_after_linking(FileData *fd, Library *UNUSED(lib), Main 
 				/* Cleanup */
 				for (int i = 0; i < 20; i++) {
 					if ((lay_used & (1 << i)) == 0) {
-						//BKE_collection_remove(scene, collections[i]);
+						BKE_collection_remove(scene, collections[i]);
 					}
 				}
 			}

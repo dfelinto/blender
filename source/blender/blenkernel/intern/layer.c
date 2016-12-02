@@ -127,10 +127,10 @@ static void scene_layer_object_base_unref(SceneLayer* sl, ObjectBase *base)
 		if (sl->basact == base) {
 			sl->basact = NULL;
 		}
-	}
 
-	BLI_remlink(&sl->object_bases, base);
-	MEM_freeN(base);
+		BLI_remlink(&sl->object_bases, base);
+		MEM_freeN(base);
+	}
 }
 
 static ObjectBase *object_base_add(SceneLayer *sl, Object *ob)
@@ -153,7 +153,10 @@ LayerCollection *BKE_collection_link(SceneLayer *sl, SceneCollection *sc)
 	return lc;
 }
 
-static void layer_collection_free(SceneLayer *sl, LayerCollection *lc)
+/*
+ * Free LayerCollection from SceneLayer
+ */
+void BKE_layer_collection_free(SceneLayer *sl, LayerCollection *lc)
 {
 	for (LayerCollection *nlc = lc->collections.first; nlc; nlc = nlc->next) {
 		for (LinkData *link = nlc->object_bases.first; link; link = link->next) {
@@ -161,7 +164,7 @@ static void layer_collection_free(SceneLayer *sl, LayerCollection *lc)
 		}
 
 		BLI_freelistN(&nlc->object_bases);
-		layer_collection_free(sl, nlc);
+		BKE_layer_collection_free(sl, nlc);
 	}
 }
 
@@ -171,7 +174,7 @@ static void layer_collection_free(SceneLayer *sl, LayerCollection *lc)
  */
 void BKE_collection_unlink(SceneLayer *sl, LayerCollection *lc)
 {
-	layer_collection_free(sl, lc);
+	BKE_layer_collection_free(sl, lc);
 
 	BLI_remlink(&sl->collections, lc);
 	MEM_freeN(lc);

@@ -92,6 +92,36 @@ static bool collection_remlink(SceneCollection *sc_parent, SceneCollection *sc_g
 }
 
 /*
+ * Recursively remove any instance of this SceneCollection
+ */
+static void layer_collection_remove(SceneLayer *sl, ListBase *lb, const SceneCollection *sc)
+{
+	LayerCollection *lc = lb->first;
+	while(lc) {
+		if (lc->collection == sc) {
+			BKE_layer_collection_free(sl, lc);
+			BLI_remlink(lb, lc);
+
+			LayerCollection *lc_next = lc->next;
+			MEM_freeN(lc);
+			lc = lc_next;
+
+			/* only the "top-level" layer collections may have the
+			 * same SceneCollection in a sibling tree.
+			 */
+			if (lb != &sl->collections) {
+				return;
+			}
+		}
+
+		else {
+			layer_collection_remove(sl, &lc->collections, sc);
+			lc = lc->next;
+		}
+	}
+}
+
+/*
  * Remove a collection from the scene, and syncronize all render layers
  */
 bool BKE_collection_remove(Scene *scene, SceneCollection *sc)
@@ -111,11 +141,12 @@ bool BKE_collection_remove(Scene *scene, SceneCollection *sc)
 	/* clear the collection items */
 	collection_free(sc);
 
-	/* TODO: check all layers that use this collection and clear them */
-	TODO_LAYER_SYNC;
+	/* check all layers that use this collection and clear them */
+	for (SceneLayer *sl = scene->render_layers.first; sl; sl = sl->next) {
+		layer_collection_remove(sl, &sl->collections, sc);
+	}
 
 	MEM_freeN(sc);
-
 	return true;
 }
 

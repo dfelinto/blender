@@ -49,6 +49,8 @@ void BKE_scene_layer_engine_set(struct SceneLayer *sl, const char *engine);
 
 struct LayerCollection *BKE_collection_link(struct SceneLayer *sl, struct SceneCollection *sc);
 
+void BKE_layer_collection_free(struct SceneLayer *sl, struct LayerCollection *lc);
+
 void BKE_collection_unlink(struct SceneLayer *sl, struct LayerCollection *lc);
 
 void BKE_collection_override_datablock_add(struct LayerCollection *lc, const char *data_path, struct ID *id);
