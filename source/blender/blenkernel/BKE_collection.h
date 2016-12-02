@@ -39,6 +39,7 @@ struct SceneCollection *BKE_collection_add(struct Scene *scene, struct SceneColl
 bool BKE_collection_remove(struct Scene *scene, struct SceneCollection *sc);
 struct SceneCollection *BKE_collection_master(struct Scene *scene);
 void BKE_collection_object_add(struct Scene *scene, struct SceneCollection *sc, struct Object *object);
+void BKE_collection_object_remove(struct Scene *scene, struct SceneCollection *sc, struct Object *object);
 
 #ifdef __cplusplus
 }

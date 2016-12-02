@@ -135,4 +135,22 @@ void BKE_collection_object_add(struct Scene *UNUSED(scene), struct SceneCollecti
 	BLI_addtail(&sc->objects, BLI_genericNodeN(ob));
 	id_us_plus((ID *)ob);
 	TODO_LAYER_SYNC;
+	/* add the equivalent object base to all layers that have this collection */
+}
+
+/*
+ * Remove object from collection
+ */
+void BKE_collection_object_remove(struct Scene *UNUSED(scene), struct SceneCollection *sc, struct Object *ob)
+{
+
+	LinkData *link = BLI_findptr(&sc->objects, ob, offsetof(LinkData, data));
+	BLI_remlink(&sc->objects, link);
+	MEM_freeN(link);
+
+	id_us_min((ID *)ob);
+	TODO_LAYER_SYNC;
+
+	/* remove the equivalent object base to all layers that have this collection
+	 * also remove all reference to ob in the filter_objects */
 }

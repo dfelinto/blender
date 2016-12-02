@@ -2148,6 +2148,14 @@ static void rna_SceneCollection_filter_set(PointerRNA *ptr, const char *value)
 	(void)scene;
 }
 
+static PointerRNA rna_SceneCollection_objects_get(CollectionPropertyIterator *iter)
+{
+	ListBaseIterator *internal = &iter->internal.listbase;
+
+	/* we are actually iterating a LinkData list, so override get */
+	return rna_pointer_inherit_refine(&iter->parent, &RNA_Object, ((LinkData *)internal->link)->data);
+}
+
 static SceneCollection *rna_SceneCollection_new(ID *id, SceneCollection *sc_parent, const char *name)
 {
 	Scene *scene = (Scene *)id;
@@ -2182,6 +2190,43 @@ static void rna_SceneCollection_remove(
 
 	DAG_id_tag_update(&scene->id, 0);
 	WM_main_add_notifier(NC_SCENE | ND_LAYER, NULL);
+}
+
+void rna_SceneCollection_object_link(
+        ID *id, SceneCollection *sc, Main *bmain, ReportList *reports, Object *ob)
+{
+	Scene *scene = (Scene *)id;
+
+	if (BLI_findptr(&sc->objects, ob, offsetof(LinkData, data))) {
+		BKE_reportf(reports, RPT_ERROR, "Object '%s' is already in collection '%s'", ob->id.name + 2, sc->name);
+		return;
+	}
+
+	BKE_collection_object_add(scene, sc, ob);
+
+	/* TODO(sergey): Only update relations for the current scene. */
+	DAG_relations_tag_update(bmain);
+	DAG_id_tag_update(&ob->id, OB_RECALC_OB | OB_RECALC_DATA | OB_RECALC_TIME);
+
+	WM_main_add_notifier(NC_SCENE | ND_LAYER | ND_OB_ACTIVE, scene);
+}
+
+static void rna_SceneCollection_object_unlink(
+        ID *id, SceneCollection *sc, Main *bmain, ReportList *reports, Object *ob)
+{
+	Scene *scene = (Scene *)id;
+
+	if (!BLI_findptr(&sc->objects, ob, offsetof(LinkData, data))) {
+		BKE_reportf(reports, RPT_ERROR, "Object '%s' is not in collection '%s'", ob->id.name + 2, sc->name);
+		return;
+	}
+
+	BKE_collection_object_remove(scene, sc, ob);
+
+	/* needed otherwise the depgraph will contain freed objects which can crash, see [#20958] */
+	DAG_relations_tag_update(bmain);
+
+	WM_main_add_notifier(NC_SCENE | ND_LAYER | ND_OB_ACTIVE, scene);
 }
 
 static void rna_SceneLayer_name_set(PointerRNA *ptr, const char *value)
@@ -5049,6 +5094,30 @@ static void rna_def_scene_collections(BlenderRNA *brna, PropertyRNA *cprop)
 	RNA_def_property_clear_flag(parm, PROP_THICK_WRAP);
 }
 
+static void rna_def_collection_objects(BlenderRNA *brna, PropertyRNA *cprop)
+{
+	StructRNA *srna;
+	FunctionRNA *func;
+	PropertyRNA *parm;
+
+	RNA_def_property_srna(cprop, "CollectionObjects");
+	srna = RNA_def_struct(brna, "CollectionObjects", NULL);
+	RNA_def_struct_sdna(srna, "SceneCollection");
+	RNA_def_struct_ui_text(srna, "Collection Objects", "Objects of a collection");
+
+	func = RNA_def_function(srna, "link", "rna_SceneCollection_object_link");
+	RNA_def_function_ui_description(func, "Link an object to collection");
+	RNA_def_function_flag(func, FUNC_USE_SELF_ID | FUNC_USE_MAIN | FUNC_USE_REPORTS);
+	parm = RNA_def_pointer(func, "object", "Object", "", "Object to add to collection");
+	RNA_def_property_flag(parm, PROP_REQUIRED |  PROP_NEVER_NULL);
+
+	func = RNA_def_function(srna, "unlink", "rna_SceneCollection_object_unlink");
+	RNA_def_function_ui_description(func, "Unlink object from collection");
+	RNA_def_function_flag(func, FUNC_USE_SELF_ID | FUNC_USE_MAIN | FUNC_USE_REPORTS);
+	parm = RNA_def_pointer(func, "object", "Object", "", "Object to remove from collection");
+	RNA_def_property_flag(parm, PROP_REQUIRED | PROP_NEVER_NULL);
+}
+
 static void rna_def_scene_collection(BlenderRNA *brna)
 {
 	StructRNA *srna;
@@ -5074,9 +5143,18 @@ static void rna_def_scene_collection(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "SceneCollections", "");
 	rna_def_scene_collections(brna, prop);
 
-#if 0
-	/* objects_filter, objects */
-#endif
+	prop = RNA_def_property(srna, "objects", PROP_COLLECTION, PROP_NONE);
+	RNA_def_property_collection_sdna(prop, NULL, "objects", NULL);
+	RNA_def_property_struct_type(prop, "Object");
+	RNA_def_property_collection_funcs(prop, NULL, NULL, NULL, "rna_SceneCollection_objects_get", NULL, NULL, NULL, NULL);
+	RNA_def_property_ui_text(prop, "Objects", "All the objects directly added to this collection (not including sub-collection objects)");
+	rna_def_collection_objects(brna, prop);
+
+	prop = RNA_def_property(srna, "filters_objects", PROP_COLLECTION, PROP_NONE);
+	RNA_def_property_collection_sdna(prop, NULL, "filter_objects", NULL);
+	RNA_def_property_struct_type(prop, "Object");
+	RNA_def_property_collection_funcs(prop, NULL, NULL, NULL, "rna_SceneCollection_objects_get", NULL, NULL, NULL, NULL);
+	RNA_def_property_ui_text(prop, "Filter Objects", "All the objects dynamically added to this collection via the filter");
 }
 
 static void rna_def_scene_layer(BlenderRNA *brna)
