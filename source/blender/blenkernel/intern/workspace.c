@@ -45,5 +45,5 @@ WorkSpace *BKE_workspace_duplicate(Main *bmain, const WorkSpace *from)
 
 void BKE_workspace_free(WorkSpace *ws)
 {
-	(void)ws;
+	UNUSED_VARS(ws);
 }

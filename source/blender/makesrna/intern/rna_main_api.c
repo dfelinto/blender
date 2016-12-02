@@ -83,6 +83,7 @@
 #include "BKE_mask.h"
 #include "BKE_gpencil.h"
 #include "BKE_linestyle.h"
+#include "BKE_workspace.h"
 
 #include "DNA_armature_types.h"
 #include "DNA_camera_types.h"
