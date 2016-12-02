@@ -2129,10 +2129,7 @@ static void rna_SceneCollection_name_set(PointerRNA *ptr, const char *value)
 	SceneCollection *sc = (SceneCollection *)ptr->data;
 	SceneCollection *sc_master = BKE_collection_master(scene);
 
-	char oldname[sizeof(sc->name)];
-	BLI_strncpy(oldname, sc->name, sizeof(sc->name));
 	BLI_strncpy_utf8(sc->name, value, sizeof(sc->name));
-
 	BLI_uniquename(&sc_master->collections, sc, DATA_("SceneCollection"), '.', offsetof(SceneCollection, name), sizeof(sc->name));
 }
 
@@ -2140,10 +2137,8 @@ static void rna_SceneCollection_filter_set(PointerRNA *ptr, const char *value)
 {
 	Scene *scene = (Scene *)ptr->id.data;
 	SceneCollection *sc = (SceneCollection *)ptr->data;
-	char oldfilter[sizeof(sc->filter)];
-
-	BLI_strncpy(oldfilter, sc->filter, sizeof(sc->filter));
 	BLI_strncpy_utf8(sc->filter, value, sizeof(sc->filter));
+
 	TODO_LAYER_SYNC;
 	(void)scene;
 }
@@ -7537,7 +7532,7 @@ void RNA_def_scene(BlenderRNA *brna)
 	prop = RNA_def_property(srna, "render_layers", PROP_COLLECTION, PROP_NONE);
 	RNA_def_property_collection_sdna(prop, NULL, "render_layers", NULL);
 	RNA_def_property_struct_type(prop, "SceneLayer");
-	RNA_def_property_ui_text(prop, "Scene Layers", "");
+	RNA_def_property_ui_text(prop, "Render Layers", "");
 	rna_def_scene_layers(brna, prop);
 
 	prop = RNA_def_property(srna, "master_collection", PROP_POINTER, PROP_NONE);

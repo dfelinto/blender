@@ -25,7 +25,10 @@
  */
 
 #include "BLI_listbase.h"
+#include "BLI_path_util.h"
 #include "BLI_string.h"
+#include "BLI_string_utf8.h"
+#include "BLT_translation.h"
 
 #include "BKE_collection.h"
 #include "BKE_layer.h"
@@ -52,10 +55,15 @@ LayerCollection *layer_collection_add(SceneLayer *sl, ListBase *lb, SceneCollect
 SceneLayer *BKE_scene_layer_add(Scene *scene, const char *name)
 {
 	SceneLayer *sl = MEM_callocN(sizeof(SceneLayer), "Scene Layer");
-	BLI_strncpy(sl->name, name, sizeof(sl->name));
+	BLI_addtail(&scene->render_layers, sl);
+
+	/* unique name */
+	BLI_strncpy_utf8(sl->name, name, sizeof(sl->name));
+	BLI_uniquename(&scene->render_layers, sl, DATA_("SceneLayer"), '.', offsetof(SceneLayer, name), sizeof(sl->name));
 
 	SceneCollection *sc = BKE_collection_master(scene);
 	layer_collection_add(sl, &sl->collections, sc);
+
 	return sl;
 }
 
