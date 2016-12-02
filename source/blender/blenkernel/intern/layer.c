@@ -148,7 +148,7 @@ CollectionBase *BKE_collection_link(SceneLayer *sl, SceneCollection *sc)
 static void collection_base_free(SceneLayer *sl, CollectionBase *cb)
 {
 	for (CollectionBase *ncb = cb->collection_bases.first; ncb; ncb = ncb->next) {
-		for (LinkData *link = ncb->object_bases.first; link; link = link->data) {
+		for (LinkData *link = ncb->object_bases.first; link; link = link->next) {
 			scene_layer_object_base_unref(sl, link->data);
 		}
 

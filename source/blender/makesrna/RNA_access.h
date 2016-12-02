@@ -479,6 +479,7 @@ extern StructRNA RNA_RigidBodyJointConstraint;
 extern StructRNA RNA_SPHFluidSettings;
 extern StructRNA RNA_Scene;
 extern StructRNA RNA_SceneGameData;
+extern StructRNA RNA_SceneLayer;
 extern StructRNA RNA_SceneRenderLayer;
 extern StructRNA RNA_SceneSequence;
 extern StructRNA RNA_SceneObjects;

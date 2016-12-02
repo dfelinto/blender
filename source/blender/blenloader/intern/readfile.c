@@ -7959,6 +7959,7 @@ static void do_versions(FileData *fd, Library *lib, Main *main)
 	blo_do_versions_250(fd, lib, main);
 	blo_do_versions_260(fd, lib, main);
 	blo_do_versions_270(fd, lib, main);
+	blo_do_versions_280(fd, lib, main);
 
 	/* WATCH IT!!!: pointers from libdata have not been converted yet here! */
 	/* WATCH IT 2!: Userdef struct init see do_versions_userdef() above! */
@@ -7966,14 +7967,10 @@ static void do_versions(FileData *fd, Library *lib, Main *main)
 	/* don't forget to set version number in BKE_blender_version.h! */
 }
 
-#if 0 // XXX: disabled for now... we still don't have this in the right place in the loading code for it to work
 static void do_versions_after_linking(FileData *fd, Library *lib, Main *main)
 {
-	/* old Animation System (using IPO's) needs to be converted to the new Animato system */
-	if (main->versionfile < 250)
-		do_versions_ipos_to_animato(main);
+	blo_do_versions_280_after_linking(fd, lib, main);
 }
-#endif
 
 static void lib_link_all(FileData *fd, Main *main)
 {
@@ -8173,7 +8170,7 @@ BlendFileData *blo_read_file_internal(FileData *fd, const char *filepath)
 	blo_join_main(&mainlist);
 	
 	lib_link_all(fd, bfd->main);
-	//do_versions_after_linking(fd, NULL, bfd->main); // XXX: not here (or even in this function at all)! this causes crashes on many files - Aligorith (July 04, 2010)
+	do_versions_after_linking(fd, NULL, bfd->main);
 	lib_verify_nodetree(bfd->main, true);
 	fix_relpaths_library(fd->relabase, bfd->main); /* make all relative paths, relative to the open blend file */
 	

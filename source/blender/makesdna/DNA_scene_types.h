@@ -47,6 +47,7 @@ extern "C" {
 #include "DNA_ID.h"
 #include "DNA_freestyle_types.h"
 #include "DNA_gpu_types.h"
+#include "DNA_layer_types.h"
 #include "DNA_userdef_types.h"
 
 struct CurveMapping;
@@ -65,6 +66,7 @@ struct bGPdata;
 struct bGPDbrush;
 struct MovieClip;
 struct ColorSpace;
+struct SceneCollection;
 
 /* ************************************************************* */
 /* Scene Data */
@@ -1630,7 +1632,7 @@ typedef struct Scene {
 	struct PreviewImage *preview;
 
 	ListBase render_layers;
-	ListBase collections;
+	struct SceneCollection collection;
 } Scene;
 
 /* **************** RENDERDATA ********************* */
