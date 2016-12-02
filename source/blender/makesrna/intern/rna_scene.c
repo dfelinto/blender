@@ -2224,6 +2224,35 @@ static void rna_SceneCollection_object_unlink(
 	WM_main_add_notifier(NC_SCENE | ND_LAYER | ND_OB_ACTIVE, scene);
 }
 
+static void rna_LayerCollection_name_get(PointerRNA *ptr, char *value)
+{
+	SceneCollection *sc = ((LayerCollection *)ptr->data)->collection;
+	strcpy(value, sc->name);
+}
+
+static int rna_LayerCollection_name_length(PointerRNA *ptr)
+{
+	SceneCollection *sc = ((LayerCollection *)ptr->data)->collection;
+	return strnlen(sc->name, sizeof(sc->name));
+}
+
+static void rna_LayerCollection_name_set(PointerRNA *ptr, const char *value)
+{
+	Scene *scene = (Scene *)ptr->id.data;
+	SceneCollection *sc = ((LayerCollection *)ptr->data)->collection;
+	SceneCollection *sc_master = BKE_collection_master(scene);
+
+	BLI_strncpy_utf8(sc->name, value, sizeof(sc->name));
+	BLI_uniquename(&sc_master->collections, sc, DATA_("SceneCollection"), '.', offsetof(SceneCollection, name), sizeof(sc->name));
+}
+
+static PointerRNA rna_LayerCollection_objects_get(CollectionPropertyIterator *iter)
+{
+	ListBaseIterator *internal = &iter->internal.listbase;
+	ObjectBase *base = ((LinkData *)internal->link)->data;
+	return rna_pointer_inherit_refine(&iter->parent, &RNA_Object, base->object);
+}
+
 static void rna_SceneLayer_name_set(PointerRNA *ptr, const char *value)
 {
 	Scene *scene = (Scene *)ptr->id.data;
@@ -5152,6 +5181,61 @@ static void rna_def_scene_collection(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Filter Objects", "All the objects dynamically added to this collection via the filter");
 }
 
+static void rna_def_layer_collection(BlenderRNA *brna)
+{
+	StructRNA *srna;
+	PropertyRNA *prop;
+
+	srna = RNA_def_struct(brna, "LayerCollection", NULL);
+	RNA_def_struct_ui_text(srna, "Layer Collection", "Layer collection");
+
+	prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
+	RNA_def_property_string_funcs(prop, "rna_LayerCollection_name_get", "rna_LayerCollection_name_length", "rna_LayerCollection_name_set");
+	RNA_def_property_ui_text(prop, "Name", "Collection name");
+	RNA_def_struct_name_property(srna, prop);
+	RNA_def_property_update(prop, NC_SCENE | ND_LAYER_CONTENT, NULL);
+
+	prop = RNA_def_property(srna, "collection", PROP_POINTER, PROP_NONE);
+	RNA_def_property_flag(prop, PROP_NEVER_NULL);
+	RNA_def_property_pointer_sdna(prop, NULL, "collection");
+	RNA_def_property_struct_type(prop, "SceneCollection");
+	RNA_def_property_ui_text(prop, "Collection", "Collection this layer collection is wrapping");
+
+	prop = RNA_def_property(srna, "collections", PROP_COLLECTION, PROP_NONE);
+	RNA_def_property_collection_sdna(prop, NULL, "collections", NULL);
+	RNA_def_property_struct_type(prop, "LayerCollection");
+	RNA_def_property_ui_text(prop, "LayerCollections", "");
+
+	prop = RNA_def_property(srna, "objects", PROP_COLLECTION, PROP_NONE);
+	RNA_def_property_collection_sdna(prop, NULL, "object_bases", NULL);
+	RNA_def_property_struct_type(prop, "Object");
+	RNA_def_property_collection_funcs(prop, NULL, NULL, NULL, "rna_LayerCollection_objects_get", NULL, NULL, NULL, NULL);
+	RNA_def_property_ui_text(prop, "Objects", "All the objects directly or indirectly added to this collection (not including sub-collection objects)");
+
+	/* Flags */
+	prop = RNA_def_property(srna, "hide", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_negative_sdna(prop, NULL, "flag", COLLECTION_VISIBLE);
+	RNA_def_property_ui_icon(prop, ICON_RESTRICT_VIEW_OFF, 0);
+	RNA_def_property_ui_text(prop, "Hide", "Restrict visiblity");
+	RNA_def_property_update(prop, NC_SCENE | ND_LAYER_CONTENT, NULL);
+
+	prop = RNA_def_property(srna, "hide_select", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_negative_sdna(prop, NULL, "flag", COLLECTION_SELECTABLE);
+	RNA_def_property_ui_icon(prop, ICON_RESTRICT_SELECT_OFF, 0);
+	RNA_def_property_ui_text(prop, "Hide Selectable", "Restrict selection");
+	RNA_def_property_update(prop, NC_SCENE | ND_LAYER_CONTENT, NULL);
+
+	prop = RNA_def_property(srna, "use_folded", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "flag", COLLECTION_FOLDED);
+	RNA_def_property_ui_text(prop, "Folded", "Folded collection");
+	RNA_def_property_update(prop, NC_SCENE | ND_LAYER_CONTENT, NULL);
+
+#if 0
+	/* objects */
+#endif
+	/* TODO_LAYER_OVERRIDE */
+}
+
 static void rna_def_scene_layer(BlenderRNA *brna)
 {
 	StructRNA *srna;
@@ -5167,8 +5251,13 @@ static void rna_def_scene_layer(BlenderRNA *brna)
 	RNA_def_struct_name_property(srna, prop);
 	RNA_def_property_update(prop, NC_SCENE | ND_LAYER_CONTENT, NULL);
 
+	prop = RNA_def_property(srna, "collections", PROP_COLLECTION, PROP_NONE);
+	RNA_def_property_collection_sdna(prop, NULL, "collections", NULL);
+	RNA_def_property_struct_type(prop, "LayerCollection");
+	RNA_def_property_ui_text(prop, "Layer Collections", "");
+
 #if 0
-	/* engine, objects, active_object, ... */
+	/* engine, objects, active_object, active collection, ... */
 #endif
 }
 
@@ -7556,6 +7645,7 @@ void RNA_def_scene(BlenderRNA *brna)
 	rna_def_selected_uv_element(brna);
 	rna_def_display_safe_areas(brna);
 	rna_def_scene_collection(brna);
+	rna_def_layer_collection(brna);
 	rna_def_scene_layer(brna);
 	RNA_define_animate_sdna(true);
 	/* *** Animated *** */
