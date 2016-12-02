@@ -2277,6 +2277,15 @@ static void rna_SceneLayer_name_set(PointerRNA *ptr, const char *value)
 	}
 }
 
+static PointerRNA rna_SceneLayer_objects_get(CollectionPropertyIterator *iter)
+{
+	ListBaseIterator *internal = &iter->internal.listbase;
+
+	/* we are actually iterating a ObjectBase list, so override get */
+	ObjectBase *base = (ObjectBase *)internal->link;
+	return rna_pointer_inherit_refine(&iter->parent, &RNA_Object, base->object);
+}
+
 static SceneLayer *rna_SceneLayer_new(ID *id, Scene *UNUSED(sce), const char *name)
 {
 	Scene *scene = (Scene *)id;
@@ -5256,8 +5265,14 @@ static void rna_def_scene_layer(BlenderRNA *brna)
 	RNA_def_property_struct_type(prop, "LayerCollection");
 	RNA_def_property_ui_text(prop, "Layer Collections", "");
 
+	prop = RNA_def_property(srna, "objects", PROP_COLLECTION, PROP_NONE);
+	RNA_def_property_collection_sdna(prop, NULL, "object_bases", NULL);
+	RNA_def_property_struct_type(prop, "Object");
+	RNA_def_property_collection_funcs(prop, NULL, NULL, NULL, "rna_SceneLayer_objects_get", NULL, NULL, NULL, NULL);
+	RNA_def_property_ui_text(prop, "Objects", "All the objects in this layer");
+
 #if 0
-	/* engine, objects, active_object, active collection, ... */
+	/* engine, active_object, active collection, ... */
 #endif
 }
 
