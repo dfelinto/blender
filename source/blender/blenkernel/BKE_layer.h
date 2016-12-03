@@ -34,18 +34,22 @@ extern "C" {
 #define TODO_LAYER_SYNC
 #define TODO_LAYER_OVERRIDE
 
-struct SceneCollection;
 struct LayerCollection;
 struct ID;
 struct Main;
-struct SceneLayer;
+struct Object;
+struct ObjectBase;
 struct Scene;
+struct SceneCollection;
+struct SceneLayer;
 
 struct SceneLayer *BKE_scene_layer_add(struct Scene *scene, const char *name);
 
 bool BKE_scene_layer_remove(struct Main *bmain, struct Scene *scene, struct SceneLayer *sl);
 
 void BKE_scene_layer_engine_set(struct SceneLayer *sl, const char *engine);
+
+struct ObjectBase *BKE_scene_layer_base_find(struct SceneLayer *sl, struct Object *ob);
 
 void BKE_layer_collection_free(struct SceneLayer *sl, struct LayerCollection *lc);
 

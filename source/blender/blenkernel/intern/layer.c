@@ -118,6 +118,11 @@ void BKE_scene_layer_engine_set(SceneLayer *sl, const char *engine)
 
 /* ObjectBase */
 
+ObjectBase *BKE_scene_layer_base_find(SceneLayer *sl, Object *ob)
+{
+	return BLI_findptr(&sl->object_bases, ob, offsetof(ObjectBase, object));
+}
+
 static void scene_layer_object_base_unref(SceneLayer* sl, ObjectBase *base)
 {
 	base->refcount--;

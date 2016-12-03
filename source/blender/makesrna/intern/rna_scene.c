@@ -2289,6 +2289,21 @@ static void rna_LayerCollections_active_collection_set(PointerRNA *ptr, PointerR
 	if (index != -1) sl->active_collection = index;
 }
 
+static PointerRNA rna_LayerObjects_active_object_get(PointerRNA *ptr)
+{
+	SceneLayer *sl = (SceneLayer *)ptr->data;
+	return rna_pointer_inherit_refine(ptr, &RNA_Object, sl->basact ? sl->basact->object : NULL);
+}
+
+static void rna_LayerObjects_active_object_set(PointerRNA *ptr, PointerRNA value)
+{
+	SceneLayer *sl = (SceneLayer *)ptr->data;
+	if (value.data)
+		sl->basact = BKE_scene_layer_base_find(sl, (Object *)value.data);
+	else
+		sl->basact = NULL;
+}
+
 static void rna_SceneLayer_name_set(PointerRNA *ptr, const char *value)
 {
 	Scene *scene = (Scene *)ptr->id.data;
@@ -5305,6 +5320,26 @@ static void rna_def_layer_collections(BlenderRNA *brna, PropertyRNA *cprop)
 	RNA_def_property_update(prop, NC_SCENE | ND_LAYER, NULL);
 }
 
+static void rna_def_layer_objects(BlenderRNA *brna, PropertyRNA *cprop)
+{
+	StructRNA *srna;
+	PropertyRNA *prop;
+
+	RNA_def_property_srna(cprop, "LayerObjects");
+	srna = RNA_def_struct(brna, "LayerObjects", NULL);
+	RNA_def_struct_sdna(srna, "SceneLayer");
+	RNA_def_struct_ui_text(srna, "Layer Objects", "Collections of objects");
+
+	prop = RNA_def_property(srna, "active", PROP_POINTER, PROP_NONE);
+	RNA_def_property_struct_type(prop, "Object");
+	RNA_def_property_pointer_funcs(prop, "rna_LayerObjects_active_object_get", "rna_LayerObjects_active_object_set", NULL, NULL);
+	RNA_def_property_flag(prop, PROP_EDITABLE | PROP_NEVER_UNLINK);
+	RNA_def_property_ui_text(prop, "Active Object", "Active object for this layer");
+	/* Could call: ED_base_object_activate(C, rl->basact);
+	 * but would be a bad level call and it seems the notifier is enough */
+	RNA_def_property_update(prop, NC_SCENE | ND_OB_ACTIVE, NULL);
+}
+
 static void rna_def_scene_layer(BlenderRNA *brna)
 {
 	StructRNA *srna;
@@ -5331,6 +5366,7 @@ static void rna_def_scene_layer(BlenderRNA *brna)
 	RNA_def_property_struct_type(prop, "Object");
 	RNA_def_property_collection_funcs(prop, NULL, NULL, NULL, "rna_SceneLayer_objects_get", NULL, NULL, NULL, NULL);
 	RNA_def_property_ui_text(prop, "Objects", "All the objects in this layer");
+	rna_def_layer_objects(brna, prop);
 
 #if 0
 	/* engine, active_object,  ... */
