@@ -113,7 +113,7 @@ bool BKE_scene_layer_remove(Main *bmain, Scene *scene, SceneLayer *sl)
  */
 void BKE_scene_layer_engine_set(SceneLayer *sl, const char *engine)
 {
-	BLI_strncpy(sl->engine, engine, sizeof(sl->engine));
+	BLI_strncpy_utf8(sl->engine, engine, sizeof(sl->engine));
 }
 
 /* ObjectBase */
