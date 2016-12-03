@@ -2337,6 +2337,24 @@ static PointerRNA rna_SceneLayer_objects_get(CollectionPropertyIterator *iter)
 	return rna_pointer_inherit_refine(&iter->parent, &RNA_Object, base->object);
 }
 
+static int rna_SceneLayer_objects_selected_skip(CollectionPropertyIterator *iter, void *UNUSED(data))
+{
+	ListBaseIterator *internal = &iter->internal.listbase;
+	ObjectBase *base = (ObjectBase *)internal->link;
+
+	if ((base->flag & BASE_SELECTED) != 0) {
+			return 0;
+	}
+
+	return 1;
+};
+
+static void rna_LayerObjects_selected_begin(CollectionPropertyIterator *iter, PointerRNA *ptr)
+{
+	SceneLayer *sl = (SceneLayer *)ptr->data;
+	rna_iterator_listbase_begin(iter, &sl->object_bases, rna_SceneLayer_objects_selected_skip);
+}
+
 static void rna_SceneLayer_engine_set(PointerRNA *ptr, int value)
 {
 	SceneLayer *sl = (SceneLayer *)ptr->data;
@@ -5391,6 +5409,14 @@ static void rna_def_layer_objects(BlenderRNA *brna, PropertyRNA *cprop)
 	/* Could call: ED_base_object_activate(C, rl->basact);
 	 * but would be a bad level call and it seems the notifier is enough */
 	RNA_def_property_update(prop, NC_SCENE | ND_OB_ACTIVE, NULL);
+
+	prop = RNA_def_property(srna, "selected", PROP_COLLECTION, PROP_NONE);
+	RNA_def_property_collection_sdna(prop, NULL, "object_bases", NULL);
+	RNA_def_property_struct_type(prop, "Object");
+	RNA_def_property_collection_funcs(prop, "rna_LayerObjects_selected_begin", "rna_iterator_listbase_next",
+	                                  "rna_iterator_listbase_end", "rna_SceneLayer_objects_get",
+	                                  NULL, NULL, NULL, NULL);
+	RNA_def_property_ui_text(prop, "Selected Objects", "All the selected objects of this layer");
 }
 
 static void rna_def_scene_layer(BlenderRNA *brna)
@@ -5439,10 +5465,6 @@ static void rna_def_scene_layer(BlenderRNA *brna)
 	RNA_def_property_boolean_funcs(prop, "rna_SceneLayer_multiple_engines_get", NULL);
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 	RNA_def_property_ui_text(prop, "Multiple Engines", "More than one rendering engine is available");
-
-#if 0
-	/* selected_objects */
-#endif
 }
 
 static void rna_def_scene_layers(BlenderRNA *brna, PropertyRNA *cprop)

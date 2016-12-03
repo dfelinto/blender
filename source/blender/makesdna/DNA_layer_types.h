@@ -77,7 +77,12 @@ typedef struct SceneLayer {
 	ListBase object_bases; /* ObjectBase */
 } SceneLayer;
 
-/* CollectionBase->flag */
+/* ObjectBase->flag */
+enum {
+	BASE_SELECTED         = (1 << 0),
+};
+
+/* LayerCollection->flag */
 enum {
 	COLLECTION_VISIBLE    = (1 << 0),
 	COLLECTION_SELECTABLE = (1 << 1),
