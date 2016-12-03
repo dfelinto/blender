@@ -141,18 +141,7 @@ static ObjectBase *object_base_add(SceneLayer *sl, Object *ob)
 	return base;
 }
 
-/* CollectionBase */
-
-/*
- * Link a collection to a renderlayer
- * The collection needs to be created separately
- */
-LayerCollection *BKE_collection_link(SceneLayer *sl, SceneCollection *sc)
-{
-	LayerCollection *lc = layer_collection_add(sl, &sl->collections, sc);
-	return lc;
-}
-
+/* LayerCollection */
 /*
  * Free LayerCollection from SceneLayer
  */
@@ -166,6 +155,16 @@ void BKE_layer_collection_free(SceneLayer *sl, LayerCollection *lc)
 		BLI_freelistN(&nlc->object_bases);
 		BKE_layer_collection_free(sl, nlc);
 	}
+}
+
+/*
+ * Link a collection to a renderlayer
+ * The collection needs to be created separately
+ */
+LayerCollection *BKE_collection_link(SceneLayer *sl, SceneCollection *sc)
+{
+	LayerCollection *lc = layer_collection_add(sl, &sl->collections, sc);
+	return lc;
 }
 
 /*

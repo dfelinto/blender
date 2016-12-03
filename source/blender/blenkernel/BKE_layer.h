@@ -47,9 +47,9 @@ bool BKE_scene_layer_remove(struct Main *bmain, struct Scene *scene, struct Scen
 
 void BKE_scene_layer_engine_set(struct SceneLayer *sl, const char *engine);
 
-struct LayerCollection *BKE_collection_link(struct SceneLayer *sl, struct SceneCollection *sc);
-
 void BKE_layer_collection_free(struct SceneLayer *sl, struct LayerCollection *lc);
+
+struct LayerCollection *BKE_collection_link(struct SceneLayer *sl, struct SceneCollection *sc);
 
 void BKE_collection_unlink(struct SceneLayer *sl, struct LayerCollection *lc);
 
