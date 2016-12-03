@@ -1012,13 +1012,13 @@ static void view3d_main_region_listener(bScreen *sc, ScrArea *sa, ARegion *ar, w
 				case ND_SKETCH:
 					ED_region_tag_redraw(ar);
 					break;
-				case ND_SCREENBROWSE:
+//				case ND_SCREENBROWSE:
 				case ND_SCREENDELETE:
 				case ND_SCREENSET:
 					/* screen was changed, need to update used layers due to NC_SCENE|ND_LAYER_CONTENT */
 					/* updates used layers only for View3D in active screen */
 					if (wmn->reference) {
-						const bScreen *sc_ref = BKE_workspace_layout_screen_get(wmn->reference);
+						const bScreen *sc_ref = wmn->reference;
 						view3d_recalc_used_layers(ar, wmn, sc_ref->scene);
 					}
 					ED_region_tag_redraw(ar);

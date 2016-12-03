@@ -308,6 +308,7 @@ struct MenuType *WM_menutype_find(const char *idname, bool quiet) RET_NULL
 void WM_operator_stack_clear(struct wmWindowManager *wm) RET_NONE
 void WM_operator_handlers_clear(wmWindowManager *wm, struct wmOperatorType *ot) RET_NONE
 struct bScreen *WM_window_get_active_screen(const struct wmWindow *win) RET_NULL
+bool WM_window_is_temp_screen(const struct wmWindow *win) RET_ZERO
 
 void WM_autosave_init(wmWindowManager *wm) RET_NONE
 void WM_jobs_kill_all_except(struct wmWindowManager *wm, void *owner) RET_NONE
@@ -395,7 +396,7 @@ struct MovieClip *ED_space_clip_get_clip(struct SpaceClip *sc) RET_NULL
 void ED_space_clip_set_clip(struct bContext *C, struct bScreen *screen, struct SpaceClip *sc, struct MovieClip *clip) RET_NONE
 void ED_space_clip_set_mask(struct bContext *C, struct SpaceClip *sc, struct Mask *mask) RET_NONE
 void ED_space_image_set_mask(struct bContext *C, struct SpaceImage *sima, struct Mask *mask) RET_NONE
-void ED_workspace_change(struct wmWindow *win, struct WorkSpace *ws) RET_NONE
+void ED_workspace_change(struct bContext *C, struct wmWindow *win, struct WorkSpace *ws) RET_NONE
 
 void ED_area_tag_redraw_regiontype(struct ScrArea *sa, int regiontype) RET_NONE
 void ED_render_engine_changed(struct Main *bmain) RET_NONE

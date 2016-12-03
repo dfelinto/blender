@@ -43,31 +43,17 @@
  * \brief API for managing workspaces and their data.
  * \{ */
 
-static void workspace_unassign_window_workspace(wmWindow *win)
-{
-	win->workspace = NULL; /* just for safty, should always be set */
-}
 
-/**
- * \note Should either be called to initially assign workspace or after calling #workspace_unassign_window_workspace.
- */
-static void workspace_assign_to_window(wmWindow *win, WorkSpace *ws)
+void ED_workspace_change(bContext *C, wmWindow *win, WorkSpace *ws_new)
 {
-	BLI_assert(win->workspace == NULL);
-	win->workspace = ws;
-}
-
-void ED_workspace_change(wmWindow *win, WorkSpace *ws_new)
-{
-	workspace_unassign_window_workspace(win);
-	workspace_assign_to_window(win, ws_new);
-	/* TODO: send notifier */
+	win->workspace = ws_new;
+	ED_screen_set(C, win->workspace->act_layout->screen);
 }
 
 /**
  * \return if succeeded.
  */
-bool ED_workspace_delete(Main *bmain, wmWindow *win, WorkSpace *ws)
+bool ED_workspace_delete(Main *bmain, const bContext *C, wmWindow *win, WorkSpace *ws)
 {
 	if (BLI_listbase_is_single(&bmain->workspaces)) {
 		return false;
@@ -75,7 +61,7 @@ bool ED_workspace_delete(Main *bmain, wmWindow *win, WorkSpace *ws)
 
 	if (win->workspace == ws) {
 		WorkSpace *fallback_ws = ws->id.prev ? ws->id.prev : ws->id.next;
-		ED_workspace_change(win, fallback_ws);
+		ED_workspace_change(C, win, fallback_ws);
 	}
 	BKE_libblock_free(bmain, &ws->id);
 
@@ -96,7 +82,7 @@ static int workspace_new_exec(bContext *C, wmOperator *UNUSED(op))
 	WorkSpace *old_ws = win->workspace;
 	WorkSpace *new_ws = BKE_workspace_duplicate(bmain, old_ws);
 
-	ED_workspace_change(win, new_ws);
+	ED_workspace_change(C, win, new_ws);
 
 	return OPERATOR_FINISHED;
 }
@@ -118,7 +104,7 @@ static int workspace_delete_exec(bContext *C, wmOperator *UNUSED(op))
 	Main *bmain = CTX_data_main(C);
 	wmWindow *win = CTX_wm_window(C);
 
-	ED_workspace_delete(bmain, win, win->workspace);
+	ED_workspace_delete(bmain, C, win, win->workspace);
 
 	return OPERATOR_FINISHED;
 }

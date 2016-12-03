@@ -293,7 +293,16 @@ void wm_event_do_notifiers(bContext *C)
 			}
 			if (note->window == win) {
 				if (note->category == NC_SCREEN) {
-					if (note->data == ND_SCREENBROWSE) {
+					if (note->data == ND_WORKSPACE_SET) {
+						WorkSpace *ref_ws = note->reference;
+
+						UI_popup_handlers_remove_all(C, &win->modalhandlers);
+
+						ED_workspace_change(C, win, ref_ws);
+						if (G.debug & G_DEBUG_EVENTS)
+							printf("%s: Workspace set %p\n", __func__, note->reference);
+					}
+					else if (note->data == ND_SCREENBROWSE) {
 						bScreen *ref_screen = BKE_workspace_layout_screen_get(note->reference);
 
 						/* free popup handlers only [#35434] */

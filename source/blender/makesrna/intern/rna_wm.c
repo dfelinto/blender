@@ -626,8 +626,27 @@ static PointerRNA rna_PieMenu_layout_get(PointerRNA *ptr)
 static void rna_Window_workspace_set(PointerRNA *ptr, PointerRNA value)
 {
 	wmWindow *win = (wmWindow *)ptr->data;
-	WorkSpace *ws_new = value.data;
-	ED_workspace_change(win, ws_new);
+
+	if (WM_window_is_temp_screen(win)) {
+		return;
+	}
+	if (value.data == NULL) {
+		return;
+	}
+
+	win->new_workspace = value.data;
+}
+
+static void rna_Window_workspace_update(bContext *C, PointerRNA *ptr)
+{
+	wmWindow *win = ptr->data;
+
+	/* exception: can't set screens inside of area/region handlers,
+	 * and must use context so notifier gets to the right window */
+	if (win->new_workspace) {
+		WM_event_add_notifier(C, NC_SCREEN | ND_WORKSPACE_SET, win->new_workspace);
+		win->new_workspace = NULL;
+	}
 }
 
 static PointerRNA rna_KeyMapItem_properties_get(PointerRNA *ptr)
@@ -1886,9 +1905,9 @@ static void rna_def_window(BlenderRNA *brna)
 	RNA_def_property_flag(prop, PROP_NEVER_NULL);
 	RNA_def_property_struct_type(prop, "WorkSpace");
 	RNA_def_property_ui_text(prop, "Workspace", "Active workspace showing in the window");
-	RNA_def_property_flag(prop, PROP_EDITABLE);
 	RNA_def_property_pointer_funcs(prop, NULL, "rna_Window_workspace_set", NULL, NULL);
-//	RNA_def_property_update(prop, 0, NULL); /* TODO own notifier? */
+	RNA_def_property_flag(prop, PROP_EDITABLE | PROP_CONTEXT_UPDATE);
+	RNA_def_property_update(prop, 0, "rna_Window_workspace_update");
 
 	prop = RNA_def_property(srna, "x", PROP_INT, PROP_NONE);
 	RNA_def_property_int_sdna(prop, NULL, "posx");
