@@ -144,6 +144,7 @@ bool BKE_collection_remove(Scene *scene, SceneCollection *sc)
 	/* check all layers that use this collection and clear them */
 	for (SceneLayer *sl = scene->render_layers.first; sl; sl = sl->next) {
 		layer_collection_remove(sl, &sl->collections, sc);
+		sl->active_collection = 0;
 	}
 
 	MEM_freeN(sc);
