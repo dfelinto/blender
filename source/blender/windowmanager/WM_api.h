@@ -101,6 +101,11 @@ int			WM_window_pixels_x		(struct wmWindow *win);
 int			WM_window_pixels_y		(struct wmWindow *win);
 bool		WM_window_is_fullscreen	(struct wmWindow *win);
 
+struct Scene *WM_window_get_active_scene(const struct wmWindow *win) ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
+struct bScreen *WM_window_get_active_screen(const struct wmWindow *win) ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
+void            WM_window_set_active_screen(struct wmWindow *win, struct bScreen *screen) ATTR_NONNULL(1);
+bool WM_window_is_temp_screen(const struct wmWindow *win) ATTR_WARN_UNUSED_RESULT;
+
 /* defines for 'type' WM_window_open_temp */
 enum {
 	WM_WINDOW_RENDER = 1,

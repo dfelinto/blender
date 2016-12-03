@@ -86,6 +86,7 @@
 #include "BKE_scene.h"
 #include "BKE_screen.h"
 #include "BKE_tracking.h"
+#include "BKE_workspace.h"
 
 #include "GPU_buffers.h"
 
@@ -2262,8 +2263,10 @@ static void dag_current_scene_layers(Main *bmain, ListBase *lb)
 		BKE_main_id_flag_listbase(&bmain->scene, LIB_TAG_DOIT, 1);
 
 		for (win = wm->windows.first; win; win = win->next) {
-			if (win->screen && win->screen->scene->theDag) {
-				Scene *scene = win->screen->scene;
+			bScreen *screen = BKE_workspace_active_screen_get(win->workspace);
+
+			if (screen && screen->scene->theDag) {
+				Scene *scene = screen->scene;
 				DagSceneLayer *dsl;
 
 				if (scene->id.tag & LIB_TAG_DOIT) {
@@ -2272,7 +2275,7 @@ static void dag_current_scene_layers(Main *bmain, ListBase *lb)
 					BLI_addtail(lb, dsl);
 
 					dsl->scene = scene;
-					dsl->layer = BKE_screen_visible_layers(win->screen, scene);
+					dsl->layer = BKE_screen_visible_layers(screen, scene);
 
 					scene->id.tag &= ~LIB_TAG_DOIT;
 				}
@@ -2289,7 +2292,7 @@ static void dag_current_scene_layers(Main *bmain, ListBase *lb)
 					 */
 					for (dsl = lb->first; dsl; dsl = dsl->next) {
 						if (dsl->scene == scene) {
-							dsl->layer |= BKE_screen_visible_layers(win->screen, scene);
+							dsl->layer |= BKE_screen_visible_layers(screen, scene);
 							break;
 						}
 					}

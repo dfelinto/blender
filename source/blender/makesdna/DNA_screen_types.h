@@ -45,8 +45,22 @@ struct Scene;
 struct uiLayout;
 struct wmTimer;
 
+/**
+ * Layouts are basically bScreens. We use this struct to wrap a reference to a screen so that we can store it in
+ * a ListBase within a workspace. Usually you shouldn't have to deal with it, only with bScreen and WorkSpace.
+ */
+typedef struct WorkSpaceLayout {
+	struct WorkSpaceLayout *next, *prev;
+
+	struct bScreen *screen;
+} WorkSpaceLayout;
+
 typedef struct WorkSpace {
 	ID id;
+
+	ListBase layouts;
+	WorkSpaceLayout *act_layout;
+	WorkSpaceLayout *new_layout; /* temporary when switching screens */
 } WorkSpace;
 
 typedef struct bScreen {
@@ -60,7 +74,7 @@ typedef struct bScreen {
 	struct Scene *scene;
 	struct Scene *newscene;				/* temporary when switching */
 	
-	short winid;						/* winid from WM, starts with 1 */
+	short winid;						/* winid from WM, starts with 1 TODO will have to rework this */
 	short redraws_flag;					/* user-setting for which editors get redrawn during anim playback (used to be time->redraws) */
 
 	char temp;							/* temp screen in a temp window, don't save (like user prefs) */

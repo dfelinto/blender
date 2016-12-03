@@ -64,6 +64,7 @@
 #include "BKE_scene.h"
 #include "BKE_sequencer.h"
 #include "BKE_screen.h"
+#include "BKE_workspace.h"
 #include "BKE_tracking.h"
 #include "BKE_gpencil.h"
 
@@ -1398,14 +1399,22 @@ void blo_do_versions_270(FileData *fd, Library *UNUSED(lib), Main *main)
 	}
 
 	{
+		/* New workspace design */
 		if (!DNA_struct_find(fd->filesdna, "WorkSpace")) {
 			BLI_assert(BLI_listbase_is_empty(&main->workspaces));
 
-			/* Add default workspace */
-			for (wmWindowManager *wm = main->wm.first; wm; wm = wm->id.next) {
-				for (wmWindow *win = wm->windows.first; win; win = win->next) {
-					win->workspace = BKE_libblock_alloc(main, ID_WS, "Default");
-				}
+			/* Add a workspace for each screen of the old file. */
+			for (bScreen *screen = main->screen.first; screen; screen = screen->id.next) {
+				WorkSpace *ws = BKE_workspace_add(main, screen->id.name + 2);
+				WorkSpaceLayout *layout = MEM_mallocN(sizeof(*layout), "WorkspaceLayout do_versions");
+
+				layout->screen = screen;
+				ws->act_layout = layout;
+				BLI_addhead(&ws->layouts, layout);
+
+				/* For compatibility, the workspace should be activated that represents the active
+				 * screen of the old file. We can't do this here though since wmWindow.screen
+				 * pointer isn't remapped yet. Done in lib_link_windowmanager instead */
 			}
 		}
 	}

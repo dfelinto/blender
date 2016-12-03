@@ -324,7 +324,7 @@ static unsigned int *screenshot(ScrArea *curarea, int *dumpsx, int *dumpsy)
 void KX_BlenderCanvas::MakeScreenShot(const char *filename)
 {
 	ScrArea area_dummy= {0};
-	bScreen *screen = m_win->screen;
+	bScreen *screen = WM_window_get_active_screen(m_win);
 	unsigned int *dumprect;
 	int dumpsx, dumpsy;
 

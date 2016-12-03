@@ -54,7 +54,7 @@ void        removedouble_scrverts(bScreen *sc);
 void        removedouble_scredges(bScreen *sc);
 void        removenotused_scredges(bScreen *sc);
 bool        scredge_is_horizontal(ScrEdge *se);
-ScrEdge    *screen_find_active_scredge(bScreen *sc,
+ScrEdge    *screen_find_active_scredge(const bScreen *sc,
                                        const int winsize_x, const int winsize_y,
                                        const int mx, const int my);
 

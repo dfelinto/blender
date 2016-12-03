@@ -5798,9 +5798,20 @@ static void lib_link_windowmanager(FileData *fd, Main *main)
 	
 	for (wm = main->wm.first; wm; wm = wm->id.next) {
 		if (wm->id.tag & LIB_TAG_NEED_LINK) {
-			for (win = wm->windows.first; win; win = win->next)
-				win->screen = newlibadr(fd, NULL, win->screen);
-			
+			for (win = wm->windows.first; win; win = win->next) {
+				/* 2.8 Conversion:
+				 * Active screen isn't stored directly in window anymore, but in the active workspace.
+				 * We already created a new workspace for each screen in blo_do_versions_270, here we need
+				 * to find and activate the workspace that contains the active screen of the old file. */
+				if (win->screen) {
+					win->screen = newlibadr(fd, NULL, win->screen);
+					win->workspace = BLI_findstring(&main->workspaces, win->screen->id.name + 2,
+					                                offsetof(ID, name) + 2);
+					/* Deprecated from now on! */
+					win->screen = NULL;
+				}
+			}
+
 			wm->id.tag &= ~LIB_TAG_NEED_LINK;
 		}
 	}
@@ -6187,6 +6198,7 @@ void blo_lib_link_screen_restore(Main *newmain, bScreen *curscreen, Scene *cursc
 	/* first windowmanager */
 	for (wm = newmain->wm.first; wm; wm = wm->id.next) {
 		for (win= wm->windows.first; win; win= win->next) {
+			/* TODO */
 			win->screen = restore_pointer_by_name(id_map, (ID *)win->screen, USER_REAL);
 			
 			if (win->screen == NULL)

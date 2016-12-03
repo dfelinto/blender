@@ -564,9 +564,11 @@ void ED_region_do_draw(bContext *C, ARegion *ar)
 	UI_blocklist_free_inactive(C, &ar->uiblocks);
 
 	if (sa) {
+		const bScreen *screen = WM_window_get_active_screen(win);
+
 		/* disable emboss when the area is full,
 		 * unless we need to see division between regions (quad-split for eg) */
-		if (((win->screen->state == SCREENFULL) && (ar->alignment == RGN_ALIGN_NONE)) == 0) {
+		if (((screen->state == SCREENFULL) && (ar->alignment == RGN_ALIGN_NONE)) == 0) {
 			region_draw_emboss(ar, &ar->winrct);
 		}
 	}
@@ -680,7 +682,7 @@ void ED_area_headerprint(ScrArea *sa, const char *str)
 /* ************************************************************ */
 
 
-static void area_azone_initialize(wmWindow *win, bScreen *screen, ScrArea *sa)
+static void area_azone_initialize(wmWindow *win, const bScreen *screen, ScrArea *sa)
 {
 	AZone *az;
 	
@@ -1336,7 +1338,9 @@ static void region_rect_recursive(wmWindow *win, ScrArea *sa, ARegion *ar, rcti 
 		 * must be minimum '4' */
 	}
 	else {
-		if (ELEM(win->screen->state, SCREENNORMAL, SCREENMAXIMIZED)) {
+		const bScreen *screen = WM_window_get_active_screen(win);
+
+		if (ELEM(screen->state, SCREENNORMAL, SCREENMAXIMIZED)) {
 			region_azone_add(sa, ar, alignment, false);
 		}
 		else {
@@ -1460,6 +1464,7 @@ static void ed_default_handlers(wmWindowManager *wm, ScrArea *sa, ListBase *hand
 /* called in screen_refresh, or screens_init, also area size changes */
 void ED_area_initialize(wmWindowManager *wm, wmWindow *win, ScrArea *sa)
 {
+	const bScreen *screen = WM_window_get_active_screen(win);
 	ARegion *ar;
 	rcti rect;
 	
@@ -1478,7 +1483,7 @@ void ED_area_initialize(wmWindowManager *wm, wmWindow *win, ScrArea *sa)
 	area_calc_totrct(sa, WM_window_pixels_x(win), WM_window_pixels_y(win));
 	
 	/* clear all azones, add the area triange widgets */
-	area_azone_initialize(win, win->screen, sa);
+	area_azone_initialize(win, screen, sa);
 
 	/* region rect sizes */
 	rect = sa->totrct;

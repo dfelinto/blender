@@ -57,6 +57,7 @@
 #include "BKE_report.h"
 #include "BKE_scene.h"
 #include "BKE_screen.h"
+#include "BKE_workspace.h"
 
 #include "BKE_sound.h"
 
@@ -274,6 +275,7 @@ void wm_event_do_notifiers(bContext *C)
 	
 	/* cache & catch WM level notifiers, such as frame change, scene/screen set */
 	for (win = wm->windows.first; win; win = win->next) {
+		const bScreen *screen = WM_window_get_active_screen(win);
 		bool do_anim = false;
 		
 		CTX_wm_window_set(C, win);
@@ -292,11 +294,13 @@ void wm_event_do_notifiers(bContext *C)
 			if (note->window == win) {
 				if (note->category == NC_SCREEN) {
 					if (note->data == ND_SCREENBROWSE) {
+						bScreen *ref_screen = BKE_workspace_layout_screen_get(note->reference);
+
 						/* free popup handlers only [#35434] */
 						UI_popup_handlers_remove_all(C, &win->modalhandlers);
 
 
-						ED_screen_set(C, note->reference);  // XXX hrms, think this over!
+						ED_screen_set(C, ref_screen);  // XXX hrms, think this over!
 						if (G.debug & G_DEBUG_EVENTS)
 							printf("%s: screen set %p\n", __func__, note->reference);
 					}
@@ -309,7 +313,7 @@ void wm_event_do_notifiers(bContext *C)
 			}
 
 			if (note->window == win ||
-			    (note->window == NULL && (note->reference == NULL || note->reference == win->screen->scene)))
+			    (note->window == NULL && (note->reference == NULL || note->reference == screen->scene)))
 			{
 				if (note->category == NC_SCENE) {
 					if (note->data == ND_FRAME)
@@ -317,7 +321,7 @@ void wm_event_do_notifiers(bContext *C)
 				}
 			}
 			if (ELEM(note->category, NC_SCENE, NC_OBJECT, NC_GEOM, NC_WM)) {
-				ED_info_stats_clear(win->screen->scene);
+				ED_info_stats_clear(screen->scene);
 				WM_event_add_notifier(C, NC_SPACE | ND_SPACE_INFO, NULL);
 			}
 		}
@@ -329,7 +333,7 @@ void wm_event_do_notifiers(bContext *C)
 			if (G.is_rendering == false) {
 
 				/* depsgraph gets called, might send more notifiers */
-				ED_update_for_newframe(CTX_data_main(C), win->screen->scene, 1);
+				ED_update_for_newframe(CTX_data_main(C), screen->scene, 1);
 			}
 		}
 	}
@@ -337,12 +341,13 @@ void wm_event_do_notifiers(bContext *C)
 	/* the notifiers are sent without context, to keep it clean */
 	while ((note = BLI_pophead(&wm->queue))) {
 		for (win = wm->windows.first; win; win = win->next) {
-			
+			bScreen *screen = WM_window_get_active_screen(win);
+
 			/* filter out notifiers */
-			if (note->category == NC_SCREEN && note->reference && note->reference != win->screen) {
+			if (note->category == NC_SCREEN && note->reference && note->reference != screen) {
 				/* pass */
 			}
-			else if (note->category == NC_SCENE && note->reference && note->reference != win->screen->scene) {
+			else if (note->category == NC_SCENE && note->reference && note->reference != screen->scene) {
 				/* pass */
 			}
 			else {
@@ -355,14 +360,14 @@ void wm_event_do_notifiers(bContext *C)
 				/* printf("notifier win %d screen %s cat %x\n", win->winid, win->screen->id.name + 2, note->category); */
 				ED_screen_do_listen(C, note);
 
-				for (ar = win->screen->regionbase.first; ar; ar = ar->next) {
-					ED_region_do_listen(win->screen, NULL, ar, note);
+				for (ar = screen->regionbase.first; ar; ar = ar->next) {
+					ED_region_do_listen(screen, NULL, ar, note);
 				}
 				
-				for (sa = win->screen->areabase.first; sa; sa = sa->next) {
-					ED_area_do_listen(win->screen, sa, note);
+				for (sa = screen->areabase.first; sa; sa = sa->next) {
+					ED_area_do_listen(screen, sa, note);
 					for (ar = sa->regionbase.first; ar; ar = ar->next) {
-						ED_region_do_listen(win->screen, sa, ar, note);
+						ED_region_do_listen(screen, sa, ar, note);
 					}
 				}
 			}
@@ -373,15 +378,16 @@ void wm_event_do_notifiers(bContext *C)
 	
 	/* combine datamasks so 1 win doesn't disable UV's in another [#26448] */
 	for (win = wm->windows.first; win; win = win->next) {
-		win_combine_v3d_datamask |= ED_view3d_screen_datamask(win->screen);
+		win_combine_v3d_datamask |= ED_view3d_screen_datamask(WM_window_get_active_screen(win));
 	}
 
 	/* cached: editor refresh callbacks now, they get context */
 	for (win = wm->windows.first; win; win = win->next) {
+		const bScreen *screen = WM_window_get_active_screen(win);
 		ScrArea *sa;
 		
 		CTX_wm_window_set(C, win);
-		for (sa = win->screen->areabase.first; sa; sa = sa->next) {
+		for (sa = screen->areabase.first; sa; sa = sa->next) {
 			if (sa->do_refresh) {
 				CTX_wm_area_set(C, sa);
 				ED_area_do_refresh(C, sa);
@@ -394,12 +400,12 @@ void wm_event_do_notifiers(bContext *C)
 			Main *bmain = CTX_data_main(C);
 
 			/* copied to set's in scene_update_tagged_recursive() */
-			win->screen->scene->customdata_mask = win_combine_v3d_datamask;
+			screen->scene->customdata_mask = win_combine_v3d_datamask;
 
 			/* XXX, hack so operators can enforce datamasks [#26482], gl render */
-			win->screen->scene->customdata_mask |= win->screen->scene->customdata_mask_modal;
+			screen->scene->customdata_mask |= screen->scene->customdata_mask_modal;
 
-			BKE_scene_update_tagged(bmain->eval_ctx, bmain, win->screen->scene);
+			BKE_scene_update_tagged(bmain->eval_ctx, bmain, screen->scene);
 		}
 	}
 
@@ -2342,17 +2348,19 @@ static void wm_paintcursor_test(bContext *C, const wmEvent *event)
 
 static void wm_event_drag_test(wmWindowManager *wm, wmWindow *win, wmEvent *event)
 {
+	bScreen *screen = WM_window_get_active_screen(win);
+
 	if (BLI_listbase_is_empty(&wm->drags)) {
 		return;
 	}
 	
 	if (event->type == MOUSEMOVE || ISKEYMODIFIER(event->type)) {
-		win->screen->do_draw_drag = true;
+		screen->do_draw_drag = true;
 	}
 	else if (event->type == ESCKEY) {
 		WM_drag_free_list(&wm->drags);
 
-		win->screen->do_draw_drag = true;
+		screen->do_draw_drag = true;
 	}
 	else if (event->type == LEFTMOUSE && event->val == KM_RELEASE) {
 		event->type = EVT_DROP;
@@ -2368,16 +2376,16 @@ static void wm_event_drag_test(wmWindowManager *wm, wmWindow *win, wmEvent *even
 		event->customdatafree = 1;
 		
 		/* clear drop icon */
-		win->screen->do_draw_drag = true;
+		screen->do_draw_drag = true;
 		
 		/* restore cursor (disabled, see wm_dragdrop.c) */
 		// WM_cursor_modal_restore(win);
 	}
 	
 	/* overlap fails otherwise */
-	if (win->screen->do_draw_drag)
+	if (screen->do_draw_drag)
 		if (win->drawmethod == USER_DRAW_OVERLAP)
-			win->screen->do_draw = true;
+			screen->do_draw = true;
 	
 }
 
@@ -2409,21 +2417,21 @@ void wm_event_do_handlers(bContext *C)
 	WM_keyconfig_update(wm);
 
 	for (win = wm->windows.first; win; win = win->next) {
+		bScreen *screen = WM_window_get_active_screen(win);
 		wmEvent *event;
 		
-		if (win->screen == NULL)
+		if (screen == NULL)
 			wm_event_free_all(win);
 		else {
-			Scene *scene = win->screen->scene;
+			Scene *scene = WM_window_get_active_scene(win);
 			
 			if (scene) {
-				int is_playing_sound = BKE_sound_scene_playing(win->screen->scene);
+				int is_playing_sound = BKE_sound_scene_playing(screen->scene);
 				
 				if (is_playing_sound != -1) {
 					bool is_playing_screen;
 					CTX_wm_window_set(C, win);
 					CTX_wm_workspace_set(C, win->workspace);
-					CTX_wm_screen_set(C, win->screen);
 					CTX_data_scene_set(C, scene);
 					
 					is_playing_screen = (ED_screen_animation_playing(wm) != NULL);
@@ -2514,12 +2522,12 @@ void wm_event_do_handlers(bContext *C)
 				}
 #endif
 
-				for (sa = win->screen->areabase.first; sa; sa = sa->next) {
+				for (sa = screen->areabase.first; sa; sa = sa->next) {
 					/* after restoring a screen from SCREENMAXIMIZED we have to wait
 					 * with the screen handling till the region coordinates are updated */
-					if (win->screen->skip_handling == true) {
+					if (screen->skip_handling == true) {
 						/* restore for the next iteration of wm_event_do_handlers */
-						win->screen->skip_handling = false;
+						screen->skip_handling = false;
 						break;
 					}
 

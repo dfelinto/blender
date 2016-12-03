@@ -267,7 +267,7 @@ bool scredge_is_horizontal(ScrEdge *se)
 }
 
 /* need win size to make sure not to include edges along screen edge */
-ScrEdge *screen_find_active_scredge(bScreen *sc,
+ScrEdge *screen_find_active_scredge(const bScreen *sc,
                                     const int winsize_x, const int winsize_y,
                                     const int mx, const int my)
 {
@@ -1068,7 +1068,9 @@ bScreen *ED_screen_duplicate(wmWindow *win, bScreen *sc)
 /* screen sets cursor based on swinid */
 static void region_cursor_set(wmWindow *win, int swinid, int swin_changed)
 {
-	for (ScrArea *sa = win->screen->areabase.first; sa; sa = sa->next) {
+	bScreen *screen = WM_window_get_active_screen(win);
+
+	for (ScrArea *sa = screen->areabase.first; sa; sa = sa->next) {
 		for (ARegion *ar = sa->regionbase.first; ar; ar = ar->next) {
 			if (ar->swinid == swinid) {
 				if (swin_changed || (ar->type && ar->type->event_cursor)) {
@@ -1086,19 +1088,20 @@ static void region_cursor_set(wmWindow *win, int swinid, int swin_changed)
 void ED_screen_do_listen(bContext *C, wmNotifier *note)
 {
 	wmWindow *win = CTX_wm_window(C);
-	
+	bScreen *screen = CTX_wm_screen(C);
+
 	/* generic notes */
 	switch (note->category) {
 		case NC_WM:
 			if (note->data == ND_FILEREAD)
-				win->screen->do_draw = true;
+				screen->do_draw = true;
 			break;
 		case NC_WINDOW:
-			win->screen->do_draw = true;
+			screen->do_draw = true;
 			break;
 		case NC_SCREEN:
 			if (note->action == NA_EDITED)
-				win->screen->do_draw = win->screen->do_refresh = true;
+				screen->do_draw = screen->do_refresh = true;
 			break;
 		case NC_SCENE:
 			if (note->data == ND_MODE)
@@ -1110,6 +1113,7 @@ void ED_screen_do_listen(bContext *C, wmNotifier *note)
 /* only for edge lines between areas, and the blended join arrows */
 void ED_screen_draw(wmWindow *win)
 {
+	bScreen *screen = WM_window_get_active_screen(win);
 	const int winsize_x = WM_window_pixels_x(win);
 	const int winsize_y = WM_window_pixels_y(win);
 
@@ -1118,15 +1122,15 @@ void ED_screen_draw(wmWindow *win)
 	ScrArea *sa2 = NULL;
 	ScrArea *sa3 = NULL;
 
-	wmSubWindowSet(win, win->screen->mainwin);
-	
+	wmSubWindowSet(win, screen->mainwin);
+
 	/* Note: first loop only draws if U.pixelsize > 1, skip otherwise */
 	if (U.pixelsize > 1.0f) {
 		/* FIXME: doesn't our glLineWidth already scale by U.pixelsize? */
 		glLineWidth((2.0f * U.pixelsize) - 1);
 		glColor3ub(0x50, 0x50, 0x50);
 		glBegin(GL_LINES);
-		for (sa = win->screen->areabase.first; sa; sa = sa->next)
+		for (sa = screen->areabase.first; sa; sa = sa->next)
 			drawscredge_area(sa, winsize_x, winsize_y);
 		glEnd();
 	}
@@ -1134,7 +1138,7 @@ void ED_screen_draw(wmWindow *win)
 	glLineWidth(1);
 	glColor3ub(0, 0, 0);
 	glBegin(GL_LINES);
-	for (sa = win->screen->areabase.first; sa; sa = sa->next) {
+	for (sa = screen->areabase.first; sa; sa = sa->next) {
 		drawscredge_area(sa, winsize_x, winsize_y);
 
 		/* gather area split/join info */
@@ -1197,8 +1201,8 @@ void ED_screen_draw(wmWindow *win)
 		glEnd();
 		glDisable(GL_BLEND);
 	}
-	
-	win->screen->do_draw = false;
+
+	screen->do_draw = false;
 }
 
 /* helper call for below, dpi changes headers */
@@ -1216,7 +1220,9 @@ static void screen_refresh_headersizes(void)
 /* make this screen usable */
 /* for file read and first use, for scaling window, area moves */
 void ED_screen_refresh(wmWindowManager *wm, wmWindow *win)
-{	
+{
+	bScreen *screen = WM_window_get_active_screen(win);
+
 	/* exception for bg mode, we only need the screen context */
 	if (!G.background) {
 		const int winsize_x = WM_window_pixels_x(win);
@@ -1232,32 +1238,32 @@ void ED_screen_refresh(wmWindowManager *wm, wmWindow *win)
 		/* header size depends on DPI, let's verify */
 		screen_refresh_headersizes();
 		
-		screen_test_scale(win->screen, winsize_x, winsize_y);
+		screen_test_scale(screen, winsize_x, winsize_y);
 		
-		if (win->screen->mainwin == 0) {
-			win->screen->mainwin = wm_subwindow_open(win, &winrct, false);
+		if (screen->mainwin == 0) {
+			screen->mainwin = wm_subwindow_open(win, &winrct, false);
 		}
 		else {
-			wm_subwindow_position(win, win->screen->mainwin, &winrct, false);
+			wm_subwindow_position(win, screen->mainwin, &winrct, false);
 		}
 		
-		for (sa = win->screen->areabase.first; sa; sa = sa->next) {
+		for (sa = screen->areabase.first; sa; sa = sa->next) {
 			/* set spacetype and region callbacks, calls init() */
 			/* sets subwindows for regions, adds handlers */
 			ED_area_initialize(wm, win, sa);
 		}
 	
 		/* wake up animtimer */
-		if (win->screen->animtimer)
-			WM_event_timer_sleep(wm, win, win->screen->animtimer, false);
+		if (screen->animtimer)
+			WM_event_timer_sleep(wm, win, screen->animtimer, false);
 	}
 
 	if (G.debug & G_DEBUG_EVENTS) {
 		printf("%s: set screen\n", __func__);
 	}
-	win->screen->do_refresh = false;
+	screen->do_refresh = false;
 
-	win->screen->context = ed_screen_context;
+	screen->context = ed_screen_context;
 }
 
 /* file read, set all screens, ... */
@@ -1269,9 +1275,7 @@ void ED_screens_initialize(wmWindowManager *wm)
 		if (win->workspace == NULL) {
 			win->workspace = G.main->workspaces.first;
 		}
-		if (win->screen == NULL)
-			win->screen = G.main->screen.first;
-		
+
 		ED_screen_refresh(wm, win);
 	}
 }
@@ -1359,7 +1363,7 @@ void ED_screen_exit(bContext *C, wmWindow *window, bScreen *screen)
 	/* mark it available for use for other windows */
 	screen->winid = 0;
 	
-	if (prevwin->screen->temp == 0) {
+	if (!WM_window_is_temp_screen(prevwin)) {
 		/* use previous window if possible */
 		CTX_wm_window_set(C, prevwin);
 	}
@@ -1375,13 +1379,14 @@ void ED_screen_exit(bContext *C, wmWindow *window, bScreen *screen)
 /* case when on area-edge or in azones, or outside window */
 static void screen_cursor_set(wmWindow *win, wmEvent *event)
 {
+	const bScreen *screen = WM_window_get_active_screen(win);
 	const int winsize_x = WM_window_pixels_x(win);
 	const int winsize_y = WM_window_pixels_y(win);
 
 	AZone *az = NULL;
 	ScrArea *sa;
 	
-	for (sa = win->screen->areabase.first; sa; sa = sa->next)
+	for (sa = screen->areabase.first; sa; sa = sa->next)
 		if ((az = is_in_area_actionzone(sa, &event->x)))
 			break;
 	
@@ -1396,7 +1401,7 @@ static void screen_cursor_set(wmWindow *win, wmEvent *event)
 		}
 	}
 	else {
-		ScrEdge *actedge = screen_find_active_scredge(win->screen, winsize_x, winsize_y, event->x, event->y);
+		ScrEdge *actedge = screen_find_active_scredge(screen, winsize_x, winsize_y, event->x, event->y);
 		
 		if (actedge) {
 			if (scredge_is_horizontal(actedge))
@@ -1415,9 +1420,9 @@ static void screen_cursor_set(wmWindow *win, wmEvent *event)
 void ED_screen_set_subwinactive(bContext *C, wmEvent *event)
 {
 	wmWindow *win = CTX_wm_window(C);
-	
-	if (win->screen) {
-		bScreen *scr = win->screen;
+	bScreen *scr = WM_window_get_active_screen(win);
+
+	if (scr) {
 		ScrArea *sa;
 		ARegion *ar;
 		int oldswin = scr->subwinactive;
@@ -1470,7 +1475,7 @@ void ED_screen_set_subwinactive(bContext *C, wmEvent *event)
 				/* this used to be a notifier, but needs to be done immediate
 				 * because it can undo setting the right button as active due
 				 * to delayed notifier handling */
-				UI_screen_free_active_but(C, win->screen);
+				UI_screen_free_active_but(C, scr);
 			}
 			else
 				region_cursor_set(win, scr->subwinactive, false);
@@ -1563,9 +1568,9 @@ bool ED_screen_set(bContext *C, bScreen *sc)
 			}
 		}
 
-		win->screen = sc;
+		WM_window_set_active_screen(win, sc);
 		CTX_wm_window_set(C, win);  // stores C->wm.screen... hrmf
-		
+
 		/* prevent multiwin errors */
 		sc->winid = win->winid;
 		
@@ -1605,12 +1610,15 @@ static bool ed_screen_used(wmWindowManager *wm, bScreen *sc)
 	wmWindow *win;
 
 	for (win = wm->windows.first; win; win = win->next) {
-		if (win->screen == sc) {
+		const bScreen *win_screen = WM_window_get_active_screen(win);
+
+		if (win_screen == sc) {
 			return true;
 		}
 
-		if (ELEM(win->screen->state, SCREENMAXIMIZED, SCREENFULL)) {
-			ScrArea *sa = win->screen->areabase.first;
+		if (ELEM(win_screen->state, SCREENMAXIMIZED, SCREENFULL)) {
+			const ScrArea *sa = win_screen->areabase.first;
+
 			if (sa->full == sc) {
 				return true;
 			}
@@ -1653,7 +1661,7 @@ bool ED_screen_delete(bContext *C, bScreen *sc)
 
 	ED_screen_set(C, newsc);
 
-	if (win->screen != sc) {
+	if (WM_window_get_active_screen(win) != sc) {
 		BKE_libblock_free(bmain, sc);
 		return true;
 	}
@@ -1907,7 +1915,7 @@ ScrArea *ED_screen_state_toggle(bContext *C, wmWindow *win, ScrArea *sa, const s
 		ScrArea *old;
 
 		sc = sa->full;       /* the old screen to restore */
-		oldscreen = win->screen; /* the one disappearing */
+		oldscreen = WM_window_get_active_screen(win); /* the one disappearing */
 
 		sc->state = SCREENNORMAL;
 
@@ -1951,7 +1959,7 @@ ScrArea *ED_screen_state_toggle(bContext *C, wmWindow *win, ScrArea *sa, const s
 		ScrArea *newa;
 		char newname[MAX_ID_NAME - 2];
 
-		oldscreen = win->screen;
+		oldscreen = WM_window_get_active_screen(win);
 
 		oldscreen->state = state;
 		BLI_snprintf(newname, sizeof(newname), "%s-%s", oldscreen->id.name + 2, "nonnormal");
@@ -2169,7 +2177,7 @@ void ED_update_for_newframe(Main *bmain, Scene *scene, int UNUSED(mute))
 
 	/* get layers from all windows */
 	for (window = wm->windows.first; window; window = window->next)
-		layers |= BKE_screen_visible_layers(window->screen, scene);
+		layers |= BKE_screen_visible_layers(WM_window_get_active_screen(window), scene);
 
 	/* this function applies the changes too */
 	BKE_scene_update_for_newframe(bmain->eval_ctx, bmain, scene, layers);
@@ -2192,7 +2200,7 @@ void ED_update_for_newframe(Main *bmain, Scene *scene, int UNUSED(mute))
 /*
  * return true if any active area requires to see in 3D
  */
-bool ED_screen_stereo3d_required(bScreen *screen)
+bool ED_screen_stereo3d_required(const bScreen *screen)
 {
 	ScrArea *sa;
 	Scene *sce = screen->scene;

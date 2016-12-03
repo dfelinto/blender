@@ -53,6 +53,7 @@
 #include "BKE_report.h"
 #include "BKE_scene.h"
 #include "BKE_screen.h"
+#include "BKE_workspace.h"
 
 #include "BLO_readfile.h"
 #include "BLO_writefile.h"
@@ -91,9 +92,8 @@ static void clean_paths(Main *main)
 
 static bool wm_scene_is_visible(wmWindowManager *wm, Scene *scene)
 {
-	wmWindow *win;
-	for (win = wm->windows.first; win; win = win->next) {
-		if (win->screen->scene == scene) {
+	for (wmWindow *win = wm->windows.first; win; win = win->next) {
+		if (BKE_workspace_active_scene_get(win->workspace) == scene) {
 			return true;
 		}
 	}
@@ -316,12 +316,12 @@ static void setup_app_data(
 		wmWindowManager *wm = G.main->wm.first;
 
 		if (wm) {
-			wmWindow *win;
+			for (wmWindow *win = wm->windows.first; win; win = win->next) {
+				bScreen *screen = BKE_workspace_active_screen_get(win->workspace);
 
-			for (win = wm->windows.first; win; win = win->next) {
-				if (win->screen && win->screen->scene) /* zealous check... */
-					if (win->screen->scene != curscene)
-						BKE_scene_set_background(G.main, win->screen->scene);
+				if (screen && screen->scene) /* zealous check... */
+					if (screen->scene != curscene)
+						BKE_scene_set_background(G.main, screen->scene);
 			}
 		}
 	}

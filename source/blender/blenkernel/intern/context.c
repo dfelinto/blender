@@ -50,6 +50,7 @@
 #include "BKE_main.h"
 #include "BKE_screen.h"
 #include "BKE_sound.h"
+#include "BKE_workspace.h"
 
 #include "RNA_access.h"
 
@@ -832,7 +833,7 @@ void CTX_wm_manager_set(bContext *C, wmWindowManager *wm)
 void CTX_wm_window_set(bContext *C, wmWindow *win)
 {
 	C->wm.window = win;
-	C->wm.screen = (win) ? win->screen : NULL;
+	C->wm.screen = (win) ? BKE_workspace_active_screen_get(win->workspace) : NULL;
 	if (C->wm.screen)
 		C->data.scene = C->wm.screen->scene;
 	C->wm.area = NULL;
@@ -842,6 +843,10 @@ void CTX_wm_window_set(bContext *C, wmWindow *win)
 void CTX_wm_workspace_set(bContext *C, WorkSpace *ws)
 {
 	C->wm.workspace = ws;
+	if (C->wm.workspace) {
+		C->wm.screen = BKE_workspace_active_screen_get(C->wm.workspace);
+		C->data.scene = C->wm.screen->scene;
+	}
 	C->wm.area = NULL;
 	C->wm.region = NULL;
 }

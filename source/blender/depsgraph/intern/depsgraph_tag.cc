@@ -47,6 +47,7 @@ extern "C" {
 #include "BKE_library.h"
 #include "BKE_main.h"
 #include "BKE_node.h"
+#include "BKE_workspace.h"
 
 #define new new_
 #include "BKE_screen.h"
@@ -264,9 +265,10 @@ void DEG_graph_on_visible_update(Main *bmain, Scene *scene)
 		     win != NULL;
 		     win = (wmWindow *)win->next)
 		{
-			Scene *scene = win->screen->scene;
+			Scene *scene = BKE_workspace_active_scene_get(win->workspace);
 			if (scene->id.tag & LIB_TAG_DOIT) {
-				graph->layers |= BKE_screen_visible_layers(win->screen, scene);
+				bScreen *screen = BKE_workspace_active_screen_get(win->workspace);
+				graph->layers |= BKE_screen_visible_layers(screen, scene);
 				scene->id.tag &= ~LIB_TAG_DOIT;
 			}
 		}

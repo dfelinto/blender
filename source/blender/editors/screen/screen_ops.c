@@ -1015,8 +1015,8 @@ static int area_dupli_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 	newwin->workspace = win->workspace;
 	/* allocs new screen and adds to newly created window, using window size */
 	newsc = ED_screen_add(newwin, CTX_data_scene(C), sc->id.name + 2);
-	newwin->screen = newsc;
-	
+	WM_window_set_active_screen(newwin, newsc);
+
 	/* copy area to new screen */
 	ED_area_data_copy((ScrArea *)newsc->areabase.first, sa, true);
 
@@ -1716,7 +1716,7 @@ static int area_split_modal(bContext *C, wmOperator *op, const wmEvent *event)
 					}
 				}
 				
-				CTX_wm_window(C)->screen->do_draw = true;
+				CTX_wm_screen(C)->do_draw = true;
 
 			}
 			
@@ -2086,12 +2086,11 @@ static void areas_do_frame_follow(bContext *C, bool middle)
 	bScreen *scr = CTX_wm_screen(C);
 	Scene *scene = CTX_data_scene(C);
 	wmWindowManager *wm = CTX_wm_manager(C);
-	wmWindow *window;
-	for (window = wm->windows.first; window; window = window->next) {
-		ScrArea *sa;
-		for (sa = window->screen->areabase.first; sa; sa = sa->next) {
-			ARegion *ar;
-			for (ar = sa->regionbase.first; ar; ar = ar->next) {
+	for (wmWindow *window = wm->windows.first; window; window = window->next) {
+		const bScreen *screen = WM_window_get_active_screen(window);
+
+		for (ScrArea *sa = screen->areabase.first; sa; sa = sa->next) {
+			for (ARegion *ar = sa->regionbase.first; ar; ar = ar->next) {
 				/* do follow here if editor type supports it */
 				if ((scr->redraws_flag & TIME_FOLLOW)) {
 					if ((ar->regiontype == RGN_TYPE_WINDOW &&
@@ -3587,7 +3586,9 @@ static int screen_animation_step(bContext *C, wmOperator *UNUSED(op), const wmEv
 		ED_update_for_newframe(bmain, scene, 1);
 
 		for (window = wm->windows.first; window; window = window->next) {
-			for (sa = window->screen->areabase.first; sa; sa = sa->next) {
+			const bScreen *win_screen = WM_window_get_active_screen(window);
+
+			for (sa = win_screen->areabase.first; sa; sa = sa->next) {
 				ARegion *ar;
 				for (ar = sa->regionbase.first; ar; ar = ar->next) {
 					bool redraw = false;
@@ -3661,11 +3662,11 @@ static void SCREEN_OT_animation_step(wmOperatorType *ot)
 /* find window that owns the animation timer */
 bScreen *ED_screen_animation_playing(const wmWindowManager *wm)
 {
-	wmWindow *win;
+	for (wmWindow *win = wm->windows.first; win; win = win->next) {
+		bScreen *screen = WM_window_get_active_screen(win);
 
-	for (win = wm->windows.first; win; win = win->next) {
-		if (win->screen->animtimer || win->screen->scrubbing) {
-			return win->screen;
+		if (screen->animtimer || screen->scrubbing) {
+			return screen;
 		}
 	}
 
@@ -3674,11 +3675,11 @@ bScreen *ED_screen_animation_playing(const wmWindowManager *wm)
 
 bScreen *ED_screen_animation_no_scrub(const wmWindowManager *wm)
 {
-	wmWindow *win;
+	for (wmWindow *win = wm->windows.first; win; win = win->next) {
+		bScreen *screen = WM_window_get_active_screen(win);
 
-	for (win = wm->windows.first; win; win = win->next) {
-		if (win->screen->animtimer) {
-			return win->screen;
+		if (screen->animtimer) {
+			return screen;
 		}
 	}
 
@@ -3926,7 +3927,7 @@ static int screen_new_exec(bContext *C, wmOperator *UNUSED(op))
 	bScreen *sc = CTX_wm_screen(C);
 	
 	sc = ED_screen_duplicate(win, sc);
-	WM_event_add_notifier(C, NC_SCREEN | ND_SCREENBROWSE, sc);
+	WM_event_add_notifier(C, NC_SCREEN | ND_SCREENBROWSE, BKE_workspace_layout_find(win->workspace, sc));
 	
 	return OPERATOR_FINISHED;
 }

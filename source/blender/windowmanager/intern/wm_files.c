@@ -159,7 +159,7 @@ static void wm_window_match_init(bContext *C, ListBase *wmlist)
 			CTX_wm_window_set(C, win);  /* needed by operator close callbacks */
 			WM_event_remove_handlers(C, &win->handlers);
 			WM_event_remove_handlers(C, &win->modalhandlers);
-			ED_screen_exit(C, win, win->screen);
+			ED_screen_exit(C, win, WM_window_get_active_screen(win));
 		}
 	}
 	
@@ -251,13 +251,16 @@ static void wm_window_match_do(bContext *C, ListBase *oldwmlist)
 					
 					for (win = wm->windows.first; win; win = win->next) {
 						/* all windows get active screen from file */
-						if (screen->winid == 0)
-							win->screen = screen;
-						else 
-							win->screen = ED_screen_duplicate(win, screen);
-						
-						BLI_strncpy(win->screenname, win->screen->id.name + 2, sizeof(win->screenname));
-						win->screen->winid = win->winid;
+						if (screen->winid == 0) {
+							WM_window_set_active_screen(win, screen);
+						}
+						else {
+							WM_window_set_active_screen(win, ED_screen_duplicate(win, screen));
+						}
+
+						bScreen *win_screen = WM_window_get_active_screen(win);
+						BLI_strncpy(win->screenname, win_screen->id.name + 2, sizeof(win->screenname));
+						win_screen->winid = win->winid;
 					}
 				}
 			}
@@ -1267,7 +1270,7 @@ static int wm_homefile_write_exec(bContext *C, wmOperator *op)
 	BLI_callback_exec(G.main, NULL, BLI_CB_EVT_SAVE_PRE);
 
 	/* check current window and close it if temp */
-	if (win && win->screen->temp)
+	if (win && WM_window_is_temp_screen(win))
 		wm_window_close(C, wm, win);
 
 	/* update keymaps in user preferences */

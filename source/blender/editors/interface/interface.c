@@ -2781,11 +2781,12 @@ uiBlock *UI_block_begin(const bContext *C, ARegion *region, const char *name, sh
 		block->aspect = 2.0f / fabsf(getsizex * block->winmat[0][0]);
 	}
 	else {
+		bScreen *screen = WM_window_get_active_screen(window);
 		/* no subwindow created yet, for menus for example, so we
 		 * use the main window instead, since buttons are created
 		 * there anyway */
-		wm_subwindow_matrix_get(window, window->screen->mainwin, block->winmat);
-		wm_subwindow_size_get(window, window->screen->mainwin, &getsizex, &getsizey);
+		wm_subwindow_matrix_get(window, screen->mainwin, block->winmat);
+		wm_subwindow_size_get(window, screen->mainwin, &getsizex, &getsizey);
 
 		block->aspect = 2.0f / fabsf(getsizex * block->winmat[0][0]);
 		block->auto_open = true;

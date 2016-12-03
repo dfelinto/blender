@@ -347,7 +347,7 @@ static bool wm_stereo3d_is_fullscreen_required(eStereoDisplayMode stereo_display
 
 bool WM_stereo3d_enabled(wmWindow *win, bool skip_stereo3d_check)
 {
-	bScreen *screen = win->screen;
+	const bScreen *screen = WM_window_get_active_screen(win);
 
 	/* some 3d methods change the window arrangement, thus they shouldn't
 	 * toggle on/off just because there is no 3d elements being drawn */
@@ -466,8 +466,10 @@ int wm_stereo3d_set_exec(bContext *C, wmOperator *op)
 		}
 	}
 	else if (win_src->stereo3d_format->display_mode == S3D_DISPLAY_PAGEFLIP) {
+		const bScreen *screen = WM_window_get_active_screen(win_src);
+
 		/* ED_screen_duplicate() can't handle other cases yet T44688 */
-		if (win_src->screen->state != SCREENNORMAL) {
+		if (screen->state != SCREENNORMAL) {
 			BKE_report(op->reports, RPT_ERROR,
 			           "Failed to switch to Time Sequential mode when in fullscreen");
 			ok = false;

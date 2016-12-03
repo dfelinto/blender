@@ -311,15 +311,12 @@ bool ED_space_clip_color_sample(Scene *scene, SpaceClip *sc, ARegion *ar, int mv
 
 void ED_clip_update_frame(const Main *mainp, int cfra)
 {
-	wmWindowManager *wm;
-	wmWindow *win;
-
 	/* image window, compo node users */
-	for (wm = mainp->wm.first; wm; wm = wm->id.next) { /* only 1 wm */
-		for (win = wm->windows.first; win; win = win->next) {
-			ScrArea *sa;
+	for (wmWindowManager *wm = mainp->wm.first; wm; wm = wm->id.next) { /* only 1 wm */
+		for (wmWindow *win = wm->windows.first; win; win = win->next) {
+			bScreen *screen = WM_window_get_active_screen(win);
 
-			for (sa = win->screen->areabase.first; sa; sa = sa->next) {
+			for (ScrArea *sa = screen->areabase.first; sa; sa = sa->next) {
 				if (sa->spacetype == SPACE_CLIP) {
 					SpaceClip *sc = sa->spacedata.first;
 

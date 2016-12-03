@@ -25,10 +25,36 @@
 #ifndef __BKE_WORKSPACE_H__
 #define __BKE_WORKSPACE_H__
 
+#include "BLI_compiler_attrs.h"
+
+struct bScreen;
 struct WorkSpace;
+
+
+/* -------------------------------------------------------------------- */
+/* Create, delete, init */
 
 struct WorkSpace *BKE_workspace_add(Main *bmain, const char *name);
 struct WorkSpace *BKE_workspace_duplicate(Main *bmain, const struct WorkSpace *from);
 void BKE_workspace_free(struct WorkSpace *ws);
+
+
+/* -------------------------------------------------------------------- */
+/* General Utils */
+
+struct WorkSpaceLayout *BKE_workspace_layout_find(
+        const struct WorkSpace *ws, const struct bScreen *screen) ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
+
+
+/* -------------------------------------------------------------------- */
+/* Getters/Setters */
+
+struct bScreen *BKE_workspace_active_screen_get(const struct WorkSpace *ws) ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
+void            BKE_workspace_active_screen_set(struct WorkSpace *ws, struct bScreen *screen) ATTR_NONNULL(1);
+struct Scene   *BKE_workspace_active_scene_get(const struct WorkSpace *ws) ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
+void            BKE_workspace_active_scene_set(struct WorkSpace *ws, struct Scene *scene);
+
+struct bScreen *BKE_workspace_layout_screen_get(
+        struct WorkSpaceLayout *layout) ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
 
 #endif /* __BKE_WORKSPACE_H__ */

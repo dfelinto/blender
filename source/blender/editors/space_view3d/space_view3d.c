@@ -50,6 +50,7 @@
 #include "BKE_object.h"
 #include "BKE_scene.h"
 #include "BKE_screen.h"
+#include "BKE_workspace.h"
 
 #include "ED_space_api.h"
 #include "ED_screen.h"
@@ -782,7 +783,6 @@ static void *view3d_main_region_duplicate(void *poin)
 static void view3d_recalc_used_layers(ARegion *ar, wmNotifier *wmn, Scene *scene)
 {
 	wmWindow *win = wmn->wm->winactive;
-	ScrArea *sa;
 	unsigned int lay_used = 0;
 	Base *base;
 
@@ -798,7 +798,8 @@ static void view3d_recalc_used_layers(ARegion *ar, wmNotifier *wmn, Scene *scene
 		base = base->next;
 	}
 
-	for (sa = win->screen->areabase.first; sa; sa = sa->next) {
+	const bScreen *screen = WM_window_get_active_screen(win);
+	for (ScrArea *sa = screen->areabase.first; sa; sa = sa->next) {
 		if (sa->spacetype == SPACE_VIEW3D) {
 			if (BLI_findindex(&sa->regionbase, ar) != -1) {
 				View3D *v3d = sa->spacedata.first;
@@ -1017,7 +1018,7 @@ static void view3d_main_region_listener(bScreen *sc, ScrArea *sa, ARegion *ar, w
 					/* screen was changed, need to update used layers due to NC_SCENE|ND_LAYER_CONTENT */
 					/* updates used layers only for View3D in active screen */
 					if (wmn->reference) {
-						bScreen *sc_ref = wmn->reference;
+						const bScreen *sc_ref = BKE_workspace_layout_screen_get(wmn->reference);
 						view3d_recalc_used_layers(ar, wmn, sc_ref->scene);
 					}
 					ED_region_tag_redraw(ar);
@@ -1036,7 +1037,7 @@ static void view3d_main_region_listener(bScreen *sc, ScrArea *sa, ARegion *ar, w
 /* concept is to retrieve cursor type context-less */
 static void view3d_main_region_cursor(wmWindow *win, ScrArea *UNUSED(sa), ARegion *UNUSED(ar))
 {
-	Scene *scene = win->screen->scene;
+	const Scene *scene = WM_window_get_active_scene(win);
 
 	if (scene->obedit) {
 		WM_cursor_set(win, CURSOR_EDIT);

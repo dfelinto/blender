@@ -61,7 +61,7 @@ void ED_workspace_change(wmWindow *win, WorkSpace *ws_new)
 {
 	workspace_unassign_window_workspace(win);
 	workspace_assign_to_window(win, ws_new);
-//	WM_event_add_notifier(C, NC_SCREEN | ND_SCREENBROWSE, sc); /* TODO own notifier */
+	/* TODO: send notifier */
 }
 
 /**

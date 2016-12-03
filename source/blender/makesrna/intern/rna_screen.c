@@ -152,7 +152,7 @@ static void rna_Area_type_update(bContext *C, PointerRNA *ptr)
 
 	/* XXX this call still use context, so we trick it to work in the right context */
 	for (win = wm->windows.first; win; win = win->next) {
-		if (sc == win->screen) {
+		if (sc == WM_window_get_active_screen(win)) {
 			wmWindow *prevwin = CTX_wm_window(C);
 			ScrArea *prevsa = CTX_wm_area(C);
 			ARegion *prevar = CTX_wm_region(C);

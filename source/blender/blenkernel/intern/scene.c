@@ -90,6 +90,7 @@
 #include "BKE_sequencer.h"
 #include "BKE_sound.h"
 #include "BKE_unit.h"
+#include "BKE_workspace.h"
 #include "BKE_world.h"
 
 #include "DEG_depsgraph.h"
@@ -1698,9 +1699,9 @@ static bool check_rendered_viewport_visible(Main *bmain)
 	wmWindowManager *wm = bmain->wm.first;
 	wmWindow *window;
 	for (window = wm->windows.first; window != NULL; window = window->next) {
-		bScreen *screen = window->screen;
-		ScrArea *area;
-		for (area = screen->areabase.first; area != NULL; area = area->next) {
+		const bScreen *screen = BKE_workspace_active_screen_get(window->workspace);
+
+		for (ScrArea *area = screen->areabase.first; area != NULL; area = area->next) {
 			View3D *v3d = area->spacedata.first;
 			if (area->spacetype != SPACE_VIEW3D) {
 				continue;

@@ -25,11 +25,18 @@
 #include "BLI_utildefines.h"
 
 #include "BKE_library.h"
+#include "BLI_listbase.h"
 #include "BKE_main.h"
 #include "BKE_workspace.h"
 
+#include "DNA_scene_types.h"
 #include "DNA_screen_types.h"
 
+#include "MEM_guardedalloc.h"
+
+
+/* -------------------------------------------------------------------- */
+/* Create, delete, init */
 
 WorkSpace *BKE_workspace_add(Main *bmain, const char *name)
 {
@@ -45,5 +52,50 @@ WorkSpace *BKE_workspace_duplicate(Main *bmain, const WorkSpace *from)
 
 void BKE_workspace_free(WorkSpace *ws)
 {
-	UNUSED_VARS(ws);
+	MEM_freeN(ws->act_layout);
+}
+
+
+/* -------------------------------------------------------------------- */
+/* General Utils */
+
+WorkSpaceLayout *BKE_workspace_layout_find(const WorkSpace *ws, const bScreen *screen)
+{
+	for (WorkSpaceLayout *layout = ws->layouts.first; layout; layout = layout->next) {
+		if (layout->screen == screen) {
+			return layout;
+		}
+	}
+
+	BLI_assert(!"Couldn't find layout in this workspace. This should not happen!");
+	return NULL;
+}
+
+
+/* -------------------------------------------------------------------- */
+/* Getters/Setters */
+
+bScreen *BKE_workspace_active_screen_get(const WorkSpace *ws)
+{
+	return ws->act_layout->screen;
+}
+void BKE_workspace_active_screen_set(WorkSpace *ws, bScreen *screen)
+{
+	/* we need to find the WorkspaceLayout that wraps this screen */
+	ws->act_layout = BKE_workspace_layout_find(ws, screen);
+}
+
+Scene *BKE_workspace_active_scene_get(const WorkSpace *ws)
+{
+	return ws->act_layout->screen->scene;
+}
+void BKE_workspace_active_scene_set(WorkSpace *ws, Scene *scene)
+{
+	ws->act_layout->screen->scene = scene;
+}
+
+
+bScreen *BKE_workspace_layout_screen_get(WorkSpaceLayout *layout)
+{
+	return layout->screen;
 }

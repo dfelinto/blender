@@ -170,6 +170,7 @@
 #include "BKE_modifier.h"
 #include "BKE_fcurve.h"
 #include "BKE_mesh.h"
+#include "BKE_workspace.h"
 
 #ifdef USE_NODE_COMPAT_CUSTOMNODES
 #include "NOD_socket.h"  /* for sock->default_value data */
@@ -1091,7 +1092,7 @@ static void current_screen_compat(Main *mainvar, bScreen **r_screen, bool use_ac
 		}
 	}
 
-	*r_screen = (window) ? window->screen : NULL;
+	*r_screen = (window) ? BKE_workspace_active_screen_get(window->workspace) : NULL;
 }
 
 typedef struct RenderInfo {
