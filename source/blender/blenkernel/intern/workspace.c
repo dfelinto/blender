@@ -35,6 +35,9 @@
 #include "MEM_guardedalloc.h"
 
 
+static bool workspaces_is_screen_used(const Main *bmain, bScreen *screen);
+
+
 /* -------------------------------------------------------------------- */
 /* Create, delete, init */
 
@@ -44,9 +47,21 @@ WorkSpace *BKE_workspace_add(Main *bmain, const char *name)
 	return new_ws;
 }
 
-WorkSpace *BKE_workspace_duplicate(Main *bmain, const WorkSpace *from)
+/**
+ * \param act_screen: Screen that will be assigned to the active layout. Note that it shouldn't be used by
+ *                    any other workspace and that the caller is responsible for actually setting it up.
+ */
+WorkSpace *BKE_workspace_duplicate(Main *bmain, const WorkSpace *from, bScreen *act_screen)
 {
 	WorkSpace *new_ws = BKE_libblock_alloc(bmain, ID_WS, from->id.name + 2);
+	WorkSpaceLayout *layout = MEM_mallocN(sizeof(*layout), __func__);
+
+	BLI_assert(!workspaces_is_screen_used(bmain, act_screen));
+
+	new_ws->act_layout = layout;
+	new_ws->act_layout->screen = act_screen;
+	BLI_addhead(&new_ws->layouts, layout);
+
 	return new_ws;
 }
 
@@ -59,12 +74,43 @@ void BKE_workspace_free(WorkSpace *ws)
 /* -------------------------------------------------------------------- */
 /* General Utils */
 
-WorkSpaceLayout *BKE_workspace_layout_find(const WorkSpace *ws, const bScreen *screen)
+/**
+ * Checks if \a screen is already used within any workspace. A screen should never be assigned to multiple
+ * WorkSpaceLayouts, but that should be ensured outside of the BKE_workspace module and without such checks.
+ * Hence, this should only be used as assert check before assigining a screen to a workflow.
+ */
+static bool workspaces_is_screen_used(const Main *bmain, bScreen *screen)
+{
+	for (WorkSpace *workspace = bmain->workspaces.first; workspace; workspace = workspace->id.next) {
+		if (BKE_workspace_layout_find_exec(workspace, screen)) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+/**
+ * This should only be used directly when it is to be expected that there isn't
+ * a layout within \a workspace that wraps \a screen. Usually - especially outside
+ * of BKE_workspace - #BKE_workspace_layout_find should be used!
+ */
+WorkSpaceLayout *BKE_workspace_layout_find_exec(const WorkSpace *ws, const bScreen *screen)
 {
 	for (WorkSpaceLayout *layout = ws->layouts.first; layout; layout = layout->next) {
 		if (layout->screen == screen) {
 			return layout;
 		}
+	}
+
+	return NULL;
+}
+
+WorkSpaceLayout *BKE_workspace_layout_find(const WorkSpace *ws, const bScreen *screen)
+{
+	WorkSpaceLayout *layout = BKE_workspace_layout_find_exec(ws, screen);
+	if (layout) {
+		return layout;
 	}
 
 	BLI_assert(!"Couldn't find layout in this workspace. This should not happen!");

@@ -35,7 +35,7 @@ struct WorkSpace;
 /* Create, delete, init */
 
 struct WorkSpace *BKE_workspace_add(Main *bmain, const char *name);
-struct WorkSpace *BKE_workspace_duplicate(Main *bmain, const struct WorkSpace *from);
+struct WorkSpace *BKE_workspace_duplicate(Main *bmain, const struct WorkSpace *from, struct bScreen *act_screen);
 void BKE_workspace_free(struct WorkSpace *ws);
 
 
@@ -43,6 +43,8 @@ void BKE_workspace_free(struct WorkSpace *ws);
 /* General Utils */
 
 struct WorkSpaceLayout *BKE_workspace_layout_find(
+        const struct WorkSpace *ws, const struct bScreen *screen) ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
+struct WorkSpaceLayout *BKE_workspace_layout_find_exec(
         const struct WorkSpace *ws, const struct bScreen *screen) ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
 
 

@@ -249,6 +249,7 @@ wmWindow *wm_window_new(bContext *C)
 /* part of wm_window.c api */
 wmWindow *wm_window_copy(bContext *C, wmWindow *win_src)
 {
+	Main *bmain = CTX_data_main(C);
 	wmWindow *win_dst = wm_window_new(C);
 	bScreen *new_screen;
 
@@ -257,15 +258,9 @@ wmWindow *wm_window_copy(bContext *C, wmWindow *win_src)
 	win_dst->sizex = win_src->sizex;
 	win_dst->sizey = win_src->sizey;
 
-	/* duplicate assigns to window */
-	new_screen = ED_screen_duplicate(win_dst, WM_window_get_active_screen(win_src));
-	WM_window_set_active_screen(win_dst, new_screen);
+	win_dst->workspace = ED_workspace_duplicate(bmain, win_dst);
+	new_screen = WM_window_get_active_screen(win_dst);
 	BLI_strncpy(win_dst->screenname, new_screen->id.name + 2, sizeof(win_dst->screenname));
-	new_screen->winid = win_dst->winid;
-	win_dst->workspace = BKE_workspace_duplicate(CTX_data_main(C), win_src->workspace);
-
-	new_screen->do_refresh = true;
-	new_screen->do_draw = true;
 
 	win_dst->drawmethod = U.wmdrawmethod;
 

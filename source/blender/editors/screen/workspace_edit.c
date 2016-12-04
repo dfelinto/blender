@@ -76,6 +76,22 @@ bool ED_workspace_change(bContext *C, wmWindow *win, WorkSpace *ws_new)
 }
 
 /**
+ * Duplicate a workspace including its active screen (since two workspaces can't show the same screen).
+ */
+WorkSpace *ED_workspace_duplicate(Main *bmain, wmWindow *win)
+{
+	bScreen *old_screen = WM_window_get_active_screen(win);
+	bScreen *new_screen = ED_screen_duplicate(win, old_screen);
+	WorkSpace *old_ws = win->workspace;
+
+	new_screen->winid = win->winid;
+	new_screen->do_refresh = true;
+	new_screen->do_draw = true;
+
+	return BKE_workspace_duplicate(bmain, old_ws, new_screen);
+}
+
+/**
  * \return if succeeded.
  */
 bool ED_workspace_delete(Main *bmain, bContext *C, wmWindow *win, WorkSpace *ws)
@@ -104,10 +120,10 @@ static int workspace_new_exec(bContext *C, wmOperator *UNUSED(op))
 {
 	Main *bmain = CTX_data_main(C);
 	wmWindow *win = CTX_wm_window(C);
-	WorkSpace *old_ws = win->workspace;
-	WorkSpace *new_ws = BKE_workspace_duplicate(bmain, old_ws);
+	WorkSpace *workspace;
 
-	ED_workspace_change(C, win, new_ws);
+	workspace = ED_workspace_duplicate(bmain, win);
+	WM_event_add_notifier(C, NC_SCREEN | ND_WORKSPACE_SET, workspace);
 
 	return OPERATOR_FINISHED;
 }
