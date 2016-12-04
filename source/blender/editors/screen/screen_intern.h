@@ -31,6 +31,8 @@
 #ifndef __SCREEN_INTERN_H__
 #define __SCREEN_INTERN_H__
 
+struct Main;
+
 /* internal exports only */
 
 #define AZONESPOT       (0.6f * U.widget_unit)
@@ -43,6 +45,10 @@ void        ED_area_data_swap(ScrArea *sa1, ScrArea *sa2);
 void		region_toggle_hidden(bContext *C, ARegion *ar, const bool do_fade);
 
 /* screen_edit.c */
+bScreen    *screen_set_find_associated_fullscreen(const struct Main *bmain, bScreen *screen);
+void        screen_set_refresh(struct Main *bmain, bContext *C, wmWindow *win, bool scene_changed);
+bScreen    *screen_set_ensure_valid(const struct Main *bmain, const wmWindow *win, bScreen *screen_new);
+void        screen_set_prepare(bContext *C, wmWindow *win, bScreen *screen_new, bScreen *screen_old);
 ScrEdge    *screen_findedge(bScreen *sc, ScrVert *v1, ScrVert *v2);
 ScrArea    *area_split(bScreen *sc, ScrArea *sa, char dir, float fac, int merge);
 int         screen_area_join(bContext *C, bScreen *scr, ScrArea *sa1, ScrArea *sa2);

@@ -627,6 +627,7 @@ static void rna_Window_workspace_set(PointerRNA *ptr, PointerRNA value)
 {
 	wmWindow *win = (wmWindow *)ptr->data;
 
+	/* disallow ID-browsing away from temp screens */
 	if (WM_window_is_temp_screen(win)) {
 		return;
 	}
@@ -634,6 +635,7 @@ static void rna_Window_workspace_set(PointerRNA *ptr, PointerRNA value)
 		return;
 	}
 
+	/* exception: can't set workspaces inside of area/region handlers */
 	win->new_workspace = value.data;
 }
 

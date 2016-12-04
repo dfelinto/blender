@@ -353,7 +353,12 @@ void wm_event_do_notifiers(bContext *C)
 			bScreen *screen = WM_window_get_active_screen(win);
 
 			/* filter out notifiers */
-			if (note->category == NC_SCREEN && note->reference && note->reference != screen) {
+			if (note->category == NC_SCREEN &&
+			    note->reference &&
+			    note->reference != screen &&
+			    note->reference != win->workspace &&
+			    note->reference != win->workspace->act_layout)
+			{
 				/* pass */
 			}
 			else if (note->category == NC_SCENE && note->reference && note->reference != screen->scene) {

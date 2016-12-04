@@ -117,6 +117,9 @@ static ARegion *ui_region_temp_add(bScreen *sc)
 static void ui_region_temp_remove(bContext *C, bScreen *sc, ARegion *ar)
 {
 	wmWindow *win = CTX_wm_window(C);
+
+	BLI_assert(ar->regiontype == RGN_TYPE_TEMPORARY);
+	BLI_assert(BLI_findindex(&sc->regionbase, ar) != -1);
 	if (win)
 		wm_draw_region_clear(win, ar);
 

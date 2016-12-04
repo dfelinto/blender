@@ -1503,103 +1503,138 @@ int ED_screen_area_active(const bContext *C)
 	return 0;
 }
 
+
+/* -------------------------------------------------------------------- */
+/* Screen Activation (screen_set_xxx) */
+
+bScreen *screen_set_find_associated_fullscreen(const Main *bmain, bScreen *screen)
+{
+	for (bScreen *screen_iter = bmain->screen.first; screen_iter; screen_iter = screen_iter->id.next) {
+		ScrArea *sa = screen_iter->areabase.first;
+		if (sa->full == screen) {
+			return screen_iter;
+		}
+	}
+
+	return screen;
+}
+
+/**
+ * Refresh data and make screen ready for drawing *after* activating it.
+ */
+void screen_set_refresh(Main *bmain, bContext *C, wmWindow *win, bool scene_changed)
+{
+	bScreen *sc = WM_window_get_active_screen(win);
+
+	CTX_wm_window_set(C, win);  // stores C->wm.screen... hrmf
+
+	/* prevent multiwin errors */
+	sc->winid = win->winid;
+
+	ED_screen_refresh(CTX_wm_manager(C), CTX_wm_window(C));
+	WM_event_add_notifier(C, NC_WINDOW, NULL);
+	WM_event_add_notifier(C, NC_SCREEN | ND_SCREENSET, sc);
+
+	/* makes button hilites work */
+	WM_event_add_mousemove(C);
+
+	/* Needed to make sure all the derivedMeshes are
+	 * up-to-date before viewport starts acquiring this.
+	 *
+	 * This is needed in cases when, for example, boolean
+	 * modifier uses operant from invisible layer.
+	 * Without this trick boolean wouldn't apply correct.
+	 *
+	 * Quite the same happens when setting screen's scene,
+	 * so perhaps this is in fact correct thing to do.
+	 */
+	if (scene_changed) {
+		BKE_scene_set_background(bmain, sc->scene);
+	}
+
+	/* Always do visible update since it's possible new screen will
+	 * have different layers visible in 3D view-ports.
+	 * This is possible because of view3d.lock_camera_and_layers option.
+	 */
+	DAG_on_visible_update(bmain, false);
+}
+
+/**
+ * Make sure the correct screen is used and that it's valid for display in \a win.
+ * \return the screen to activate (might differ from \a screen_new in case
+ *         of fullscreen) or NULL if no valid one found.
+ */
+bScreen *screen_set_ensure_valid(const Main *bmain, const wmWindow *win, bScreen *screen_new)
+{
+	/* validate screen, it's called with notifier reference */
+	if (BLI_findindex(&bmain->screen, screen_new) == -1) {
+		return NULL;
+	}
+
+	if (ELEM(screen_new->state, SCREENMAXIMIZED, SCREENFULL)) {
+		screen_new = screen_set_find_associated_fullscreen(bmain, screen_new);
+	}
+
+	/* check for valid winid */
+	if (!(screen_new->winid == 0 || screen_new->winid == win->winid)) {
+		return NULL;
+	}
+
+	return screen_new;
+}
+
+void screen_set_prepare(bContext *C, wmWindow *win, bScreen *screen_new, bScreen *screen_old)
+{
+	wmWindowManager *wm = CTX_wm_manager(C);
+	wmTimer *wt = screen_old->animtimer;
+	ScrArea *sa;
+	Scene *scene_old = screen_old->scene;
+
+	/* remove handlers referencing areas in old screen */
+	for (sa = screen_old->areabase.first; sa; sa = sa->next) {
+		WM_event_remove_area_handler(&win->modalhandlers, sa);
+	}
+
+	/* we put timer to sleep, so screen_exit has to think there's no timer */
+	screen_old->animtimer = NULL;
+	if (wt) {
+		WM_event_timer_sleep(wm, win, wt, true);
+	}
+	ED_screen_exit(C, win, screen_old);
+
+	/* Same scene, "transfer" playback to new screen. */
+	if (wt) {
+		if (scene_old == screen_new->scene) {
+			screen_new->animtimer = wt;
+		}
+		/* Else, stop playback. */
+		else {
+			screen_old->animtimer = wt;
+			ED_screen_animation_play(C, 0, 0);
+		}
+	}
+}
+
 /**
  * operator call, WM + Window + screen already existed before
- *
  * \warning Do NOT call in area/region queues!
  * \returns success.
  */
 bool ED_screen_set(bContext *C, bScreen *sc)
 {
 	Main *bmain = CTX_data_main(C);
-	wmWindowManager *wm = CTX_wm_manager(C);
 	wmWindow *win = CTX_wm_window(C);
-	bScreen *oldscreen = CTX_wm_screen(C);
-	
-	/* validate screen, it's called with notifier reference */
-	if (BLI_findindex(&bmain->screen, sc) == -1) {
-		return true;
-	}
+	bScreen *screen_old = CTX_wm_screen(C);
+	bScreen *screen_new;
 
-	if (ELEM(sc->state, SCREENMAXIMIZED, SCREENFULL)) {
-		/* find associated full */
-		bScreen *sc1;
-		for (sc1 = bmain->screen.first; sc1; sc1 = sc1->id.next) {
-			ScrArea *sa = sc1->areabase.first;
-			if (sa->full == sc) {
-				sc = sc1;
-				break;
-			}
-		}
-	}
-
-	/* check for valid winid */
-	if (sc->winid != 0 && sc->winid != win->winid) {
+	if (!(screen_new = screen_set_ensure_valid(bmain, win, sc))) {
 		return false;
 	}
-	
-	if (oldscreen != sc) {
-		wmTimer *wt = oldscreen->animtimer;
-		ScrArea *sa;
-		Scene *oldscene = oldscreen->scene;
 
-		/* remove handlers referencing areas in old screen */
-		for (sa = oldscreen->areabase.first; sa; sa = sa->next) {
-			WM_event_remove_area_handler(&win->modalhandlers, sa);
-		}
-
-		/* we put timer to sleep, so screen_exit has to think there's no timer */
-		oldscreen->animtimer = NULL;
-		if (wt) {
-			WM_event_timer_sleep(wm, win, wt, true);
-		}
-
-		ED_screen_exit(C, win, oldscreen);
-
-		/* Same scene, "transfer" playback to new screen. */
-		if (wt) {
-			if (oldscene == sc->scene) {
-				sc->animtimer = wt;
-			}
-			/* Else, stop playback. */
-			else {
-				oldscreen->animtimer = wt;
-				ED_screen_animation_play(C, 0, 0);
-			}
-		}
-
+	if (screen_old != screen_new) {
+		screen_set_prepare(C, win, screen_new, screen_old);
 		WM_window_set_active_screen(win, sc);
-		CTX_wm_window_set(C, win);  // stores C->wm.screen... hrmf
-
-		/* prevent multiwin errors */
-		sc->winid = win->winid;
-		
-		ED_screen_refresh(CTX_wm_manager(C), CTX_wm_window(C));
-		WM_event_add_notifier(C, NC_WINDOW, NULL);
-		WM_event_add_notifier(C, NC_SCREEN | ND_SCREENSET, sc);
-		
-		/* makes button hilites work */
-		WM_event_add_mousemove(C);
-
-		/* Needed to make sure all the derivedMeshes are
-		 * up-to-date before viewport starts acquiring this.
-		 *
-		 * This is needed in cases when, for example, boolean
-		 * modifier uses operant from invisible layer.
-		 * Without this trick boolean wouldn't apply correct.
-		 *
-		 * Quite the same happens when setting screen's scene,
-		 * so perhaps this is in fact correct thing to do.
-		 */
-		if (oldscene != sc->scene) {
-			BKE_scene_set_background(bmain, sc->scene);
-		}
-
-		/* Always do visible update since it's possible new screen will
-		 * have different layers visible in 3D view-ports.
-		 * This is possible because of view3d.lock_camera_and_layers option.
-		 */
-		DAG_on_visible_update(bmain, false);
+		screen_set_refresh(bmain, C, win, screen_old->scene != screen_new->scene);
 	}
 
 	return true;

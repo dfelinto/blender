@@ -442,7 +442,7 @@ void wm_close_and_free(bContext *C, wmWindowManager *wm)
 		wm_autosave_timer_ended(wm);
 
 	while ((win = BLI_pophead(&wm->windows))) {
-		ED_workspace_change(C, win, NULL);
+		win->workspace = NULL; /* prevent draw clear to use screen */
 		wm_draw_window_clear(win);
 		wm_window_free(C, wm, win);
 	}

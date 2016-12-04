@@ -124,8 +124,8 @@ bool    ED_screen_stereo3d_required(const struct bScreen *screen);
 void    ED_screen_preview_render(const struct bScreen *screen, int size_x, int size_y, unsigned int *r_rect) ATTR_NONNULL();
 
 /* workspaces */
-void ED_workspace_change(struct bContext *C, struct wmWindow *win, WorkSpace *ws_new);
-bool ED_workspace_delete(struct Main *bmain, const struct bContext *C, struct wmWindow *win, WorkSpace *ws);
+bool ED_workspace_change(struct bContext *C, struct wmWindow *win, WorkSpace *ws_new) ATTR_NONNULL();
+bool ED_workspace_delete(struct Main *bmain, struct bContext *C, struct wmWindow *win, WorkSpace *ws);
 
 /* anim */
 void    ED_update_for_newframe(struct Main *bmain, struct Scene *scene, int mute);

@@ -37,6 +37,8 @@
 #include "WM_api.h"
 #include "WM_types.h"
 
+#include "screen_intern.h"
+
 
 /** \name Workspace API
  *
@@ -44,16 +46,39 @@
  * \{ */
 
 
-void ED_workspace_change(bContext *C, wmWindow *win, WorkSpace *ws_new)
+/**
+ * \brief Change the active workspace.
+ *
+ * Operator call, WM + Window + screen already existed before
+ * Pretty similar to #ED_screen_set since changing workspace also changes screen.
+ *
+ * \warning Do NOT call in area/region queues!
+ * \returns success.
+ */
+bool ED_workspace_change(bContext *C, wmWindow *win, WorkSpace *ws_new)
 {
-	win->workspace = ws_new;
-	ED_screen_set(C, win->workspace->act_layout->screen);
+	Main *bmain = CTX_data_main(C);
+	bScreen *screen_old = BKE_workspace_active_screen_get(win->workspace);
+	bScreen *screen_new = BKE_workspace_active_screen_get(ws_new);
+
+	if (!(screen_new = screen_set_ensure_valid(bmain, win, screen_new))) {
+		return false;
+	}
+
+	if (screen_old != screen_new) {
+		screen_set_prepare(C, win, screen_new, screen_old);
+		win->workspace = ws_new;
+		screen_set_refresh(bmain, C, win, screen_old->scene != screen_new->scene);
+	}
+	BLI_assert(CTX_wm_workspace(C) == ws_new);
+
+	return true;
 }
 
 /**
  * \return if succeeded.
  */
-bool ED_workspace_delete(Main *bmain, const bContext *C, wmWindow *win, WorkSpace *ws)
+bool ED_workspace_delete(Main *bmain, bContext *C, wmWindow *win, WorkSpace *ws)
 {
 	if (BLI_listbase_is_single(&bmain->workspaces)) {
 		return false;

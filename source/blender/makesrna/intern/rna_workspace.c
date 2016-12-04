@@ -47,9 +47,9 @@ static void rna_workspace_screen_set(PointerRNA *ptr, PointerRNA value)
 	if (screen->temp) {
 		return;
 	}
-
-	if (value.data == NULL)
+	if (value.data == NULL) {
 		return;
+	}
 
 	/* exception: can't set screens inside of area/region handlers */
 	ws->new_layout = BKE_workspace_layout_find(ws, value.data);
