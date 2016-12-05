@@ -2407,7 +2407,7 @@ static void write_scene_collection(WriteData *wd, SceneCollection *sc)
 	writelist(wd, DATA, LinkData, &sc->objects);
 	writelist(wd, DATA, LinkData, &sc->filter_objects);
 
-	for (SceneCollection *nsc = sc->collections.first; nsc; nsc = nsc->next) {
+	for (SceneCollection *nsc = sc->scene_collections.first; nsc; nsc = nsc->next) {
 		writestruct(wd, DATA, SceneCollection, 1, nsc);
 		write_scene_collection(wd, nsc);
 	}
@@ -2421,7 +2421,7 @@ static void write_layer_collections(WriteData *wd, ListBase *lb)
 		writelist(wd, DATA, CollectionOverride, &lc->overrides);
 		writelist(wd, DATA, LinkData, &lc->object_bases);
 
-		write_layer_collections(wd, &lc->collections);
+		write_layer_collections(wd, &lc->layer_collections);
 	}
 }
 
@@ -2646,7 +2646,7 @@ static void write_scenes(WriteData *wd, ListBase *scebase)
 		for (sl = sce->render_layers.first; sl; sl = sl->next) {
 			writestruct(wd, DATA, SceneLayer, 1, sl);
 			writelist(wd, DATA, ObjectBase, &sl->object_bases);
-			write_layer_collections(wd, &sl->collections);
+			write_layer_collections(wd, &sl->layer_collections);
 		}
 
 		sce = sce->id.next;

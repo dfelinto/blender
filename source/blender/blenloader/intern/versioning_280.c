@@ -85,7 +85,7 @@ void blo_do_versions_280_after_linking(FileData *fd, Library *UNUSED(lib), Main 
 						BKE_scene_layer_engine_set(sl, scene->r.engine);
 
 						if (srl->mat_override) {
-							BKE_collection_override_datablock_add((LayerCollection *)sl->collections.first, "material", (ID *)srl->mat_override);
+							BKE_collection_override_datablock_add((LayerCollection *)sl->layer_collections.first, "material", (ID *)srl->mat_override);
 						}
 
 						if (srl->light_override && BKE_scene_uses_blender_internal(scene)) {
@@ -95,7 +95,7 @@ void blo_do_versions_280_after_linking(FileData *fd, Library *UNUSED(lib), Main 
 
 						if (srl->lay != scene->lay) {
 							/* unlink master collection  */
-							BKE_collection_unlink(sl, sl->collections.first);
+							BKE_collection_unlink(sl, sl->layer_collections.first);
 
 							/* add new collection bases */
 							for (int i = 0; i < 20; i++) {
@@ -112,7 +112,7 @@ void blo_do_versions_280_after_linking(FileData *fd, Library *UNUSED(lib), Main 
 				SceneLayer *sl = BKE_scene_layer_add(scene, "Render Layer");
 
 				/* In this particular case we can safely assume the data struct */
-				LayerCollection *lc = ((LayerCollection *)sl->collections.first)->collections.first;
+				LayerCollection *lc = ((LayerCollection *)sl->layer_collections.first)->layer_collections.first;
 				for (int i = 0; i < 20; i++) {
 					if (!is_visible[i]) {
 						lc->flag &= ~COLLECTION_VISIBLE;

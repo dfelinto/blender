@@ -2130,7 +2130,7 @@ static void rna_SceneCollection_name_set(PointerRNA *ptr, const char *value)
 	SceneCollection *sc_master = BKE_collection_master(scene);
 
 	BLI_strncpy_utf8(sc->name, value, sizeof(sc->name));
-	BLI_uniquename(&sc_master->collections, sc, DATA_("SceneCollection"), '.', offsetof(SceneCollection, name), sizeof(sc->name));
+	BLI_uniquename(&sc_master->scene_collections, sc, DATA_("SceneCollection"), '.', offsetof(SceneCollection, name), sizeof(sc->name));
 }
 
 static void rna_SceneCollection_filter_set(PointerRNA *ptr, const char *value)
@@ -2168,7 +2168,7 @@ static void rna_SceneCollection_remove(
 	Scene *scene = (Scene *)id;
 	SceneCollection *sc = sc_ptr->data;
 
-	const int index = BLI_findindex(&sc_parent->collections, sc);
+	const int index = BLI_findindex(&sc_parent->scene_collections, sc);
 	if (index != -1) {
 		BKE_reportf(reports, RPT_ERROR, "Collection '%s' is not a sub-collection of '%s'",
 		            sc->name, sc_parent->name);
@@ -2226,24 +2226,24 @@ static void rna_SceneCollection_object_unlink(
 
 static void rna_LayerCollection_name_get(PointerRNA *ptr, char *value)
 {
-	SceneCollection *sc = ((LayerCollection *)ptr->data)->collection;
+	SceneCollection *sc = ((LayerCollection *)ptr->data)->scene_collection;
 	strcpy(value, sc->name);
 }
 
 static int rna_LayerCollection_name_length(PointerRNA *ptr)
 {
-	SceneCollection *sc = ((LayerCollection *)ptr->data)->collection;
+	SceneCollection *sc = ((LayerCollection *)ptr->data)->scene_collection;
 	return strnlen(sc->name, sizeof(sc->name));
 }
 
 static void rna_LayerCollection_name_set(PointerRNA *ptr, const char *value)
 {
 	Scene *scene = (Scene *)ptr->id.data;
-	SceneCollection *sc = ((LayerCollection *)ptr->data)->collection;
+	SceneCollection *sc = ((LayerCollection *)ptr->data)->scene_collection;
 	SceneCollection *sc_master = BKE_collection_master(scene);
 
 	BLI_strncpy_utf8(sc->name, value, sizeof(sc->name));
-	BLI_uniquename(&sc_master->collections, sc, DATA_("SceneCollection"), '.', offsetof(SceneCollection, name), sizeof(sc->name));
+	BLI_uniquename(&sc_master->scene_collections, sc, DATA_("SceneCollection"), '.', offsetof(SceneCollection, name), sizeof(sc->name));
 }
 
 static PointerRNA rna_LayerCollection_objects_get(CollectionPropertyIterator *iter)
@@ -5293,7 +5293,7 @@ static void rna_def_scene_collection(BlenderRNA *brna)
 	RNA_def_property_update(prop, NC_SCENE | ND_LAYER_CONTENT, NULL);
 
 	prop = RNA_def_property(srna, "collections", PROP_COLLECTION, PROP_NONE);
-	RNA_def_property_collection_sdna(prop, NULL, "collections", NULL);
+	RNA_def_property_collection_sdna(prop, NULL, "scene_collections", NULL);
 	RNA_def_property_struct_type(prop, "SceneCollection");
 	RNA_def_property_ui_text(prop, "SceneCollections", "");
 	rna_def_scene_collections(brna, prop);
@@ -5328,12 +5328,12 @@ static void rna_def_layer_collection(BlenderRNA *brna)
 
 	prop = RNA_def_property(srna, "collection", PROP_POINTER, PROP_NONE);
 	RNA_def_property_flag(prop, PROP_NEVER_NULL);
-	RNA_def_property_pointer_sdna(prop, NULL, "collection");
+	RNA_def_property_pointer_sdna(prop, NULL, "scene_collection");
 	RNA_def_property_struct_type(prop, "SceneCollection");
 	RNA_def_property_ui_text(prop, "Collection", "Collection this layer collection is wrapping");
 
 	prop = RNA_def_property(srna, "collections", PROP_COLLECTION, PROP_NONE);
-	RNA_def_property_collection_sdna(prop, NULL, "collections", NULL);
+	RNA_def_property_collection_sdna(prop, NULL, "layer_collections", NULL);
 	RNA_def_property_struct_type(prop, "LayerCollection");
 	RNA_def_property_ui_text(prop, "Layer Collections", "");
 
@@ -5440,7 +5440,7 @@ static void rna_def_scene_layer(BlenderRNA *brna)
 	RNA_def_property_update(prop, NC_SCENE | ND_LAYER_CONTENT, NULL);
 
 	prop = RNA_def_property(srna, "collections", PROP_COLLECTION, PROP_NONE);
-	RNA_def_property_collection_sdna(prop, NULL, "collections", NULL);
+	RNA_def_property_collection_sdna(prop, NULL, "layer_collections", NULL);
 	RNA_def_property_struct_type(prop, "LayerCollection");
 	RNA_def_property_ui_text(prop, "Layer Collections", "");
 	rna_def_layer_collections(brna, prop);

@@ -5242,7 +5242,7 @@ static void lib_link_scene_collection(FileData *fd, Library *lib, SceneCollectio
 		BLI_assert(link->data);
 	}
 
-	for (SceneCollection *nsc = sc->collections.first; nsc; nsc = nsc->next) {
+	for (SceneCollection *nsc = sc->scene_collections.first; nsc; nsc = nsc->next) {
 		lib_link_scene_collection(fd, lib, nsc);
 	}
 }
@@ -5519,8 +5519,8 @@ static void direct_link_scene_collection(FileData *fd, SceneCollection *sc)
 		link->data = newdataadr(fd, link->data);
 	}
 
-	link_list(fd, &sc->collections);
-	for (SceneCollection *nsc = sc->collections.first; nsc; nsc = nsc->next) {
+	link_list(fd, &sc->scene_collections);
+	for (SceneCollection *nsc = sc->scene_collections.first; nsc; nsc = nsc->next) {
 		direct_link_scene_collection(fd, nsc);
 	}
 }
@@ -5536,7 +5536,7 @@ static void direct_link_layer_collections(FileData *fd, ListBase *lb)
 			link->data = newdataadr(fd, link->data);
 		}
 
-		direct_link_layer_collections(fd, &lc->collections);
+		direct_link_layer_collections(fd, &lc->layer_collections);
 	}
 }
 
@@ -5787,7 +5787,7 @@ static void direct_link_scene(FileData *fd, Scene *sce)
 	for (sl = sce->render_layers.first; sl; sl = sl->next) {
 		link_list(fd, &sl->object_bases);
 		sl->basact = newdataadr(fd, sl->basact);
-		direct_link_layer_collections(fd, &sl->collections);
+		direct_link_layer_collections(fd, &sl->layer_collections);
 	}
 }
 
@@ -9062,7 +9062,7 @@ static void expand_layer_collection(FileData *fd, Main *mainvar, SceneCollection
 		expand_doit(fd, mainvar, link->data);
 	}
 
-	for (SceneCollection *nsc= sc->collections.first; nsc; nsc = nsc->next) {
+	for (SceneCollection *nsc= sc->scene_collections.first; nsc; nsc = nsc->next) {
 		expand_layer_collection(fd, mainvar, nsc);
 	}
 }

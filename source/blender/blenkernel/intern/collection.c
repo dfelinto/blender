@@ -48,9 +48,9 @@ SceneCollection *BKE_collection_add(Scene *scene, SceneCollection *sc_parent, co
 	SceneCollection *sc_master = BKE_collection_master(scene);
 
 	BLI_strncpy(sc->name, name, sizeof(sc->name));
-	BLI_uniquename(&sc_master->collections, sc, DATA_("Collection"), '.', offsetof(SceneCollection, name), sizeof(sc->name));
+	BLI_uniquename(&sc_master->scene_collections, sc, DATA_("Collection"), '.', offsetof(SceneCollection, name), sizeof(sc->name));
 
-	BLI_addtail(&sc_parent->collections, sc);
+	BLI_addtail(&sc_parent->scene_collections, sc);
 
 	TODO_LAYER_SYNC;
 	return sc;
@@ -67,20 +67,20 @@ static void collection_free(SceneCollection *sc)
 		id_us_min(link->data);
 	}
 
-	for (SceneCollection *nsc = sc->collections.first; nsc; nsc = nsc->next) {
+	for (SceneCollection *nsc = sc->scene_collections.first; nsc; nsc = nsc->next) {
 		collection_free(nsc);
 	}
-	BLI_freelistN(&sc->collections);
+	BLI_freelistN(&sc->scene_collections);
 }
 
 /* unlink the collection recursively
  * return true if unlinked */
 static bool collection_remlink(SceneCollection *sc_parent, SceneCollection *sc_gone)
 {
-	for (SceneCollection *sc = sc_parent->collections.first; sc; sc = sc->next)
+	for (SceneCollection *sc = sc_parent->scene_collections.first; sc; sc = sc->next)
 	{
 		if (sc == sc_gone) {
-			BLI_remlink(&sc_parent->collections, sc_gone);
+			BLI_remlink(&sc_parent->scene_collections, sc_gone);
 			return true;
 		}
 
@@ -98,7 +98,7 @@ static void layer_collection_remove(SceneLayer *sl, ListBase *lb, const SceneCol
 {
 	LayerCollection *lc = lb->first;
 	while(lc) {
-		if (lc->collection == sc) {
+		if (lc->scene_collection == sc) {
 			BKE_layer_collection_free(sl, lc);
 			BLI_remlink(lb, lc);
 
@@ -109,13 +109,13 @@ static void layer_collection_remove(SceneLayer *sl, ListBase *lb, const SceneCol
 			/* only the "top-level" layer collections may have the
 			 * same SceneCollection in a sibling tree.
 			 */
-			if (lb != &sl->collections) {
+			if (lb != &sl->layer_collections) {
 				return;
 			}
 		}
 
 		else {
-			layer_collection_remove(sl, &lc->collections, sc);
+			layer_collection_remove(sl, &lc->layer_collections, sc);
 			lc = lc->next;
 		}
 	}
@@ -143,7 +143,7 @@ bool BKE_collection_remove(Scene *scene, SceneCollection *sc)
 
 	/* check all layers that use this collection and clear them */
 	for (SceneLayer *sl = scene->render_layers.first; sl; sl = sl->next) {
-		layer_collection_remove(sl, &sl->collections, sc);
+		layer_collection_remove(sl, &sl->layer_collections, sc);
 		sl->active_collection = 0;
 	}
 

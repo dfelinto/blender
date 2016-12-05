@@ -62,7 +62,7 @@ SceneLayer *BKE_scene_layer_add(Scene *scene, const char *name)
 	BLI_uniquename(&scene->render_layers, sl, DATA_("SceneLayer"), '.', offsetof(SceneLayer, name), sizeof(sl->name));
 
 	SceneCollection *sc = BKE_collection_master(scene);
-	layer_collection_add(sl, &sl->collections, sc);
+	layer_collection_add(sl, &sl->layer_collections, sc);
 
 	return sl;
 }
@@ -85,7 +85,7 @@ bool BKE_scene_layer_remove(Main *bmain, Scene *scene, SceneLayer *sl)
 
 	BLI_freelistN(&sl->object_bases);
 	//layer_collections_free(rl, &rl->collection_bases);
-	BLI_freelistN(&sl->collections);
+	BLI_freelistN(&sl->layer_collections);
 
 	MEM_freeN(sl);
 
@@ -152,7 +152,7 @@ static ObjectBase *object_base_add(SceneLayer *sl, Object *ob)
  */
 void BKE_layer_collection_free(SceneLayer *sl, LayerCollection *lc)
 {
-	for (LayerCollection *nlc = lc->collections.first; nlc; nlc = nlc->next) {
+	for (LayerCollection *nlc = lc->layer_collections.first; nlc; nlc = nlc->next) {
 		for (LinkData *link = nlc->object_bases.first; link; link = link->next) {
 			scene_layer_object_base_unref(sl, link->data);
 		}
@@ -172,7 +172,7 @@ static LayerCollection *collection_from_index(ListBase *lb, const int number, in
 
 		(*i)++;
 
-		LayerCollection *lc_nested = collection_from_index(&lc->collections, number, i);
+		LayerCollection *lc_nested = collection_from_index(&lc->layer_collections, number, i);
 		if (lc_nested) {
 			return lc_nested;
 		}
@@ -186,7 +186,7 @@ static LayerCollection *collection_from_index(ListBase *lb, const int number, in
 LayerCollection *BKE_layer_collection_active(SceneLayer *sl)
 {
 	int i = 0;
-	return collection_from_index(&sl->collections, sl->active_collection, &i);
+	return collection_from_index(&sl->layer_collections, sl->active_collection, &i);
 }
 
 /*
@@ -196,7 +196,7 @@ static int collection_count(ListBase *lb)
 {
 	int i = 0;
 	for (LayerCollection *lc = lb->first; lc; lc = lc->next) {
-		i += collection_count(&lc->collections) + 1;
+		i += collection_count(&lc->layer_collections) + 1;
 	}
 	return i;
 }
@@ -207,7 +207,7 @@ static int collection_count(ListBase *lb)
  */
 int BKE_layer_collection_count(SceneLayer *sl)
 {
-	return collection_count(&sl->collections);
+	return collection_count(&sl->layer_collections);
 }
 
 /* Recursively get the index for a given collection */
@@ -220,7 +220,7 @@ static int index_from_collection(ListBase *lb, LayerCollection *lc, int *i)
 
 		(*i)++;
 
-		int i_nested = index_from_collection(&lcol->collections, lc, i);
+		int i_nested = index_from_collection(&lcol->layer_collections, lc, i);
 		if (i_nested != -1) {
 			return i_nested;
 		}
@@ -234,7 +234,7 @@ static int index_from_collection(ListBase *lb, LayerCollection *lc, int *i)
 int BKE_layer_collection_findindex(SceneLayer *sl, LayerCollection *lc)
 {
 	int i = 0;
-	return index_from_collection(&sl->collections, lc, &i);
+	return index_from_collection(&sl->layer_collections, lc, &i);
 }
 
 /*
@@ -243,7 +243,7 @@ int BKE_layer_collection_findindex(SceneLayer *sl, LayerCollection *lc)
  */
 LayerCollection *BKE_collection_link(SceneLayer *sl, SceneCollection *sc)
 {
-	LayerCollection *lc = layer_collection_add(sl, &sl->collections, sc);
+	LayerCollection *lc = layer_collection_add(sl, &sl->layer_collections, sc);
 	return lc;
 }
 
@@ -255,7 +255,7 @@ void BKE_collection_unlink(SceneLayer *sl, LayerCollection *lc)
 {
 	BKE_layer_collection_free(sl, lc);
 
-	BLI_remlink(&sl->collections, lc);
+	BLI_remlink(&sl->layer_collections, lc);
 	MEM_freeN(lc);
 	sl->active_collection = 0;
 }
@@ -285,8 +285,8 @@ static void layer_collection_populate(SceneLayer *sl, LayerCollection *lc, Scene
 	object_base_populate(sl, lc, &sc->objects);
 	object_base_populate(sl, lc, &sc->filter_objects);
 
-	for (SceneCollection *nsc = sc->collections.first; nsc; nsc = nsc->next) {
-		layer_collection_add(sl, &lc->collections, nsc);
+	for (SceneCollection *nsc = sc->scene_collections.first; nsc; nsc = nsc->next) {
+		layer_collection_add(sl, &lc->layer_collections, nsc);
 	}
 }
 
@@ -295,7 +295,7 @@ LayerCollection *layer_collection_add(SceneLayer *sl, ListBase *lb, SceneCollect
 	LayerCollection *lc = MEM_callocN(sizeof(LayerCollection), "Collection Base");
 	BLI_addtail(lb, lc);
 
-	lc->collection = sc;
+	lc->scene_collection = sc;
 	lc->flag = COLLECTION_VISIBLE + COLLECTION_SELECTABLE + COLLECTION_FOLDED;
 
 	layer_collection_populate(sl, lc, sc);
