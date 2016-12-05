@@ -5396,7 +5396,7 @@ static void lib_link_scene(FileData *fd, Main *main)
 			/* Motion Tracking */
 			sce->clip = newlibadr_us(fd, sce->id.lib, sce->clip);
 
-			lib_link_scene_collection(fd, sce->id.lib, &sce->collection);
+			lib_link_scene_collection(fd, sce->id.lib, sce->collection);
 
 			for (sl = sce->render_layers.first; sl; sl = sl->next) {
 				for (ObjectBase *ob_base = sl->object_bases.first; ob_base; ob_base = ob_base->next) {
@@ -5509,6 +5509,11 @@ static void direct_link_view_settings(FileData *fd, ColorManagedViewSettings *vi
 
 static void direct_link_scene_collection(FileData *fd, SceneCollection *sc)
 {
+	/* this runs before the very first doversion */
+	if (sc == NULL) {
+		return;
+	}
+
 	link_list(fd, &sc->objects);
 	for (LinkData *link = sc->objects.first; link; link = link->next) {
 		link->data = newdataadr(fd, link->data);
@@ -5781,7 +5786,7 @@ static void direct_link_scene(FileData *fd, Scene *sce)
 
 	direct_link_curvemapping(fd, &sce->r.mblur_shutter_curve);
 
-	direct_link_scene_collection(fd, &sce->collection);
+	direct_link_scene_collection(fd, sce->collection);
 
 	link_list(fd, &sce->render_layers);
 	for (sl = sce->render_layers.first; sl; sl = sl->next) {
@@ -9137,7 +9142,7 @@ static void expand_scene(FileData *fd, Main *mainvar, Scene *sce)
 
 	expand_doit(fd, mainvar, sce->clip);
 
-	expand_layer_collection(fd, mainvar, &sce->collection);
+	expand_layer_collection(fd, mainvar, sce->collection);
 }
 
 static void expand_camera(FileData *fd, Main *mainvar, Camera *ca)

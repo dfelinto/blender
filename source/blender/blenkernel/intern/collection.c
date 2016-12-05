@@ -156,7 +156,7 @@ bool BKE_collection_remove(Scene *scene, SceneCollection *sc)
  */
 SceneCollection *BKE_collection_master(Scene *scene)
 {
-	return &scene->collection;
+	return scene->collection;
 }
 
 /*

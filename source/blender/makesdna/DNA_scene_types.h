@@ -1632,7 +1632,7 @@ typedef struct Scene {
 	struct PreviewImage *preview;
 
 	ListBase render_layers;
-	struct SceneCollection collection;
+	struct SceneCollection *collection;
 } Scene;
 
 /* **************** RENDERDATA ********************* */

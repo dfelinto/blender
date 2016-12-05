@@ -462,6 +462,10 @@ void BKE_scene_free(Scene *sce)
 
 	BKE_previewimg_free(&sce->preview);
 	curvemapping_free_data(&sce->r.mblur_shutter_curve);
+
+	/* Master Collection */
+	MEM_freeN(sce->collection);
+	sce->collection = NULL;
 }
 
 void BKE_scene_init(Scene *sce)
@@ -792,6 +796,10 @@ void BKE_scene_init(Scene *sce)
 	sce->toolsettings->gpencil_v2d_align = GP_PROJECT_VIEWSPACE;
 	sce->toolsettings->gpencil_seq_align = GP_PROJECT_VIEWSPACE;
 	sce->toolsettings->gpencil_ima_align = GP_PROJECT_VIEWSPACE;
+
+	/* Master Collection */
+	sce->collection = MEM_callocN(sizeof(SceneCollection), "Master Collection");
+	BLI_strncpy(sce->collection->name, "Master Collection", sizeof(sce->collection->name));
 }
 
 Scene *BKE_scene_add(Main *bmain, const char *name)
