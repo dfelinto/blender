@@ -72,6 +72,7 @@
 #include "DNA_ipo_types.h"
 #include "DNA_key_types.h"
 #include "DNA_lattice_types.h"
+#include "DNA_layer_types.h"
 #include "DNA_lamp_types.h"
 #include "DNA_linestyle_types.h"
 #include "DNA_meta_types.h"
@@ -5229,11 +5230,29 @@ static bool scene_validate_setscene__liblink(Scene *sce, const int totscene)
 }
 #endif
 
+static void lib_link_scene_collection(FileData *fd, Library *lib, SceneCollection *sc)
+{
+	for (LinkData *link = sc->objects.first; link; link = link->next) {
+		link->data = newlibadr_us(fd, lib, link->data);
+		BLI_assert(link->data);
+	}
+
+	for (LinkData *link = sc->objects.first; link; link = link->next) {
+		link->data = newlibadr_us(fd, lib, link->data);
+		BLI_assert(link->data);
+	}
+
+	for (SceneCollection *nsc = sc->collections.first; nsc; nsc = nsc->next) {
+		lib_link_scene_collection(fd, lib, nsc);
+	}
+}
+
 static void lib_link_scene(FileData *fd, Main *main)
 {
 	Scene *sce;
 	Base *base, *next;
 	Sequence *seq;
+	SceneLayer *sl;
 	SceneRenderLayer *srl;
 	FreestyleModuleConfig *fmc;
 	FreestyleLineSet *fls;
@@ -5377,6 +5396,14 @@ static void lib_link_scene(FileData *fd, Main *main)
 			/* Motion Tracking */
 			sce->clip = newlibadr_us(fd, sce->id.lib, sce->clip);
 
+			lib_link_scene_collection(fd, sce->id.lib, &sce->collection);
+
+			for (sl = sce->render_layers.first; sl; sl = sl->next) {
+				for (ObjectBase *ob_base = sl->object_bases.first; ob_base; ob_base = ob_base->next) {
+					ob_base->object = newlibadr_us(fd, sce->id.lib, ob_base->object);
+				}
+			}
+
 #ifdef USE_SETSCENE_CHECK
 			if (sce->set != NULL) {
 				/* link flag for scenes with set would be reset later,
@@ -5480,12 +5507,46 @@ static void direct_link_view_settings(FileData *fd, ColorManagedViewSettings *vi
 		direct_link_curvemapping(fd, view_settings->curve_mapping);
 }
 
+static void direct_link_scene_collection(FileData *fd, SceneCollection *sc)
+{
+	link_list(fd, &sc->objects);
+	for (LinkData *link = sc->objects.first; link; link = link->next) {
+		link->data = newdataadr(fd, link->data);
+	}
+
+	link_list(fd, &sc->filter_objects);
+	for (LinkData *link = sc->filter_objects.first; link; link = link->next) {
+		link->data = newdataadr(fd, link->data);
+	}
+
+	link_list(fd, &sc->collections);
+	for (SceneCollection *nsc = sc->collections.first; nsc; nsc = nsc->next) {
+		direct_link_scene_collection(fd, nsc);
+	}
+}
+
+static void direct_link_layer_collections(FileData *fd, ListBase *lb)
+{
+	link_list(fd, lb);
+	for (LayerCollection *lc = lb->first; lc; lc = lc->next) {
+		link_list(fd, &lc->overrides);
+		link_list(fd, &lc->object_bases);
+
+		for (LinkData *link = lc->object_bases.first; link; link = link->next) {
+			link->data = newdataadr(fd, link->data);
+		}
+
+		direct_link_layer_collections(fd, &lc->collections);
+	}
+}
+
 static void direct_link_scene(FileData *fd, Scene *sce)
 {
 	Editing *ed;
 	Sequence *seq;
 	MetaStack *ms;
 	RigidBodyWorld *rbw;
+	SceneLayer *sl;
 	SceneRenderLayer *srl;
 	
 	sce->theDag = NULL;
@@ -5719,6 +5780,15 @@ static void direct_link_scene(FileData *fd, Scene *sce)
 	sce->preview = direct_link_preview_image(fd, sce->preview);
 
 	direct_link_curvemapping(fd, &sce->r.mblur_shutter_curve);
+
+	direct_link_scene_collection(fd, &sce->collection);
+
+	link_list(fd, &sce->render_layers);
+	for (sl = sce->render_layers.first; sl; sl = sl->next) {
+		link_list(fd, &sl->object_bases);
+		sl->basact = newdataadr(fd, sl->basact);
+		direct_link_layer_collections(fd, &sl->collections);
+	}
 }
 
 /* ************ READ WM ***************** */
@@ -8982,6 +9052,21 @@ static void expand_object(FileData *fd, Main *mainvar, Object *ob)
 	}
 }
 
+static void expand_layer_collection(FileData *fd, Main *mainvar, SceneCollection *sc)
+{
+	for (LinkData *link = sc->objects.first; link; link = link->next) {
+		expand_doit(fd, mainvar, link->data);
+	}
+
+	for (LinkData *link = sc->filter_objects.first; link; link = link->next) {
+		expand_doit(fd, mainvar, link->data);
+	}
+
+	for (SceneCollection *nsc= sc->collections.first; nsc; nsc = nsc->next) {
+		expand_layer_collection(fd, mainvar, nsc);
+	}
+}
+
 static void expand_scene(FileData *fd, Main *mainvar, Scene *sce)
 {
 	Base *base;
@@ -9051,6 +9136,8 @@ static void expand_scene(FileData *fd, Main *mainvar, Scene *sce)
 	}
 
 	expand_doit(fd, mainvar, sce->clip);
+
+	expand_layer_collection(fd, mainvar, &sce->collection);
 }
 
 static void expand_camera(FileData *fd, Main *mainvar, Camera *ca)

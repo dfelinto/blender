@@ -120,6 +120,7 @@
 #include "DNA_key_types.h"
 #include "DNA_lattice_types.h"
 #include "DNA_lamp_types.h"
+#include "DNA_layer_types.h"
 #include "DNA_linestyle_types.h"
 #include "DNA_meta_types.h"
 #include "DNA_mesh_types.h"
@@ -2401,6 +2402,29 @@ static void write_paint(WriteData *wd, Paint *p)
 	}
 }
 
+static void write_scene_collection(WriteData *wd, SceneCollection *sc)
+{
+	writelist(wd, DATA, LinkData, &sc->objects);
+	writelist(wd, DATA, LinkData, &sc->filter_objects);
+
+	for (SceneCollection *nsc = sc->collections.first; nsc; nsc = nsc->next) {
+		writestruct(wd, DATA, SceneCollection, 1, nsc);
+		write_scene_collection(wd, nsc);
+	}
+}
+
+static void write_layer_collections(WriteData *wd, ListBase *lb)
+{
+	for (LayerCollection *lc = lb->first; lc; lc = lc->next) {
+		writestruct(wd, DATA, LayerCollection, 1, lc);
+
+		writelist(wd, DATA, CollectionOverride, &lc->overrides);
+		writelist(wd, DATA, LinkData, &lc->object_bases);
+
+		write_layer_collections(wd, &lc->collections);
+	}
+}
+
 static void write_scenes(WriteData *wd, ListBase *scebase)
 {
 	Scene *sce;
@@ -2416,6 +2440,7 @@ static void write_scenes(WriteData *wd, ListBase *scebase)
 	ToolSettings *tos;
 	FreestyleModuleConfig *fmc;
 	FreestyleLineSet *fls;
+	SceneLayer *sl;
 
 	sce = scebase->first;
 	while (sce) {
@@ -2615,6 +2640,14 @@ static void write_scenes(WriteData *wd, ListBase *scebase)
 
 		write_previews(wd, sce->preview);
 		write_curvemapping_curves(wd, &sce->r.mblur_shutter_curve);
+
+		write_scene_collection(wd, &sce->collection);
+
+		for (sl = sce->render_layers.first; sl; sl = sl->next) {
+			writestruct(wd, DATA, SceneLayer, 1, sl);
+			writelist(wd, DATA, ObjectBase, &sl->object_bases);
+			write_layer_collections(wd, &sl->collections);
+		}
 
 		sce = sce->id.next;
 	}
