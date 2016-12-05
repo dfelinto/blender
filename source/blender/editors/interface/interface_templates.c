@@ -106,7 +106,20 @@ typedef struct TemplateID {
 	PointerRNA ptr;
 	PropertyRNA *prop;
 
-	ListBase *idlb;
+	/**
+	 * The collection to search in. By default this is the main listbase of
+	 * an ID type but it's also possible to use a custom RNA collection.
+	 */
+	union {
+		ListBase *idlb;
+
+		/* optional RNA collection property to search IDs in */
+		struct {
+			PointerRNA searchptr;
+			PropertyRNA *searchprop;
+		} custom;
+	} collection;
+
 	int prv_rows, prv_cols;
 	bool preview;
 } TemplateID;
@@ -127,10 +140,10 @@ static void id_search_call_cb(bContext *C, void *arg_template, void *item)
 }
 
 /* ID Search browse menu, do the search */
-static void id_search_cb(const bContext *C, void *arg_template, const char *str, uiSearchItems *items)
+static void id_search_listbase_cb(const bContext *C, void *arg_template, const char *str, uiSearchItems *items)
 {
 	TemplateID *template = (TemplateID *)arg_template;
-	ListBase *lb = template->idlb;
+	ListBase *lb = template->collection.idlb;
 	ID *id, *id_from = template->ptr.id.data;
 	int iconid;
 	int flag = RNA_property_flag(template->prop);
@@ -165,6 +178,28 @@ static void id_search_cb(const bContext *C, void *arg_template, const char *str,
 					break;
 			}
 		}
+	}
+}
+
+static void id_search_cb(const bContext *C, void *arg_template, const char *str, uiSearchItems *items)
+{
+	TemplateID *template = (TemplateID *)arg_template;
+
+	if (template->collection.custom.searchprop) {
+		struct uiRNACollectionSearch coll_search;
+
+		coll_search.target_ptr = template->ptr;
+		coll_search.target_prop = template->prop;
+		coll_search.search_ptr = template->collection.custom.searchptr;
+		coll_search.search_prop = template->collection.custom.searchprop;
+		coll_search.but_changed = SET_INT_IN_POINTER(false);
+
+		/* add search items from custom RNA collection property */
+		ui_rna_collection_search_cb(C, &coll_search, str, items);
+	}
+	else {
+		/* add search items from listbase */
+		id_search_listbase_cb(C, template, str, items);
 	}
 }
 
@@ -219,7 +254,7 @@ static uiBlock *id_search_menu(bContext *C, ARegion *ar, void *arg_litem)
 	
 	UI_block_bounds_set_normal(block, 0.3f * U.widget_unit);
 	UI_block_direction_set(block, UI_DIR_DOWN);
-	
+
 	/* give search-field focus */
 	UI_but_focus_on_enter_event(win, but);
 	/* this type of search menu requires undo */
@@ -407,7 +442,7 @@ static void template_ID(
 	idptr = RNA_property_pointer_get(&template->ptr, template->prop);
 	id = idptr.data;
 	idfrom = template->ptr.id.data;
-	// lb = template->idlb;
+	// lb = template->collection.idlb;
 
 	block = uiLayoutGetBlock(layout);
 	UI_block_align_begin(block);
@@ -623,12 +658,59 @@ static void template_ID(
 	UI_block_align_end(block);
 }
 
+static PropertyRNA *template_id_get_searchprop(
+        PointerRNA *targetptr, PropertyRNA *targetprop,
+        PointerRNA *searchptr, const char *searchpropname)
+{
+	PropertyRNA *searchprop;
+
+	if (searchptr && !searchptr->data) {
+		searchptr = NULL;
+	}
+
+	if (!searchptr && !searchpropname) {
+		/* both NULL means we don't use a custom rna collection to search in */
+	}
+	else if (!searchptr && searchpropname) {
+		RNA_warning("searchpropname defined (%s) but searchptr is missing", searchpropname);
+	}
+	else if (searchptr && !searchpropname) {
+		RNA_warning("searchptr defined (%s) but searchpropname is missing", RNA_struct_identifier(searchptr->type));
+	}
+	else if (!(searchprop = RNA_struct_find_property(searchptr, searchpropname))) {
+		RNA_warning("search collection property not found: %s.%s",
+		            RNA_struct_identifier(searchptr->type), searchpropname);
+	}
+	else if (RNA_property_type(searchprop) != PROP_COLLECTION) {
+		RNA_warning("search collection property is not a collection type: %s.%s",
+		            RNA_struct_identifier(searchptr->type), searchpropname);
+	}
+	/* check if searchprop actually is an ID */
+	else if (!RNA_struct_is_ID(RNA_property_pointer_type(searchptr, searchprop))) {
+		RNA_warning("search collection property is not an ID type: %s.%s",
+		            RNA_struct_identifier(searchptr->type), searchpropname);
+	}
+	/* check if searchprop has same type as targetprop */
+	else if (RNA_property_pointer_type(searchptr, searchprop) != RNA_property_pointer_type(targetptr, targetprop)) {
+		RNA_warning("search collection items from %s.%s are not of type %s",
+		            RNA_struct_identifier(searchptr->type), searchpropname,
+		            RNA_struct_identifier(RNA_property_pointer_type(targetptr, targetprop)));
+	}
+	else {
+		return searchprop;
+	}
+
+	return NULL;
+}
+
 static void ui_template_id(
-        uiLayout *layout, bContext *C, PointerRNA *ptr, const char *propname, const char *newop,
-        const char *openop, const char *unlinkop, int flag, int prv_rows, int prv_cols)
+        uiLayout *layout, bContext *C, PointerRNA *ptr, const char *propname,
+        PointerRNA *searchptr, const char *searchpropname,
+        const char *newop, const char *openop, const char *unlinkop,
+        int flag, int prv_rows, int prv_cols)
 {
 	TemplateID *template;
-	PropertyRNA *prop;
+	PropertyRNA *prop, *searchprop;
 	StructRNA *type;
 	short idcode;
 
@@ -638,6 +720,8 @@ static void ui_template_id(
 		RNA_warning("pointer property not found: %s.%s", RNA_struct_identifier(ptr->type), propname);
 		return;
 	}
+
+	searchprop = template_id_get_searchprop(ptr, prop, searchptr, searchpropname);
 
 	template = MEM_callocN(sizeof(TemplateID), "TemplateID");
 	template->ptr = *ptr;
@@ -652,12 +736,18 @@ static void ui_template_id(
 
 	type = RNA_property_pointer_type(ptr, prop);
 	idcode = RNA_type_to_ID_code(type);
-	template->idlb = which_libbase(CTX_data_main(C), idcode);
-	
+	if (searchprop) {
+		template->collection.custom.searchptr = *searchptr;
+		template->collection.custom.searchprop = searchprop;
+	}
+	else {
+		template->collection.idlb = which_libbase(CTX_data_main(C), idcode);
+	}
+
 	/* create UI elements for this template
 	 *	- template_ID makes a copy of the template data and assigns it to the relevant buttons
 	 */
-	if (template->idlb) {
+	if (template->collection.idlb || template->collection.custom.searchprop) {
 		uiLayoutRow(layout, true);
 		template_ID(C, layout, template, type, idcode, flag, newop, openop, unlinkop);
 	}
@@ -666,25 +756,29 @@ static void ui_template_id(
 }
 
 void uiTemplateID(
-        uiLayout *layout, bContext *C, PointerRNA *ptr, const char *propname, const char *newop,
+        uiLayout *layout, bContext *C, PointerRNA *ptr, const char *propname,
+        PointerRNA *searchptr, const char *searchpropname, const char *newop,
         const char *openop, const char *unlinkop)
 {
-	ui_template_id(layout, C, ptr, propname, newop, openop, unlinkop,
+	ui_template_id(layout, C, ptr, propname, searchptr, searchpropname, newop, openop, unlinkop,
 	               UI_ID_BROWSE | UI_ID_RENAME | UI_ID_DELETE, 0, 0);
 }
 
 void uiTemplateIDBrowse(
-        uiLayout *layout, bContext *C, PointerRNA *ptr, const char *propname, const char *newop,
+        uiLayout *layout, bContext *C, PointerRNA *ptr, const char *propname,
+        PointerRNA *searchptr, const char *searchpropname, const char *newop,
         const char *openop, const char *unlinkop)
 {
-	ui_template_id(layout, C, ptr, propname, newop, openop, unlinkop, UI_ID_BROWSE | UI_ID_RENAME, 0, 0);
+	ui_template_id(layout, C, ptr, propname, searchptr, searchpropname, newop, openop, unlinkop,
+	               UI_ID_BROWSE | UI_ID_RENAME, 0, 0);
 }
 
 void uiTemplateIDPreview(
-        uiLayout *layout, bContext *C, PointerRNA *ptr, const char *propname, const char *newop,
+        uiLayout *layout, bContext *C, PointerRNA *ptr, const char *propname,
+        PointerRNA *searchptr, const char *searchpropname, const char *newop,
         const char *openop, const char *unlinkop, int rows, int cols)
 {
-	ui_template_id(layout, C, ptr, propname, newop, openop, unlinkop,
+	ui_template_id(layout, C, ptr, propname, searchptr, searchpropname, newop, openop, unlinkop,
 	               UI_ID_BROWSE | UI_ID_RENAME | UI_ID_DELETE | UI_ID_PREVIEWS, rows, cols);
 }
 
@@ -3863,7 +3957,7 @@ void uiTemplateCacheFile(uiLayout *layout, bContext *C, PointerRNA *ptr, const c
 
 	uiLayoutSetContextPointer(layout, "edit_cachefile", &fileptr);
 
-	uiTemplateID(layout, C, ptr, propname, NULL, "CACHEFILE_OT_open", NULL);
+	uiTemplateID(layout, C, ptr, propname, NULL, NULL, NULL, "CACHEFILE_OT_open", NULL);
 
 	if (!file) {
 		return;

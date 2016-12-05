@@ -907,11 +907,14 @@ uiLayout *uiLayoutRadial(uiLayout *layout);
 /* templates */
 void uiTemplateHeader(uiLayout *layout, struct bContext *C);
 void uiTemplateID(uiLayout *layout, struct bContext *C, struct PointerRNA *ptr, const char *propname,
-                  const char *newop, const char *openop, const char *unlinkop);
+                  struct PointerRNA *searchptr, const char *searchpropname, const char *newop,
+                  const char *openop, const char *unlinkop);
 void uiTemplateIDBrowse(uiLayout *layout, struct bContext *C, struct PointerRNA *ptr, const char *propname,
-                        const char *newop, const char *openop, const char *unlinkop);
+                        struct PointerRNA *searchptr, const char *searchpropname, const char *newop,
+                        const char *openop, const char *unlinkop);
 void uiTemplateIDPreview(uiLayout *layout, struct bContext *C, struct PointerRNA *ptr, const char *propname,
-                         const char *newop, const char *openop, const char *unlinkop, int rows, int cols);
+                         struct PointerRNA *searchptr, const char *searchpropname, const char *newop,
+                         const char *openop, const char *unlinkop, int rows, int cols);
 void uiTemplateAnyID(uiLayout *layout, struct PointerRNA *ptr, const char *propname, 
                      const char *proptypename, const char *text);
 void uiTemplatePathBuilder(uiLayout *layout, struct PointerRNA *ptr, const char *propname, 

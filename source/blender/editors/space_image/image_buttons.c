@@ -890,7 +890,7 @@ void uiTemplateImage(uiLayout *layout, bContext *C, PointerRNA *ptr, const char 
 	uiLayoutSetContextPointer(layout, "edit_image_user", userptr);
 
 	if (!compact)
-		uiTemplateID(layout, C, ptr, propname, ima ? NULL : "IMAGE_OT_new", "IMAGE_OT_open", NULL);
+		uiTemplateID(layout, C, ptr, propname, NULL, NULL, ima ? NULL : "IMAGE_OT_new", "IMAGE_OT_open", NULL);
 
 	if (ima) {
 		UI_block_funcN_set(block, rna_update_cb, MEM_dupallocN(cb), NULL);

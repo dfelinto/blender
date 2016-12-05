@@ -744,4 +744,20 @@ void UI_OT_eyedropper_id(struct wmOperatorType *ot);
 void UI_OT_eyedropper_depth(struct wmOperatorType *ot);
 void UI_OT_eyedropper_driver(struct wmOperatorType *ot);
 
+/* interface_util.c */
+
+/**
+ * For use with #ui_rna_collection_search_cb.
+ */
+struct uiRNACollectionSearch {
+	PointerRNA target_ptr;
+	PropertyRNA *target_prop;
+
+	PointerRNA search_ptr;
+	PropertyRNA *search_prop;
+
+	bool *but_changed; /* pointer to uiBut.changed */
+};
+void ui_rna_collection_search_cb(const struct bContext *C, void *arg, const char *str, uiSearchItems *items);
+
 #endif  /* __INTERFACE_INTERN_H__ */

@@ -73,6 +73,13 @@ static void rna_workspace_screen_update(bContext *C, PointerRNA *ptr)
 	}
 }
 
+static PointerRNA rna_workspace_screens_item_get(CollectionPropertyIterator *iter)
+{
+	WorkSpaceLayout *layout = rna_iterator_listbase_get(iter);
+
+	return rna_pointer_inherit_refine(&iter->parent, &RNA_Screen, layout->screen);
+}
+
 #else /* RNA_RUNTIME */
 
 static void rna_def_workspace(BlenderRNA *brna)
@@ -92,6 +99,12 @@ static void rna_def_workspace(BlenderRNA *brna)
 	RNA_def_property_pointer_funcs(prop, NULL, "rna_workspace_screen_set", NULL, "rna_workspace_screen_assign_poll");
 	RNA_def_property_flag(prop, PROP_NEVER_NULL | PROP_EDITABLE | PROP_CONTEXT_UPDATE);
 	RNA_def_property_update(prop, 0, "rna_workspace_screen_update");
+
+	prop = RNA_def_property(srna, "screens", PROP_COLLECTION, PROP_NONE);
+	RNA_def_property_collection_sdna(prop, NULL, "layouts", NULL);
+	RNA_def_property_struct_type(prop, "Screen");
+	RNA_def_property_collection_funcs(prop, NULL, NULL, NULL, "rna_workspace_screens_item_get", NULL, NULL, NULL, NULL);
+	RNA_def_property_ui_text(prop, "Screens", "Screen layouts of a workspace");
 }
 
 void RNA_def_workspace(BlenderRNA *brna)
