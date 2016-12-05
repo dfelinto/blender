@@ -28,6 +28,7 @@ class INFO_HT_header(Header):
         layout = self.layout
 
         window = context.window
+        workspace = context.workspace
         screen = context.screen
         scene = context.scene
         rd = scene.render
@@ -42,7 +43,7 @@ class INFO_HT_header(Header):
             layout.separator()
         else:
             layout.template_ID(window, "workspace", new="workspace.workspace_new", unlink="workspace.workspace_delete")
-            layout.template_ID_preview(context.workspace, "screen", workspace, "screens", new="screen.new", unlink="screen.delete", rows=2, cols=6)
+            layout.template_ID_preview(workspace, "screen", workspace, "screens", new="screen.new", unlink="screen.delete", rows=2, cols=6)
             layout.template_ID(screen, "scene", new="scene.new", unlink="scene.delete")
 
         layout.separator()
