@@ -3924,11 +3924,12 @@ static void SCREEN_OT_userpref_show(struct wmOperatorType *ot)
 static int screen_new_exec(bContext *C, wmOperator *UNUSED(op))
 {
 	wmWindow *win = CTX_wm_window(C);
+	WorkSpaceLayout *layout;
 	bScreen *sc = CTX_wm_screen(C);
-	
-	sc = ED_screen_duplicate(win, sc);
-	WM_event_add_notifier(C, NC_SCREEN | ND_SCREENBROWSE, BKE_workspace_layout_find(win->workspace, sc));
-	
+
+	sc = ED_screen_duplicate(win, sc, &layout);
+	WM_event_add_notifier(C, NC_SCREEN | ND_SCREENBROWSE, layout);
+
 	return OPERATOR_FINISHED;
 }
 

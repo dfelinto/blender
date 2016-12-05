@@ -223,6 +223,7 @@ int uiDefAutoButsRNA(
 
 typedef struct CollItemSearch {
 	struct CollItemSearch *next, *prev;
+	ID *id;
 	char *name;
 	int index;
 	int iconid;
@@ -251,6 +252,8 @@ void ui_rna_collection_search_cb(const struct bContext *C, void *arg, const char
 	/* build a temporary list of relevant items first */
 	RNA_PROP_BEGIN (&data->search_ptr, itemptr, data->search_prop)
 	{
+		ID *id = NULL;
+
 		if (flag & PROP_ID_SELF_CHECK)
 			if (itemptr.data == data->target_ptr.id.data)
 				continue;
@@ -262,8 +265,9 @@ void ui_rna_collection_search_cb(const struct bContext *C, void *arg, const char
 		}
 
 		if (itemptr.type && RNA_struct_is_ID(itemptr.type)) {
-			ID *id = itemptr.data;
 			char name_ui[MAX_ID_NAME];
+
+			id = itemptr.data;
 
 #if 0       /* this name is used for a string comparison and can't be modified, TODO */
 			/* if ever enabled, make name_ui be MAX_ID_NAME+1 */
@@ -282,6 +286,7 @@ void ui_rna_collection_search_cb(const struct bContext *C, void *arg, const char
 		if (name) {
 			if (skip_filter || BLI_strcasestr(name, str)) {
 				cis = MEM_callocN(sizeof(CollItemSearch), "CollectionItemSearch");
+				cis->id = id;
 				cis->name = MEM_dupallocN(name);
 				cis->index = i;
 				cis->iconid = iconid;
@@ -298,7 +303,8 @@ void ui_rna_collection_search_cb(const struct bContext *C, void *arg, const char
 
 	/* add search items from temporary list */
 	for (cis = items_list->first; cis; cis = cis->next) {
-		if (false == UI_search_item_add(items, cis->name, SET_INT_IN_POINTER(cis->index), cis->iconid)) {
+		void *poin = cis->id ? cis->id : SET_INT_IN_POINTER(cis->index);
+		if (UI_search_item_add(items, cis->name, poin, cis->iconid) == false) {
 			break;
 		}
 	}

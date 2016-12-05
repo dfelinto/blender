@@ -38,6 +38,8 @@ struct WorkSpace *BKE_workspace_add(Main *bmain, const char *name);
 struct WorkSpace *BKE_workspace_duplicate(Main *bmain, const struct WorkSpace *from, struct bScreen *act_screen);
 void BKE_workspace_free(struct WorkSpace *ws);
 
+struct WorkSpaceLayout *BKE_workspace_layout_add(struct WorkSpace *workspace, struct bScreen *screen) ATTR_NONNULL();
+
 
 /* -------------------------------------------------------------------- */
 /* General Utils */
@@ -51,6 +53,8 @@ struct WorkSpaceLayout *BKE_workspace_layout_find_exec(
 /* -------------------------------------------------------------------- */
 /* Getters/Setters */
 
+struct WorkSpaceLayout *BKE_workspace_active_layout_get(const struct WorkSpace *ws) ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
+void                    BKE_workspace_active_layout_set(struct WorkSpace *ws, struct WorkSpaceLayout *layout) ATTR_NONNULL(1);
 struct bScreen *BKE_workspace_active_screen_get(const struct WorkSpace *ws) ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
 void            BKE_workspace_active_screen_set(struct WorkSpace *ws, struct bScreen *screen) ATTR_NONNULL(1);
 struct Scene   *BKE_workspace_active_scene_get(const struct WorkSpace *ws) ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;

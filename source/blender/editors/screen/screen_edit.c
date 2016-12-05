@@ -51,6 +51,7 @@
 #include "BKE_node.h"
 #include "BKE_screen.h"
 #include "BKE_scene.h"
+#include "BKE_workspace.h"
 
 #include "BIF_gl.h"
 #include "BIF_glutil.h"
@@ -1051,16 +1052,23 @@ static void drawscredge_area(ScrArea *sa, int sizex, int sizey)
 
 /* ****************** EXPORTED API TO OTHER MODULES *************************** */
 
-bScreen *ED_screen_duplicate(wmWindow *win, bScreen *sc)
+/**
+ * \param r_layout: The layout wrapper created for \a sc. Can be NULL to skip layout creation.
+ */
+bScreen *ED_screen_duplicate(wmWindow *win, bScreen *sc, WorkSpaceLayout **r_layout)
 {
 	bScreen *newsc;
-	
+
 	if (sc->state != SCREENNORMAL) return NULL;  /* XXX handle this case! */
-	
+
 	/* make new empty screen: */
 	newsc = ED_screen_add(win, sc->scene, sc->id.name + 2);
 	/* copy all data */
 	screen_copy(newsc, sc);
+
+	if (r_layout) {
+		*r_layout = BKE_workspace_layout_add(win->workspace, newsc);
+	}
 
 	return newsc;
 }

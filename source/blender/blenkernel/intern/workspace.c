@@ -24,6 +24,7 @@
 
 #include "BLI_utildefines.h"
 
+#include "BKE_global.h"
 #include "BKE_library.h"
 #include "BLI_listbase.h"
 #include "BKE_main.h"
@@ -54,20 +55,31 @@ WorkSpace *BKE_workspace_add(Main *bmain, const char *name)
 WorkSpace *BKE_workspace_duplicate(Main *bmain, const WorkSpace *from, bScreen *act_screen)
 {
 	WorkSpace *new_ws = BKE_libblock_alloc(bmain, ID_WS, from->id.name + 2);
-	WorkSpaceLayout *layout = MEM_mallocN(sizeof(*layout), __func__);
+	WorkSpaceLayout *new_layout = BKE_workspace_layout_add(new_ws, act_screen);
 
-	BLI_assert(!workspaces_is_screen_used(bmain, act_screen));
-
-	new_ws->act_layout = layout;
-	new_ws->act_layout->screen = act_screen;
-	BLI_addhead(&new_ws->layouts, layout);
+	new_ws->act_layout = new_layout;
 
 	return new_ws;
 }
 
 void BKE_workspace_free(WorkSpace *ws)
 {
-	MEM_freeN(ws->act_layout);
+	BLI_freelistN(&ws->layouts);
+}
+
+
+/**
+ * Add a new layout to \a workspace for \a screen.
+ */
+WorkSpaceLayout *BKE_workspace_layout_add(WorkSpace *workspace, bScreen *screen)
+{
+	WorkSpaceLayout *layout = MEM_mallocN(sizeof(*layout), __func__);
+
+	BLI_assert(!workspaces_is_screen_used(G.main, screen));
+	layout->screen = screen;
+	BLI_addhead(&workspace->layouts, layout);
+
+	return layout;
 }
 
 
@@ -120,6 +132,15 @@ WorkSpaceLayout *BKE_workspace_layout_find(const WorkSpace *ws, const bScreen *s
 
 /* -------------------------------------------------------------------- */
 /* Getters/Setters */
+
+WorkSpaceLayout *BKE_workspace_active_layout_get(const WorkSpace *ws)
+{
+	return ws->act_layout;
+}
+void BKE_workspace_active_layout_set(WorkSpace *ws, WorkSpaceLayout *layout)
+{
+	ws->act_layout = layout;
+}
 
 bScreen *BKE_workspace_active_screen_get(const WorkSpace *ws)
 {

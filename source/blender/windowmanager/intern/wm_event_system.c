@@ -357,7 +357,7 @@ void wm_event_do_notifiers(bContext *C)
 			    note->reference &&
 			    note->reference != screen &&
 			    note->reference != win->workspace &&
-			    note->reference != win->workspace->act_layout)
+			    note->reference != WM_window_get_active_layout(win))
 			{
 				/* pass */
 			}

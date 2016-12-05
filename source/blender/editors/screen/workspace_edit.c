@@ -81,7 +81,7 @@ bool ED_workspace_change(bContext *C, wmWindow *win, WorkSpace *ws_new)
 WorkSpace *ED_workspace_duplicate(Main *bmain, wmWindow *win)
 {
 	bScreen *old_screen = WM_window_get_active_screen(win);
-	bScreen *new_screen = ED_screen_duplicate(win, old_screen);
+	bScreen *new_screen = ED_screen_duplicate(win, old_screen, NULL);
 	WorkSpace *old_ws = win->workspace;
 
 	new_screen->winid = win->winid;

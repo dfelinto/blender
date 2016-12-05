@@ -1730,6 +1730,15 @@ Scene *WM_window_get_active_scene(const wmWindow *win)
 	return (LIKELY(win->workspace != NULL) ? BKE_workspace_active_scene_get(win->workspace) : NULL);
 }
 
+WorkSpaceLayout *WM_window_get_active_layout(const wmWindow *win)
+{
+	return (LIKELY(win->workspace != NULL) ? BKE_workspace_active_layout_get(win->workspace): NULL);
+}
+void WM_window_set_active_layout(wmWindow *win, WorkSpaceLayout *layout)
+{
+	BKE_workspace_active_layout_set(win->workspace, layout);
+}
+
 /**
  * Get the active screen of the active workspace in \a win.
  */

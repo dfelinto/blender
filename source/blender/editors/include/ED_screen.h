@@ -104,7 +104,7 @@ void    ED_screens_initialize(struct wmWindowManager *wm);
 void    ED_screen_draw(struct wmWindow *win);
 void    ED_screen_refresh(struct wmWindowManager *wm, struct wmWindow *win);
 void    ED_screen_do_listen(struct bContext *C, struct wmNotifier *note);
-bScreen *ED_screen_duplicate(struct wmWindow *win, struct bScreen *sc);
+bScreen *ED_screen_duplicate(struct wmWindow *win, struct bScreen *sc, WorkSpaceLayout **r_layout);
 bScreen *ED_screen_add(struct wmWindow *win, struct Scene *scene, const char *name);
 bool    ED_screen_set(struct bContext *C, struct bScreen *sc);
 bool    ED_screen_delete(struct bContext *C, struct bScreen *sc);
