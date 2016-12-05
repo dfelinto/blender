@@ -128,7 +128,7 @@ static void scene_layer_object_base_unref(SceneLayer* sl, ObjectBase *base)
 	base->refcount--;
 
 	/* It only exists in the RenderLayer */
-	if (base->refcount == 1) {
+	if (base->refcount == 0) {
 		if (sl->basact == base) {
 			sl->basact = NULL;
 		}
