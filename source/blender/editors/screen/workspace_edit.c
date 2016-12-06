@@ -109,6 +109,65 @@ bool ED_workspace_delete(Main *bmain, bContext *C, wmWindow *win, WorkSpace *ws)
 	return true;
 }
 
+static bool workspace_layout_set_poll(const WorkSpaceLayout *layout)
+{
+	const bScreen *screen = layout->screen;
+
+	return ((screen->winid == 0) &&
+	        /* in typical usage these should have a nonzero winid
+	         * (all temp screens should be used, or closed & freed). */
+	        (screen->temp == false) &&
+	        (screen->state == SCREENNORMAL) &&
+	        (screen->id.name[2] != '.' || !(U.uiflag & USER_HIDE_DOT)));
+}
+
+bool ED_workspace_layout_circle(bContext *C, wmWindow *win, const short direction)
+{
+	const WorkSpace *workspace = win->workspace;
+	WorkSpaceLayout *old_layout = WM_window_get_active_layout(win);
+	WorkSpaceLayout *new_layout;
+	ScrArea *sa = CTX_wm_area(C);
+
+	if (WM_window_is_temp_screen(win) || (sa && sa->full && sa->full->temp)) {
+		return false;
+	}
+
+	if (direction == 1) {
+		BLI_LISTBASE_CIRCULAR_FORWARD_BEGIN(&workspace->layouts, new_layout, old_layout)
+		{
+			if (workspace_layout_set_poll(new_layout)) {
+				break;
+			}
+		}
+		BLI_LISTBASE_CIRCULAR_FORWARD_END(&workspace->layouts, new_layout, old_layout)
+	}
+	else if (direction == -1) {
+		BLI_LISTBASE_CIRCULAR_BACKWARD_BEGIN(&workspace->layouts, new_layout, old_layout)
+		{
+			if (workspace_layout_set_poll(new_layout)) {
+				break;
+			}
+		}
+		BLI_LISTBASE_CIRCULAR_BACKWARD_END(&workspace->layouts, new_layout, old_layout)
+	}
+	else {
+		BLI_assert(0);
+	}
+
+	if (new_layout && (old_layout != new_layout)) {
+		if (sa && sa->full) {
+			/* return to previous state before switching screens */
+			ED_screen_full_restore(C, sa); /* may free screen of old_layout */
+		}
+
+		ED_screen_set(C, new_layout->screen);
+
+		return true;
+	}
+
+	return false;
+}
+
 /** \} Workspace API */
 
 

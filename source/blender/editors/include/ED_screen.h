@@ -127,6 +127,7 @@ void    ED_screen_preview_render(const struct bScreen *screen, int size_x, int s
 bool ED_workspace_change(struct bContext *C, struct wmWindow *win, WorkSpace *ws_new) ATTR_NONNULL();
 WorkSpace *ED_workspace_duplicate(struct Main *bmain, struct wmWindow *win);
 bool ED_workspace_delete(struct Main *bmain, struct bContext *C, struct wmWindow *win, WorkSpace *ws);
+bool ED_workspace_layout_circle(struct bContext *C, struct wmWindow *win, const short direction) ATTR_NONNULL();
 
 /* anim */
 void    ED_update_for_newframe(struct Main *bmain, struct Scene *scene, int mute);
