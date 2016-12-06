@@ -459,9 +459,11 @@ ScrArea *area_split(bScreen *sc, ScrArea *sa, char dir, float fac, int merge)
 	return newa;
 }
 
-/* empty screen, with 1 dummy area without spacedata */
-/* uses window size */
-bScreen *ED_screen_add(wmWindow *win, Scene *scene, const char *name)
+/**
+ * Empty screen, with 1 dummy area without spacedata. Uses window size.
+ * \param r_layout: The layout wrapper created for \a sc. Can be NULL to skip layout creation.
+ */
+bScreen *ED_screen_add(wmWindow *win, Scene *scene, const char *name, WorkSpaceLayout **r_layout)
 {
 	const int winsize_x = WM_window_pixels_x(win);
 	const int winsize_y = WM_window_pixels_y(win);
@@ -487,7 +489,11 @@ bScreen *ED_screen_add(wmWindow *win, Scene *scene, const char *name)
 	
 	/* dummy type, no spacedata */
 	screen_addarea(sc, sv1, sv2, sv3, sv4, HEADERDOWN, SPACE_EMPTY);
-		
+
+	if (r_layout) {
+		*r_layout = BKE_workspace_layout_add(win->workspace, sc);
+	}
+
 	return sc;
 }
 
@@ -1062,13 +1068,9 @@ bScreen *ED_screen_duplicate(wmWindow *win, bScreen *sc, WorkSpaceLayout **r_lay
 	if (sc->state != SCREENNORMAL) return NULL;  /* XXX handle this case! */
 
 	/* make new empty screen: */
-	newsc = ED_screen_add(win, sc->scene, sc->id.name + 2);
+	newsc = ED_screen_add(win, sc->scene, sc->id.name + 2, r_layout);
 	/* copy all data */
 	screen_copy(newsc, sc);
-
-	if (r_layout) {
-		*r_layout = BKE_workspace_layout_add(win->workspace, newsc);
-	}
 
 	return newsc;
 }
@@ -1954,6 +1956,7 @@ ScrArea *ED_screen_state_toggle(bContext *C, wmWindow *win, ScrArea *sa, const s
 	}
 
 	if (sa && sa->full) {
+		WorkSpaceLayout *layout_old = WM_window_get_active_layout(win);
 		/* restoring back to SCREENNORMAL */
 		ScrArea *old;
 
@@ -1988,6 +1991,7 @@ ScrArea *ED_screen_state_toggle(bContext *C, wmWindow *win, ScrArea *sa, const s
 
 		ED_screen_set(C, sc);
 
+		BKE_workspace_layout_remove(win->workspace, layout_old);
 		BKE_screen_free(oldscreen);
 		BKE_libblock_free(CTX_data_main(C), oldscreen);
 
@@ -1999,6 +2003,7 @@ ScrArea *ED_screen_state_toggle(bContext *C, wmWindow *win, ScrArea *sa, const s
 	}
 	else {
 		/* change from SCREENNORMAL to new state */
+		WorkSpaceLayout *layout_new;
 		ScrArea *newa;
 		char newname[MAX_ID_NAME - 2];
 
@@ -2006,7 +2011,7 @@ ScrArea *ED_screen_state_toggle(bContext *C, wmWindow *win, ScrArea *sa, const s
 
 		oldscreen->state = state;
 		BLI_snprintf(newname, sizeof(newname), "%s-%s", oldscreen->id.name + 2, "nonnormal");
-		sc = ED_screen_add(win, oldscreen->scene, newname);
+		sc = ED_screen_add(win, oldscreen->scene, newname, &layout_new);
 		sc->state = state;
 		sc->redraws_flag = oldscreen->redraws_flag;
 		sc->temp = oldscreen->temp;

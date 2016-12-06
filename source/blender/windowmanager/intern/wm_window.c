@@ -661,9 +661,10 @@ wmWindow *WM_window_open_temp(bContext *C, const rcti *rect_init, int type)
 	}
 
 	if (screen == NULL) {
-		screen = ED_screen_add(win, scene, "temp");
 		/* add new screen */
-		WM_window_set_active_screen(win, screen);
+		WorkSpaceLayout *layout;
+		screen = ED_screen_add(win, scene, "temp", &layout);
+		WM_window_set_active_layout(win, layout);
 	}
 	else {
 		/* switch scene for rendering */

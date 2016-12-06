@@ -121,7 +121,7 @@ static bool workspace_layout_set_poll(const WorkSpaceLayout *layout)
 	        (screen->id.name[2] != '.' || !(U.uiflag & USER_HIDE_DOT)));
 }
 
-bool ED_workspace_layout_circle(bContext *C, wmWindow *win, const short direction)
+bool ED_workspace_layout_cycle(bContext *C, wmWindow *win, const short direction)
 {
 	const WorkSpace *workspace = win->workspace;
 	WorkSpaceLayout *old_layout = WM_window_get_active_layout(win);

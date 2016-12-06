@@ -980,6 +980,7 @@ static void SCREEN_OT_area_swap(wmOperatorType *ot)
 static int area_dupli_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
 	wmWindow *newwin, *win;
+	WorkSpaceLayout *layout;
 	bScreen *newsc, *sc;
 	ScrArea *sa;
 	rcti rect;
@@ -1014,8 +1015,8 @@ static int area_dupli_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 
 	newwin->workspace = win->workspace;
 	/* allocs new screen and adds to newly created window, using window size */
-	newsc = ED_screen_add(newwin, CTX_data_scene(C), sc->id.name + 2);
-	WM_window_set_active_screen(newwin, newsc);
+	newsc = ED_screen_add(newwin, CTX_data_scene(C), sc->id.name + 2, &layout);
+	WM_window_set_active_layout(newwin, layout);
 
 	/* copy area to new screen */
 	ED_area_data_copy((ScrArea *)newsc->areabase.first, sa, true);
@@ -2392,7 +2393,7 @@ static int screen_set_exec(bContext *C, wmOperator *op)
 	wmWindow *win = CTX_wm_window(C);
 	int delta = RNA_int_get(op->ptr, "delta");
 
-	if (ED_workspace_layout_circle(C, win, delta)) {
+	if (ED_workspace_layout_cycle(C, win, delta)) {
 		return OPERATOR_FINISHED;
 	}
 

@@ -39,6 +39,7 @@ struct WorkSpace *BKE_workspace_duplicate(Main *bmain, const struct WorkSpace *f
 void BKE_workspace_free(struct WorkSpace *ws);
 
 struct WorkSpaceLayout *BKE_workspace_layout_add(struct WorkSpace *workspace, struct bScreen *screen) ATTR_NONNULL();
+void BKE_workspace_layout_remove(struct WorkSpace *workspace, struct WorkSpaceLayout *layout) ATTR_NONNULL();
 
 
 /* -------------------------------------------------------------------- */

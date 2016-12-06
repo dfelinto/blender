@@ -82,6 +82,12 @@ WorkSpaceLayout *BKE_workspace_layout_add(WorkSpace *workspace, bScreen *screen)
 	return layout;
 }
 
+void BKE_workspace_layout_remove(WorkSpace *workspace, WorkSpaceLayout *layout)
+{
+	BLI_remlink(&workspace->layouts, layout);
+	MEM_freeN(layout);
+}
+
 
 /* -------------------------------------------------------------------- */
 /* General Utils */

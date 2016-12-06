@@ -105,7 +105,7 @@ void    ED_screen_draw(struct wmWindow *win);
 void    ED_screen_refresh(struct wmWindowManager *wm, struct wmWindow *win);
 void    ED_screen_do_listen(struct bContext *C, struct wmNotifier *note);
 bScreen *ED_screen_duplicate(struct wmWindow *win, struct bScreen *sc, WorkSpaceLayout **r_layout);
-bScreen *ED_screen_add(struct wmWindow *win, struct Scene *scene, const char *name);
+bScreen *ED_screen_add(struct wmWindow *win, struct Scene *scene, const char *name, WorkSpaceLayout **r_layout);
 bool    ED_screen_set(struct bContext *C, struct bScreen *sc);
 bool    ED_screen_delete(struct bContext *C, struct bScreen *sc);
 void    ED_screen_set_scene(struct bContext *C, struct bScreen *screen, struct Scene *scene);
@@ -127,7 +127,7 @@ void    ED_screen_preview_render(const struct bScreen *screen, int size_x, int s
 bool ED_workspace_change(struct bContext *C, struct wmWindow *win, WorkSpace *ws_new) ATTR_NONNULL();
 WorkSpace *ED_workspace_duplicate(struct Main *bmain, struct wmWindow *win);
 bool ED_workspace_delete(struct Main *bmain, struct bContext *C, struct wmWindow *win, WorkSpace *ws);
-bool ED_workspace_layout_circle(struct bContext *C, struct wmWindow *win, const short direction) ATTR_NONNULL();
+bool ED_workspace_layout_cycle(struct bContext *C, struct wmWindow *win, const short direction) ATTR_NONNULL();
 
 /* anim */
 void    ED_update_for_newframe(struct Main *bmain, struct Scene *scene, int mute);

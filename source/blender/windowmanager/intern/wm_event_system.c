@@ -2479,6 +2479,9 @@ void wm_event_do_handlers(bContext *C)
 		while ( (event = win->queue.first) ) {
 			int action = WM_HANDLER_CONTINUE;
 
+			/* active screen might change during handlers, update pointer */
+			screen = WM_window_get_active_screen(win);
+
 			if (G.debug & (G_DEBUG_HANDLERS | G_DEBUG_EVENTS) && !ELEM(event->type, MOUSEMOVE, INBETWEEN_MOUSEMOVE)) {
 				printf("\n%s: Handling event\n", __func__);
 				WM_event_print(event);
