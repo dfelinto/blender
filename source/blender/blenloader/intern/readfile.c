@@ -5509,11 +5509,6 @@ static void direct_link_view_settings(FileData *fd, ColorManagedViewSettings *vi
 
 static void direct_link_scene_collection(FileData *fd, SceneCollection *sc)
 {
-	/* this runs before the very first doversion */
-	if (sc == NULL) {
-		return;
-	}
-
 	link_list(fd, &sc->objects);
 	for (LinkData *link = sc->objects.first; link; link = link->next) {
 		link->data = newdataadr(fd, link->data);
@@ -5786,7 +5781,11 @@ static void direct_link_scene(FileData *fd, Scene *sce)
 
 	direct_link_curvemapping(fd, &sce->r.mblur_shutter_curve);
 
-	direct_link_scene_collection(fd, sce->collection);
+	/* this runs before the very first doversion */
+	if (sce->collection != NULL) {
+		sce->collection = newdataadr(fd, sce->collection);
+		direct_link_scene_collection(fd, sce->collection);
+	}
 
 	link_list(fd, &sce->render_layers);
 	for (sl = sce->render_layers.first; sl; sl = sl->next) {
@@ -9057,7 +9056,7 @@ static void expand_object(FileData *fd, Main *mainvar, Object *ob)
 	}
 }
 
-static void expand_layer_collection(FileData *fd, Main *mainvar, SceneCollection *sc)
+static void expand_scene_collection(FileData *fd, Main *mainvar, SceneCollection *sc)
 {
 	for (LinkData *link = sc->objects.first; link; link = link->next) {
 		expand_doit(fd, mainvar, link->data);
@@ -9068,7 +9067,7 @@ static void expand_layer_collection(FileData *fd, Main *mainvar, SceneCollection
 	}
 
 	for (SceneCollection *nsc= sc->scene_collections.first; nsc; nsc = nsc->next) {
-		expand_layer_collection(fd, mainvar, nsc);
+		expand_scene_collection(fd, mainvar, nsc);
 	}
 }
 
@@ -9142,7 +9141,7 @@ static void expand_scene(FileData *fd, Main *mainvar, Scene *sce)
 
 	expand_doit(fd, mainvar, sce->clip);
 
-	expand_layer_collection(fd, mainvar, sce->collection);
+	expand_scene_collection(fd, mainvar, sce->collection);
 }
 
 static void expand_camera(FileData *fd, Main *mainvar, Camera *ca)

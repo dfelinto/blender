@@ -135,7 +135,7 @@ void blo_do_versions_280_after_linking(FileData *fd, Library *UNUSED(lib), Main 
 void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *main)
 {
 	if (!MAIN_VERSION_ATLEAST(main, 280, 0)) {
-		if (!DNA_struct_elem_find(fd->filesdna, "Scene", "SceneCollection", "collection")) {
+		if (!DNA_struct_elem_find(fd->filesdna, "Scene", "ListBase", "render_layers")) {
 			for (Scene *scene = main->scene.first; scene; scene = scene->id.next) {
 				/* Master Collection */
 				scene->collection = MEM_callocN(sizeof(SceneCollection), "Master Collection");
