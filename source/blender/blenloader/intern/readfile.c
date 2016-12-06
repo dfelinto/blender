@@ -5523,6 +5523,7 @@ static void direct_link_layer_collections(FileData *fd, ListBase *lb)
 {
 	link_list(fd, lb);
 	for (LayerCollection *lc = lb->first; lc; lc = lc->next) {
+		lc->scene_collection = newdataadr(fd, lc->scene_collection);
 		link_list(fd, &lc->overrides);
 		link_list(fd, &lc->object_bases);
 

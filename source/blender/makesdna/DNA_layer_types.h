@@ -52,19 +52,10 @@ typedef struct LayerCollection {
 	struct SceneCollection *scene_collection;
 	short flag;
 	short pad[3];
-	ListBase layer_collections;   /* synced with collection->collections */
-	ListBase object_bases;  /* (ObjectBase *)LinkData->data - synced with collection->objects and collection->filter_objects */
+	ListBase layer_collections; /* synced with collection->collections */
+	ListBase object_bases;      /* (ObjectBase *)LinkData->data - synced with collection->objects and collection->filter_objects */
 	ListBase overrides;
 } LayerCollection;
-
-typedef struct SceneCollection {
-	struct SceneCollection *next, *prev;
-	char name[64]; /* MAX_NAME */
-	char filter[64]; /* MAX_NAME */
-	ListBase scene_collections;     /* nested collections */
-	ListBase objects;         /* (Object *)LinkData->data */
-	ListBase filter_objects;  /* (Object *)LinkData->data */
-} SceneCollection;
 
 typedef struct SceneLayer {
 	struct SceneLayer *next, *prev;
@@ -73,9 +64,18 @@ typedef struct SceneLayer {
 	short active_collection;
 	short pad[3];
 	struct ObjectBase *basact;
-	ListBase layer_collections;
-	ListBase object_bases; /* ObjectBase */
+	ListBase layer_collections; /* LayerCollection */
+	ListBase object_bases;      /* ObjectBase */
 } SceneLayer;
+
+typedef struct SceneCollection {
+	struct SceneCollection *next, *prev;
+	char name[64]; /* MAX_NAME */
+	char filter[64]; /* MAX_NAME */
+	ListBase scene_collections; /* nested collections */
+	ListBase objects;           /* (Object *)LinkData->data */
+	ListBase filter_objects;    /* (Object *)LinkData->data */
+} SceneCollection;
 
 /* ObjectBase->flag */
 enum {
