@@ -56,7 +56,7 @@ WorkSpaceLayout *ED_workspace_layout_add(WorkSpace *workspace, wmWindow *win, Sc
 
 WorkSpaceLayout *ED_workspace_layout_duplicate(WorkSpace *workspace, const WorkSpaceLayout *layout_old, wmWindow *win)
 {
-	Scene *scene = BKE_workspace_active_scene_get(workspace);
+	Scene *scene = BKE_workspace_layout_scene_get(layout_old);
 	bScreen *screen_old = BKE_workspace_layout_screen_get(layout_old);
 
 	WorkSpaceLayout *layout_new;

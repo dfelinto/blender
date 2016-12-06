@@ -159,3 +159,8 @@ bScreen *BKE_workspace_layout_screen_get(const WorkSpaceLayout *layout)
 {
 	return layout->screen;
 }
+
+Scene *BKE_workspace_layout_scene_get(const WorkSpaceLayout *layout)
+{
+	return layout->screen->scene;
+}

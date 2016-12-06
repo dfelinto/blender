@@ -61,5 +61,6 @@ struct Scene   *BKE_workspace_active_scene_get(const struct WorkSpace *ws) ATTR_
 void            BKE_workspace_active_scene_set(struct WorkSpace *ws, struct Scene *scene);
 
 struct bScreen *BKE_workspace_layout_screen_get(const struct WorkSpaceLayout *layout) ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
+struct Scene *BKE_workspace_layout_scene_get(const struct WorkSpaceLayout *layout) ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
 
 #endif /* __BKE_WORKSPACE_H__ */
