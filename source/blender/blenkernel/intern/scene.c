@@ -808,6 +808,8 @@ void BKE_scene_init(Scene *sce)
 	/* Master Collection */
 	sce->collection = MEM_callocN(sizeof(SceneCollection), "Master Collection");
 	BLI_strncpy(sce->collection->name, "Master Collection", sizeof(sce->collection->name));
+
+	BKE_scene_layer_add(sce, "Render Layer");
 }
 
 Scene *BKE_scene_add(Main *bmain, const char *name)
