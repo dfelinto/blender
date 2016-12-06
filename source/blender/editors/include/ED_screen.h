@@ -104,8 +104,6 @@ void    ED_screens_initialize(struct wmWindowManager *wm);
 void    ED_screen_draw(struct wmWindow *win);
 void    ED_screen_refresh(struct wmWindowManager *wm, struct wmWindow *win);
 void    ED_screen_do_listen(struct bContext *C, struct wmNotifier *note);
-bScreen *ED_screen_duplicate(struct wmWindow *win, struct bScreen *sc, WorkSpaceLayout **r_layout);
-bScreen *ED_screen_add(struct wmWindow *win, struct Scene *scene, const char *name, WorkSpaceLayout **r_layout);
 bool    ED_screen_set(struct bContext *C, struct bScreen *sc);
 void    ED_screen_set_scene(struct bContext *C, struct bScreen *screen, struct Scene *scene);
 bool    ED_screen_delete_scene(struct bContext *C, struct Scene *scene);
@@ -124,7 +122,9 @@ void    ED_screen_preview_render(const struct bScreen *screen, int size_x, int s
 
 /* workspaces */
 bool ED_workspace_change(struct bContext *C, struct wmWindow *win, WorkSpace *ws_new) ATTR_NONNULL();
-WorkSpace *ED_workspace_duplicate(struct Main *bmain, struct wmWindow *win);
+WorkSpace *ED_workspace_duplicate(WorkSpace *workspace_old, struct Main *bmain, struct wmWindow *win);
+WorkSpaceLayout *ED_workspace_layout_add(WorkSpace *workspace, struct wmWindow *win, Scene *scene, const char *name) ATTR_NONNULL();
+WorkSpaceLayout *ED_workspace_layout_duplicate(WorkSpace *workspace, const WorkSpaceLayout *layout_old, struct wmWindow *win) ATTR_NONNULL();
 bool ED_workspace_delete(struct Main *bmain, struct bContext *C, struct wmWindow *win, WorkSpace *ws);
 bool ED_workspace_layout_delete(struct bContext *C, WorkSpace *workspace, WorkSpaceLayout *layout_old) ATTR_NONNULL();
 bool ED_workspace_layout_cycle(struct bContext *C, WorkSpace *workspace, const short direction) ATTR_NONNULL();

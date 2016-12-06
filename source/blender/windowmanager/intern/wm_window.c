@@ -258,7 +258,7 @@ wmWindow *wm_window_copy(bContext *C, wmWindow *win_src)
 	win_dst->sizex = win_src->sizex;
 	win_dst->sizey = win_src->sizey;
 
-	win_dst->workspace = ED_workspace_duplicate(bmain, win_dst);
+	win_dst->workspace = ED_workspace_duplicate(win_src->workspace, bmain, win_dst);
 	new_screen = WM_window_get_active_screen(win_dst);
 	BLI_strncpy(win_dst->screenname, new_screen->id.name + 2, sizeof(win_dst->screenname));
 
@@ -661,9 +661,10 @@ wmWindow *WM_window_open_temp(bContext *C, const rcti *rect_init, int type)
 	}
 
 	if (screen == NULL) {
-		/* add new screen */
-		WorkSpaceLayout *layout;
-		screen = ED_screen_add(win, scene, "temp", &layout);
+		/* add new screen layout */
+		WorkSpaceLayout *layout = ED_workspace_layout_add(win->workspace, win, scene, "temp");
+
+		screen = BKE_workspace_layout_screen_get(layout);
 		WM_window_set_active_layout(win, layout);
 	}
 	else {

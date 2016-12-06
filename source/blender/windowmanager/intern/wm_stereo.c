@@ -468,7 +468,7 @@ int wm_stereo3d_set_exec(bContext *C, wmOperator *op)
 	else if (win_src->stereo3d_format->display_mode == S3D_DISPLAY_PAGEFLIP) {
 		const bScreen *screen = WM_window_get_active_screen(win_src);
 
-		/* ED_screen_duplicate() can't handle other cases yet T44688 */
+		/* ED_workspace_layout_duplicate() can't handle other cases yet T44688 */
 		if (screen->state != SCREENNORMAL) {
 			BKE_report(op->reports, RPT_ERROR,
 			           "Failed to switch to Time Sequential mode when in fullscreen");

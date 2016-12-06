@@ -48,20 +48,6 @@ WorkSpace *BKE_workspace_add(Main *bmain, const char *name)
 	return new_ws;
 }
 
-/**
- * \param act_screen: Screen that will be assigned to the active layout. Note that it shouldn't be used by
- *                    any other workspace and that the caller is responsible for actually setting it up.
- */
-WorkSpace *BKE_workspace_duplicate(Main *bmain, const WorkSpace *from, bScreen *act_screen)
-{
-	WorkSpace *new_ws = BKE_libblock_alloc(bmain, ID_WS, from->id.name + 2);
-	WorkSpaceLayout *new_layout = BKE_workspace_layout_add(new_ws, act_screen);
-
-	new_ws->act_layout = new_layout;
-
-	return new_ws;
-}
-
 void BKE_workspace_free(WorkSpace *ws)
 {
 	BLI_freelistN(&ws->layouts);

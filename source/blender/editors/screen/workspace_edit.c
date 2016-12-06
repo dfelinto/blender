@@ -77,19 +77,25 @@ bool ED_workspace_change(bContext *C, wmWindow *win, WorkSpace *ws_new)
 }
 
 /**
- * Duplicate a workspace including its active screen (since two workspaces can't show the same screen).
+ * Duplicate a workspace including its layouts.
  */
-WorkSpace *ED_workspace_duplicate(Main *bmain, wmWindow *win)
+WorkSpace *ED_workspace_duplicate(WorkSpace *workspace_old, Main *bmain, wmWindow *win)
 {
-	bScreen *old_screen = WM_window_get_active_screen(win);
-	bScreen *new_screen = ED_screen_duplicate(win, old_screen, NULL);
-	WorkSpace *old_ws = win->workspace;
+	WorkSpaceLayout *layout_active_old = BKE_workspace_active_layout_get(workspace_old);
+	WorkSpace *worspace_new = BKE_libblock_alloc(bmain, ID_WS, workspace_old->id.name + 2);
 
-	new_screen->winid = win->winid;
-	new_screen->do_refresh = true;
-	new_screen->do_draw = true;
+	for (WorkSpaceLayout *layout_old = workspace_old->layouts.first; layout_old; layout_old = layout_old->next) {
+		WorkSpaceLayout *layout_new = ED_workspace_layout_duplicate(worspace_new, layout_old, win);
 
-	return BKE_workspace_duplicate(bmain, old_ws, new_screen);
+		if (layout_active_old == layout_old) {
+			bScreen *screen_new = BKE_workspace_layout_screen_get(layout_new);
+
+			screen_new_activate_refresh(win, screen_new);
+			BKE_workspace_active_layout_set(worspace_new, layout_new);
+		}
+	}
+
+	return worspace_new;
 }
 
 /**
@@ -121,9 +127,10 @@ static int workspace_new_exec(bContext *C, wmOperator *UNUSED(op))
 {
 	Main *bmain = CTX_data_main(C);
 	wmWindow *win = CTX_wm_window(C);
+	WorkSpace *workspace_old = win->workspace;
 	WorkSpace *workspace;
 
-	workspace = ED_workspace_duplicate(bmain, win);
+	workspace = ED_workspace_duplicate(workspace_old, bmain, win);
 	WM_event_add_notifier(C, NC_SCREEN | ND_WORKSPACE_SET, workspace);
 
 	return OPERATOR_FINISHED;

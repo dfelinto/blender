@@ -461,16 +461,12 @@ ScrArea *area_split(bScreen *sc, ScrArea *sa, char dir, float fac, int merge)
 
 /**
  * Empty screen, with 1 dummy area without spacedata. Uses window size.
- * \param r_layout: The layout wrapper created for \a sc. Can be NULL to skip layout creation.
  */
-bScreen *ED_screen_add(wmWindow *win, Scene *scene, const char *name, WorkSpaceLayout **r_layout)
+bScreen *screen_add(wmWindow *win, Scene *scene, const char *name, const int winsize_x, const int winsize_y)
 {
-	const int winsize_x = WM_window_pixels_x(win);
-	const int winsize_y = WM_window_pixels_y(win);
-
 	bScreen *sc;
 	ScrVert *sv1, *sv2, *sv3, *sv4;
-	
+
 	sc = BKE_libblock_alloc(G.main, ID_SCR, name);
 	sc->scene = scene;
 	sc->do_refresh = true;
@@ -481,23 +477,19 @@ bScreen *ED_screen_add(wmWindow *win, Scene *scene, const char *name, WorkSpaceL
 	sv2 = screen_addvert(sc, 0, winsize_y - 1);
 	sv3 = screen_addvert(sc, winsize_x - 1, winsize_y - 1);
 	sv4 = screen_addvert(sc, winsize_x - 1, 0);
-	
+
 	screen_addedge(sc, sv1, sv2);
 	screen_addedge(sc, sv2, sv3);
 	screen_addedge(sc, sv3, sv4);
 	screen_addedge(sc, sv4, sv1);
-	
+
 	/* dummy type, no spacedata */
 	screen_addarea(sc, sv1, sv2, sv3, sv4, HEADERDOWN, SPACE_EMPTY);
-
-	if (r_layout) {
-		*r_layout = BKE_workspace_layout_add(win->workspace, sc);
-	}
 
 	return sc;
 }
 
-static void screen_copy(bScreen *to, bScreen *from)
+void screen_data_copy(bScreen *to, bScreen *from)
 {
 	ScrVert *s1, *s2;
 	ScrEdge *se;
@@ -540,7 +532,16 @@ static void screen_copy(bScreen *to, bScreen *from)
 	/* put at zero (needed?) */
 	for (s1 = from->vertbase.first; s1; s1 = s1->next)
 		s1->newv = NULL;
+}
 
+/**
+ * Prepare a newly created screen for initializing it as active screen.
+ */
+void screen_new_activate_refresh(const wmWindow *win, bScreen *screen_new)
+{
+	screen_new->winid = win->winid;
+	screen_new->do_refresh = true;
+	screen_new->do_draw = true;
 }
 
 
@@ -1057,23 +1058,6 @@ static void drawscredge_area(ScrArea *sa, int sizex, int sizey)
 }
 
 /* ****************** EXPORTED API TO OTHER MODULES *************************** */
-
-/**
- * \param r_layout: The layout wrapper created for \a sc. Can be NULL to skip layout creation.
- */
-bScreen *ED_screen_duplicate(wmWindow *win, bScreen *sc, WorkSpaceLayout **r_layout)
-{
-	bScreen *newsc;
-
-	if (sc->state != SCREENNORMAL) return NULL;  /* XXX handle this case! */
-
-	/* make new empty screen: */
-	newsc = ED_screen_add(win, sc->scene, sc->id.name + 2, r_layout);
-	/* copy all data */
-	screen_copy(newsc, sc);
-
-	return newsc;
-}
 
 /* screen sets cursor based on swinid */
 static void region_cursor_set(wmWindow *win, int swinid, int swin_changed)
@@ -1959,6 +1943,7 @@ ScrArea *ED_screen_state_toggle(bContext *C, wmWindow *win, ScrArea *sa, const s
 	}
 	else {
 		/* change from SCREENNORMAL to new state */
+		WorkSpace *workspace = win->workspace;
 		WorkSpaceLayout *layout_new;
 		ScrArea *newa;
 		char newname[MAX_ID_NAME - 2];
@@ -1967,7 +1952,10 @@ ScrArea *ED_screen_state_toggle(bContext *C, wmWindow *win, ScrArea *sa, const s
 
 		oldscreen->state = state;
 		BLI_snprintf(newname, sizeof(newname), "%s-%s", oldscreen->id.name + 2, "nonnormal");
-		sc = ED_screen_add(win, oldscreen->scene, newname, &layout_new);
+
+		layout_new = ED_workspace_layout_add(workspace, win, oldscreen->scene, newname);
+
+		sc = BKE_workspace_layout_screen_get(layout_new);
 		sc->state = state;
 		sc->redraws_flag = oldscreen->redraws_flag;
 		sc->temp = oldscreen->temp;

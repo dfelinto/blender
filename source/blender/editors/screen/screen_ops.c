@@ -980,7 +980,7 @@ static void SCREEN_OT_area_swap(wmOperatorType *ot)
 static int area_dupli_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
 	wmWindow *newwin, *win;
-	WorkSpaceLayout *layout;
+	WorkSpaceLayout *layout_new;
 	bScreen *newsc, *sc;
 	ScrArea *sa;
 	rcti rect;
@@ -1015,8 +1015,9 @@ static int area_dupli_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 
 	newwin->workspace = win->workspace;
 	/* allocs new screen and adds to newly created window, using window size */
-	newsc = ED_screen_add(newwin, CTX_data_scene(C), sc->id.name + 2, &layout);
-	WM_window_set_active_layout(newwin, layout);
+	layout_new = ED_workspace_layout_add(newwin->workspace, newwin, CTX_data_scene(C), sc->id.name + 2);
+	newsc = BKE_workspace_layout_screen_get(layout_new);
+	WM_window_set_active_layout(newwin, layout_new);
 
 	/* copy area to new screen */
 	ED_area_data_copy((ScrArea *)newsc->areabase.first, sa, true);
@@ -3877,11 +3878,12 @@ static void SCREEN_OT_userpref_show(struct wmOperatorType *ot)
 static int screen_new_exec(bContext *C, wmOperator *UNUSED(op))
 {
 	wmWindow *win = CTX_wm_window(C);
-	WorkSpaceLayout *layout;
-	bScreen *sc = CTX_wm_screen(C);
+	WorkSpace *workspace = CTX_wm_workspace(C);
+	WorkSpaceLayout *layout_old = BKE_workspace_active_layout_get(workspace);
+	WorkSpaceLayout *layout_new;
 
-	sc = ED_screen_duplicate(win, sc, &layout);
-	WM_event_add_notifier(C, NC_SCREEN | ND_SCREENBROWSE, layout);
+	layout_new = ED_workspace_layout_duplicate(workspace, layout_old, win);
+	WM_event_add_notifier(C, NC_SCREEN | ND_SCREENBROWSE, layout_new);
 
 	return OPERATOR_FINISHED;
 }

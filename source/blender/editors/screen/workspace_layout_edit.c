@@ -23,6 +23,7 @@
  */
 
 #include "BKE_context.h"
+#include "BKE_global.h"
 #include "BKE_main.h"
 #include "BKE_screen.h"
 #include "BKE_workspace.h"
@@ -34,6 +35,43 @@
 
 #include "ED_screen.h"
 
+#include "WM_api.h"
+
+#include "screen_intern.h"
+
+
+/**
+ * Empty screen, with 1 dummy area without spacedata. Uses window size.
+ */
+WorkSpaceLayout *ED_workspace_layout_add(WorkSpace *workspace, wmWindow *win, Scene *scene, const char *name)
+{
+	const int winsize_x = WM_window_pixels_x(win);
+	const int winsize_y = WM_window_pixels_y(win);
+
+	bScreen *screen = screen_add(win, scene, name, winsize_x, winsize_y);
+	WorkSpaceLayout *layout = BKE_workspace_layout_add(workspace, screen);
+
+	return layout;
+}
+
+WorkSpaceLayout *ED_workspace_layout_duplicate(WorkSpace *workspace, const WorkSpaceLayout *layout_old, wmWindow *win)
+{
+	Scene *scene = BKE_workspace_active_scene_get(workspace);
+	bScreen *screen_old = BKE_workspace_layout_screen_get(layout_old);
+
+	WorkSpaceLayout *layout_new;
+	bScreen *screen_new;
+
+	if (BKE_screen_is_fullscreen_area(screen_old)) {
+		return NULL; /* XXX handle this case! */
+	}
+
+	layout_new = ED_workspace_layout_add(workspace, win, scene, screen_old->id.name + 2);
+	screen_new = BKE_workspace_layout_screen_get(layout_new);
+	screen_data_copy(screen_new, screen_old);
+
+	return layout_new;
+}
 
 static bool workspace_layout_delete_doit(bContext *C, WorkSpace *workspace,
                                          WorkSpaceLayout *layout_old, WorkSpaceLayout *layout_new)

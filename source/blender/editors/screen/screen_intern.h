@@ -45,6 +45,9 @@ void        ED_area_data_swap(ScrArea *sa1, ScrArea *sa2);
 void		region_toggle_hidden(bContext *C, ARegion *ar, const bool do_fade);
 
 /* screen_edit.c */
+bScreen    *screen_add(wmWindow *win, Scene *scene, const char *name, const int winsize_x, const int winsize_y);
+void        screen_data_copy(bScreen *to, bScreen *from);
+void        screen_new_activate_refresh(const wmWindow *win, bScreen *screen_new);
 bScreen    *screen_set_find_associated_fullscreen(const struct Main *bmain, bScreen *screen);
 void        screen_set_refresh(struct Main *bmain, bContext *C, wmWindow *win, bool scene_changed);
 bScreen    *screen_set_ensure_valid(const struct Main *bmain, const wmWindow *win, bScreen *screen_new);
