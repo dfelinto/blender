@@ -2390,10 +2390,10 @@ static void SCREEN_OT_marker_jump(wmOperatorType *ot)
 /* function to be called outside UI context, or for redo */
 static int screen_set_exec(bContext *C, wmOperator *op)
 {
-	wmWindow *win = CTX_wm_window(C);
+	WorkSpace *workspace = CTX_wm_workspace(C);
 	int delta = RNA_int_get(op->ptr, "delta");
 
-	if (ED_workspace_layout_cycle(C, win, delta)) {
+	if (ED_workspace_layout_cycle(C, workspace, delta)) {
 		return OPERATOR_FINISHED;
 	}
 
