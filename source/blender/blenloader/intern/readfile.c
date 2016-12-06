@@ -5510,16 +5510,9 @@ static void direct_link_view_settings(FileData *fd, ColorManagedViewSettings *vi
 static void direct_link_scene_collection(FileData *fd, SceneCollection *sc)
 {
 	link_list(fd, &sc->objects);
-	for (LinkData *link = sc->objects.first; link; link = link->next) {
-		link->data = newdataadr(fd, link->data);
-	}
-
 	link_list(fd, &sc->filter_objects);
-	for (LinkData *link = sc->filter_objects.first; link; link = link->next) {
-		link->data = newdataadr(fd, link->data);
-	}
-
 	link_list(fd, &sc->scene_collections);
+
 	for (SceneCollection *nsc = sc->scene_collections.first; nsc; nsc = nsc->next) {
 		direct_link_scene_collection(fd, nsc);
 	}
