@@ -62,10 +62,12 @@ static void collection_free(SceneCollection *sc)
 	for (LinkData *link = sc->objects.first; link; link = link->next) {
 		id_us_min(link->data);
 	}
+	BLI_freelistN(&sc->objects);
 
 	for (LinkData *link = sc->filter_objects.first; link; link = link->next) {
 		id_us_min(link->data);
 	}
+	BLI_freelistN(&sc->filter_objects);
 
 	for (SceneCollection *nsc = sc->scene_collections.first; nsc; nsc = nsc->next) {
 		collection_free(nsc);
@@ -157,6 +159,14 @@ bool BKE_collection_remove(Scene *scene, SceneCollection *sc)
 SceneCollection *BKE_collection_master(Scene *scene)
 {
 	return scene->collection;
+}
+
+/*
+ * Free (or release) any data used by the master collection (does not free the master collection itself).
+ * Used only to clear the entire scene data since it's not doing re-syncing of the LayerCollection tree
+ */
+void BKE_collection_master_free(Scene *scene){
+	collection_free(BKE_collection_master(scene));
 }
 
 /*

@@ -66,6 +66,7 @@
 #include "BKE_action.h"
 #include "BKE_armature.h"
 #include "BKE_cachefile.h"
+#include "BKE_collection.h"
 #include "BKE_colortools.h"
 #include "BKE_depsgraph.h"
 #include "BKE_editmesh.h"
@@ -77,6 +78,7 @@
 #include "BKE_icons.h"
 #include "BKE_idprop.h"
 #include "BKE_image.h"
+#include "BKE_layer.h"
 #include "BKE_library.h"
 #include "BKE_linestyle.h"
 #include "BKE_main.h"
@@ -463,7 +465,13 @@ void BKE_scene_free(Scene *sce)
 	BKE_previewimg_free(&sce->preview);
 	curvemapping_free_data(&sce->r.mblur_shutter_curve);
 
+	for (SceneLayer *sl = sce->render_layers.first; sl; sl = sl->next) {
+		BKE_scene_layer_free(sl);
+	}
+	BLI_freelistN(&sce->render_layers);
+
 	/* Master Collection */
+	BKE_collection_master_free(sce);
 	MEM_freeN(sce->collection);
 	sce->collection = NULL;
 }

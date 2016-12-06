@@ -45,6 +45,7 @@
 
 /* prototype */
 LayerCollection *layer_collection_add(SceneLayer *sl, ListBase *lb, SceneCollection *sc);
+void layer_collection_free(SceneLayer *sl, LayerCollection *lc);
 
 /* RenderLayer */
 
@@ -82,11 +83,7 @@ bool BKE_scene_layer_remove(Main *bmain, Scene *scene, SceneLayer *sl)
 	}
 
 	BLI_remlink(&scene->render_layers, sl);
-
-	BLI_freelistN(&sl->object_bases);
-	//layer_collections_free(rl, &rl->collection_bases);
-	BLI_freelistN(&sl->layer_collections);
-
+	BKE_scene_layer_free(sl);
 	MEM_freeN(sl);
 
 	/* TODO WORKSPACE: set active_layer to 0 */
@@ -106,6 +103,20 @@ bool BKE_scene_layer_remove(Main *bmain, Scene *scene, SceneLayer *sl)
 	}
 
 	return true;
+}
+
+/*
+ * Free (or release) any data used by this SceneLayer (does not free the SceneLayer itself).
+ */
+void BKE_scene_layer_free(SceneLayer *sl)
+{
+	sl->basact = NULL;
+	BLI_freelistN(&sl->object_bases);
+
+	for (LayerCollection *lc = sl->layer_collections.first; lc; lc = lc->next) {
+		layer_collection_free(NULL, lc);
+	}
+	BLI_freelistN(&sl->layer_collections);
 }
 
 /*
@@ -148,20 +159,37 @@ static ObjectBase *object_base_add(SceneLayer *sl, Object *ob)
 }
 
 /* LayerCollection */
+
+/* When freeing the entire SceneLayer at once we don't bother with unref
+ * otherwise SceneLayer is passed to keep the syncing of the LayerCollection tree
+ */
+void layer_collection_free(SceneLayer *sl, LayerCollection *lc)
+{
+	if (sl) {
+		for (LinkData *link = lc->object_bases.first; link; link = link->next) {
+			scene_layer_object_base_unref(sl, link->data);
+		}
+	}
+
+	BLI_freelistN(&lc->object_bases);
+	BLI_freelistN(&lc->overrides);
+
+	for (LayerCollection *nlc = lc->layer_collections.first; nlc; nlc = nlc->next) {
+		layer_collection_free(sl, nlc);
+	}
+	BLI_freelistN(&lc->layer_collections);
+}
+
 /*
- * Free LayerCollection from SceneLayer
+ * Free (or release) LayerCollection from SceneLayer
+ * (does not free the LayerCollection itself).
  */
 void BKE_layer_collection_free(SceneLayer *sl, LayerCollection *lc)
 {
-	for (LayerCollection *nlc = lc->layer_collections.first; nlc; nlc = nlc->next) {
-		for (LinkData *link = nlc->object_bases.first; link; link = link->next) {
-			scene_layer_object_base_unref(sl, link->data);
-		}
-
-		BLI_freelistN(&nlc->object_bases);
-		BKE_layer_collection_free(sl, nlc);
-	}
+	layer_collection_free(sl, lc);
 }
+
+/* LayerCollection */
 
 /* Recursively get the collection for a given index */
 static LayerCollection *collection_from_index(ListBase *lb, const int number, int *i)
