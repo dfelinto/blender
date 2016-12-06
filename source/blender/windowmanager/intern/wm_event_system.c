@@ -314,7 +314,10 @@ void wm_event_do_notifiers(bContext *C)
 							printf("%s: screen set %p\n", __func__, note->reference);
 					}
 					else if (note->data == ND_SCREENDELETE) {
-						ED_screen_delete(C, note->reference);   // XXX hrms, think this over!
+						WorkSpace *workspace = win->workspace;
+						WorkSpaceLayout *layout = note->reference;
+
+						ED_workspace_layout_delete(C, workspace, layout);   // XXX hrms, think this over!
 						if (G.debug & G_DEBUG_EVENTS)
 							printf("%s: screen delete %p\n", __func__, note->reference);
 					}

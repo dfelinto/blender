@@ -3903,9 +3903,11 @@ static void SCREEN_OT_new(wmOperatorType *ot)
 static int screen_delete_exec(bContext *C, wmOperator *UNUSED(op))
 {
 	bScreen *sc = CTX_wm_screen(C);
-	
-	WM_event_add_notifier(C, NC_SCREEN | ND_SCREENDELETE, sc);
-	
+	WorkSpace *workspace = CTX_wm_workspace(C);
+	WorkSpaceLayout *layout = BKE_workspace_layout_find(workspace, sc);
+
+	WM_event_add_notifier(C, NC_SCREEN | ND_SCREENDELETE, layout);
+
 	return OPERATOR_FINISHED;
 }
 

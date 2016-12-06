@@ -700,3 +700,13 @@ void BKE_screen_gpu_fx_validate(GPUFXSettings *fx_settings)
 		GPU_fx_compositor_init_ssao_settings(fx_ssao);
 	}
 }
+
+bool BKE_screen_is_fullscreen_area(const bScreen *screen)
+{
+	return ELEM(screen->state, SCREENMAXIMIZED, SCREENFULL);
+}
+
+bool BKE_screen_is_used(const bScreen *screen)
+{
+	return (screen->winid != 0);
+}

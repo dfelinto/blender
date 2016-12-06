@@ -1012,8 +1012,9 @@ static void view3d_main_region_listener(bScreen *sc, ScrArea *sa, ARegion *ar, w
 				case ND_SKETCH:
 					ED_region_tag_redraw(ar);
 					break;
+				/* XXX */
 //				case ND_SCREENBROWSE:
-				case ND_SCREENDELETE:
+//				case ND_SCREENDELETE:
 				case ND_SCREENSET:
 					/* screen was changed, need to update used layers due to NC_SCENE|ND_LAYER_CONTENT */
 					/* updates used layers only for View3D in active screen */

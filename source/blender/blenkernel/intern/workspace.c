@@ -82,8 +82,9 @@ WorkSpaceLayout *BKE_workspace_layout_add(WorkSpace *workspace, bScreen *screen)
 	return layout;
 }
 
-void BKE_workspace_layout_remove(WorkSpace *workspace, WorkSpaceLayout *layout)
+void BKE_workspace_layout_remove(WorkSpace *workspace, WorkSpaceLayout *layout, Main *bmain)
 {
+	BKE_libblock_free(bmain, BKE_workspace_layout_screen_get(layout));
 	BLI_remlink(&workspace->layouts, layout);
 	MEM_freeN(layout);
 }
@@ -168,7 +169,7 @@ void BKE_workspace_active_scene_set(WorkSpace *ws, Scene *scene)
 }
 
 
-bScreen *BKE_workspace_layout_screen_get(WorkSpaceLayout *layout)
+bScreen *BKE_workspace_layout_screen_get(const WorkSpaceLayout *layout)
 {
 	return layout->screen;
 }

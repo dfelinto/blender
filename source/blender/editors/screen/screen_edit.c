@@ -1673,48 +1673,6 @@ static bool ed_screen_used(wmWindowManager *wm, bScreen *sc)
 	return false;
 }
 
-/* only call outside of area/region loops */
-bool ED_screen_delete(bContext *C, bScreen *sc)
-{
-	Main *bmain = CTX_data_main(C);
-	wmWindowManager *wm = CTX_wm_manager(C);
-	wmWindow *win = CTX_wm_window(C);
-	bScreen *newsc;
-	
-	/* don't allow deleting temp fullscreens for now */
-	if (ELEM(sc->state, SCREENMAXIMIZED, SCREENFULL)) {
-		return false;
-	}
-
-	/* screen can only be in use by one window at a time, so as
-	 * long as we are able to find a screen that is unused, we
-	 * can safely assume ours is not in use anywhere an delete it */
-
-	for (newsc = sc->id.prev; newsc; newsc = newsc->id.prev)
-		if (!ed_screen_used(wm, newsc) && !newsc->temp)
-			break;
-	
-	if (!newsc) {
-		for (newsc = sc->id.next; newsc; newsc = newsc->id.next)
-			if (!ed_screen_used(wm, newsc) && !newsc->temp)
-				break;
-	}
-
-	if (!newsc) {
-		return false;
-	}
-
-	ED_screen_set(C, newsc);
-
-	if (WM_window_get_active_screen(win) != sc) {
-		BKE_libblock_free(bmain, sc);
-		return true;
-	}
-	else {
-		return false;
-	}
-}
-
 static void ed_screen_set_3dview_camera(Scene *scene, bScreen *sc, ScrArea *sa, View3D *v3d)
 {
 	/* fix any cameras that are used in the 3d view but not in the scene */
@@ -1991,9 +1949,7 @@ ScrArea *ED_screen_state_toggle(bContext *C, wmWindow *win, ScrArea *sa, const s
 
 		ED_screen_set(C, sc);
 
-		BKE_workspace_layout_remove(win->workspace, layout_old);
-		BKE_screen_free(oldscreen);
-		BKE_libblock_free(CTX_data_main(C), oldscreen);
+		BKE_workspace_layout_remove(win->workspace, layout_old, CTX_data_main(C));
 
 		/* After we've restored back to SCREENNORMAL, we have to wait with
 		 * screen handling as it uses the area coords which aren't updated yet.

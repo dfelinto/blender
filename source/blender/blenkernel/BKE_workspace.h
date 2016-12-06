@@ -39,7 +39,7 @@ struct WorkSpace *BKE_workspace_duplicate(Main *bmain, const struct WorkSpace *f
 void BKE_workspace_free(struct WorkSpace *ws);
 
 struct WorkSpaceLayout *BKE_workspace_layout_add(struct WorkSpace *workspace, struct bScreen *screen) ATTR_NONNULL();
-void BKE_workspace_layout_remove(struct WorkSpace *workspace, struct WorkSpaceLayout *layout) ATTR_NONNULL();
+void BKE_workspace_layout_remove(struct WorkSpace *workspace, struct WorkSpaceLayout *layout, Main *bmain) ATTR_NONNULL();
 
 
 /* -------------------------------------------------------------------- */
@@ -61,7 +61,6 @@ void            BKE_workspace_active_screen_set(struct WorkSpace *ws, struct bSc
 struct Scene   *BKE_workspace_active_scene_get(const struct WorkSpace *ws) ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
 void            BKE_workspace_active_scene_set(struct WorkSpace *ws, struct Scene *scene);
 
-struct bScreen *BKE_workspace_layout_screen_get(
-        struct WorkSpaceLayout *layout) ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
+struct bScreen *BKE_workspace_layout_screen_get(const struct WorkSpaceLayout *layout) ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
 
 #endif /* __BKE_WORKSPACE_H__ */
