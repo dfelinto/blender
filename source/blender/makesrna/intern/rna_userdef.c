@@ -145,7 +145,7 @@ static void rna_userdef_dpi_update(Main *UNUSED(bmain), Scene *UNUSED(scene), Po
 
 	BKE_blender_userdef_refresh();
 	WM_main_add_notifier(NC_WINDOW, NULL);      /* full redraw */
-	WM_main_add_notifier(NC_SCREEN | NA_EDITED, NULL);    /* refresh region sizes */
+	WM_main_add_notifier(NC_WORKSPACE | NA_EDITED, NULL);    /* refresh region sizes */
 }
 
 static void rna_userdef_virtual_pixel_update(Main *bmain, Scene *UNUSED(scene), PointerRNA *UNUSED(ptr))
@@ -162,7 +162,7 @@ static void rna_userdef_virtual_pixel_update(Main *bmain, Scene *UNUSED(scene), 
 	}
 
 	WM_main_add_notifier(NC_WINDOW, NULL);      /* full redraw */
-	WM_main_add_notifier(NC_SCREEN | NA_EDITED, NULL);    /* refresh region sizes */
+	WM_main_add_notifier(NC_WORKSPACE | NA_EDITED, NULL);    /* refresh region sizes */
 }
 
 static void rna_userdef_language_update(Main *UNUSED(bmain), Scene *UNUSED(scene), PointerRNA *UNUSED(ptr))

@@ -292,7 +292,7 @@ void wm_event_do_notifiers(bContext *C)
 					wm_window_title(wm, win);
 			}
 			if (note->window == win) {
-				if (note->category == NC_SCREEN) {
+				if (note->category == NC_WORKSPACE) {
 					if (note->data == ND_WORKSPACE_SET) {
 						WorkSpace *ref_ws = note->reference;
 
@@ -356,7 +356,7 @@ void wm_event_do_notifiers(bContext *C)
 			bScreen *screen = WM_window_get_active_screen(win);
 
 			/* filter out notifiers */
-			if (note->category == NC_SCREEN &&
+			if (note->category == NC_WORKSPACE &&
 			    note->reference &&
 			    note->reference != screen &&
 			    note->reference != win->workspace &&

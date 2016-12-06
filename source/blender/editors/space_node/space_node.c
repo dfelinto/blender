@@ -466,7 +466,7 @@ static void node_area_listener(bScreen *sc, ScrArea *sa, wmNotifier *wmn)
 			else if (wmn->action == NA_SELECTED)
 				ED_area_tag_redraw(sa);
 			break;
-		case NC_SCREEN:
+		case NC_WORKSPACE:
 			switch (wmn->data) {
 				case ND_ANIMPLAY:
 					ED_area_tag_refresh(sa);
@@ -745,7 +745,7 @@ static void node_region_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(sa), ARegi
 			if (wmn->data == ND_SPACE_NODE)
 				ED_region_tag_redraw(ar);
 			break;
-		case NC_SCREEN:
+		case NC_WORKSPACE:
 			switch (wmn->data) {
 				case ND_SCREENCAST:
 				case ND_ANIMPLAY:

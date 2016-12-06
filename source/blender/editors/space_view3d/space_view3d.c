@@ -1006,7 +1006,7 @@ static void view3d_main_region_listener(bScreen *sc, ScrArea *sa, ARegion *ar, w
 			if (wmn->action == NA_RENAME)
 				ED_region_tag_redraw(ar);
 			break;
-		case NC_SCREEN:
+		case NC_WORKSPACE:
 			switch (wmn->data) {
 				case ND_ANIMPLAY:
 				case ND_SKETCH:

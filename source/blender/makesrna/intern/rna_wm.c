@@ -646,7 +646,7 @@ static void rna_Window_workspace_update(bContext *C, PointerRNA *ptr)
 	/* exception: can't set screens inside of area/region handlers,
 	 * and must use context so notifier gets to the right window */
 	if (win->new_workspace) {
-		WM_event_add_notifier(C, NC_SCREEN | ND_WORKSPACE_SET, win->new_workspace);
+		WM_event_add_notifier(C, NC_WORKSPACE | ND_WORKSPACE_SET, win->new_workspace);
 		win->new_workspace = NULL;
 	}
 }
@@ -949,7 +949,7 @@ static void rna_Operator_unregister(struct Main *bmain, StructRNA *type)
 
 		WM_operator_handlers_clear(wm, ot);
 	}
-	WM_main_add_notifier(NC_SCREEN | NA_EDITED, NULL);
+	WM_main_add_notifier(NC_WORKSPACE | NA_EDITED, NULL);
 
 	RNA_struct_free_extension(type, &ot->ext);
 
@@ -1256,7 +1256,7 @@ static StructRNA *rna_Operator_register(Main *bmain, ReportList *reports, void *
 	WM_operatortype_append_ptr(operator_wrapper, (void *)&dummyot);
 
 	/* update while blender is running */
-	WM_main_add_notifier(NC_SCREEN | NA_EDITED, NULL);
+	WM_main_add_notifier(NC_WORKSPACE | NA_EDITED, NULL);
 
 	return dummyot.ext.srna;
 }
@@ -1348,7 +1348,7 @@ static StructRNA *rna_MacroOperator_register(Main *bmain, ReportList *reports, v
 	WM_operatortype_append_macro_ptr(macro_wrapper, (void *)&dummyot);
 
 	/* update while blender is running */
-	WM_main_add_notifier(NC_SCREEN | NA_EDITED, NULL);
+	WM_main_add_notifier(NC_WORKSPACE | NA_EDITED, NULL);
 
 	return dummyot.ext.srna;
 }

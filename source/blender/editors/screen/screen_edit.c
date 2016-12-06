@@ -1093,7 +1093,7 @@ void ED_screen_do_listen(bContext *C, wmNotifier *note)
 		case NC_WINDOW:
 			screen->do_draw = true;
 			break;
-		case NC_SCREEN:
+		case NC_WORKSPACE:
 			if (note->action == NA_EDITED)
 				screen->do_draw = screen->do_refresh = true;
 			break;
@@ -1527,7 +1527,7 @@ void screen_set_refresh(Main *bmain, bContext *C, wmWindow *win, bool scene_chan
 
 	ED_screen_refresh(CTX_wm_manager(C), CTX_wm_window(C));
 	WM_event_add_notifier(C, NC_WINDOW, NULL);
-	WM_event_add_notifier(C, NC_SCREEN | ND_SCREENSET, sc);
+	WM_event_add_notifier(C, NC_WORKSPACE | ND_SCREENSET, sc);
 
 	/* makes button hilites work */
 	WM_event_add_mousemove(C);
@@ -2104,7 +2104,7 @@ void ED_screen_animation_timer(bContext *C, int redraws, int refresh, int sync, 
 	}
 
 	/* notifier catched by top header, for button */
-	WM_event_add_notifier(C, NC_SCREEN | ND_ANIMPLAY, NULL);
+	WM_event_add_notifier(C, NC_WORKSPACE | ND_ANIMPLAY, NULL);
 }
 
 /* helper for screen_animation_play() - only to be used for TimeLine */

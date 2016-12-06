@@ -947,7 +947,7 @@ static int area_swap_modal(bContext *C, wmOperator *op, const wmEvent *event)
 				
 				area_swap_exit(C, op);
 				
-				WM_event_add_notifier(C, NC_SCREEN | NA_EDITED, NULL);
+				WM_event_add_notifier(C, NC_WORKSPACE | NA_EDITED, NULL);
 				
 				return OPERATOR_FINISHED;
 			}
@@ -1025,7 +1025,7 @@ static int area_dupli_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 	ED_area_tag_redraw((ScrArea *)newsc->areabase.first);
 
 	/* screen, areas init */
-	WM_event_add_notifier(C, NC_SCREEN | NA_EDITED, NULL);
+	WM_event_add_notifier(C, NC_WORKSPACE | NA_EDITED, NULL);
 
 
 finally:
@@ -1224,7 +1224,7 @@ static void area_move_apply_do(bContext *C, int origval, int delta, int dir, int
 				ED_area_tag_redraw(sa);
 		}
 
-		WM_event_add_notifier(C, NC_SCREEN | NA_EDITED, NULL); /* redraw everything */
+		WM_event_add_notifier(C, NC_WORKSPACE | NA_EDITED, NULL); /* redraw everything */
 		/* Update preview thumbnail */
 		BKE_icon_changed(sc->id.icon_id);
 	}
@@ -1514,7 +1514,7 @@ static int area_split_apply(bContext *C, wmOperator *op)
 		ED_area_tag_redraw(sd->sarea);
 		ED_area_tag_redraw(sd->narea);
 
-		WM_event_add_notifier(C, NC_SCREEN | NA_EDITED, NULL);
+		WM_event_add_notifier(C, NC_WORKSPACE | NA_EDITED, NULL);
 		/* Update preview thumbnail */
 		BKE_icon_changed(sc->id.icon_id);
 
@@ -1539,7 +1539,7 @@ static void area_split_exit(bContext *C, wmOperator *op)
 	}
 	
 	WM_cursor_modal_restore(CTX_wm_window(C));
-	WM_event_add_notifier(C, NC_SCREEN | NA_EDITED, NULL);
+	WM_event_add_notifier(C, NC_WORKSPACE | NA_EDITED, NULL);
 	
 	/* this makes sure aligned edges will result in aligned grabbing */
 	removedouble_scrverts(CTX_wm_screen(C));
@@ -2025,7 +2025,7 @@ static int region_scale_modal(bContext *C, wmOperator *op, const wmEvent *event)
 					region_scale_toggle_hidden(C, rmd);
 			}
 			ED_area_tag_redraw(rmd->sa);
-			WM_event_add_notifier(C, NC_SCREEN | NA_EDITED, NULL);
+			WM_event_add_notifier(C, NC_WORKSPACE | NA_EDITED, NULL);
 			
 			break;
 			
@@ -2041,7 +2041,7 @@ static int region_scale_modal(bContext *C, wmOperator *op, const wmEvent *event)
 					}
 
 					ED_area_tag_redraw(rmd->sa);
-					WM_event_add_notifier(C, NC_SCREEN | NA_EDITED, NULL);
+					WM_event_add_notifier(C, NC_WORKSPACE | NA_EDITED, NULL);
 				}
 				MEM_freeN(op->customdata);
 				op->customdata = NULL;
@@ -2720,7 +2720,7 @@ static int area_join_modal(bContext *C, wmOperator *op, const wmEvent *event)
 				ED_area_tag_redraw(jd->sa2);
 
 				area_join_apply(C, op);
-				WM_event_add_notifier(C, NC_SCREEN | NA_EDITED, NULL);
+				WM_event_add_notifier(C, NC_WORKSPACE | NA_EDITED, NULL);
 				area_join_exit(C, op);
 				return OPERATOR_FINISHED;
 			}
@@ -3054,7 +3054,7 @@ static int region_quadview_exec(bContext *C, wmOperator *op)
 			}
 		}
 		ED_area_tag_redraw(sa);
-		WM_event_add_notifier(C, NC_SCREEN | NA_EDITED, NULL);
+		WM_event_add_notifier(C, NC_WORKSPACE | NA_EDITED, NULL);
 	}
 	else if (ar->next) {
 		BKE_report(op->reports, RPT_ERROR, "Only last region can be 4-splitted");
@@ -3099,7 +3099,7 @@ static int region_quadview_exec(bContext *C, wmOperator *op)
 #endif
 		}
 		ED_area_tag_redraw(sa);
-		WM_event_add_notifier(C, NC_SCREEN | NA_EDITED, NULL);
+		WM_event_add_notifier(C, NC_WORKSPACE | NA_EDITED, NULL);
 	}
 	
 	
@@ -3140,7 +3140,7 @@ static int region_flip_exec(bContext *C, wmOperator *UNUSED(op))
 		ar->alignment = RGN_ALIGN_LEFT;
 
 	ED_area_tag_redraw(CTX_wm_area(C));
-	WM_event_add_notifier(C, NC_SCREEN | NA_EDITED, NULL);
+	WM_event_add_notifier(C, NC_WORKSPACE | NA_EDITED, NULL);
 	
 	return OPERATOR_FINISHED;
 }
@@ -3172,7 +3172,7 @@ static int header_exec(bContext *C, wmOperator *UNUSED(op))
 
 	ED_area_tag_redraw(CTX_wm_area(C));
 
-	WM_event_add_notifier(C, NC_SCREEN | NA_EDITED, NULL);
+	WM_event_add_notifier(C, NC_WORKSPACE | NA_EDITED, NULL);
 
 	return OPERATOR_FINISHED;
 }
@@ -3211,7 +3211,7 @@ static int header_flip_exec(bContext *C, wmOperator *UNUSED(op))
 
 	ED_area_tag_redraw(CTX_wm_area(C));
 
-	WM_event_add_notifier(C, NC_SCREEN | NA_EDITED, NULL);
+	WM_event_add_notifier(C, NC_WORKSPACE | NA_EDITED, NULL);
 	
 	return OPERATOR_FINISHED;
 }
@@ -3243,7 +3243,7 @@ static int header_toggle_menus_exec(bContext *C, wmOperator *UNUSED(op))
 	sa->flag = sa->flag ^ HEADER_NO_PULLDOWN;
 
 	ED_area_tag_redraw(sa);
-	WM_event_add_notifier(C, NC_SCREEN | NA_EDITED, NULL);	
+	WM_event_add_notifier(C, NC_WORKSPACE | NA_EDITED, NULL);
 
 	return OPERATOR_FINISHED;
 }
@@ -3883,7 +3883,7 @@ static int screen_new_exec(bContext *C, wmOperator *UNUSED(op))
 	WorkSpaceLayout *layout_new;
 
 	layout_new = ED_workspace_layout_duplicate(workspace, layout_old, win);
-	WM_event_add_notifier(C, NC_SCREEN | ND_SCREENBROWSE, layout_new);
+	WM_event_add_notifier(C, NC_WORKSPACE | ND_SCREENBROWSE, layout_new);
 
 	return OPERATOR_FINISHED;
 }
@@ -3908,7 +3908,7 @@ static int screen_delete_exec(bContext *C, wmOperator *UNUSED(op))
 	WorkSpace *workspace = CTX_wm_workspace(C);
 	WorkSpaceLayout *layout = BKE_workspace_layout_find(workspace, sc);
 
-	WM_event_add_notifier(C, NC_SCREEN | ND_SCREENDELETE, layout);
+	WM_event_add_notifier(C, NC_WORKSPACE | ND_SCREENDELETE, layout);
 
 	return OPERATOR_FINISHED;
 }

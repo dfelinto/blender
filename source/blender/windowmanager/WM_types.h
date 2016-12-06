@@ -224,7 +224,7 @@ typedef struct wmNotifier {
 #define NOTE_CATEGORY		0xFF000000
 #define	NC_WM				(1<<24)
 #define	NC_WINDOW			(2<<24)
-#define	NC_SCREEN			(3<<24)
+#define NC_WORKSPACE		(3<<24)
 #define	NC_SCENE			(4<<24)
 #define	NC_OBJECT			(5<<24)
 #define	NC_MATERIAL			(6<<24)
@@ -258,7 +258,7 @@ typedef struct wmNotifier {
 #define ND_JOB				(5<<16)
 #define ND_UNDO				(6<<16)
 
-	/* NC_SCREEN screen */
+	/* NC_WORKSPACE screen */
 #define ND_SCREENBROWSE		(1<<16)
 #define ND_SCREENDELETE		(2<<16)
 #define ND_SCREENCAST		(3<<16)

@@ -131,7 +131,7 @@ static int workspace_new_exec(bContext *C, wmOperator *UNUSED(op))
 	WorkSpace *workspace;
 
 	workspace = ED_workspace_duplicate(workspace_old, bmain, win);
-	WM_event_add_notifier(C, NC_SCREEN | ND_WORKSPACE_SET, workspace);
+	WM_event_add_notifier(C, NC_WORKSPACE | ND_WORKSPACE_SET, workspace);
 
 	return OPERATOR_FINISHED;
 }

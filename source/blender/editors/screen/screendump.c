@@ -534,14 +534,14 @@ static int screencast_exec(bContext *C, wmOperator *op)
 
 	/* setup job */
 	WM_jobs_customdata_set(wm_job, sj, screenshot_freejob);
-	WM_jobs_timer(wm_job, 0.1, 0, NC_SCREEN | ND_SCREENCAST);
+	WM_jobs_timer(wm_job, 0.1, 0, NC_WORKSPACE | ND_SCREENCAST);
 	WM_jobs_callbacks(wm_job, screenshot_startjob, NULL, screenshot_updatejob, screenshot_endjob);
 	
 	WM_jobs_start(sj->wm, wm_job);
 	
 	screencast_cursor_toggle(sj->wm, 1);
 	
-	WM_event_add_notifier(C, NC_SCREEN | ND_SCREENCAST, screen);
+	WM_event_add_notifier(C, NC_WORKSPACE | ND_SCREENCAST, screen);
 	
 	return OPERATOR_FINISHED;
 }

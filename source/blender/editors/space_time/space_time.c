@@ -550,7 +550,7 @@ static void time_header_region_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(sa)
 {
 	/* context changes */
 	switch (wmn->category) {
-		case NC_SCREEN:
+		case NC_WORKSPACE:
 		{
 			if (wmn->data == ND_ANIMPLAY)
 				ED_region_tag_redraw(ar);
