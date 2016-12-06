@@ -141,6 +141,7 @@ static void scene_layer_object_base_unref(SceneLayer* sl, ObjectBase *base)
 static ObjectBase *object_base_add(SceneLayer *sl, Object *ob)
 {
 	ObjectBase *base = MEM_callocN(sizeof(ObjectBase), "Object Base");
+	/* don't bump user count */
 	base->object = ob;
 	BLI_addtail(&sl->object_bases, base);
 	return base;

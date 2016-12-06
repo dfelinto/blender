@@ -5237,7 +5237,7 @@ static void lib_link_scene_collection(FileData *fd, Library *lib, SceneCollectio
 		BLI_assert(link->data);
 	}
 
-	for (LinkData *link = sc->objects.first; link; link = link->next) {
+	for (LinkData *link = sc->filter_objects.first; link; link = link->next) {
 		link->data = newlibadr_us(fd, lib, link->data);
 		BLI_assert(link->data);
 	}
@@ -5400,7 +5400,8 @@ static void lib_link_scene(FileData *fd, Main *main)
 
 			for (sl = sce->render_layers.first; sl; sl = sl->next) {
 				for (ObjectBase *ob_base = sl->object_bases.first; ob_base; ob_base = ob_base->next) {
-					ob_base->object = newlibadr_us(fd, sce->id.lib, ob_base->object);
+					/* we only bump the use count for the collection objects */
+					ob_base->object = newlibadr(fd, sce->id.lib, ob_base->object);
 				}
 			}
 
@@ -5775,7 +5776,7 @@ static void direct_link_scene(FileData *fd, Scene *sce)
 	direct_link_curvemapping(fd, &sce->r.mblur_shutter_curve);
 
 	/* this runs before the very first doversion */
-	if (sce->collection != NULL) {
+	if (sce->collection) {
 		sce->collection = newdataadr(fd, sce->collection);
 		direct_link_scene_collection(fd, sce->collection);
 	}
