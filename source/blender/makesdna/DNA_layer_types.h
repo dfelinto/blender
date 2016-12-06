@@ -52,9 +52,9 @@ typedef struct LayerCollection {
 	struct SceneCollection *scene_collection;
 	short flag;
 	short pad[3];
-	ListBase layer_collections; /* synced with collection->collections */
 	ListBase object_bases;      /* (ObjectBase *)LinkData->data - synced with collection->objects and collection->filter_objects */
 	ListBase overrides;
+	ListBase layer_collections; /* synced with collection->collections */
 } LayerCollection;
 
 typedef struct SceneLayer {
@@ -63,18 +63,18 @@ typedef struct SceneLayer {
 	char engine[32]; /* render engine */
 	short active_collection;
 	short pad[3];
+	ListBase object_bases;      /* ObjectBase */
 	struct ObjectBase *basact;
 	ListBase layer_collections; /* LayerCollection */
-	ListBase object_bases;      /* ObjectBase */
 } SceneLayer;
 
 typedef struct SceneCollection {
 	struct SceneCollection *next, *prev;
 	char name[64]; /* MAX_NAME */
 	char filter[64]; /* MAX_NAME */
-	ListBase scene_collections; /* nested collections */
 	ListBase objects;           /* (Object *)LinkData->data */
 	ListBase filter_objects;    /* (Object *)LinkData->data */
+	ListBase scene_collections; /* nested collections */
 } SceneCollection;
 
 /* ObjectBase->flag */

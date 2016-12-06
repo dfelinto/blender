@@ -2419,8 +2419,8 @@ static void write_layer_collections(WriteData *wd, ListBase *lb)
 	for (LayerCollection *lc = lb->first; lc; lc = lc->next) {
 		writestruct(wd, DATA, LayerCollection, 1, lc);
 
-		writelist(wd, DATA, CollectionOverride, &lc->overrides);
 		writelist(wd, DATA, LinkData, &lc->object_bases);
+		writelist(wd, DATA, CollectionOverride, &lc->overrides);
 
 		write_layer_collections(wd, &lc->layer_collections);
 	}
