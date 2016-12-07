@@ -82,7 +82,7 @@ typedef struct SpaceType {
 	/* exit is called when the area is hidden or removed */
 	void (*exit)(struct wmWindowManager *, struct ScrArea *);
 	/* Listeners can react to bContext changes */
-	void (*listener)(struct bScreen *sc, struct ScrArea *, struct wmNotifier *);
+	void (*listener)(struct bScreen *sc, struct ScrArea *, struct wmNotifier *, const struct Scene *);
 	
 	/* refresh context, called after filereads, ED_area_tag_refresh() */
 	void (*refresh)(const struct bContext *, struct ScrArea *);
@@ -133,7 +133,7 @@ typedef struct ARegionType {
 	/* draw entirely, view changes should be handled here */
 	void (*draw)(const struct bContext *, struct ARegion *);
 	/* contextual changes should be handled here */
-	void (*listener)(struct bScreen *sc, struct ScrArea *, struct ARegion *, struct wmNotifier *);
+	void (*listener)(struct bScreen *, struct ScrArea *, struct ARegion *, struct wmNotifier *, const struct Scene *);
 	
 	void (*free)(struct ARegion *);
 
@@ -306,7 +306,7 @@ unsigned int BKE_screen_view3d_layer_active(
 unsigned int BKE_screen_view3d_layer_all(const struct bScreen *sc) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL(1);
 
 void BKE_screen_view3d_sync(struct View3D *v3d, struct Scene *scene);
-void BKE_screen_view3d_scene_sync(struct bScreen *sc);
+void BKE_screen_view3d_scene_sync(struct bScreen *sc, struct Scene *scene);
 void BKE_screen_view3d_main_sync(ListBase *screen_lb, struct Scene *scene);
 void BKE_screen_view3d_twmode_remove(struct View3D *v3d, const int i);
 void BKE_screen_view3d_main_twmode_remove(ListBase *screen_lb, struct Scene *scene, const int i);

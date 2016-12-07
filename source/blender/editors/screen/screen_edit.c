@@ -462,13 +462,12 @@ ScrArea *area_split(bScreen *sc, ScrArea *sa, char dir, float fac, int merge)
 /**
  * Empty screen, with 1 dummy area without spacedata. Uses window size.
  */
-bScreen *screen_add(wmWindow *win, Scene *scene, const char *name, const int winsize_x, const int winsize_y)
+bScreen *screen_add(wmWindow *win, const char *name, const int winsize_x, const int winsize_y)
 {
 	bScreen *sc;
 	ScrVert *sv1, *sv2, *sv3, *sv4;
 
 	sc = BKE_libblock_alloc(G.main, ID_SCR, name);
-	sc->scene = scene;
 	sc->do_refresh = true;
 	sc->redraws_flag = TIME_ALL_3D_WIN | TIME_ALL_ANIM_WIN;
 	sc->winid = win->winid;
@@ -1516,7 +1515,7 @@ bScreen *screen_set_find_associated_fullscreen(const Main *bmain, bScreen *scree
 /**
  * Refresh data and make screen ready for drawing *after* activating it.
  */
-void screen_set_refresh(Main *bmain, bContext *C, wmWindow *win, bool scene_changed)
+void screen_set_refresh(Main *bmain, bContext *C, wmWindow *win)
 {
 	bScreen *sc = WM_window_get_active_screen(win);
 
@@ -1531,20 +1530,6 @@ void screen_set_refresh(Main *bmain, bContext *C, wmWindow *win, bool scene_chan
 
 	/* makes button hilites work */
 	WM_event_add_mousemove(C);
-
-	/* Needed to make sure all the derivedMeshes are
-	 * up-to-date before viewport starts acquiring this.
-	 *
-	 * This is needed in cases when, for example, boolean
-	 * modifier uses operant from invisible layer.
-	 * Without this trick boolean wouldn't apply correct.
-	 *
-	 * Quite the same happens when setting screen's scene,
-	 * so perhaps this is in fact correct thing to do.
-	 */
-	if (scene_changed) {
-		BKE_scene_set_background(bmain, sc->scene);
-	}
 
 	/* Always do visible update since it's possible new screen will
 	 * have different layers visible in 3D view-ports.
@@ -1582,7 +1567,6 @@ void screen_set_prepare(bContext *C, wmWindow *win, bScreen *screen_new, bScreen
 	wmWindowManager *wm = CTX_wm_manager(C);
 	wmTimer *wt = screen_old->animtimer;
 	ScrArea *sa;
-	Scene *scene_old = screen_old->scene;
 
 	/* remove handlers referencing areas in old screen */
 	for (sa = screen_old->areabase.first; sa; sa = sa->next) {
@@ -1598,14 +1582,7 @@ void screen_set_prepare(bContext *C, wmWindow *win, bScreen *screen_new, bScreen
 
 	/* Same scene, "transfer" playback to new screen. */
 	if (wt) {
-		if (scene_old == screen_new->scene) {
-			screen_new->animtimer = wt;
-		}
-		/* Else, stop playback. */
-		else {
-			screen_old->animtimer = wt;
-			ED_screen_animation_play(C, 0, 0);
-		}
+		screen_new->animtimer = wt;
 	}
 }
 
@@ -1628,7 +1605,7 @@ bool ED_screen_set(bContext *C, bScreen *sc)
 	if (screen_old != screen_new) {
 		screen_set_prepare(C, win, screen_new, screen_old);
 		WM_window_set_active_screen(win, sc);
-		screen_set_refresh(bmain, C, win, screen_old->scene != screen_new->scene);
+		screen_set_refresh(bmain, C, win);
 	}
 
 	return true;
@@ -1953,7 +1930,7 @@ ScrArea *ED_screen_state_toggle(bContext *C, wmWindow *win, ScrArea *sa, const s
 		oldscreen->state = state;
 		BLI_snprintf(newname, sizeof(newname), "%s-%s", oldscreen->id.name + 2, "nonnormal");
 
-		layout_new = ED_workspace_layout_add(workspace, win, oldscreen->scene, newname);
+		layout_new = ED_workspace_layout_add(workspace, win, newname);
 
 		sc = BKE_workspace_layout_screen_get(layout_new);
 		sc->state = state;
@@ -2160,7 +2137,7 @@ void ED_update_for_newframe(Main *bmain, Scene *scene, int UNUSED(mute))
 		scene->camera = camera;
 		/* are there cameras in the views that are not in the scene? */
 		for (sc = bmain->screen.first; sc; sc = sc->id.next) {
-			BKE_screen_view3d_scene_sync(sc);
+			BKE_screen_view3d_scene_sync(sc, scene);
 		}
 	}
 #endif
@@ -2192,11 +2169,10 @@ void ED_update_for_newframe(Main *bmain, Scene *scene, int UNUSED(mute))
 /*
  * return true if any active area requires to see in 3D
  */
-bool ED_screen_stereo3d_required(const bScreen *screen)
+bool ED_screen_stereo3d_required(const bScreen *screen, const Scene *scene)
 {
 	ScrArea *sa;
-	Scene *sce = screen->scene;
-	const bool is_multiview = (sce->r.scemode & R_MULTIVIEW) != 0;
+	const bool is_multiview = (scene->r.scemode & R_MULTIVIEW) != 0;
 
 	for (sa = screen->areabase.first; sa; sa = sa->next) {
 		switch (sa->spacetype) {

@@ -216,7 +216,7 @@ static void buttons_area_redraw(ScrArea *sa, short buttons)
 }
 
 /* reused! */
-static void buttons_area_listener(bScreen *UNUSED(sc), ScrArea *sa, wmNotifier *wmn)
+static void buttons_area_listener(bScreen *UNUSED(sc), ScrArea *sa, wmNotifier *wmn, const Scene *UNUSED(scene))
 {
 	SpaceButs *sbuts = sa->spacedata.first;
 

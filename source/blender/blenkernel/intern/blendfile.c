@@ -93,7 +93,7 @@ static void clean_paths(Main *main)
 static bool wm_scene_is_visible(wmWindowManager *wm, Scene *scene)
 {
 	for (wmWindow *win = wm->windows.first; win; win = win->next) {
-		if (BKE_workspace_active_scene_get(win->workspace) == scene) {
+		if (win->scene == scene) {
 			return true;
 		}
 	}
@@ -207,8 +207,7 @@ static void setup_app_data(
 			wmWindowManager *wm = bfd->main->wm.first;
 			if (wm_scene_is_visible(wm, bfd->curscene) == false) {
 				curscene = bfd->curscene;
-				curscreen->scene = curscene;
-				BKE_screen_view3d_scene_sync(curscreen);
+				BKE_screen_view3d_scene_sync(curscreen, curscene);
 			}
 		}
 	}

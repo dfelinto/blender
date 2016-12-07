@@ -69,7 +69,7 @@ bool ED_workspace_change(bContext *C, wmWindow *win, WorkSpace *ws_new)
 	if (screen_old != screen_new) {
 		screen_set_prepare(C, win, screen_new, screen_old);
 		win->workspace = ws_new;
-		screen_set_refresh(bmain, C, win, screen_old->scene != screen_new->scene);
+		screen_set_refresh(bmain, C, win);
 	}
 	BLI_assert(CTX_wm_workspace(C) == ws_new);
 

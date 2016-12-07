@@ -145,22 +145,8 @@ void BKE_workspace_active_screen_set(WorkSpace *ws, bScreen *screen)
 	ws->act_layout = BKE_workspace_layout_find(ws, screen);
 }
 
-Scene *BKE_workspace_active_scene_get(const WorkSpace *ws)
-{
-	return ws->act_layout->screen->scene;
-}
-void BKE_workspace_active_scene_set(WorkSpace *ws, Scene *scene)
-{
-	ws->act_layout->screen->scene = scene;
-}
-
 
 bScreen *BKE_workspace_layout_screen_get(const WorkSpaceLayout *layout)
 {
 	return layout->screen;
-}
-
-Scene *BKE_workspace_layout_scene_get(const WorkSpaceLayout *layout)
-{
-	return layout->screen->scene;
 }

@@ -662,7 +662,7 @@ wmWindow *WM_window_open_temp(bContext *C, const rcti *rect_init, int type)
 
 	if (screen == NULL) {
 		/* add new screen layout */
-		WorkSpaceLayout *layout = ED_workspace_layout_add(win->workspace, win, scene, "temp");
+		WorkSpaceLayout *layout = ED_workspace_layout_add(win->workspace, win, "temp");
 
 		screen = BKE_workspace_layout_screen_get(layout);
 		WM_window_set_active_layout(win, layout);
@@ -1729,7 +1729,7 @@ bool WM_window_is_fullscreen(wmWindow *win)
 
 Scene *WM_window_get_active_scene(const wmWindow *win)
 {
-	return (LIKELY(win->workspace != NULL) ? BKE_workspace_active_scene_get(win->workspace) : NULL);
+	return win->scene;
 }
 
 WorkSpaceLayout *WM_window_get_active_layout(const wmWindow *win)

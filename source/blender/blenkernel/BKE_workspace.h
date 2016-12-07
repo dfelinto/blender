@@ -57,10 +57,7 @@ struct WorkSpaceLayout *BKE_workspace_active_layout_get(const struct WorkSpace *
 void                    BKE_workspace_active_layout_set(struct WorkSpace *ws, struct WorkSpaceLayout *layout) ATTR_NONNULL(1);
 struct bScreen *BKE_workspace_active_screen_get(const struct WorkSpace *ws) ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
 void            BKE_workspace_active_screen_set(struct WorkSpace *ws, struct bScreen *screen) ATTR_NONNULL(1);
-struct Scene   *BKE_workspace_active_scene_get(const struct WorkSpace *ws) ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
-void            BKE_workspace_active_scene_set(struct WorkSpace *ws, struct Scene *scene);
 
 struct bScreen *BKE_workspace_layout_screen_get(const struct WorkSpaceLayout *layout) ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
-struct Scene *BKE_workspace_layout_scene_get(const struct WorkSpaceLayout *layout) ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
 
 #endif /* __BKE_WORKSPACE_H__ */

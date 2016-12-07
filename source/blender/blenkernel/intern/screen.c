@@ -596,7 +596,7 @@ void BKE_screen_view3d_sync(View3D *v3d, struct Scene *scene)
 	}
 }
 
-void BKE_screen_view3d_scene_sync(bScreen *sc)
+void BKE_screen_view3d_scene_sync(bScreen *sc, Scene *scene)
 {
 	/* are there cameras in the views that are not in the scene? */
 	ScrArea *sa;
@@ -605,7 +605,7 @@ void BKE_screen_view3d_scene_sync(bScreen *sc)
 		for (sl = sa->spacedata.first; sl; sl = sl->next) {
 			if (sl->spacetype == SPACE_VIEW3D) {
 				View3D *v3d = (View3D *) sl;
-				BKE_screen_view3d_sync(v3d, sc->scene);
+				BKE_screen_view3d_sync(v3d, scene);
 			}
 		}
 	}

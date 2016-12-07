@@ -92,9 +92,10 @@ const char *screen_context_dir[] = {
 
 int ed_screen_context(const bContext *C, const char *member, bContextDataResult *result)
 {
+	wmWindow *win = CTX_wm_window(C);
 	bScreen *sc = CTX_wm_screen(C);
 	ScrArea *sa = CTX_wm_area(C);
-	Scene *scene = sc->scene;
+	Scene *scene = WM_window_get_active_scene(win);
 	Base *base;
 
 #if 0  /* Using the context breaks adding objects in the UI. Need to find out why - campbell */

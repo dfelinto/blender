@@ -348,6 +348,7 @@ static bool wm_stereo3d_is_fullscreen_required(eStereoDisplayMode stereo_display
 bool WM_stereo3d_enabled(wmWindow *win, bool skip_stereo3d_check)
 {
 	const bScreen *screen = WM_window_get_active_screen(win);
+	const Scene *scene = WM_window_get_active_scene(win);
 
 	/* some 3d methods change the window arrangement, thus they shouldn't
 	 * toggle on/off just because there is no 3d elements being drawn */
@@ -355,7 +356,7 @@ bool WM_stereo3d_enabled(wmWindow *win, bool skip_stereo3d_check)
 		return GHOST_GetWindowState(win->ghostwin) == GHOST_kWindowStateFullScreen;
 	}
 
-	if ((skip_stereo3d_check == false) && (ED_screen_stereo3d_required(screen) == false)) {
+	if ((skip_stereo3d_check == false) && (ED_screen_stereo3d_required(screen, scene) == false)) {
 		return false;
 	}
 

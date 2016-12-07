@@ -275,7 +275,7 @@ void wm_event_do_notifiers(bContext *C)
 	
 	/* cache & catch WM level notifiers, such as frame change, scene/screen set */
 	for (win = wm->windows.first; win; win = win->next) {
-		const bScreen *screen = WM_window_get_active_screen(win);
+		Scene *scene = WM_window_get_active_scene(win);
 		bool do_anim = false;
 		
 		CTX_wm_window_set(C, win);
@@ -325,7 +325,7 @@ void wm_event_do_notifiers(bContext *C)
 			}
 
 			if (note->window == win ||
-			    (note->window == NULL && (note->reference == NULL || note->reference == screen->scene)))
+			    (note->window == NULL && (note->reference == NULL || note->reference == scene)))
 			{
 				if (note->category == NC_SCENE) {
 					if (note->data == ND_FRAME)
@@ -333,7 +333,7 @@ void wm_event_do_notifiers(bContext *C)
 				}
 			}
 			if (ELEM(note->category, NC_SCENE, NC_OBJECT, NC_GEOM, NC_WM)) {
-				ED_info_stats_clear(screen->scene);
+				ED_info_stats_clear(scene);
 				WM_event_add_notifier(C, NC_SPACE | ND_SPACE_INFO, NULL);
 			}
 		}
@@ -345,7 +345,7 @@ void wm_event_do_notifiers(bContext *C)
 			if (G.is_rendering == false) {
 
 				/* depsgraph gets called, might send more notifiers */
-				ED_update_for_newframe(CTX_data_main(C), screen->scene, 1);
+				ED_update_for_newframe(CTX_data_main(C), scene, 1);
 			}
 		}
 	}
@@ -353,6 +353,7 @@ void wm_event_do_notifiers(bContext *C)
 	/* the notifiers are sent without context, to keep it clean */
 	while ((note = BLI_pophead(&wm->queue))) {
 		for (win = wm->windows.first; win; win = win->next) {
+			Scene *scene = WM_window_get_active_scene(win);
 			bScreen *screen = WM_window_get_active_screen(win);
 
 			/* filter out notifiers */
@@ -364,7 +365,7 @@ void wm_event_do_notifiers(bContext *C)
 			{
 				/* pass */
 			}
-			else if (note->category == NC_SCENE && note->reference && note->reference != screen->scene) {
+			else if (note->category == NC_SCENE && note->reference && note->reference != scene) {
 				/* pass */
 			}
 			else {
@@ -378,13 +379,13 @@ void wm_event_do_notifiers(bContext *C)
 				ED_screen_do_listen(C, note);
 
 				for (ar = screen->regionbase.first; ar; ar = ar->next) {
-					ED_region_do_listen(screen, NULL, ar, note);
+					ED_region_do_listen(screen, NULL, ar, note, scene);
 				}
 				
 				for (sa = screen->areabase.first; sa; sa = sa->next) {
-					ED_area_do_listen(screen, sa, note);
+					ED_area_do_listen(screen, sa, note, scene);
 					for (ar = sa->regionbase.first; ar; ar = ar->next) {
-						ED_region_do_listen(screen, sa, ar, note);
+						ED_region_do_listen(screen, sa, ar, note, scene);
 					}
 				}
 			}
@@ -392,15 +393,19 @@ void wm_event_do_notifiers(bContext *C)
 		
 		MEM_freeN(note);
 	}
-	
+
 	/* combine datamasks so 1 win doesn't disable UV's in another [#26448] */
 	for (win = wm->windows.first; win; win = win->next) {
-		win_combine_v3d_datamask |= ED_view3d_screen_datamask(WM_window_get_active_screen(win));
+		const Scene *scene = WM_window_get_active_scene(win);
+		const bScreen *screen = WM_window_get_active_screen(win);
+
+		win_combine_v3d_datamask |= ED_view3d_screen_datamask(scene, screen);
 	}
 
 	/* cached: editor refresh callbacks now, they get context */
 	for (win = wm->windows.first; win; win = win->next) {
 		const bScreen *screen = WM_window_get_active_screen(win);
+		Scene *scene = WM_window_get_active_scene(win);
 		ScrArea *sa;
 		
 		CTX_wm_window_set(C, win);
@@ -417,12 +422,12 @@ void wm_event_do_notifiers(bContext *C)
 			Main *bmain = CTX_data_main(C);
 
 			/* copied to set's in scene_update_tagged_recursive() */
-			screen->scene->customdata_mask = win_combine_v3d_datamask;
+			scene->customdata_mask = win_combine_v3d_datamask;
 
 			/* XXX, hack so operators can enforce datamasks [#26482], gl render */
-			screen->scene->customdata_mask |= screen->scene->customdata_mask_modal;
+			scene->customdata_mask |= scene->customdata_mask_modal;
 
-			BKE_scene_update_tagged(bmain->eval_ctx, bmain, screen->scene);
+			BKE_scene_update_tagged(bmain->eval_ctx, bmain, scene);
 		}
 	}
 
@@ -2443,7 +2448,7 @@ void wm_event_do_handlers(bContext *C)
 			Scene *scene = WM_window_get_active_scene(win);
 			
 			if (scene) {
-				int is_playing_sound = BKE_sound_scene_playing(screen->scene);
+				int is_playing_sound = BKE_sound_scene_playing(scene);
 				
 				if (is_playing_sound != -1) {
 					bool is_playing_screen;

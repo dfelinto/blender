@@ -61,6 +61,7 @@
 #include "DNA_sound_types.h"
 #include "DNA_text_types.h"
 #include "DNA_vfont_types.h"
+#include "DNA_windowmanager_types.h"
 #include "DNA_world_types.h"
 
 #include "BLI_utildefines.h"
@@ -654,13 +655,6 @@ void BKE_library_foreach_ID_link(ID *id, LibraryIDLinkCallback callback, void *u
 				break;
 			}
 
-			case ID_SCR:
-			{
-				bScreen *screen = (bScreen *) id;
-				CALLBACK_INVOKE(screen->scene, IDWALK_USER_ONE);
-				break;
-			}
-
 			case ID_WO:
 			{
 				World *world = (World *) id;
@@ -807,14 +801,24 @@ void BKE_library_foreach_ID_link(ID *id, LibraryIDLinkCallback callback, void *u
 				break;
 			}
 
+			case ID_WM:
+			{
+				wmWindowManager *wm = (wmWindowManager *)id;
+
+				for (wmWindow *win = wm->windows.first; win; win = win->next) {
+					CALLBACK_INVOKE(win->scene, IDWALK_USER_ONE);
+				}
+				break;
+			}
+
 			/* Nothing needed for those... */
+			case ID_SCR:
 			case ID_IM:
 			case ID_VF:
 			case ID_TXT:
 			case ID_SO:
 			case ID_AR:
 			case ID_GD:
-			case ID_WM:
 			case ID_PAL:
 			case ID_PC:
 			case ID_CF:

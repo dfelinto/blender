@@ -2265,8 +2265,8 @@ static void dag_current_scene_layers(Main *bmain, ListBase *lb)
 		for (win = wm->windows.first; win; win = win->next) {
 			bScreen *screen = BKE_workspace_active_screen_get(win->workspace);
 
-			if (screen && screen->scene->theDag) {
-				Scene *scene = screen->scene;
+			if (win->scene->theDag) {
+				Scene *scene = win->scene;
 				DagSceneLayer *dsl;
 
 				if (scene->id.tag & LIB_TAG_DOIT) {

@@ -308,6 +308,7 @@ struct MenuType *WM_menutype_find(const char *idname, bool quiet) RET_NULL
 void WM_operator_stack_clear(struct wmWindowManager *wm) RET_NONE
 void WM_operator_handlers_clear(wmWindowManager *wm, struct wmOperatorType *ot) RET_NONE
 struct bScreen *WM_window_get_active_screen(const struct wmWindow *win) RET_NULL
+struct Scene *WM_window_get_active_scene(const struct wmWindow *win) RET_NULL
 bool WM_window_is_temp_screen(const struct wmWindow *win) RET_ZERO
 
 void WM_autosave_init(wmWindowManager *wm) RET_NONE

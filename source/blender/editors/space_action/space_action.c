@@ -308,7 +308,8 @@ static void action_header_region_draw(const bContext *C, ARegion *ar)
 	ED_region_header(C, ar);
 }
 
-static void action_channel_region_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(sa), ARegion *ar, wmNotifier *wmn)
+static void action_channel_region_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(sa), ARegion *ar,
+                                           wmNotifier *wmn, const Scene *UNUSED(scene))
 {
 	/* context changes */
 	switch (wmn->category) {
@@ -351,7 +352,8 @@ static void action_channel_region_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(
 	}
 }
 
-static void action_main_region_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(sa), ARegion *ar, wmNotifier *wmn)
+static void action_main_region_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(sa), ARegion *ar,
+                                        wmNotifier *wmn, const Scene *UNUSED(scene))
 {
 	/* context changes */
 	switch (wmn->category) {
@@ -400,7 +402,7 @@ static void action_main_region_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(sa)
 }
 
 /* editor level listener */
-static void action_listener(bScreen *UNUSED(sc), ScrArea *sa, wmNotifier *wmn)
+static void action_listener(bScreen *UNUSED(sc), ScrArea *sa, wmNotifier *wmn, const Scene *UNUSED(scene))
 {
 	SpaceAction *saction = (SpaceAction *)sa->spacedata.first;
 	
@@ -502,7 +504,8 @@ static void action_listener(bScreen *UNUSED(sc), ScrArea *sa, wmNotifier *wmn)
 	}
 }
 
-static void action_header_region_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(sa), ARegion *ar, wmNotifier *wmn)
+static void action_header_region_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(sa), ARegion *ar,
+                                          wmNotifier *wmn, const Scene *UNUSED(scene))
 {
 	// SpaceAction *saction = (SpaceAction *)sa->spacedata.first;
 
@@ -554,7 +557,8 @@ static void action_buttons_area_draw(const bContext *C, ARegion *ar)
 	ED_region_panels(C, ar, NULL, -1, true);
 }
 
-static void action_region_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(sa), ARegion *ar, wmNotifier *wmn)
+static void action_region_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(sa), ARegion *ar,
+                                   wmNotifier *wmn, const Scene *UNUSED(scene))
 {
 	/* context changes */
 	switch (wmn->category) {

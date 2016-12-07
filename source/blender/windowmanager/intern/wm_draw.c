@@ -134,7 +134,7 @@ static bool wm_area_test_invalid_backbuf(ScrArea *sa)
 		return true;
 }
 
-static void wm_region_test_render_do_draw(const bScreen *screen, ScrArea *sa, ARegion *ar)
+static void wm_region_test_render_do_draw(const Scene *scene, ScrArea *sa, ARegion *ar)
 {
 	/* tag region for redraw from render engine preview running inside of it */
 	if (sa->spacetype == SPACE_VIEW3D) {
@@ -142,7 +142,6 @@ static void wm_region_test_render_do_draw(const bScreen *screen, ScrArea *sa, AR
 		RenderEngine *engine = (rv3d) ? rv3d->render_engine : NULL;
 
 		if (engine && (engine->flag & RE_ENGINE_DO_DRAW)) {
-			Scene *scene = screen->scene;
 			View3D *v3d = sa->spacedata.first;
 			rcti border_rect;
 
@@ -831,6 +830,7 @@ static void wm_method_draw_triple_multiview(bContext *C, wmWindow *win, StereoVi
 /* quick test to prevent changing window drawable */
 static bool wm_draw_update_test_window(wmWindow *win)
 {
+	const Scene *scene = WM_window_get_active_scene(win);
 	const bScreen *screen = WM_window_get_active_screen(win);
 	ScrArea *sa;
 	ARegion *ar;
@@ -847,7 +847,7 @@ static bool wm_draw_update_test_window(wmWindow *win)
 
 	for (sa = screen->areabase.first; sa; sa = sa->next) {
 		for (ar = sa->regionbase.first; ar; ar = ar->next) {
-			wm_region_test_render_do_draw(screen, sa, ar);
+			wm_region_test_render_do_draw(scene, sa, ar);
 
 			if (ar->swinid && ar->do_draw)
 				do_draw = true;

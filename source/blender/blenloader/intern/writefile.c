@@ -1064,7 +1064,7 @@ static void write_nodetree(WriteData *wd, bNodeTree *ntree)
  * Take care using 'use_active_win', since we wont want the currently active window
  * to change which scene renders (currently only used for undo).
  */
-static void current_screen_compat(Main *mainvar, bScreen **r_screen, bool use_active_win)
+static void current_screen_compat(Main *mainvar, bScreen **r_screen, Scene **r_scene, bool use_active_win)
 {
 	wmWindowManager *wm;
 	wmWindow *window = NULL;
@@ -1093,6 +1093,7 @@ static void current_screen_compat(Main *mainvar, bScreen **r_screen, bool use_ac
 	}
 
 	*r_screen = (window) ? BKE_workspace_active_screen_get(window->workspace) : NULL;
+	*r_scene = (window) ? window->scene : NULL;
 }
 
 typedef struct RenderInfo {
@@ -1111,10 +1112,7 @@ static void write_renderinfo(WriteData *wd, Main *mainvar)
 	RenderInfo data;
 
 	/* XXX in future, handle multiple windows with multiple screens? */
-	current_screen_compat(mainvar, &curscreen, false);
-	if (curscreen) {
-		curscene = curscreen->scene;
-	}
+	current_screen_compat(mainvar, &curscreen, &curscene, false);
 
 	for (sce = mainvar->scene.first; sce; sce = sce->id.next) {
 		if (sce->id.lib == NULL && (sce == curscene || (sce->r.scemode & R_BG_RENDER))) {
@@ -3759,6 +3757,7 @@ static void write_global(WriteData *wd, int fileflags, Main *mainvar)
 	const bool is_undo = (wd->current != NULL);
 	FileGlobal fg;
 	bScreen *screen;
+	Scene *scene;
 	char subvstr[8];
 
 	/* prevent mem checkers from complaining */
@@ -3766,11 +3765,11 @@ static void write_global(WriteData *wd, int fileflags, Main *mainvar)
 	memset(fg.filename, 0, sizeof(fg.filename));
 	memset(fg.build_hash, 0, sizeof(fg.build_hash));
 
-	current_screen_compat(mainvar, &screen, is_undo);
+	current_screen_compat(mainvar, &screen, &scene, is_undo);
 
 	/* XXX still remap G */
 	fg.curscreen = screen;
-	fg.curscene = screen ? screen->scene : NULL;
+	fg.curscene = scene;
 
 	/* prevent to save this, is not good convention, and feature with concerns... */
 	fg.fileflags = (fileflags & ~G_FILE_FLAGS_RUNTIME);

@@ -810,9 +810,9 @@ static void view3d_recalc_used_layers(ARegion *ar, wmNotifier *wmn, Scene *scene
 	}
 }
 
-static void view3d_main_region_listener(bScreen *sc, ScrArea *sa, ARegion *ar, wmNotifier *wmn)
+static void view3d_main_region_listener(bScreen *UNUSED(sc), ScrArea *sa, ARegion *ar,
+                                        wmNotifier *wmn, const Scene *scene)
 {
-	Scene *scene = sc->scene;
 	View3D *v3d = sa->spacedata.first;
 	
 	/* context changes */
@@ -1019,8 +1019,7 @@ static void view3d_main_region_listener(bScreen *sc, ScrArea *sa, ARegion *ar, w
 					/* screen was changed, need to update used layers due to NC_SCENE|ND_LAYER_CONTENT */
 					/* updates used layers only for View3D in active screen */
 					if (wmn->reference) {
-						const bScreen *sc_ref = wmn->reference;
-						view3d_recalc_used_layers(ar, wmn, sc_ref->scene);
+						view3d_recalc_used_layers(ar, wmn, scene);
 					}
 					ED_region_tag_redraw(ar);
 					break;
@@ -1063,7 +1062,8 @@ static void view3d_header_region_draw(const bContext *C, ARegion *ar)
 	ED_region_header(C, ar);
 }
 
-static void view3d_header_region_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(sa), ARegion *ar, wmNotifier *wmn)
+static void view3d_header_region_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(sa), ARegion *ar,
+                                          wmNotifier *wmn, const Scene *UNUSED(scene))
 {
 	/* context changes */
 	switch (wmn->category) {
@@ -1109,7 +1109,8 @@ static void view3d_buttons_region_draw(const bContext *C, ARegion *ar)
 	ED_region_panels(C, ar, NULL, -1, true);
 }
 
-static void view3d_buttons_region_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(sa), ARegion *ar, wmNotifier *wmn)
+static void view3d_buttons_region_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(sa), ARegion *ar,
+                                           wmNotifier *wmn, const Scene *UNUSED(scene))
 {
 	/* context changes */
 	switch (wmn->category) {
@@ -1215,7 +1216,8 @@ static void view3d_tools_region_draw(const bContext *C, ARegion *ar)
 	ED_region_panels(C, ar, CTX_data_mode_string(C), -1, true);
 }
 
-static void view3d_props_region_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(sa), ARegion *ar, wmNotifier *wmn)
+static void view3d_props_region_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(sa), ARegion *ar,
+                                         wmNotifier *wmn, const Scene *UNUSED(scene))
 {
 	/* context changes */
 	switch (wmn->category) {
@@ -1235,7 +1237,7 @@ static void view3d_props_region_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(sa
 }
 
 /* area (not region) level listener */
-static void space_view3d_listener(bScreen *UNUSED(sc), ScrArea *sa, struct wmNotifier *wmn)
+static void space_view3d_listener(bScreen *UNUSED(sc), ScrArea *sa, struct wmNotifier *wmn, const Scene *UNUSED(scene))
 {
 	View3D *v3d = sa->spacedata.first;
 

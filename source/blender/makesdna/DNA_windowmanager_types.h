@@ -177,6 +177,8 @@ typedef struct wmWindow {
 
 	void *ghostwin;             /* don't want to include ghost.h stuff */
 
+	struct Scene *scene; /* The scene displayed in this window. */
+
 	struct bScreen *screen DNA_DEPRECATED;
 	struct WorkSpace *workspace; /* active workspace */
 	struct WorkSpace *new_workspace; /* temporary when switching */

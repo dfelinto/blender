@@ -1398,7 +1398,7 @@ void blo_do_versions_270(FileData *fd, Library *UNUSED(lib), Main *main)
 		}
 	}
 
-	{
+	if (!MAIN_VERSION_ATLEAST(main, 278, 5)) {
 		/* New workspace design */
 		if (!DNA_struct_find(fd->filesdna, "WorkSpace")) {
 			BLI_assert(BLI_listbase_is_empty(&main->workspaces));

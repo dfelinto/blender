@@ -692,13 +692,17 @@ static void rna_RegionView3D_view_matrix_set(PointerRNA *ptr, const float *value
 
 static int rna_SpaceView3D_viewport_shade_get(PointerRNA *ptr)
 {
+#if 0
 	Scene *scene = ((bScreen *)ptr->id.data)->scene;
 	RenderEngineType *type = RE_engines_find(scene->r.engine);
+#endif
 	View3D *v3d = (View3D *)ptr->data;
 	int drawtype = v3d->drawtype;
 
+#if 0
 	if (drawtype == OB_RENDER && !(type && type->view_draw))
 		return OB_SOLID;
+#endif
 
 	return drawtype;
 }
@@ -712,10 +716,11 @@ static void rna_SpaceView3D_viewport_shade_set(PointerRNA *ptr, int value)
 	v3d->drawtype = value;
 }
 
-static EnumPropertyItem *rna_SpaceView3D_viewport_shade_itemf(bContext *UNUSED(C), PointerRNA *ptr,
+static EnumPropertyItem *rna_SpaceView3D_viewport_shade_itemf(bContext *C, PointerRNA *UNUSED(ptr),
                                                               PropertyRNA *UNUSED(prop), bool *r_free)
 {
-	Scene *scene = ((bScreen *)ptr->id.data)->scene;
+	wmWindow *win = CTX_wm_window(C);
+	Scene *scene = WM_window_get_active_scene(win);
 	RenderEngineType *type = RE_engines_find(scene->r.engine);
 	
 	EnumPropertyItem *item = NULL;
@@ -736,10 +741,10 @@ static EnumPropertyItem *rna_SpaceView3D_viewport_shade_itemf(bContext *UNUSED(C
 	return item;
 }
 
-static EnumPropertyItem *rna_SpaceView3D_stereo3d_camera_itemf(bContext *UNUSED(C), PointerRNA *ptr,
+static EnumPropertyItem *rna_SpaceView3D_stereo3d_camera_itemf(bContext *C, PointerRNA *UNUSED(ptr),
                                                                PropertyRNA *UNUSED(prop), bool *UNUSED(r_free))
 {
-	Scene *scene = ((bScreen *)ptr->id.data)->scene;
+	Scene *scene = CTX_data_scene(C);
 
 	if (scene->r.views_format == SCE_VIEWS_FORMAT_MULTIVIEW)
 		return multiview_camera_items;

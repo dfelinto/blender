@@ -265,11 +265,10 @@ void DEG_graph_on_visible_update(Main *bmain, Scene *scene)
 		     win != NULL;
 		     win = (wmWindow *)win->next)
 		{
-			Scene *scene = BKE_workspace_active_scene_get(win->workspace);
-			if (scene->id.tag & LIB_TAG_DOIT) {
+			if (win->scene->id.tag & LIB_TAG_DOIT) {
 				bScreen *screen = BKE_workspace_active_screen_get(win->workspace);
-				graph->layers |= BKE_screen_visible_layers(screen, scene);
-				scene->id.tag &= ~LIB_TAG_DOIT;
+				graph->layers |= BKE_screen_visible_layers(screen, win->scene);
+				win->scene->id.tag &= ~LIB_TAG_DOIT;
 			}
 		}
 	}

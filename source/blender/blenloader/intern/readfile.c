@@ -145,6 +145,7 @@
 #include "BKE_outliner_treehash.h"
 #include "BKE_sound.h"
 #include "BKE_colortools.h"
+#include "BKE_workspace.h"
 
 #include "NOD_common.h"
 #include "NOD_socket.h"
@@ -5791,6 +5792,34 @@ static void direct_link_windowmanager(FileData *fd, wmWindowManager *wm)
 	wm->is_interface_locked = 0;
 }
 
+/**
+ * \brief Window data compatibility conversion for 2.8
+ *
+ *  *  Active screen isn't stored directly in window anymore, but in the active workspace.
+ *     We already created a new workspace for each screen in blo_do_versions_270, here we need
+ *     to find and activate the workspace that contains the active screen of the old file.
+ *  *  Active scene isn't stored in screen anymore, but in window.
+ */
+static void lib_link_window_280_conversion(FileData *fd, Main *main, wmWindow *win)
+{
+	if (MAIN_VERSION_ATLEAST(main, 278, 5)) {
+		return;
+	}
+
+	if (win->screen) {
+		win->screen = newlibadr(fd, NULL, win->screen);
+		win->workspace = BLI_findstring(&main->workspaces, win->screen->id.name + 2,
+		                                offsetof(ID, name) + 2);
+		/* Deprecated from now on! */
+		win->screen = NULL;
+	}
+
+	{
+		const bScreen *screen = BKE_workspace_active_screen_get(win->workspace);
+		win->scene = newlibadr(fd, NULL, screen->scene);
+	}
+}
+
 static void lib_link_windowmanager(FileData *fd, Main *main)
 {
 	wmWindowManager *wm;
@@ -5799,17 +5828,7 @@ static void lib_link_windowmanager(FileData *fd, Main *main)
 	for (wm = main->wm.first; wm; wm = wm->id.next) {
 		if (wm->id.tag & LIB_TAG_NEED_LINK) {
 			for (win = wm->windows.first; win; win = win->next) {
-				/* 2.8 Conversion:
-				 * Active screen isn't stored directly in window anymore, but in the active workspace.
-				 * We already created a new workspace for each screen in blo_do_versions_270, here we need
-				 * to find and activate the workspace that contains the active screen of the old file. */
-				if (win->screen) {
-					win->screen = newlibadr(fd, NULL, win->screen);
-					win->workspace = BLI_findstring(&main->workspaces, win->screen->id.name + 2,
-					                                offsetof(ID, name) + 2);
-					/* Deprecated from now on! */
-					win->screen = NULL;
-				}
+				lib_link_window_280_conversion(fd, main, win);
 			}
 
 			wm->id.tag &= ~LIB_TAG_NEED_LINK;
@@ -5896,12 +5915,9 @@ static void lib_link_screen(FileData *fd, Main *main)
 	for (sc = main->screen.first; sc; sc = sc->id.next) {
 		if (sc->id.tag & LIB_TAG_NEED_LINK) {
 			id_us_ensure_real(&sc->id);
-			sc->scene = newlibadr(fd, sc->id.lib, sc->scene);
 
-			/* this should not happen, but apparently it does somehow. Until we figure out the cause,
-			 * just assign first available scene */
-			if (!sc->scene)
-				sc->scene = main->scene.first;
+			/* deprecated now */
+			sc->scene = NULL;
 
 			sc->animtimer = NULL; /* saved in rare cases */
 			sc->scrubbing = false;
