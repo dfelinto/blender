@@ -249,6 +249,46 @@ class UnitsTesting(unittest.TestCase):
                 filepath_layers_json),
                 "Read test failed")
 
+    def test_scene_copy(self):
+        import bpy
+        import os
+        import tempfile
+        import filecmp
+
+        with tempfile.TemporaryDirectory() as dirpath:
+            filepath_layers = os.path.join(ROOT, 'layers.blend')
+            filepath_layers_json = os.path.join(ROOT, 'layers.json')
+            filepath_layers_copy_json = os.path.join(ROOT, 'layers_copy.json')
+
+            (self.path_exists(f) for f in (
+                filepath_layers, filepath_layers_json, filepath_layers_copy_json))
+
+            type_lookup = {
+                    'LINK_OBJECTS': filepath_layers_json,
+                    'FULL_COPY': filepath_layers_copy_json,
+                    }
+
+            for scene_type, json_reference_file in type_lookup.items():
+                bpy.ops.wm.open_mainfile('EXEC_DEFAULT', filepath=filepath_layers)
+                bpy.ops.scene.new(type=scene_type)
+
+                filepath_saved = os.path.join(dirpath, '{0}.blend'.format(scene_type))
+                bpy.ops.wm.save_mainfile('EXEC_DEFAULT', filepath=filepath_saved)
+
+                data = query_scene(filepath_saved, 'Main.001', (get_scene_collections, get_layers))
+                self.assertTrue(data, "Data is not valid")
+                collections, layers = data
+
+                filepath_json = os.path.join(dirpath, "{0}.json".format(scene_type))
+                with open(filepath_json, "w") as f:
+                    f.write(dump(collections))
+                    f.write(dump(layers))
+
+                self.assertTrue(filecmp.cmp(
+                    json_reference_file,
+                    filepath_json),
+                    "Scene copy \"{0}\" test failed".format(scene_type.title()))
+
 
 # ############################################################
 # Main
