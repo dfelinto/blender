@@ -52,11 +52,13 @@
 #include "BLT_translation.h"
 
 #include "BKE_context.h"
+#include "BKE_depsgraph.h"
 #include "BKE_global.h"
 #include "BKE_main.h"
 #include "BKE_multires.h"
 #include "BKE_packedFile.h"
 #include "BKE_paint.h"
+#include "BKE_scene.h"
 #include "BKE_screen.h"
 
 #include "ED_armature.h"
@@ -67,6 +69,8 @@
 #include "ED_object.h"
 #include "ED_outliner.h"
 #include "ED_paint.h"
+#include "ED_render.h"
+#include "ED_screen.h"
 #include "ED_space_api.h"
 #include "ED_util.h"
 
@@ -303,6 +307,25 @@ void unpack_menu(bContext *C, const char *opname, const char *id_name, const cha
 	}
 
 	UI_popup_menu_end(C, pup);
+}
+
+void ED_scene_exit(bContext *C)
+{
+	ED_object_editmode_exit(C, EM_FREEDATA | EM_DO_UNDO);
+}
+
+void ED_scene_changed_update(Main *bmain, bContext *C, Scene *scene_new, const bScreen *active_screen)
+{
+	CTX_data_scene_set(C, scene_new);
+	BKE_scene_set_background(bmain, scene_new);
+	DAG_on_visible_update(bmain, false);
+
+	ED_screen_update_after_scene_change(active_screen, scene_new);
+	ED_render_engine_changed(bmain);
+	ED_update_for_newframe(bmain, scene_new, 1);
+
+	/* complete redraw */
+	WM_event_add_notifier(C, NC_WINDOW, NULL);
 }
 
 /* ********************* generic callbacks for drawcall api *********************** */

@@ -780,7 +780,7 @@ static void *view3d_main_region_duplicate(void *poin)
 	return NULL;
 }
 
-static void view3d_recalc_used_layers(ARegion *ar, wmNotifier *wmn, Scene *scene)
+static void view3d_recalc_used_layers(ARegion *ar, wmNotifier *wmn, const Scene *scene)
 {
 	wmWindow *win = wmn->wm->winactive;
 	unsigned int lay_used = 0;

@@ -3930,6 +3930,7 @@ static int scene_new_exec(bContext *C, wmOperator *op)
 {
 	Scene *newscene, *scene = CTX_data_scene(C);
 	Main *bmain = CTX_data_main(C);
+	wmWindow *win = CTX_wm_window(C);
 	int type = RNA_enum_get(op->ptr, "type");
 
 	if (type == SCE_COPY_NEW) {
@@ -3947,9 +3948,9 @@ static int scene_new_exec(bContext *C, wmOperator *op)
 			ED_object_single_users(bmain, newscene, true, true);
 		}
 	}
-	
-	ED_screen_set_scene(C, CTX_wm_screen(C), newscene);
-	
+
+	WM_window_set_active_scene(bmain, C, win, newscene);
+
 	WM_event_add_notifier(C, NC_SCENE | ND_SCENEBROWSE, newscene);
 	
 	return OPERATOR_FINISHED;

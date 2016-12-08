@@ -68,8 +68,10 @@
 #include "wm_subwindow.h"
 #include "wm_event_system.h"
 
+#include "ED_object.h"
 #include "ED_screen.h"
 #include "ED_fileselect.h"
+#include "ED_util.h"
 
 #include "UI_interface.h"
 
@@ -620,6 +622,7 @@ wmWindow *WM_window_open(bContext *C, const rcti *rect)
  */
 wmWindow *WM_window_open_temp(bContext *C, const rcti *rect_init, int type)
 {
+	Main *bmain = CTX_data_main(C);
 	wmWindow *win_prev = CTX_wm_window(C);
 	wmWindow *win;
 	bScreen *screen;
@@ -657,7 +660,7 @@ wmWindow *WM_window_open_temp(bContext *C, const rcti *rect_init, int type)
 	}
 
 	if (win->workspace == NULL) {
-		win->workspace = BKE_workspace_add(CTX_data_main(C), "Temp");
+		win->workspace = BKE_workspace_add(bmain, "Temp");
 	}
 
 	if (screen == NULL) {
@@ -670,7 +673,7 @@ wmWindow *WM_window_open_temp(bContext *C, const rcti *rect_init, int type)
 	else {
 		/* switch scene for rendering */
 		if (WM_window_get_active_scene(win) != scene) {
-			ED_screen_set_scene(C, screen, scene);
+			WM_window_set_active_scene(bmain, C, win, scene);
 		}
 	}
 
@@ -1730,6 +1733,18 @@ bool WM_window_is_fullscreen(wmWindow *win)
 Scene *WM_window_get_active_scene(const wmWindow *win)
 {
 	return win->scene;
+}
+
+/**
+ * \warning Only call outside of area/region loops
+ */
+void WM_window_set_active_scene(Main *bmain, bContext *C, wmWindow *win, Scene *scene_new)
+{
+	const bScreen *screen = WM_window_get_active_screen(win);
+
+	ED_scene_exit(C);
+	win->scene = scene_new;
+	ED_scene_changed_update(bmain, C, scene_new, screen);
 }
 
 WorkSpaceLayout *WM_window_get_active_layout(const wmWindow *win)

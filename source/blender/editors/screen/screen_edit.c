@@ -1611,36 +1611,13 @@ bool ED_screen_set(bContext *C, bScreen *sc)
 	return true;
 }
 
-static bool ed_screen_used(wmWindowManager *wm, bScreen *sc)
-{
-	wmWindow *win;
-
-	for (win = wm->windows.first; win; win = win->next) {
-		const bScreen *win_screen = WM_window_get_active_screen(win);
-
-		if (win_screen == sc) {
-			return true;
-		}
-
-		if (ELEM(win_screen->state, SCREENMAXIMIZED, SCREENFULL)) {
-			const ScrArea *sa = win_screen->areabase.first;
-
-			if (sa->full == sc) {
-				return true;
-			}
-		}
-	}
-
-	return false;
-}
-
-static void ed_screen_set_3dview_camera(Scene *scene, bScreen *sc, ScrArea *sa, View3D *v3d)
+static void screen_set_3dview_camera(Scene *scene, ScrArea *sa, View3D *v3d)
 {
 	/* fix any cameras that are used in the 3d view but not in the scene */
 	BKE_screen_view3d_sync(v3d, scene);
 
 	if (!v3d->camera || !BKE_scene_base_find(scene, v3d->camera)) {
-		v3d->camera = BKE_scene_camera_find(sc->scene);
+		v3d->camera = BKE_scene_camera_find(scene);
 		// XXX if (sc == curscreen) handle_view3d_lock();
 		if (!v3d->camera) {
 			ARegion *ar;
@@ -1664,65 +1641,16 @@ static void ed_screen_set_3dview_camera(Scene *scene, bScreen *sc, ScrArea *sa, 
 	}
 }
 
-/* only call outside of area/region loops */
-void ED_screen_set_scene(bContext *C, bScreen *screen, Scene *scene)
+void ED_screen_update_after_scene_change(const bScreen *screen, Scene *scene_new)
 {
-	Main *bmain = CTX_data_main(C);
-	bScreen *sc;
-
-	if (screen == NULL)
-		return;
-	
-	if (ed_screen_used(CTX_wm_manager(C), screen))
-		ED_object_editmode_exit(C, EM_FREEDATA | EM_DO_UNDO);
-
-	for (sc = bmain->screen.first; sc; sc = sc->id.next) {
-		if ((U.flag & USER_SCENEGLOBAL) || sc == screen) {
-			
-			if (scene != sc->scene) {
-				/* all areas endlocalview */
-				// XXX	ScrArea *sa = sc->areabase.first;
-				//	while (sa) {
-				//		endlocalview(sa);
-				//		sa = sa->next;
-				//	}
-				sc->scene = scene;
-			}
-			
-		}
-	}
-	
-	//  copy_view3d_lock(0);	/* space.c */
-	
-	/* are there cameras in the views that are not in the scene? */
-	for (sc = bmain->screen.first; sc; sc = sc->id.next) {
-		if ((U.flag & USER_SCENEGLOBAL) || sc == screen) {
-			ScrArea *sa = sc->areabase.first;
-			while (sa) {
-				SpaceLink *sl = sa->spacedata.first;
-				while (sl) {
-					if (sl->spacetype == SPACE_VIEW3D) {
-						View3D *v3d = (View3D *) sl;
-						ed_screen_set_3dview_camera(scene, sc, sa, v3d);
-
-					}
-					sl = sl->next;
-				}
-				sa = sa->next;
+	for (ScrArea *sa = screen->areabase.first; sa; sa = sa->next) {
+		for (SpaceLink *sl = sa->spacedata.first; sl; sl = sl->next) {
+			if (sl->spacetype == SPACE_VIEW3D) {
+				View3D *v3d = (View3D *)sl;
+				screen_set_3dview_camera(scene_new, sa, v3d);
 			}
 		}
 	}
-	
-	CTX_data_scene_set(C, scene);
-	BKE_scene_set_background(bmain, scene);
-	DAG_on_visible_update(bmain, false);
-	
-	ED_render_engine_changed(bmain);
-	ED_update_for_newframe(bmain, scene, 1);
-	
-	/* complete redraw */
-	WM_event_add_notifier(C, NC_WINDOW, NULL);
-	
 }
 
 /**
@@ -1732,6 +1660,7 @@ void ED_screen_set_scene(bContext *C, bScreen *screen, Scene *scene)
 bool ED_screen_delete_scene(bContext *C, Scene *scene)
 {
 	Main *bmain = CTX_data_main(C);
+	wmWindow *win = CTX_wm_window(C);
 	Scene *newscene;
 
 	if (scene->id.prev)
@@ -1741,7 +1670,7 @@ bool ED_screen_delete_scene(bContext *C, Scene *scene)
 	else
 		return false;
 
-	ED_screen_set_scene(C, CTX_wm_screen(C), newscene);
+	WM_window_set_active_scene(bmain, C, win, newscene);
 
 	BKE_libblock_remap(bmain, scene, newscene, ID_REMAP_SKIP_INDIRECT_USAGE | ID_REMAP_SKIP_NEVER_NULL_USAGE);
 

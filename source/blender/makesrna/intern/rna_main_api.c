@@ -114,6 +114,8 @@
 #  include "BPY_extern.h"
 #endif
 
+#include "WM_api.h"
+
 
 static void rna_Main_ID_remove(Main *bmain, ReportList *reports, PointerRNA *id_ptr, int do_unlink)
 {
@@ -155,14 +157,15 @@ static void rna_Main_scenes_remove(Main *bmain, bContext *C, ReportList *reports
 	    (scene_new = scene->id.next))
 	{
 		if (do_unlink) {
-			bScreen *sc = CTX_wm_screen(C);
-			if (sc->scene == scene) {
+			wmWindow *win = CTX_wm_window(C);
+
+			if (WM_window_get_active_scene(win) == scene) {
 
 #ifdef WITH_PYTHON
 				BPy_BEGIN_ALLOW_THREADS;
 #endif
 
-				ED_screen_set_scene(C, sc, scene_new);
+				WM_window_set_active_scene(bmain, C, win, scene_new);
 
 #ifdef WITH_PYTHON
 				BPy_END_ALLOW_THREADS;

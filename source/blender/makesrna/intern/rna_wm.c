@@ -642,8 +642,8 @@ static void rna_Window_scene_set(PointerRNA *ptr, PointerRNA value)
 
 static void rna_Window_scene_update(bContext *C, PointerRNA *ptr)
 {
+	Main *bmain = CTX_data_main(C);
 	wmWindow *win = ptr->data;
-	bScreen *screen = WM_window_get_active_screen(win);
 
 	/* exception: must use context so notifier gets to the right window  */
 	if (win->new_scene) {
@@ -651,7 +651,7 @@ static void rna_Window_scene_update(bContext *C, PointerRNA *ptr)
 		BPy_BEGIN_ALLOW_THREADS;
 #endif
 
-		ED_screen_set_scene(C, screen, win->new_scene);
+		WM_window_set_active_scene(bmain, C, win, win->new_scene);
 
 #ifdef WITH_PYTHON
 		BPy_END_ALLOW_THREADS;
