@@ -64,40 +64,6 @@ EnumPropertyItem rna_enum_region_type_items[] = {
 #  include "BPY_extern.h"
 #endif
 
-static void rna_Screen_scene_set(PointerRNA *ptr, PointerRNA value)
-{
-	bScreen *sc = (bScreen *)ptr->data;
-
-	if (value.data == NULL)
-		return;
-
-	sc->newscene = value.data;
-}
-
-static void rna_Screen_scene_update(bContext *C, PointerRNA *ptr)
-{
-	bScreen *sc = (bScreen *)ptr->data;
-
-	/* exception: must use context so notifier gets to the right window  */
-	if (sc->newscene) {
-#ifdef WITH_PYTHON
-		BPy_BEGIN_ALLOW_THREADS;
-#endif
-
-		ED_screen_set_scene(C, sc, sc->newscene);
-
-#ifdef WITH_PYTHON
-		BPy_END_ALLOW_THREADS;
-#endif
-
-		WM_event_add_notifier(C, NC_SCENE | ND_SCENEBROWSE, sc->newscene);
-
-		if (G.debug & G_DEBUG)
-			printf("scene set %p\n", sc->newscene);
-
-		sc->newscene = NULL;
-	}
-}
 
 static void rna_Screen_redraw_update(Main *UNUSED(bmain), Scene *UNUSED(scene), PointerRNA *ptr)
 {
@@ -106,7 +72,6 @@ static void rna_Screen_redraw_update(Main *UNUSED(bmain), Scene *UNUSED(scene), 
 	/* the settings for this are currently only available from a menu in the TimeLine, hence refresh=SPACE_TIME */
 	ED_screen_animation_timer_update(screen, screen->redraws_flag, SPACE_TIME);
 }
-
 
 static int rna_Screen_is_animation_playing_get(PointerRNA *UNUSED(ptr))
 {
@@ -376,14 +341,6 @@ static void rna_def_screen(BlenderRNA *brna)
 	RNA_def_struct_sdna(srna, "Screen"); /* it is actually bScreen but for 2.5 the dna is patched! */
 	RNA_def_struct_ui_text(srna, "Screen", "Screen data-block, defining the layout of areas in a window");
 	RNA_def_struct_ui_icon(srna, ICON_SPLITSCREEN);
-
-	/* pointers */
-	prop = RNA_def_property(srna, "scene", PROP_POINTER, PROP_NONE);
-	RNA_def_property_flag(prop, PROP_EDITABLE | PROP_NEVER_NULL);
-	RNA_def_property_pointer_funcs(prop, NULL, "rna_Screen_scene_set", NULL, NULL);
-	RNA_def_property_ui_text(prop, "Scene", "Active scene to be edited in the screen");
-	RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
-	RNA_def_property_update(prop, 0, "rna_Screen_scene_update");
 
 	/* collections */
 	prop = RNA_def_property(srna, "areas", PROP_COLLECTION, PROP_NONE);

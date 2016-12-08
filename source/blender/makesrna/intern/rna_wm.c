@@ -465,9 +465,15 @@ EnumPropertyItem rna_enum_wm_report_items[] = {
 
 #include "UI_interface.h"
 
+#include "BKE_global.h"
 #include "BKE_idprop.h"
 
 #include "MEM_guardedalloc.h"
+
+#ifdef WITH_PYTHON
+#  include "BPY_extern.h"
+#endif
+
 
 static wmOperator *rna_OperatorProperties_find_operator(PointerRNA *ptr)
 {
@@ -621,6 +627,43 @@ static PointerRNA rna_PieMenu_layout_get(PointerRNA *ptr)
 	RNA_pointer_create(ptr->id.data, &RNA_UILayout, layout, &rptr);
 
 	return rptr;
+}
+
+static void rna_Window_scene_set(PointerRNA *ptr, PointerRNA value)
+{
+	wmWindow *win = ptr->data;
+
+	if (value.data == NULL) {
+		return;
+	}
+
+	win->new_scene = value.data;
+}
+
+static void rna_Window_scene_update(bContext *C, PointerRNA *ptr)
+{
+	wmWindow *win = ptr->data;
+	bScreen *screen = WM_window_get_active_screen(win);
+
+	/* exception: must use context so notifier gets to the right window  */
+	if (win->new_scene) {
+#ifdef WITH_PYTHON
+		BPy_BEGIN_ALLOW_THREADS;
+#endif
+
+		ED_screen_set_scene(C, screen, win->new_scene);
+
+#ifdef WITH_PYTHON
+		BPy_END_ALLOW_THREADS;
+#endif
+
+		WM_event_add_notifier(C, NC_SCENE | ND_SCENEBROWSE, win->new_scene);
+
+		if (G.debug & G_DEBUG)
+			printf("scene set %p\n", win->new_scene);
+
+		win->new_scene = NULL;
+	}
 }
 
 static void rna_Window_workspace_set(PointerRNA *ptr, PointerRNA value)
@@ -1902,6 +1945,13 @@ static void rna_def_window(BlenderRNA *brna)
 	RNA_def_struct_sdna(srna, "wmWindow");
 
 	rna_def_window_stereo3d(brna);
+
+	prop = RNA_def_property(srna, "scene", PROP_POINTER, PROP_NONE);
+	RNA_def_property_flag(prop, PROP_EDITABLE | PROP_NEVER_NULL);
+	RNA_def_property_pointer_funcs(prop, NULL, "rna_Window_scene_set", NULL, NULL);
+	RNA_def_property_ui_text(prop, "Scene", "Active scene to be edited in the window");
+	RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
+	RNA_def_property_update(prop, 0, "rna_Window_scene_update");
 
 	prop = RNA_def_property(srna, "workspace", PROP_POINTER, PROP_NONE);
 	RNA_def_property_flag(prop, PROP_NEVER_NULL);
