@@ -74,6 +74,7 @@ set(SRC
 	../include/ED_paint.h
 	../include/ED_physics.h
 	../include/ED_render.h
+	../include/ED_scene.h
 	../include/ED_screen.h
 	../include/ED_screen_types.h
 	../include/ED_sculpt.h

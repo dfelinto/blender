@@ -1653,32 +1653,6 @@ void ED_screen_update_after_scene_change(const bScreen *screen, Scene *scene_new
 	}
 }
 
-/**
- * \note Only call outside of area/region loops
- * \return true if successful
- */
-bool ED_screen_delete_scene(bContext *C, Scene *scene)
-{
-	Main *bmain = CTX_data_main(C);
-	wmWindow *win = CTX_wm_window(C);
-	Scene *newscene;
-
-	if (scene->id.prev)
-		newscene = scene->id.prev;
-	else if (scene->id.next)
-		newscene = scene->id.next;
-	else
-		return false;
-
-	WM_window_set_active_scene(bmain, C, win, newscene);
-
-	BKE_libblock_remap(bmain, scene, newscene, ID_REMAP_SKIP_INDIRECT_USAGE | ID_REMAP_SKIP_NEVER_NULL_USAGE);
-
-	BKE_libblock_free(bmain, scene);
-
-	return true;
-}
-
 ScrArea *ED_screen_full_newspace(bContext *C, ScrArea *sa, int type)
 {
 	wmWindow *win = CTX_wm_window(C);

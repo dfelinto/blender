@@ -68,10 +68,9 @@
 #include "wm_subwindow.h"
 #include "wm_event_system.h"
 
-#include "ED_object.h"
+#include "ED_scene.h"
 #include "ED_screen.h"
 #include "ED_fileselect.h"
-#include "ED_util.h"
 
 #include "UI_interface.h"
 

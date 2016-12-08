@@ -43,11 +43,6 @@ void    ED_editors_exit(struct bContext *C);
 
 bool    ED_editors_flush_edits(const struct bContext *C, bool for_render);
 
-/* editor level scene utils, could move these into own file */
-void    ED_scene_exit(struct bContext *C);
-void    ED_scene_changed_update(struct Main *bmain, struct bContext *C, struct Scene *scene_new,
-                                const struct bScreen *active_screen);
-
 void    ED_spacedata_id_remap(struct ScrArea *sa, struct SpaceLink *sl, struct ID *old_id, struct ID *new_id);
 
 void    ED_OT_flush_edits(struct wmOperatorType *ot);

@@ -66,6 +66,7 @@
 
 #include "ED_armature.h"
 #include "ED_object.h"
+#include "ED_scene.h"
 #include "ED_screen.h"
 #include "ED_sequencer.h"
 #include "ED_util.h"
@@ -309,7 +310,7 @@ static bool scene_cb(bContext *C, eOutliner_PropSceneOps event, TreeElement *UNU
 	Scene *scene = (Scene *)tselem->id;
 
 	if (event == OL_SCENE_OP_DELETE) {
-		if (ED_screen_delete_scene(C, scene)) {
+		if (ED_scene_delete(C, CTX_data_main(C), CTX_wm_window(C), scene)) {
 			WM_event_add_notifier(C, NC_SCENE | NA_REMOVED, scene);
 		}
 		else {

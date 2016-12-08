@@ -3924,96 +3924,6 @@ static void SCREEN_OT_delete(wmOperatorType *ot)
 	ot->exec = screen_delete_exec;
 }
 
-/********************* new scene operator *********************/
-
-static int scene_new_exec(bContext *C, wmOperator *op)
-{
-	Scene *newscene, *scene = CTX_data_scene(C);
-	Main *bmain = CTX_data_main(C);
-	wmWindow *win = CTX_wm_window(C);
-	int type = RNA_enum_get(op->ptr, "type");
-
-	if (type == SCE_COPY_NEW) {
-		newscene = BKE_scene_add(bmain, DATA_("Scene"));
-	}
-	else { /* different kinds of copying */
-		newscene = BKE_scene_copy(bmain, scene, type);
-
-		/* these can't be handled in blenkernel currently, so do them here */
-		if (type == SCE_COPY_LINK_DATA) {
-			ED_object_single_users(bmain, newscene, false, true);
-		}
-		else if (type == SCE_COPY_FULL) {
-			ED_editors_flush_edits(C, false);
-			ED_object_single_users(bmain, newscene, true, true);
-		}
-	}
-
-	WM_window_set_active_scene(bmain, C, win, newscene);
-
-	WM_event_add_notifier(C, NC_SCENE | ND_SCENEBROWSE, newscene);
-	
-	return OPERATOR_FINISHED;
-}
-
-static void SCENE_OT_new(wmOperatorType *ot)
-{
-	static EnumPropertyItem type_items[] = {
-		{SCE_COPY_NEW, "NEW", 0, "New", "Add new scene"},
-		{SCE_COPY_EMPTY, "EMPTY", 0, "Copy Settings", "Make a copy without any objects"},
-		{SCE_COPY_LINK_OB, "LINK_OBJECTS", 0, "Link Objects", "Link to the objects from the current scene"},
-		{SCE_COPY_LINK_DATA, "LINK_OBJECT_DATA", 0, "Link Object Data", "Copy objects linked to data from the current scene"},
-		{SCE_COPY_FULL, "FULL_COPY", 0, "Full Copy", "Make a full copy of the current scene"},
-		{0, NULL, 0, NULL, NULL}};
-	
-	/* identifiers */
-	ot->name = "New Scene";
-	ot->description = "Add new scene by type";
-	ot->idname = "SCENE_OT_new";
-	
-	/* api callbacks */
-	ot->exec = scene_new_exec;
-	ot->invoke = WM_menu_invoke;
-	
-	/* flags */
-	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
-	
-	/* properties */
-	ot->prop = RNA_def_enum(ot->srna, "type", type_items, 0, "Type", "");
-}
-
-/********************* delete scene operator *********************/
-
-static int scene_delete_exec(bContext *C, wmOperator *UNUSED(op))
-{
-	Scene *scene = CTX_data_scene(C);
-
-	if (ED_screen_delete_scene(C, scene) == false) {
-		return OPERATOR_CANCELLED;
-	}
-
-	if (G.debug & G_DEBUG)
-		printf("scene delete %p\n", scene);
-
-	WM_event_add_notifier(C, NC_SCENE | NA_REMOVED, scene);
-
-	return OPERATOR_FINISHED;
-}
-
-static void SCENE_OT_delete(wmOperatorType *ot)
-{
-	/* identifiers */
-	ot->name = "Delete Scene";
-	ot->description = "Delete active scene";
-	ot->idname = "SCENE_OT_delete";
-	
-	/* api callbacks */
-	ot->exec = scene_delete_exec;
-	
-	/* flags */
-	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
-}
-
 /* ***************** region alpha blending ***************** */
 
 /* implementation note: a disappearing region needs at least 1 last draw with 100% backbuffer
@@ -4288,12 +4198,10 @@ void ED_operatortypes_screen(void)
 	WM_operatortype_append(SCREEN_OT_animation_step);
 	WM_operatortype_append(SCREEN_OT_animation_play);
 	WM_operatortype_append(SCREEN_OT_animation_cancel);
-	
+
 	/* new/delete */
 	WM_operatortype_append(SCREEN_OT_new);
 	WM_operatortype_append(SCREEN_OT_delete);
-	WM_operatortype_append(SCENE_OT_new);
-	WM_operatortype_append(SCENE_OT_delete);
 
 	/* tools shared by more space types */
 	WM_operatortype_append(ED_OT_undo);
