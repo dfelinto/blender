@@ -38,9 +38,18 @@
 #include "WM_types.h"
 
 
+PointerRNA rna_workspace_screen_get(PointerRNA *ptr)
+{
+	WorkSpace *workspace = (WorkSpace *)ptr->data;
+	bScreen *screen = BKE_workspace_active_screen_get(workspace);
+
+	return rna_pointer_inherit_refine(ptr, &RNA_Screen, screen);
+}
+
 static void rna_workspace_screen_set(PointerRNA *ptr, PointerRNA value)
 {
 	WorkSpace *ws = (WorkSpace *)ptr->data;
+	WorkSpaceLayout *layout_new;
 	const bScreen *screen = BKE_workspace_active_screen_get(ws);
 
 	/* disallow ID-browsing away from temp screens */
@@ -52,7 +61,8 @@ static void rna_workspace_screen_set(PointerRNA *ptr, PointerRNA value)
 	}
 
 	/* exception: can't set screens inside of area/region handlers */
-	ws->new_layout = BKE_workspace_layout_find(ws, value.data);
+	layout_new = BKE_workspace_layout_find(ws, value.data);
+	BKE_workspace_new_layout_set(ws, layout_new);
 }
 
 static int rna_workspace_screen_assign_poll(PointerRNA *UNUSED(ptr), PointerRNA value)
@@ -64,20 +74,28 @@ static int rna_workspace_screen_assign_poll(PointerRNA *UNUSED(ptr), PointerRNA 
 static void rna_workspace_screen_update(bContext *C, PointerRNA *ptr)
 {
 	WorkSpace *ws = (WorkSpace *)ptr->data;
+	WorkSpaceLayout *layout_new = BKE_workspace_new_layout_get(ws);
 
 	/* exception: can't set screens inside of area/region handlers,
 	 * and must use context so notifier gets to the right window */
-	if (ws->new_layout) {
-		WM_event_add_notifier(C, NC_WORKSPACE | ND_SCREENBROWSE, ws->new_layout);
-		ws->new_layout = NULL;
+	if (layout_new) {
+		WM_event_add_notifier(C, NC_WORKSPACE | ND_SCREENBROWSE, layout_new);
+		BKE_workspace_new_layout_set(ws, NULL);
 	}
+}
+
+void rna_workspace_screens_begin(CollectionPropertyIterator *iter, PointerRNA *ptr)
+{
+	WorkSpace *workspace = ptr->id.data;
+	rna_iterator_listbase_begin(iter, BKE_workspace_layouts_get(workspace), NULL);
 }
 
 static PointerRNA rna_workspace_screens_item_get(CollectionPropertyIterator *iter)
 {
 	WorkSpaceLayout *layout = rna_iterator_listbase_get(iter);
+	bScreen *screen = BKE_workspace_layout_screen_get(layout);
 
-	return rna_pointer_inherit_refine(&iter->parent, &RNA_Screen, layout->screen);
+	return rna_pointer_inherit_refine(&iter->parent, &RNA_Screen, screen);
 }
 
 #else /* RNA_RUNTIME */
@@ -96,14 +114,16 @@ static void rna_def_workspace(BlenderRNA *brna)
 	RNA_def_property_pointer_sdna(prop, NULL, "act_layout->screen");
 	RNA_def_property_struct_type(prop, "Screen");
 	RNA_def_property_ui_text(prop, "Screen", "Active screen showing in the workspace");
-	RNA_def_property_pointer_funcs(prop, NULL, "rna_workspace_screen_set", NULL, "rna_workspace_screen_assign_poll");
+	RNA_def_property_pointer_funcs(prop, "rna_workspace_screen_get", "rna_workspace_screen_set", NULL,
+	                               "rna_workspace_screen_assign_poll");
 	RNA_def_property_flag(prop, PROP_NEVER_NULL | PROP_EDITABLE | PROP_CONTEXT_UPDATE);
 	RNA_def_property_update(prop, 0, "rna_workspace_screen_update");
 
 	prop = RNA_def_property(srna, "screens", PROP_COLLECTION, PROP_NONE);
 	RNA_def_property_collection_sdna(prop, NULL, "layouts", NULL);
 	RNA_def_property_struct_type(prop, "Screen");
-	RNA_def_property_collection_funcs(prop, NULL, NULL, NULL, "rna_workspace_screens_item_get", NULL, NULL, NULL, NULL);
+	RNA_def_property_collection_funcs(prop, "rna_workspace_screens_begin", NULL, NULL,
+	                                  "rna_workspace_screens_item_get", NULL, NULL, NULL, NULL);
 	RNA_def_property_ui_text(prop, "Screens", "Screen layouts of a workspace");
 }
 

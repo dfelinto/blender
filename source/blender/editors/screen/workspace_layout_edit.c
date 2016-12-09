@@ -101,14 +101,15 @@ static bool workspace_layout_set_poll(const WorkSpaceLayout *layout)
 
 static WorkSpaceLayout *workspace_layout_delete_find_new(const WorkSpaceLayout *layout_old)
 {
-	WorkSpaceLayout *layout_new;
+	WorkSpaceLayout *prev = BKE_workspace_layout_prev_get(layout_old);
+	WorkSpaceLayout *next = BKE_workspace_layout_next_get(layout_old);
 
-	for (layout_new = layout_old->prev; layout_new; layout_new = layout_new->prev) {
+	BKE_workspace_layout_iter_backwards(layout_new, prev) {
 		if (workspace_layout_set_poll(layout_new)) {
 			return layout_new;
 		}
 	}
-	for (layout_new = layout_old->next; layout_new; layout_new = layout_new->next) {
+	BKE_workspace_layout_iter(layout_new, next) {
 		if (workspace_layout_set_poll(layout_new)) {
 			return layout_new;
 		}
@@ -123,10 +124,10 @@ static WorkSpaceLayout *workspace_layout_delete_find_new(const WorkSpaceLayout *
  */
 bool ED_workspace_layout_delete(bContext *C, WorkSpace *workspace, WorkSpaceLayout *layout_old)
 {
-	const bScreen *screen_old = layout_old->screen;
+	const bScreen *screen_old = BKE_workspace_layout_screen_get(layout_old);
 	WorkSpaceLayout *layout_new;
 
-	BLI_assert(BLI_findindex(&workspace->layouts, layout_old) != -1);
+	BLI_assert(BLI_findindex(BKE_workspace_layouts_get(workspace), layout_old) != -1);
 
 	/* don't allow deleting temp fullscreens for now */
 	if (BKE_screen_is_fullscreen_area(screen_old)) {
@@ -146,45 +147,35 @@ bool ED_workspace_layout_delete(bContext *C, WorkSpace *workspace, WorkSpaceLayo
 	return false;
 }
 
+static bool workspace_layout_cycle_iter_cb(const WorkSpaceLayout *layout, void *UNUSED(arg))
+{
+	return workspace_layout_set_poll(layout);
+}
+
 bool ED_workspace_layout_cycle(bContext *C, WorkSpace *workspace, const short direction)
 {
 	WorkSpaceLayout *old_layout = BKE_workspace_active_layout_get(workspace);
 	WorkSpaceLayout *new_layout;
+	const bScreen *old_screen = BKE_workspace_layout_screen_get(old_layout);
 	ScrArea *sa = CTX_wm_area(C);
 
-	if (old_layout->screen->temp || (sa && sa->full && sa->full->temp)) {
+	if (old_screen->temp || (sa && sa->full && sa->full->temp)) {
 		return false;
 	}
 
-	if (direction == 1) {
-		BLI_LISTBASE_CIRCULAR_FORWARD_BEGIN(&workspace->layouts, new_layout, old_layout)
-		{
-			if (workspace_layout_set_poll(new_layout)) {
-				break;
-			}
-		}
-		BLI_LISTBASE_CIRCULAR_FORWARD_END(&workspace->layouts, new_layout, old_layout)
-	}
-	else if (direction == -1) {
-		BLI_LISTBASE_CIRCULAR_BACKWARD_BEGIN(&workspace->layouts, new_layout, old_layout)
-		{
-			if (workspace_layout_set_poll(new_layout)) {
-				break;
-			}
-		}
-		BLI_LISTBASE_CIRCULAR_BACKWARD_END(&workspace->layouts, new_layout, old_layout)
-	}
-	else {
-		BLI_assert(0);
-	}
+	BLI_assert(ELEM(direction, 1, -1));
+	new_layout = BKE_workspace_layout_iter_circular(workspace, old_layout, workspace_layout_cycle_iter_cb,
+	                                                NULL, (direction == -1) ? true : false);
 
 	if (new_layout && (old_layout != new_layout)) {
+		bScreen *new_screen = BKE_workspace_layout_screen_get(new_layout);
+
 		if (sa && sa->full) {
 			/* return to previous state before switching screens */
 			ED_screen_full_restore(C, sa); /* may free screen of old_layout */
 		}
 
-		ED_screen_set(C, new_layout->screen);
+		ED_screen_set(C, new_screen);
 
 		return true;
 	}

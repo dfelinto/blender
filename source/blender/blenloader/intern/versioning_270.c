@@ -1406,11 +1406,9 @@ void blo_do_versions_270(FileData *fd, Library *UNUSED(lib), Main *main)
 			/* Add a workspace for each screen of the old file. */
 			for (bScreen *screen = main->screen.first; screen; screen = screen->id.next) {
 				WorkSpace *ws = BKE_workspace_add(main, screen->id.name + 2);
-				WorkSpaceLayout *layout = MEM_mallocN(sizeof(*layout), "WorkspaceLayout do_versions");
+				WorkSpaceLayout *layout = BKE_workspace_layout_add(ws, screen);
 
-				layout->screen = screen;
-				ws->act_layout = layout;
-				BLI_addhead(&ws->layouts, layout);
+				BKE_workspace_active_layout_set(ws, layout);
 
 				/* For compatibility, the workspace should be activated that represents the active
 				 * screen of the old file. We can't do this here though since wmWindow.screen

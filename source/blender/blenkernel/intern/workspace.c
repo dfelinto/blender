@@ -35,6 +35,8 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "workspace_dna.h"
+
 
 static bool workspaces_is_screen_used(const Main *bmain, bScreen *screen);
 
@@ -122,17 +124,64 @@ WorkSpaceLayout *BKE_workspace_layout_find(const WorkSpace *ws, const bScreen *s
 	return NULL;
 }
 
+WorkSpaceLayout *BKE_workspace_layout_iter_circular(const WorkSpace *workspace, WorkSpaceLayout *start,
+                                                    bool (*callback)(const WorkSpaceLayout *layout, void *arg),
+                                                    void *arg, const bool iter_backward)
+{
+	WorkSpaceLayout *iter_layout;
+
+	if (iter_backward) {
+		BLI_LISTBASE_CIRCULAR_BACKWARD_BEGIN(&workspace->layouts, iter_layout, start)
+		{
+			if (!callback(iter_layout, arg)) {
+				return iter_layout;
+			}
+		}
+		BLI_LISTBASE_CIRCULAR_BACKWARD_END(&workspace->layouts, iter_layout, start);
+	}
+	else {
+		BLI_LISTBASE_CIRCULAR_FORWARD_BEGIN(&workspace->layouts, iter_layout, start)
+		{
+			if (!callback(iter_layout, arg)) {
+				return iter_layout;
+			}
+		}
+		BLI_LISTBASE_CIRCULAR_FORWARD_END(&workspace->layouts, iter_layout, start)
+	}
+
+	return NULL;
+}
+
 
 /* -------------------------------------------------------------------- */
 /* Getters/Setters */
 
-WorkSpaceLayout *BKE_workspace_active_layout_get(const WorkSpace *ws)
+ID *BKE_workspace_id_get(WorkSpace *workspace)
 {
-	return ws->act_layout;
+	return &workspace->id;
 }
-void BKE_workspace_active_layout_set(WorkSpace *ws, WorkSpaceLayout *layout)
+
+const char *BKE_workspace_name_get(const WorkSpace *workspace)
 {
-	ws->act_layout = layout;
+	return workspace->id.name + 2;
+}
+
+WorkSpaceLayout *BKE_workspace_active_layout_get(const WorkSpace *workspace)
+{
+	return workspace->act_layout;
+}
+void BKE_workspace_active_layout_set(WorkSpace *workspace, WorkSpaceLayout *layout)
+{
+	workspace->act_layout = layout;
+}
+
+WorkSpaceLayout *BKE_workspace_new_layout_get(const WorkSpace *workspace)
+{
+	return workspace->new_layout;
+}
+void BKE_workspace_new_layout_set(WorkSpace *workspace, WorkSpaceLayout *layout)
+{
+	workspace->new_layout = layout;
 }
 
 bScreen *BKE_workspace_active_screen_get(const WorkSpace *ws)
@@ -145,8 +194,35 @@ void BKE_workspace_active_screen_set(WorkSpace *ws, bScreen *screen)
 	ws->act_layout = BKE_workspace_layout_find(ws, screen);
 }
 
+ListBase *BKE_workspace_layouts_get(WorkSpace *workspace)
+{
+	return &workspace->layouts;
+}
+
+WorkSpace *BKE_workspace_next_get(const WorkSpace *workspace)
+{
+	return workspace->id.next;
+}
+WorkSpace *BKE_workspace_prev_get(const WorkSpace *workspace)
+{
+	return workspace->id.prev;
+}
+
 
 bScreen *BKE_workspace_layout_screen_get(const WorkSpaceLayout *layout)
 {
 	return layout->screen;
+}
+void BKE_workspace_layout_screen_set(WorkSpaceLayout *layout, bScreen *screen)
+{
+	layout->screen = screen;
+}
+
+WorkSpaceLayout *BKE_workspace_layout_next_get(const WorkSpaceLayout *layout)
+{
+	return layout->next;
+}
+WorkSpaceLayout *BKE_workspace_layout_prev_get(const WorkSpaceLayout *layout)
+{
+	return layout->prev;
 }

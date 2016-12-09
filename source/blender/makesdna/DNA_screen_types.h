@@ -45,23 +45,6 @@ struct Scene;
 struct uiLayout;
 struct wmTimer;
 
-/**
- * Layouts are basically bScreens. We use this struct to wrap a reference to a screen so that we can store it in
- * a ListBase within a workspace. Usually you shouldn't have to deal with it, only with bScreen and WorkSpace.
- */
-typedef struct WorkSpaceLayout {
-	struct WorkSpaceLayout *next, *prev;
-
-	struct bScreen *screen;
-} WorkSpaceLayout;
-
-typedef struct WorkSpace {
-	ID id;
-
-	ListBase layouts;
-	WorkSpaceLayout *act_layout;
-	WorkSpaceLayout *new_layout; /* temporary when switching screens */
-} WorkSpace;
 
 typedef struct bScreen {
 	ID id;

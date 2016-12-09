@@ -43,6 +43,7 @@ struct wmWindow;
 struct wmNotifier;
 struct wmEvent;
 struct wmKeyConfig;
+struct WorkSpace;
 struct bContext;
 struct Scene;
 struct bScreen;
@@ -121,13 +122,15 @@ bool    ED_screen_stereo3d_required(const struct bScreen *screen, const struct S
 void    ED_screen_preview_render(const struct bScreen *screen, int size_x, int size_y, unsigned int *r_rect) ATTR_NONNULL();
 
 /* workspaces */
-bool ED_workspace_change(struct bContext *C, struct wmWindow *win, WorkSpace *ws_new) ATTR_NONNULL();
-WorkSpace *ED_workspace_duplicate(WorkSpace *workspace_old, struct Main *bmain, struct wmWindow *win);
-WorkSpaceLayout *ED_workspace_layout_add(WorkSpace *workspace, struct wmWindow *win, const char *name) ATTR_NONNULL();
-WorkSpaceLayout *ED_workspace_layout_duplicate(WorkSpace *workspace, const WorkSpaceLayout *layout_old, struct wmWindow *win) ATTR_NONNULL();
-bool ED_workspace_delete(struct Main *bmain, struct bContext *C, struct wmWindow *win, WorkSpace *ws);
-bool ED_workspace_layout_delete(struct bContext *C, WorkSpace *workspace, WorkSpaceLayout *layout_old) ATTR_NONNULL();
-bool ED_workspace_layout_cycle(struct bContext *C, WorkSpace *workspace, const short direction) ATTR_NONNULL();
+bool ED_workspace_change(struct bContext *C, struct wmWindow *win, struct WorkSpace *ws_new) ATTR_NONNULL();
+struct WorkSpace *ED_workspace_duplicate(struct WorkSpace *workspace_old, struct Main *bmain, struct wmWindow *win);
+struct WorkSpaceLayout *ED_workspace_layout_add(struct WorkSpace *workspace, struct wmWindow *win, const char *name) ATTR_NONNULL();
+struct WorkSpaceLayout *ED_workspace_layout_duplicate(struct WorkSpace *workspace,
+                                                      const struct WorkSpaceLayout *layout_old,
+                                                      struct wmWindow *win) ATTR_NONNULL();
+bool ED_workspace_delete(struct Main *bmain, struct bContext *C, struct wmWindow *win, struct WorkSpace *ws);
+bool ED_workspace_layout_delete(struct bContext *C, struct WorkSpace *workspace, struct WorkSpaceLayout *layout_old) ATTR_NONNULL();
+bool ED_workspace_layout_cycle(struct bContext *C, struct WorkSpace *workspace, const short direction) ATTR_NONNULL();
 
 /* anim */
 void    ED_update_for_newframe(struct Main *bmain, struct Scene *scene, int mute);

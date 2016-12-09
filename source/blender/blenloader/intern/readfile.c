@@ -2738,13 +2738,16 @@ static void lib_link_workspaces(FileData *fd, Main *bmain)
 	/* Note the NULL pointer checks for result of newlibadr. This is needed for reading old files from before the
 	 * introduction of workspaces (in do_versioning code we already created workspaces for screens of old file). */
 
-	for (WorkSpace *workspace = bmain->workspaces.first; workspace; workspace = workspace->id.next) {
-		id_us_ensure_real(&workspace->id);
+	BKE_workspace_iter(workspace, bmain->workspaces.first) {
+		ID *id = BKE_workspace_id_get(workspace);
+		ListBase *layouts = BKE_workspace_layouts_get(workspace);
 
-		for (WorkSpaceLayout *layout = workspace->layouts.first; layout; layout = layout->next) {
-			bScreen *screen = newlibadr(fd, workspace->id.lib, layout->screen);
+		id_us_ensure_real(id);
+
+		BKE_workspace_layout_iter(layout, layouts->first) {
+			bScreen *screen = newlibadr(fd, id->lib, BKE_workspace_layout_screen_get(layout));
 			if (screen) {
-				layout->screen = screen;
+				BKE_workspace_layout_screen_set(layout, screen);
 			}
 		}
 	}
@@ -2752,8 +2755,12 @@ static void lib_link_workspaces(FileData *fd, Main *bmain)
 
 static void direct_link_workspace(FileData *fd, WorkSpace *ws)
 {
-	link_list(fd, &ws->layouts);
-	ws->act_layout = newdataadr(fd, ws->act_layout);
+	WorkSpaceLayout *act_layout = BKE_workspace_active_layout_get(ws);
+
+	link_list(fd, BKE_workspace_layouts_get(ws));
+
+	act_layout = newdataadr(fd, act_layout);
+	BKE_workspace_active_layout_set(ws, act_layout);
 }
 
 /* ************ READ MOTION PATHS *************** */

@@ -82,9 +82,10 @@ bool ED_workspace_change(bContext *C, wmWindow *win, WorkSpace *ws_new)
 WorkSpace *ED_workspace_duplicate(WorkSpace *workspace_old, Main *bmain, wmWindow *win)
 {
 	WorkSpaceLayout *layout_active_old = BKE_workspace_active_layout_get(workspace_old);
-	WorkSpace *worspace_new = BKE_libblock_alloc(bmain, ID_WS, workspace_old->id.name + 2);
+	ListBase *layouts_old = BKE_workspace_layouts_get(workspace_old);
+	WorkSpace *worspace_new = BKE_libblock_alloc(bmain, ID_WS, BKE_workspace_name_get(workspace_old));
 
-	for (WorkSpaceLayout *layout_old = workspace_old->layouts.first; layout_old; layout_old = layout_old->next) {
+	BKE_workspace_layout_iter(layout_old, layouts_old->first) {
 		WorkSpaceLayout *layout_new = ED_workspace_layout_duplicate(worspace_new, layout_old, win);
 
 		if (layout_active_old == layout_old) {
@@ -108,10 +109,12 @@ bool ED_workspace_delete(Main *bmain, bContext *C, wmWindow *win, WorkSpace *ws)
 	}
 
 	if (win->workspace == ws) {
-		WorkSpace *fallback_ws = ws->id.prev ? ws->id.prev : ws->id.next;
-		ED_workspace_change(C, win, fallback_ws);
+		WorkSpace *prev = BKE_workspace_prev_get(ws);
+		WorkSpace *next = BKE_workspace_next_get(ws);
+
+		ED_workspace_change(C, win, (prev != NULL) ? prev : next);
 	}
-	BKE_libblock_free(bmain, &ws->id);
+	BKE_libblock_free(bmain, BKE_workspace_id_get(ws));
 
 	return true;
 }

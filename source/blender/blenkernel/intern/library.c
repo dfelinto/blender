@@ -130,6 +130,10 @@
 
 #include "atomic_ops.h"
 
+/* local DNA files */
+#include "workspace_dna.h"
+
+
 /* GS reads the memory pointed at in a specific ordering. 
  * only use this definition, makes little and big endian systems
  * work fine, in conjunction with MAKE_ID */

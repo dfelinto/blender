@@ -30,34 +30,59 @@
 struct bScreen;
 struct WorkSpace;
 
+typedef struct WorkSpace WorkSpace;
+typedef struct WorkSpaceLayout WorkSpaceLayout;
+
 
 /* -------------------------------------------------------------------- */
 /* Create, delete, init */
 
-struct WorkSpace *BKE_workspace_add(Main *bmain, const char *name);
-void BKE_workspace_free(struct WorkSpace *ws);
+WorkSpace *BKE_workspace_add(Main *bmain, const char *name);
+void BKE_workspace_free(WorkSpace *ws);
 
-struct WorkSpaceLayout *BKE_workspace_layout_add(struct WorkSpace *workspace, struct bScreen *screen) ATTR_NONNULL();
-void BKE_workspace_layout_remove(struct WorkSpace *workspace, struct WorkSpaceLayout *layout, Main *bmain) ATTR_NONNULL();
+struct WorkSpaceLayout *BKE_workspace_layout_add(WorkSpace *workspace, struct bScreen *screen) ATTR_NONNULL();
+void BKE_workspace_layout_remove(WorkSpace *workspace, WorkSpaceLayout *layout, Main *bmain) ATTR_NONNULL();
 
 
 /* -------------------------------------------------------------------- */
 /* General Utils */
 
-struct WorkSpaceLayout *BKE_workspace_layout_find(
-        const struct WorkSpace *ws, const struct bScreen *screen) ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
-struct WorkSpaceLayout *BKE_workspace_layout_find_exec(
-        const struct WorkSpace *ws, const struct bScreen *screen) ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
+#define BKE_workspace_iter(_workspace, _start_workspace) \
+	for (WorkSpace *_workspace = _start_workspace; _workspace; _workspace = BKE_workspace_next_get(_workspace))
+
+WorkSpaceLayout *BKE_workspace_layout_find(const WorkSpace *ws, const struct bScreen *screen) ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
+WorkSpaceLayout *BKE_workspace_layout_find_exec(const WorkSpace *ws, const struct bScreen *screen) ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
+
+#define BKE_workspace_layout_iter(_layout, _start_layout) \
+	for (WorkSpaceLayout *_layout = _start_layout; _layout; _layout = BKE_workspace_layout_next_get(_layout))
+#define BKE_workspace_layout_iter_backwards(_layout, _start_layout) \
+	for (WorkSpaceLayout *_layout = _start_layout; _layout; _layout = BKE_workspace_layout_prev_get(_layout))
+
+WorkSpaceLayout *BKE_workspace_layout_iter_circular(const WorkSpace *workspace, WorkSpaceLayout *start,
+                                                    bool (*callback)(const WorkSpaceLayout *layout, void *arg),
+                                                    void *arg, const bool iter_backward);
 
 
 /* -------------------------------------------------------------------- */
 /* Getters/Setters */
 
-struct WorkSpaceLayout *BKE_workspace_active_layout_get(const struct WorkSpace *ws) ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
-void                    BKE_workspace_active_layout_set(struct WorkSpace *ws, struct WorkSpaceLayout *layout) ATTR_NONNULL(1);
+struct ID *BKE_workspace_id_get(WorkSpace *workspace);
+const char *BKE_workspace_name_get(const WorkSpace *workspace);
+WorkSpaceLayout *BKE_workspace_active_layout_get(const struct WorkSpace *ws) ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
+void             BKE_workspace_active_layout_set(WorkSpace *ws, WorkSpaceLayout *layout) ATTR_NONNULL(1);
 struct bScreen *BKE_workspace_active_screen_get(const struct WorkSpace *ws) ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
-void            BKE_workspace_active_screen_set(struct WorkSpace *ws, struct bScreen *screen) ATTR_NONNULL(1);
+void            BKE_workspace_active_screen_set(WorkSpace *ws, struct bScreen *screen) ATTR_NONNULL(1);
+ListBase *BKE_workspace_layouts_get(WorkSpace *workspace) ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
+WorkSpaceLayout *BKE_workspace_new_layout_get(const WorkSpace *workspace) ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
+void             BKE_workspace_new_layout_set(WorkSpace *workspace, WorkSpaceLayout *layout) ATTR_NONNULL(1);
 
-struct bScreen *BKE_workspace_layout_screen_get(const struct WorkSpaceLayout *layout) ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
+WorkSpace *BKE_workspace_next_get(const WorkSpace *workspace) ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
+WorkSpace *BKE_workspace_prev_get(const WorkSpace *workspace) ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
+
+struct bScreen *BKE_workspace_layout_screen_get(const WorkSpaceLayout *layout) ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
+void            BKE_workspace_layout_screen_set(WorkSpaceLayout *layout, struct bScreen *screen) ATTR_NONNULL(1);
+
+WorkSpaceLayout *BKE_workspace_layout_next_get(const WorkSpaceLayout *layout) ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
+WorkSpaceLayout *BKE_workspace_layout_prev_get(const WorkSpaceLayout *layout) ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
 
 #endif /* __BKE_WORKSPACE_H__ */

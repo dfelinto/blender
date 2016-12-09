@@ -3679,9 +3679,10 @@ static void write_cachefiles(WriteData *wd, ListBase *idbase)
 
 static void write_workspaces(WriteData *wd, ListBase *idbase)
 {
-	for (WorkSpace *ws = idbase->first; ws; ws = ws->id.next) {
-		writestruct(wd, ID_WS, WorkSpace, 1, ws);
-		writelist(wd, DATA, WorkSpaceLayout, &ws->layouts);
+	BKE_workspace_iter(workspace, idbase->first) {
+		ListBase *layouts = BKE_workspace_layouts_get(workspace);
+		writestruct(wd, ID_WS, WorkSpace, 1, workspace);
+		writelist(wd, DATA, WorkSpaceLayout, layouts);
 	}
 }
 
