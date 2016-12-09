@@ -2731,9 +2731,29 @@ static void direct_link_cachefile(FileData *fd, CacheFile *cache_file)
 	direct_link_animdata(fd, cache_file->adt);
 }
 
+/* ************ READ WORKSPACES *************** */
+
+static void lib_link_workspaces(FileData *fd, Main *bmain)
+{
+	/* Note the NULL pointer checks for result of newlibadr. This is needed for reading old files from before the
+	 * introduction of workspaces (in do_versioning code we already created workspaces for screens of old file). */
+
+	for (WorkSpace *workspace = bmain->workspaces.first; workspace; workspace = workspace->id.next) {
+		id_us_ensure_real(&workspace->id);
+
+		for (WorkSpaceLayout *layout = workspace->layouts.first; layout; layout = layout->next) {
+			bScreen *screen = newlibadr(fd, workspace->id.lib, layout->screen);
+			if (screen) {
+				layout->screen = screen;
+			}
+		}
+	}
+}
+
 static void direct_link_workspace(FileData *fd, WorkSpace *ws)
 {
-	UNUSED_VARS(fd, ws);
+	link_list(fd, &ws->layouts);
+	ws->act_layout = newdataadr(fd, ws->act_layout);
 }
 
 /* ************ READ MOTION PATHS *************** */
@@ -5799,11 +5819,13 @@ static void direct_link_windowmanager(FileData *fd, wmWindowManager *wm)
  *     We already created a new workspace for each screen in blo_do_versions_270, here we need
  *     to find and activate the workspace that contains the active screen of the old file.
  *  *  Active scene isn't stored in screen anymore, but in window.
+ *
+ * \return if conversion was done.
  */
-static void lib_link_window_280_conversion(FileData *fd, Main *main, wmWindow *win)
+static bool lib_link_window_280_conversion(FileData *fd, Main *main, wmWindow *win)
 {
 	if (MAIN_VERSION_ATLEAST(main, 278, 5)) {
-		return;
+		return false;
 	}
 
 	if (win->screen) {
@@ -5818,6 +5840,8 @@ static void lib_link_window_280_conversion(FileData *fd, Main *main, wmWindow *w
 		const bScreen *screen = BKE_workspace_active_screen_get(win->workspace);
 		win->scene = newlibadr(fd, NULL, screen->scene);
 	}
+
+	return true;
 }
 
 static void lib_link_windowmanager(FileData *fd, Main *main)
@@ -5828,7 +5852,10 @@ static void lib_link_windowmanager(FileData *fd, Main *main)
 	for (wm = main->wm.first; wm; wm = wm->id.next) {
 		if (wm->id.tag & LIB_TAG_NEED_LINK) {
 			for (win = wm->windows.first; win; win = win->next) {
-				lib_link_window_280_conversion(fd, main, win);
+				if (!lib_link_window_280_conversion(fd, main, win)) {
+					win->scene = newlibadr(fd, wm->id.lib, win->scene);
+					win->workspace = newlibadr(fd, wm->id.lib, win->workspace);
+				}
 			}
 
 			wm->id.tag &= ~LIB_TAG_NEED_LINK;
@@ -8054,6 +8081,7 @@ static void lib_link_all(FileData *fd, Main *main)
 	lib_link_linestyle(fd, main);
 	lib_link_gpencil(fd, main);
 	lib_link_cachefiles(fd, main);
+	lib_link_workspaces(fd, main);
 
 	lib_link_mesh(fd, main);		/* as last: tpage images with users at zero */
 	

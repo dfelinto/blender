@@ -3681,6 +3681,7 @@ static void write_workspaces(WriteData *wd, ListBase *idbase)
 {
 	for (WorkSpace *ws = idbase->first; ws; ws = ws->id.next) {
 		writestruct(wd, ID_WS, WorkSpace, 1, ws);
+		writelist(wd, DATA, WorkSpaceLayout, &ws->layouts);
 	}
 }
 
