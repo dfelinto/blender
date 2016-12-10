@@ -34,6 +34,7 @@
 
 #include "DNA_ID.h"
 #include "DNA_layer_types.h"
+#include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
 #include "MEM_guardedalloc.h"
@@ -195,4 +196,22 @@ void BKE_collection_object_remove(struct Scene *UNUSED(scene), struct SceneColle
 
 	/* remove the equivalent object base to all layers that have this collection
 	 * also remove all reference to ob in the filter_objects */
+}
+
+/*
+ * Recursively calls the callback function for the objects in a SceneCollection
+ */
+void BKE_collection_objects_callback(SceneCollection *sc, void (*callback)(struct Object *_ob, void *_data), void *data)
+{
+	for (LinkData *link= sc->objects.first; link; link = link->next) {
+		callback(link->data, data);
+	}
+
+	for (LinkData *link= sc->filter_objects.first; link; link = link->next) {
+		callback(link->data, data);
+	}
+
+	for (SceneCollection *nsc = sc->scene_collections.first; nsc; nsc = nsc->next) {
+		BKE_collection_objects_callback(nsc, callback, data);
+	}
 }

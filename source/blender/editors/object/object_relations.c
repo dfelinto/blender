@@ -62,6 +62,7 @@
 #include "BKE_animsys.h"
 #include "BKE_armature.h"
 #include "BKE_camera.h"
+#include "BKE_collection.h"
 #include "BKE_context.h"
 #include "BKE_constraint.h"
 #include "BKE_curve.h"
@@ -73,6 +74,7 @@
 #include "BKE_fcurve.h"
 #include "BKE_lamp.h"
 #include "BKE_lattice.h"
+#include "BKE_layer.h"
 #include "BKE_library.h"
 #include "BKE_library_query.h"
 #include "BKE_main.h"
@@ -1730,10 +1732,68 @@ void OBJECT_OT_make_links_data(wmOperatorType *ot)
 
 /**************************** Make Single User ********************************/
 
+static Object *single_object_users_object(Main *bmain, Scene *scene, Object *ob, const bool copy_groups)
+{
+	if (!ID_IS_LINKED_DATABLOCK(ob) && ob->id.us > 1) {
+		/* base gets copy of object */
+		Object *obn = BKE_object_copy(bmain, ob);
+
+		if (copy_groups) {
+			if (ob->flag & OB_FROMGROUP) {
+				obn->flag |= OB_FROMGROUP;
+			}
+		}
+		else {
+			/* copy already clears */
+		}
+		/* remap gpencil parenting */
+
+		if (scene->gpd) {
+			bGPdata *gpd = scene->gpd;
+			for (bGPDlayer *gpl = gpd->layers.first; gpl; gpl = gpl->next) {
+				if (gpl->parent == ob) {
+					gpl->parent = obn;
+				}
+			}
+		}
+
+		id_us_min(&ob->id);
+		return obn;
+	}
+	return NULL;
+}
+
+static void libblock_relink_scene_collection(SceneCollection *sc)
+{
+	for (LinkData *link = sc->objects.first; link; link = link->next) {
+		BKE_libblock_relink(link->data);
+	}
+
+	for (SceneCollection *nsc = sc->scene_collections.first; nsc; nsc = nsc->next) {
+		libblock_relink_scene_collection(nsc);
+	}
+}
+
+static void single_object_users_scene_collection(Main *bmain, Scene *scene, SceneCollection *sc, const int flag, const bool copy_groups)
+{
+	for (LinkData *link = sc->objects.first; link; link = link->next) {
+		Object *ob = link->data;
+		/* an object may be in more than one collection */
+		if ((ob->id.newid == NULL) && ((ob->flag & flag) == flag)) {
+			link->data = single_object_users_object(bmain, scene, link->data, copy_groups);
+		}
+	}
+
+	/* we reset filter objects because they should be regenerated after this */
+	BLI_freelistN(&sc->filter_objects);
+
+	for (SceneCollection *nsc = sc->scene_collections.first; nsc; nsc = nsc->next) {
+		single_object_users_scene_collection(bmain, scene, nsc, flag, copy_groups);
+	}
+}
+
 static void single_object_users(Main *bmain, Scene *scene, View3D *v3d, const int flag, const bool copy_groups)
 {
-	Base *base;
-	Object *ob, *obn;
 	Group *group, *groupn;
 	GroupObject *go;
 
@@ -1750,39 +1810,14 @@ static void single_object_users(Main *bmain, Scene *scene, View3D *v3d, const in
 		}
 	}
 
-	/* duplicate (must set newid) */
-	for (base = FIRSTBASE; base; base = base->next) {
-		ob = base->object;
+	/* duplicate all the objects of the scene */
+	SceneCollection *msc = BKE_collection_master(scene);
+	single_object_users_scene_collection(bmain, scene, msc, flag, copy_groups);
 
-		if ((base->flag & flag) == flag) {
-			if (!ID_IS_LINKED_DATABLOCK(ob) && ob->id.us > 1) {
-				/* base gets copy of object */
-				obn = BKE_object_copy(bmain, ob);
-				base->object = obn;
-
-				if (copy_groups) {
-					if (ob->flag & OB_FROMGROUP) {
-						obn->flag |= OB_FROMGROUP;
-					}
-				}
-				else {
-					/* copy already clears */
-				}
-				/* remap gpencil parenting */
-
-				if (scene->gpd) {
-					bGPdata *gpd = scene->gpd;
-					for (bGPDlayer *gpl = gpd->layers.first; gpl; gpl = gpl->next) {
-						if (gpl->parent == ob) {
-							gpl->parent = obn;
-						}
-					}
-				}
-
-				base->flag = obn->flag;
-
-				id_us_min(&ob->id);
-			}
+	/* loop over SceneLayers and assign the pointers accordingly */
+	for (SceneLayer *sl = scene->render_layers.first; sl; sl = sl->next) {
+		for (ObjectBase *ob_base = sl->object_bases.first; ob_base; ob_base = ob_base->next) {
+			ID_NEW(ob_base->object);
 		}
 	}
 
@@ -1816,26 +1851,28 @@ static void single_object_users(Main *bmain, Scene *scene, View3D *v3d, const in
 	if (v3d) ID_NEW(v3d->camera);
 
 	/* object and group pointers */
-	for (base = FIRSTBASE; base; base = base->next) {
-		BKE_libblock_relink(&base->object->id);
-	}
+	libblock_relink_scene_collection(msc);
 
 	set_sca_new_poins();
+
+	/* TODO redo filter */
+	TODO_LAYER_SYNC_FILTER
+}
+
+static void object_untag_OB_DONE(Object *ob, void *UNUSED(data))
+{
+	ob->flag &= ~OB_DONE;
 }
 
 /* not an especially efficient function, only added so the single user
  * button can be functional.*/
 void ED_object_single_user(Main *bmain, Scene *scene, Object *ob)
 {
-	Base *base;
-	const bool copy_groups = false;
+	SceneCollection *msc = BKE_collection_master(scene);
+	BKE_collection_objects_callback(msc, object_untag_OB_DONE, NULL);
 
-	for (base = FIRSTBASE; base; base = base->next) {
-		if (base->object == ob) base->flag |=  OB_DONE;
-		else base->flag &= ~OB_DONE;
-	}
-
-	single_object_users(bmain, scene, NULL, OB_DONE, copy_groups);
+	ob->flag |= OB_DONE;
+	single_object_users(bmain, scene, NULL, OB_DONE, false);
 }
 
 static void new_id_matar(Main *bmain, Material **matar, const int totcol)
@@ -1871,6 +1908,8 @@ static void single_obdata_users(Main *bmain, Scene *scene, const int flag)
 	Lattice *lat;
 	ID *id;
 	int a;
+
+	TODO_LAYER; /* need to use scene->collection base instead of scene->bases */
 
 	for (base = FIRSTBASE; base; base = base->next) {
 		ob = base->object;
@@ -2379,7 +2418,15 @@ static int make_single_user_exec(bContext *C, wmOperator *op)
 	BKE_main_id_clear_newpoins(bmain);
 
 	if (RNA_boolean_get(op->ptr, "object")) {
-		single_object_users(bmain, scene, v3d, flag, copy_groups);
+		if (flag == SELECT) {
+			SceneLayer *sl = CTX_data_scene_layer(C);
+
+			BKE_scene_layer_selected_objects_tag(sl, OB_DONE);
+			single_object_users(bmain, scene, v3d, OB_DONE, copy_groups);
+		}
+		else {
+			single_object_users(bmain, scene, v3d, 0, copy_groups);
+		}
 
 		/* needed since object relationships may have changed */
 		update_deps = true;

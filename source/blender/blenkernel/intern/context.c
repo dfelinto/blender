@@ -47,6 +47,7 @@
 #include "BLT_translation.h"
 
 #include "BKE_context.h"
+#include "BKE_layer.h"
 #include "BKE_main.h"
 #include "BKE_screen.h"
 #include "BKE_sound.h"
@@ -78,6 +79,7 @@ struct bContext {
 	struct {
 		struct Main *main;
 		struct Scene *scene;
+		struct SceneLayer *render_layer;
 
 		int recursion;
 		int py_init; /* true if python is initialized */
@@ -836,8 +838,9 @@ void CTX_wm_window_set(bContext *C, wmWindow *win)
 void CTX_wm_screen_set(bContext *C, bScreen *screen)
 {
 	C->wm.screen = screen;
-	if (C->wm.screen)
-		C->data.scene = C->wm.screen->scene;
+	if (C->wm.screen) {
+		CTX_data_scene_set(C, C->wm.screen->scene);
+	}
 	C->wm.area = NULL;
 	C->wm.region = NULL;
 }
@@ -894,6 +897,16 @@ Scene *CTX_data_scene(const bContext *C)
 		return scene;
 	else
 		return C->data.scene;
+}
+
+SceneLayer *CTX_data_scene_layer(const bContext *C)
+{
+	SceneLayer *sl;
+
+	if (ctx_data_pointer_verify(C, "render_layer", (void *)&sl))
+		return sl;
+	else
+		return C->data.render_layer;
 }
 
 int CTX_data_mode_enum(const bContext *C)
@@ -960,6 +973,17 @@ const char *CTX_data_mode_string(const bContext *C)
 void CTX_data_scene_set(bContext *C, Scene *scene)
 {
 	C->data.scene = scene;
+	TODO_LAYER_CONTEXT
+
+	/* render_layer comes from workspace (or even viewport) actually
+	 * this is only while we wait for workspace changes to be merged
+	 */
+	CTX_data_scene_layer_set(C, scene->render_layers.last);
+}
+
+void CTX_data_scene_layer_set(bContext *C, SceneLayer *sl)
+{
+	C->data.render_layer = sl;
 }
 
 ToolSettings *CTX_data_tool_settings(const bContext *C)

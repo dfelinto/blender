@@ -154,6 +154,59 @@ static void remove_sequencer_fcurves(Scene *sce)
 	}
 }
 
+/* copy SceneCollection tree but keep pointing to the same objects */
+static void scene_collection_copy(SceneCollection *scn, SceneCollection *sc)
+{
+	BLI_duplicatelist(&scn->objects, &sc->objects);
+	for (LinkData *link = scn->objects.first; link; link = link->next) {
+		id_us_plus(link->data);
+	}
+
+	BLI_duplicatelist(&scn->filter_objects, &sc->filter_objects);
+	for (LinkData *link = scn->filter_objects.first; link; link = link->next) {
+		id_us_plus(link->data);
+	}
+
+	BLI_duplicatelist(&scn->scene_collections, &sc->scene_collections);
+	SceneCollection *nscn = scn->scene_collections.first; /* nested SceneCollection new */
+	for (SceneCollection *nsc = sc->scene_collections.first; nsc; nsc = nsc->next) {
+		scene_collection_copy(nscn, nsc);
+		nscn = nscn->next;
+	}
+}
+
+/* Find the equivalent SceneCollection in the new tree */
+static SceneCollection *scene_collection_from_new_tree(SceneCollection *sc_reference, SceneCollection *scn, SceneCollection *sc)
+{
+	if (sc == sc_reference) {
+		return scn;
+	}
+
+	SceneCollection *nscn = scn->scene_collections.first; /* nested master collection new */
+	for (SceneCollection *nsc = sc->scene_collections.first; nsc; nsc = nsc->next) {
+
+		SceneCollection *found = scene_collection_from_new_tree(sc_reference, nscn, nsc);
+		if (found) {
+			return found;
+		}
+		nscn = nscn->next;
+	}
+	return NULL;
+}
+
+/* recreate the LayerCollection tree */
+static void layer_collections_recreate(SceneLayer *sl, ListBase *lb, SceneCollection *mcn, SceneCollection *mc)
+{
+	for (LayerCollection *lc = lb->first; lc; lc = lc->next) {
+
+		SceneCollection *sc = scene_collection_from_new_tree(lc->scene_collection, mcn, mc);
+		BLI_assert(sc);
+
+		/* instead of syncronizing both trees we simply re-create it */
+		BKE_collection_link(sl, sc);
+	}
+}
+
 Scene *BKE_scene_copy(Main *bmain, Scene *sce, int type)
 {
 	Scene *scen;
@@ -245,6 +298,36 @@ Scene *BKE_scene_copy(Main *bmain, Scene *sce, int type)
 				}
 			}
 			new_srl = new_srl->next;
+		}
+
+		/* layers and collections */
+		scen->collection = MEM_dupallocN(sce->collection);
+		SceneCollection *mcn = BKE_collection_master(scen);
+		SceneCollection *mc = BKE_collection_master(sce);
+
+		/* recursively creates a new SceneCollection tree */
+		scene_collection_copy(mcn, mc);
+
+		BLI_duplicatelist(&scen->render_layers, &sce->render_layers);
+		SceneLayer *new_sl = scen->render_layers.first;
+		for (SceneLayer *sl = sce->render_layers.first; sl; sl = sl->next) {
+
+			/* we start fresh with no overrides and no visibility flags set
+			 * instead of syncing both trees we simply unlink and relink the scene collection */
+			BLI_listbase_clear(&new_sl->layer_collections);
+			BLI_listbase_clear(&new_sl->object_bases);
+			layer_collections_recreate(new_sl, &sl->layer_collections, mcn, mc);
+
+			if (sl->basact) {
+				Object *active_ob = sl->basact->object;
+				for (ObjectBase *ob_base = new_sl->object_bases.first; ob_base; ob_base = ob_base->next) {
+					if (ob_base->object == active_ob) {
+						new_sl->basact = ob_base;
+						break;
+					}
+				}
+			}
+			new_sl = new_sl->next;
 		}
 	}
 

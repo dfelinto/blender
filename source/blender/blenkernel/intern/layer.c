@@ -127,6 +127,21 @@ void BKE_scene_layer_engine_set(SceneLayer *sl, const char *engine)
 	BLI_strncpy_utf8(sl->engine, engine, sizeof(sl->engine));
 }
 
+/*
+ * Tag all the selected objects of a renderlayer
+ */
+void BKE_scene_layer_selected_objects_tag(SceneLayer *sl, const int tag)
+{
+	for (ObjectBase *ob_base = sl->object_bases.first; ob_base; ob_base = ob_base->next) {
+		if ((ob_base->flag & BASE_SELECTED) != 0) {
+			ob_base->object->flag |= tag;
+		}
+		else {
+			ob_base->object->flag &= ~tag;
+		}
+	}
+}
+
 /* ObjectBase */
 
 ObjectBase *BKE_scene_layer_base_find(SceneLayer *sl, Object *ob)

@@ -31,8 +31,11 @@
 extern "C" {
 #endif
 
-#define TODO_LAYER_SYNC
-#define TODO_LAYER_OVERRIDE
+#define TODO_LAYER_SYNC /* syncing of SceneCollection and LayerCollection trees*/
+#define TODO_LAYER_SYNC_FILTER /* syncing of filter_objects across all trees */
+#define TODO_LAYER_OVERRIDE /* CollectionOverride */
+#define TODO_LAYER_CONTEXT /* get/set current (context) SceneLayer */
+#define TODO_LAYER /* generic todo */
 
 struct LayerCollection;
 struct ID;
@@ -50,6 +53,8 @@ bool BKE_scene_layer_remove(struct Main *bmain, struct Scene *scene, struct Scen
 void BKE_scene_layer_free(struct SceneLayer *sl);
 
 void BKE_scene_layer_engine_set(struct SceneLayer *sl, const char *engine);
+
+void BKE_scene_layer_selected_objects_tag(struct SceneLayer *sl, const int tag);
 
 struct ObjectBase *BKE_scene_layer_base_find(struct SceneLayer *sl, struct Object *ob);
 
