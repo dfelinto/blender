@@ -170,6 +170,7 @@ def dump(data):
 # ############################################################
 
 class UnitsTesting(unittest.TestCase):
+    _test_simple = False
 
     def path_exists(self, filepath):
         import os
@@ -206,7 +207,11 @@ class UnitsTesting(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as dirpath:
             filepath_layers = os.path.join(ROOT, 'layers.blend')
-            filepath_layers_json = os.path.join(ROOT, 'layers.json')
+
+            if self._test_simple:
+                filepath_layers_json = os.path.join(ROOT, 'layers_simple.json')
+            else:
+                filepath_layers_json = os.path.join(ROOT, 'layers.json')
 
             (self.path_exists(f) for f in (filepath_layers, filepath_layers_json))
 
@@ -223,12 +228,20 @@ class UnitsTesting(unittest.TestCase):
             filepath_doversion_json = os.path.join(dirpath, "doversion.json")
             with open(filepath_doversion_json, "w") as f:
                 f.write(dump(collections))
-                f.write(dump(layers))
+                if not self._test_simple:
+                    f.write(dump(layers))
 
-            self.assertTrue(filecmp.cmp(
-                filepath_doversion_json,
-                filepath_layers_json),
-                "Doversion test failed")
+            if not filecmp.cmp(
+                    filepath_doversion_json,
+                    filepath_layers_json):
+
+                print('FAILED!')
+                print(dump(collections))
+
+                if not self._test_simple:
+                    print(dump(layers))
+
+                self.assertTrue(False, "Doversion test failed")
 
             # read test
             bpy.ops.wm.open_mainfile('EXEC_DEFAULT', filepath=filepath_doversion)
@@ -242,12 +255,20 @@ class UnitsTesting(unittest.TestCase):
             filepath_read_json = os.path.join(dirpath, "read.json")
             with open(filepath_read_json, "w") as f:
                 f.write(dump(collections))
-                f.write(dump(layers))
+                if not self._test_simple:
+                    f.write(dump(layers))
 
-            self.assertTrue(filecmp.cmp(
-                filepath_read_json,
-                filepath_layers_json),
-                "Read test failed")
+            if not filecmp.cmp(
+                    filepath_read_json,
+                    filepath_layers_json):
+
+                print('FAILED!')
+                print(dump(collections))
+
+                if not self._test_simple:
+                    print(dump(layers))
+
+                self.assertTrue(False, "Read test failed")
 
     def test_scene_copy(self):
         import bpy
@@ -257,15 +278,26 @@ class UnitsTesting(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as dirpath:
             filepath_layers = os.path.join(ROOT, 'layers.blend')
-            filepath_layers_json = os.path.join(ROOT, 'layers.json')
-            filepath_layers_copy_json = os.path.join(ROOT, 'layers_copy.json')
+
+            if self._test_simple:
+                filepath_layers_json = os.path.join(ROOT, 'layers_simple.json')
+                filepath_layers_json_copy_full = os.path.join(ROOT, 'layers_copy_full_simple.json')
+                filepath_layers_json_copy_link = os.path.join(ROOT, 'layers_copy_link_simple.json')
+            else:
+                filepath_layers_json = os.path.join(ROOT, 'layers.json')
+                filepath_layers_json_copy_full = os.path.join(ROOT, 'layers_copy_full.json')
+                filepath_layers_json_copy_link = os.path.join(ROOT, 'layers_copy_link.json')
 
             (self.path_exists(f) for f in (
-                filepath_layers, filepath_layers_json, filepath_layers_copy_json))
+                filepath_layers,
+                filepath_layers_json,
+                filepath_layers_json_copy_full,
+                filepath_layers_json_copy_link,
+                ))
 
             type_lookup = {
-                    'LINK_OBJECTS': filepath_layers_json,
-                    'FULL_COPY': filepath_layers_copy_json,
+                    'LINK_OBJECTS': filepath_layers_json_copy_link,
+                    'FULL_COPY': filepath_layers_json_copy_full,
                     }
 
             for scene_type, json_reference_file in type_lookup.items():
@@ -282,12 +314,21 @@ class UnitsTesting(unittest.TestCase):
                 filepath_json = os.path.join(dirpath, "{0}.json".format(scene_type))
                 with open(filepath_json, "w") as f:
                     f.write(dump(collections))
-                    f.write(dump(layers))
+                    if not self._test_simple:
+                        f.write(dump(layers))
 
-                self.assertTrue(filecmp.cmp(
+                if not filecmp.cmp(
                     json_reference_file,
-                    filepath_json),
-                    "Scene copy \"{0}\" test failed".format(scene_type.title()))
+                    filepath_json):
+
+                    print('FAILED!')
+                    print(dump(collections))
+
+                    if not self._test_simple:
+                        print(dump(layers))
+
+                    self.assertTrue(False,
+                        "Scene copy \"{0}\" test failed".format(scene_type.title()))
 
 
 # ############################################################
