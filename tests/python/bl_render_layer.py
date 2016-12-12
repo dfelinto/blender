@@ -169,6 +169,22 @@ def dump(data):
 # Tests
 # ############################################################
 
+def compare_files(file_a, file_b):
+    import filecmp
+
+    if not filecmp.cmp(
+        file_a,
+        file_b):
+        """
+        import pdb
+        print("Files differ:", file_a, file_b)
+        pdb.set_trace()
+        """
+        return False
+
+    return True
+
+
 class UnitsTesting(unittest.TestCase):
     _test_simple = False
 
@@ -231,17 +247,11 @@ class UnitsTesting(unittest.TestCase):
                 if not self._test_simple:
                     f.write(dump(layers))
 
-            if not filecmp.cmp(
-                    filepath_doversion_json,
-                    filepath_layers_json):
-
-                print('FAILED!')
-                print(dump(collections))
-
-                if not self._test_simple:
-                    print(dump(layers))
-
-                self.assertTrue(False, "Doversion test failed")
+            self.assertTrue(compare_files(
+                filepath_doversion_json,
+                filepath_layers_json,
+                ),
+                "Doversion test failed")
 
             # read test
             bpy.ops.wm.open_mainfile('EXEC_DEFAULT', filepath=filepath_doversion)
@@ -258,17 +268,11 @@ class UnitsTesting(unittest.TestCase):
                 if not self._test_simple:
                     f.write(dump(layers))
 
-            if not filecmp.cmp(
-                    filepath_read_json,
-                    filepath_layers_json):
-
-                print('FAILED!')
-                print(dump(collections))
-
-                if not self._test_simple:
-                    print(dump(layers))
-
-                self.assertTrue(False, "Read test failed")
+            self.assertTrue(compare_files(
+                filepath_read_json,
+                filepath_layers_json,
+                ),
+                "Read test failed")
 
     def test_scene_copy(self):
         import bpy
@@ -282,7 +286,7 @@ class UnitsTesting(unittest.TestCase):
             if self._test_simple:
                 filepath_layers_json = os.path.join(ROOT, 'layers_simple.json')
                 filepath_layers_json_copy_full = os.path.join(ROOT, 'layers_copy_full_simple.json')
-                filepath_layers_json_copy_link = os.path.join(ROOT, 'layers_copy_link_simple.json')
+                filepath_layers_json_copy_link = os.path.join(ROOT, 'layers_simple.json')
             else:
                 filepath_layers_json = os.path.join(ROOT, 'layers.json')
                 filepath_layers_json_copy_full = os.path.join(ROOT, 'layers_copy_full.json')
@@ -317,18 +321,11 @@ class UnitsTesting(unittest.TestCase):
                     if not self._test_simple:
                         f.write(dump(layers))
 
-                if not filecmp.cmp(
+                self.assertTrue(compare_files(
+                    filepath_json,
                     json_reference_file,
-                    filepath_json):
-
-                    print('FAILED!')
-                    print(dump(collections))
-
-                    if not self._test_simple:
-                        print(dump(layers))
-
-                    self.assertTrue(False,
-                        "Scene copy \"{0}\" test failed".format(scene_type.title()))
+                    ),
+                    "Scene copy \"{0}\" test failed".format(scene_type.title()))
 
 
 # ############################################################
