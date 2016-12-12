@@ -41,7 +41,7 @@ struct SceneCollection *BKE_collection_master(struct Scene *scene);
 void BKE_collection_master_free(struct Scene *scene);
 void BKE_collection_object_add(struct Scene *scene, struct SceneCollection *sc, struct Object *object);
 void BKE_collection_object_remove(struct Scene *scene, struct SceneCollection *sc, struct Object *object);
-void BKE_collection_objects_callback(struct SceneCollection *sc, void (*callback)(struct Object *_ob, void *_data), void *data);
+void BKE_scene_objects_callback(struct Scene *scene, void (*callback)(struct Object *_ob, void *_data), void *data);
 
 #ifdef __cplusplus
 }

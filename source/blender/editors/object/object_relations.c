@@ -1868,9 +1868,7 @@ static void object_untag_OB_DONE(Object *ob, void *UNUSED(data))
  * button can be functional.*/
 void ED_object_single_user(Main *bmain, Scene *scene, Object *ob)
 {
-	SceneCollection *msc = BKE_collection_master(scene);
-	BKE_collection_objects_callback(msc, object_untag_OB_DONE, NULL);
-
+	BKE_scene_objects_callback(scene, object_untag_OB_DONE, NULL);
 	ob->flag |= OB_DONE;
 	single_object_users(bmain, scene, NULL, OB_DONE, false);
 }

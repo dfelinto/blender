@@ -199,12 +199,34 @@ void BKE_collection_object_remove(struct Scene *UNUSED(scene), struct SceneColle
 }
 
 /*
+ * Tag util functions to make sure the same object is not called twice
+ */
+
+static void object_tag(Object *ob)
+{
+	ob->flag |= BA_TEMP_TAG;
+}
+
+static void object_tag_clear(Object *ob, void *UNUSED(data))
+{
+	ob->flag &= ~BA_TEMP_TAG;
+}
+
+static bool object_tag_test(Object *ob)
+{
+	return (ob->flag & BA_TEMP_TAG) != 0;
+}
+
+/*
  * Recursively calls the callback function for the objects in a SceneCollection
  */
-void BKE_collection_objects_callback(SceneCollection *sc, void (*callback)(struct Object *_ob, void *_data), void *data)
+static void collection_objects_callback(SceneCollection *sc, void (*callback)(struct Object *_ob, void *_data), void *data)
 {
 	for (LinkData *link= sc->objects.first; link; link = link->next) {
-		callback(link->data, data);
+		if (object_tag_test(link->data)) {
+			callback(link->data, data);
+			object_tag(link->data);
+		}
 	}
 
 	for (LinkData *link= sc->filter_objects.first; link; link = link->next) {
@@ -212,6 +234,17 @@ void BKE_collection_objects_callback(SceneCollection *sc, void (*callback)(struc
 	}
 
 	for (SceneCollection *nsc = sc->scene_collections.first; nsc; nsc = nsc->next) {
-		BKE_collection_objects_callback(nsc, callback, data);
+		collection_objects_callback(nsc, callback, data);
 	}
+}
+
+/*
+ * Recursively calls the callback function for the objects in a Scene
+ * The same object
+ */
+void BKE_scene_objects_callback(Scene *scene, void (*callback)(struct Object *_ob, void *_data), void *data)
+{
+	SceneCollection *sc = BKE_collection_master(scene);
+	collection_objects_callback(sc, object_tag_clear, NULL);
+	collection_objects_callback(sc, callback, data);
 }
