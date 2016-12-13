@@ -748,7 +748,7 @@ static int datadropper_poll(bContext *C)
 	if ((CTX_wm_window(C) != NULL) &&
 	    (but = UI_context_active_but_prop_get(C, &ptr, &prop, &index_dummy)) &&
 	    (but->type == UI_BTYPE_SEARCH_MENU) &&
-	    (but->flag & UI_BUT_SEARCH_UNLINK))
+	    (but->flag & UI_BUT_VALUE_CLEAR))
 	{
 		if (prop && RNA_property_type(prop) == PROP_POINTER) {
 			StructRNA *type = RNA_property_pointer_type(&ptr, prop);
@@ -882,7 +882,6 @@ static void depthdropper_exit(bContext *C, wmOperator *op)
  */
 static void depthdropper_depth_sample_pt(bContext *C, DepthDropper *ddr, int mx, int my, float *r_depth)
 {
-
 	/* we could use some clever */
 	wmWindow *win = CTX_wm_window(C);
 	ScrArea *sa = BKE_screen_find_area_xy(win->screen, SPACE_TYPE_ANY, mx, my);
@@ -923,7 +922,7 @@ static void depthdropper_depth_sample_pt(bContext *C, DepthDropper *ddr, int mx,
 					float co_align[3];
 
 					/* quick way to get view-center aligned point */
-					ED_view3d_win_to_3d(ar, co, mval_center_fl, co_align);
+					ED_view3d_win_to_3d(v3d, ar, co, mval_center_fl, co_align);
 
 					*r_depth = len_v3v3(view_co, co_align);
 

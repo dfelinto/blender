@@ -284,7 +284,7 @@ NO_BUILD=false
 NO_CONFIRM=false
 USE_CXX11=true  # Mandatory in blender2.8
 
-PYTHON_VERSION="3.5.1"
+PYTHON_VERSION="3.5.2"
 PYTHON_VERSION_MIN="3.5"
 PYTHON_FORCE_BUILD=false
 PYTHON_FORCE_REBUILD=false
@@ -317,7 +317,7 @@ OPENEXR_FORCE_REBUILD=false
 OPENEXR_SKIP=false
 _with_built_openexr=false
 
-OIIO_VERSION="1.6.9"
+OIIO_VERSION="1.7.8"
 OIIO_VERSION_MIN="1.6.0"
 OIIO_VERSION_MAX="1.9.0"  # UNKNOWN currently # Not supported by current OSL...
 OIIO_FORCE_BUILD=false
@@ -332,14 +332,14 @@ LLVM_FORCE_REBUILD=false
 LLVM_SKIP=false
 
 # OSL needs to be compiled for now!
-OSL_VERSION="1.7.3"
+OSL_VERSION="1.7.5"
 OSL_VERSION_MIN=$OSL_VERSION
 OSL_FORCE_BUILD=false
 OSL_FORCE_REBUILD=false
 OSL_SKIP=false
 
 # OpenSubdiv needs to be compiled for now
-OSD_VERSION="3.0.5"
+OSD_VERSION="3.1.0"
 OSD_VERSION_MIN=$OSD_VERSION
 OSD_FORCE_BUILD=false
 OSD_FORCE_REBUILD=false
@@ -367,7 +367,7 @@ OPENCOLLADA_FORCE_BUILD=false
 OPENCOLLADA_FORCE_REBUILD=false
 OPENCOLLADA_SKIP=false
 
-FFMPEG_VERSION="2.8.4"
+FFMPEG_VERSION="3.2.1"
 FFMPEG_VERSION_MIN="2.8.4"
 FFMPEG_FORCE_BUILD=false
 FFMPEG_FORCE_REBUILD=false
@@ -705,6 +705,21 @@ if [ "$WITH_ALL" = true -a "$OPENCOLLADA_SKIP" = false ]; then
 fi
 
 
+WARNING "****WARNING****"
+PRINT "If you are experiencing issues building Blender, _*TRY A FRESH, CLEAN BUILD FIRST*_!"
+PRINT "The same goes for install_deps itself, if you encounter issues, please first erase everything in $SRC and $INST"
+PRINT "(provided obviously you did not add anything yourself in those dirs!), and run install_deps.sh again!"
+PRINT "Often, changes in the libs built by this script, or in your distro package, cannot be handled simply, so..."
+PRINT ""
+PRINT "You may also try to use the '--build-foo' options to bypass your distribution's packages"
+PRINT "for some troublesome/buggy libraries..."
+PRINT ""
+PRINT ""
+PRINT "Ran with:"
+PRINT "    install_deps.sh $COMMANDLINE"
+PRINT ""
+PRINT ""
+
 
 # This has to be done here, because user might force some versions...
 PYTHON_SOURCE=( "https://www.python.org/ftp/python/$PYTHON_VERSION/Python-$PYTHON_VERSION.tgz" )
@@ -777,6 +792,8 @@ However, if you are experiencing linking errors (also when building Blender itse
 
 Please note that until the transition to C++11-built libraries if completed in your distribution, situation will
 remain fuzzy and incompatibilities may happen..."
+  PRINT ""
+  PRINT ""
   CXXFLAGS="$CXXFLAGS -std=c++11"
   export CXXFLAGS
 fi
@@ -2455,7 +2472,7 @@ compile_FFmpeg() {
         --enable-avfilter --disable-vdpau \
         --disable-bzlib --disable-libgsm --disable-libspeex \
         --enable-pthreads --enable-zlib --enable-stripping --enable-runtime-cpudetect \
-        --disable-vaapi --disable-libfaac --disable-nonfree --enable-gpl \
+        --disable-vaapi --disable-nonfree --enable-gpl \
         --disable-postproc --disable-librtmp --disable-libopencore-amrnb \
         --disable-libopencore-amrwb --disable-libdc1394 --disable-version3 --disable-outdev=sdl \
         --disable-libxcb \
@@ -4154,16 +4171,6 @@ print_info_ffmpeglink() {
 }
 
 print_info() {
-  PRINT ""
-  PRINT ""
-  WARNING "****WARNING****"
-  PRINT "If you are experiencing issues building Blender, _*TRY A FRESH, CLEAN BUILD FIRST*_!"
-  PRINT "The same goes for install_deps itself, if you encounter issues, please first erase everything in $SRC and $INST"
-  PRINT "(provided obviously you did not add anything yourself in those dirs!), and run install_deps.sh again!"
-  PRINT "Often, changes in the libs built by this script, or in your distro package, cannot be handled simply, so..."
-  PRINT ""
-  PRINT "You may also try to use the '--build-foo' options to bypass your distribution's packages"
-  PRINT "for some troublesome/buggy libraries..."
   PRINT ""
   PRINT ""
   PRINT "Ran with:"

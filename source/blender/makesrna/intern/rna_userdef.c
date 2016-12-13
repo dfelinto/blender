@@ -124,6 +124,14 @@ static EnumPropertyItem rna_enum_language_default_items[] = {
 #endif
 
 
+static void rna_userdef_version_get(PointerRNA *ptr, int *value)
+{
+	UserDef *userdef = (UserDef *)ptr->data;
+	value[0] = userdef->versionfile / 100;
+	value[1] = userdef->versionfile % 100;
+	value[2] = userdef->subversionfile;
+}
+
 static void rna_userdef_update(Main *UNUSED(bmain), Scene *UNUSED(scene), PointerRNA *UNUSED(ptr))
 {
 	WM_main_add_notifier(NC_WINDOW, NULL);
@@ -4190,6 +4198,14 @@ static void rna_def_userdef_system(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "OpenSubdiv Compute Type", "Type of computer back-end used with OpenSubdiv");
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_PROPERTIES, "rna_userdef_opensubdiv_update");
 #endif
+
+#ifdef WITH_CYCLES
+	prop = RNA_def_property(srna, "legacy_compute_device_type", PROP_INT, PROP_NONE);
+	RNA_def_property_int_sdna(prop, NULL, "compute_device_type");
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+	RNA_def_property_flag(prop, PROP_HIDDEN);
+	RNA_def_property_ui_text(prop, "Legacy Compute Device Type", "For backwards compatibility only");
+#endif
 }
 
 static void rna_def_userdef_input(BlenderRNA *brna)
@@ -4592,8 +4608,8 @@ static void rna_def_userdef_addon_collection(BlenderRNA *brna, PropertyRNA *cpro
 	RNA_def_function_flag(func, FUNC_NO_SELF | FUNC_USE_REPORTS);
 	RNA_def_function_ui_description(func, "Remove add-on");
 	parm = RNA_def_pointer(func, "addon", "Addon", "", "Add-on to remove");
-	RNA_def_property_flag(parm, PROP_REQUIRED | PROP_NEVER_NULL | PROP_RNAPTR);
-	RNA_def_property_clear_flag(parm, PROP_THICK_WRAP);
+	RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED | PARM_RNAPTR);
+	RNA_def_parameter_clear_flags(parm, PROP_THICK_WRAP, 0);
 }
 
 static void rna_def_userdef_autoexec_path_collection(BlenderRNA *brna, PropertyRNA *cprop)
@@ -4618,8 +4634,8 @@ static void rna_def_userdef_autoexec_path_collection(BlenderRNA *brna, PropertyR
 	RNA_def_function_flag(func, FUNC_NO_SELF | FUNC_USE_REPORTS);
 	RNA_def_function_ui_description(func, "Remove path");
 	parm = RNA_def_pointer(func, "pathcmp", "PathCompare", "", "");
-	RNA_def_property_flag(parm, PROP_REQUIRED | PROP_NEVER_NULL | PROP_RNAPTR);
-	RNA_def_property_clear_flag(parm, PROP_THICK_WRAP);
+	RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED | PARM_RNAPTR);
+	RNA_def_parameter_clear_flags(parm, PROP_THICK_WRAP, 0);
 }
 
 void RNA_def_userdef(BlenderRNA *brna)
@@ -4707,6 +4723,12 @@ void RNA_def_userdef(BlenderRNA *brna)
 	RNA_def_property_pointer_funcs(prop, "rna_UserDef_system_get", NULL, NULL, NULL);
 	RNA_def_property_ui_text(prop, "System & OpenGL", "Graphics driver and operating system settings");
 	
+	prop = RNA_def_int_vector(srna, "version", 3, NULL, 0, INT_MAX,
+	                   "Version", "Version of Blender the userpref.blend was saved with", 0, INT_MAX);
+	RNA_def_property_int_funcs(prop, "rna_userdef_version_get", NULL, NULL);
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+	RNA_def_property_flag(prop, PROP_THICK_WRAP);
+
 	rna_def_userdef_view(brna);
 	rna_def_userdef_edit(brna);
 	rna_def_userdef_input(brna);

@@ -4923,6 +4923,10 @@ static void direct_link_modifiers(FileData *fd, ListBase *lb)
 			csmd->delta_cache = NULL;
 			csmd->delta_cache_num = 0;
 		}
+		else if (md->type == eModifierType_MeshSequenceCache) {
+			MeshSeqCacheModifierData *msmcd = (MeshSeqCacheModifierData *)md;
+			msmcd->reader = NULL;
+		}
 	}
 }
 
@@ -6638,6 +6642,8 @@ static bool direct_link_screen(FileData *fd, bScreen *sc)
 	sc->mainwin = sc->subwinactive= 0;	/* indices */
 	sc->swap = 0;
 
+	sc->preview = direct_link_preview_image(fd, sc->preview);
+
 	/* edges */
 	for (se = sc->edgebase.first; se; se = se->next) {
 		se->v1 = newdataadr(fd, se->v1);
@@ -7777,6 +7783,7 @@ static BHead *read_libblock(FileData *fd, Main *main, BHead *bhead, const short 
 	id->lib = main->curlib;
 	id->us = ID_FAKE_USERS(id);
 	id->icon_id = 0;
+	id->newid = NULL;  /* Needed because .blend may have been saved with crap value here... */
 	
 	/* this case cannot be direct_linked: it's just the ID part */
 	if (bhead->code == ID_ID) {

@@ -1442,14 +1442,14 @@ void PointDensityTextureNode::compile(SVMCompiler& compiler)
 		else {
 			if(use_density) {
 				compiler.add_node(NODE_VALUE_F,
-								  __float_as_int(0.0f),
-								  compiler.stack_assign(density_out));
+				                  __float_as_int(0.0f),
+				                  compiler.stack_assign(density_out));
 			}
 			if(use_color) {
 				compiler.add_node(NODE_VALUE_V, compiler.stack_assign(color_out));
 				compiler.add_node(NODE_VALUE_V, make_float3(TEX_IMAGE_MISSING_R,
-															TEX_IMAGE_MISSING_G,
-															TEX_IMAGE_MISSING_B));
+				                                            TEX_IMAGE_MISSING_G,
+				                                            TEX_IMAGE_MISSING_B));
 			}
 		}
 	}
@@ -2421,7 +2421,7 @@ void BackgroundNode::compile(SVMCompiler& compiler)
 	if(color_in->link || strength_in->link) {
 		compiler.add_node(NODE_EMISSION_WEIGHT,
 		                  compiler.stack_assign(color_in),
-						  compiler.stack_assign(strength_in));
+		                  compiler.stack_assign(strength_in));
 	}
 	else
 		compiler.add_node(NODE_CLOSURE_SET_WEIGHT, color*strength);
@@ -3993,7 +3993,7 @@ NODE_DEFINE(SeparateRGBNode)
 
 	SOCKET_IN_COLOR(color, "Image", make_float3(0.0f, 0.0f, 0.0f));
 
-	SOCKET_OUT_FLOAT(g, "R");
+	SOCKET_OUT_FLOAT(r, "R");
 	SOCKET_OUT_FLOAT(g, "G");
 	SOCKET_OUT_FLOAT(b, "B");
 

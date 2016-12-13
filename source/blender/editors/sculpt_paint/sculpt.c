@@ -821,10 +821,9 @@ static float calc_overlap(StrokeCache *cache, const char symm, const char axis, 
 	flip_v3_v3(mirror, cache->true_location, symm);
 
 	if (axis != 0) {
-		float mat[4][4];
-		unit_m4(mat);
-		rotate_m4(mat, axis, angle);
-		mul_m4_v3(mat, mirror);
+		float mat[3][3];
+		axis_angle_to_mat3_single(mat, axis, angle);
+		mul_m3_v3(mat, mirror);
 	}
 
 	/* distsq = len_squared_v3v3(mirror, cache->traced_location); */
@@ -4188,7 +4187,7 @@ static void sculpt_update_brush_delta(UnifiedPaintSettings *ups, Object *ob, Bru
 
 		/* compute 3d coordinate at same z from original location + mouse */
 		mul_v3_m4v3(loc, ob->obmat, cache->orig_grab_location);
-		ED_view3d_win_to_3d(cache->vc->ar, loc, mouse, grab_location);
+		ED_view3d_win_to_3d(cache->vc->v3d, cache->vc->ar, loc, mouse, grab_location);
 
 		/* compute delta to move verts by */
 		if (!cache->first_time) {

@@ -851,7 +851,7 @@ static void ui_searchbox_select(bContext *C, ARegion *ar, uiBut *but, int step)
 		}
 		else {
 			/* only let users step into an 'unset' state for unlink buttons */
-			data->active = (but->flag & UI_BUT_SEARCH_UNLINK) ? -1 : 0;
+			data->active = (but->flag & UI_BUT_VALUE_CLEAR) ? -1 : 0;
 		}
 	}
 	
@@ -922,8 +922,8 @@ bool ui_searchbox_apply(uiBut *but, ARegion *ar)
 
 		return true;
 	}
-	else if (but->flag & UI_BUT_SEARCH_UNLINK) {
-		/* It is valid for _UNLINK flavor to have no active element (it's a valid way to unlink). */
+	else if (but->flag & UI_BUT_VALUE_CLEAR) {
+		/* It is valid for _VALUE_CLEAR flavor to have no active element (it's a valid way to unlink). */
 		but->editstr[0] = '\0';
 
 		return true;
@@ -1059,7 +1059,7 @@ int ui_searchbox_autocomplete(bContext *C, ARegion *ar, uiBut *but, char *str)
 	return match;
 }
 
-static void ui_searchbox_region_draw_cb(const bContext *UNUSED(C), ARegion *ar)
+static void ui_searchbox_region_draw_cb(const bContext *C, ARegion *ar)
 {
 	uiSearchboxData *data = ar->regiondata;
 	
@@ -1077,6 +1077,9 @@ static void ui_searchbox_region_draw_cb(const bContext *UNUSED(C), ARegion *ar)
 		if (data->preview) {
 			/* draw items */
 			for (a = 0; a < data->items.totitem; a++) {
+				/* ensure icon is up-to-date */
+				ui_icon_ensure_deferred(C, data->items.icons[a], data->preview);
+
 				ui_searchbox_butrect(&rect, data, a);
 				
 				/* widget itself */

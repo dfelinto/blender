@@ -48,6 +48,8 @@
 
 #include "util/deg_util_foreach.h"
 
+#include <cstdio>
+
 namespace DEG {
 
 string deg_fcurve_id_name(const FCurve *fcu)
@@ -152,18 +154,20 @@ void deg_graph_build_finalize(Depsgraph *graph)
 		}
 		GHASH_FOREACH_END();
 
-		ID *id = id_node->id;
-		if (id->tag & LIB_TAG_ID_RECALC_ALL &&
-		    id->tag & LIB_TAG_DOIT)
-		{
-			id_node->tag_update(graph);
-			id->tag &= ~LIB_TAG_DOIT;
-		}
-		else if (GS(id->name) == ID_OB) {
-			Object *object = (Object *)id;
-			if (object->recalc & OB_RECALC_ALL) {
+		if ((id_node->layers & graph->layers) != 0) {
+			ID *id = id_node->id;
+			if ((id->tag & LIB_TAG_ID_RECALC_ALL) &&
+			    (id->tag & LIB_TAG_DOIT))
+			{
 				id_node->tag_update(graph);
 				id->tag &= ~LIB_TAG_DOIT;
+			}
+			else if (GS(id->name) == ID_OB) {
+				Object *object = (Object *)id;
+				if (object->recalc & OB_RECALC_ALL) {
+					id_node->tag_update(graph);
+					id->tag &= ~LIB_TAG_DOIT;
+				}
 			}
 		}
 		id_node->finalize_build();
