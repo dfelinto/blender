@@ -8248,7 +8248,12 @@ BlendFileData *blo_read_file_internal(FileData *fd, const char *filepath)
 	blo_join_main(&mainlist);
 	
 	lib_link_all(fd, bfd->main);
-	do_versions_after_linking(fd, NULL, bfd->main);
+
+	/* skip undo case */
+	if (fd->memfile == NULL) {
+		do_versions_after_linking(fd, NULL, bfd->main);
+	}
+
 	lib_verify_nodetree(bfd->main, true);
 	fix_relpaths_library(fd->relabase, bfd->main); /* make all relative paths, relative to the open blend file */
 	
