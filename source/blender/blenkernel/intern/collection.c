@@ -220,7 +220,7 @@ static bool object_tag_test(Object *ob)
 /*
  * Recursively calls the callback function for the objects in a SceneCollection
  */
-static void collection_objects_callback(SceneCollection *sc, void (*callback)(struct Object *_ob, void *_data), void *data)
+static void collection_objects_callback(SceneCollection *sc, BKE_scene_objects_Cb callback, void *data)
 {
 	for (LinkData *link= sc->objects.first; link; link = link->next) {
 		if (object_tag_test(link->data)) {
@@ -242,7 +242,7 @@ static void collection_objects_callback(SceneCollection *sc, void (*callback)(st
  * Recursively calls the callback function for the objects in a Scene
  * The same object
  */
-void BKE_scene_objects_callback(Scene *scene, void (*callback)(struct Object *_ob, void *_data), void *data)
+void BKE_scene_objects_callback(Scene *scene, BKE_scene_objects_Cb callback, void *data)
 {
 	SceneCollection *sc = BKE_collection_master(scene);
 	collection_objects_callback(sc, object_tag_clear, NULL);
