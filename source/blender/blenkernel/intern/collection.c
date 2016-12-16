@@ -248,3 +248,42 @@ void BKE_scene_objects_callback(Scene *scene, void (*callback)(struct Object *_o
 	collection_objects_callback(sc, object_tag_clear, NULL);
 	collection_objects_callback(sc, callback, data);
 }
+
+
+/* ---------------------------------------------------------------------- */
+/* Iteractors */
+
+/**
+ * Init an already allocated SObjectsIterator.
+ *
+ * \param sobi The SObjectsIterator to initialize.
+ * \param scene The Scene to iterate over.
+ */
+void BKE_scene_objects_Iterator_init(SObjectsIterator *sobi, Scene *scene)
+{
+	sobi->scene = scene;
+	sobi->ob = NULL;
+	TODO_LAYER;
+}
+
+/**
+ * Steps the iterator to the next index.
+ *
+ * \param sobi The iterator.
+ */
+void BKE_scene_objects_Iterator_step(SObjectsIterator *sobi)
+{
+	TODO_LAYER;
+}
+
+/**
+ * Determine if an iterator is done.
+ *
+ * \param sobi The iterator.
+ * \return True if done, False otherwise.
+ */
+bool BLI_ghashIterator_done(SObjectsIterator *sobi)
+{
+	TODO_LAYER;
+	return false;
+}

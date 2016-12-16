@@ -43,6 +43,21 @@ void BKE_collection_object_add(struct Scene *scene, struct SceneCollection *sc, 
 void BKE_collection_object_remove(struct Scene *scene, struct SceneCollection *sc, struct Object *object);
 void BKE_scene_objects_callback(struct Scene *scene, void (*callback)(struct Object *_ob, void *_data), void *data);
 
+/* iterators */
+typedef struct SObjectsIterator {
+	Scene *scene;
+	Object *ob;
+} SObjectsIterator;
+
+void BKE_scene_objects_Iterator_init(SObjectsIterator *sobi, Object *ob);
+void BKE_scene_objects_Iterator_done(SObjectsIterator *sobi);
+void BKE_scene_objects_Iterator_step(SObjectsIterator *sobi);
+
+#define SCENE_OBJECTS_ITER(my_iter_, data_) \
+	for (BKE_scene_objects_Iterator_init(&my_iter_, data_); \
+	     BKE_scene_objects_Iterator_done(&my_iter_) == false; \
+	     BKE_scene_objects_Iterator_step(&my_iter_))
+
 #ifdef __cplusplus
 }
 #endif
