@@ -8047,7 +8047,7 @@ static void do_versions(FileData *fd, Library *lib, Main *main)
 
 static void do_versions_after_linking(FileData *fd, Library *lib, Main *main)
 {
-	blo_do_versions_280_after_linking(fd, lib, main);
+	blo_do_versions_after_linking_280(fd, lib, main);
 }
 
 static void lib_link_all(FileData *fd, Main *main)

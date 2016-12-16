@@ -46,7 +46,7 @@
 
 #include "MEM_guardedalloc.h"
 
-void blo_do_versions_280_after_linking(FileData *fd, Library *UNUSED(lib), Main *main)
+void blo_do_versions_after_linking_280(FileData *fd, Library *UNUSED(lib), Main *main)
 {
 	if (!MAIN_VERSION_ATLEAST(main, 280, 0)) {
 		if (!DNA_struct_elem_find(fd->filesdna, "Scene", "ListBase", "render_layers")) {
