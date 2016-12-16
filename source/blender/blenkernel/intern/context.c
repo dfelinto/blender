@@ -903,10 +903,12 @@ SceneLayer *CTX_data_scene_layer(const bContext *C)
 {
 	SceneLayer *sl;
 
-	if (ctx_data_pointer_verify(C, "render_layer", (void *)&sl))
+	if (ctx_data_pointer_verify(C, "render_layer", (void *)&sl)) {
 		return sl;
-	else
+	}
+	else {
 		return C->data.render_layer;
+	}
 }
 
 int CTX_data_mode_enum(const bContext *C)
