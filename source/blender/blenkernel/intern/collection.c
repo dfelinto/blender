@@ -25,6 +25,7 @@
  */
 
 #include "BLI_blenlib.h"
+#include "BLI_iterator.h"
 #include "BLI_listbase.h"
 #include "BLT_translation.h"
 
@@ -247,4 +248,53 @@ void BKE_scene_objects_callback(Scene *scene, BKE_scene_objects_Cb callback, voi
 	SceneCollection *sc = BKE_collection_master(scene);
 	collection_objects_callback(sc, object_tag_clear, NULL);
 	collection_objects_callback(sc, callback, data);
+}
+
+
+/* ---------------------------------------------------------------------- */
+/* Iteractors */
+
+/* sequence strip iterator:
+ * - builds a full array, recursively into meta strips
+ */
+
+static void scene_objects_count(Object *UNUSED(ob), void *data)
+{
+	int *tot = data;
+	(*tot)++;
+}
+
+static void scene_objects_build_array(Object *ob, void *data)
+{
+	Object ***array = data;
+	**array = ob;
+	(*array)++;
+}
+
+static void scene_objects_array(Scene *scene, Object ***objects_array, int *tot)
+{
+	Object **array;
+
+	*objects_array = NULL;
+	*tot = 0;
+
+	if (scene == NULL)
+		return;
+
+	BKE_scene_objects_callback(scene, scene_objects_count, tot);
+
+	if (*tot == 0)
+		return;
+
+	*objects_array = array = MEM_mallocN(sizeof(Object *) * (*tot), "ObjectsArray");
+	BKE_scene_objects_callback(scene, scene_objects_build_array, &array);
+}
+
+/*
+ * Only use this in non-performance critical situations
+ * (it iterates over all scene collections twice)
+ */
+void BKE_scene_objects_Iterator_begin(Iterator *iter, void *data)
+{
+	scene_objects_array(data, (Object ***)&iter->array, &iter->tot);
 }

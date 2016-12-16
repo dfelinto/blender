@@ -27,10 +27,13 @@
  *  \ingroup bke
  */
 
+#include "BLI_iterator.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+struct Iterator;
 struct SceneCollection;
 struct Object;
 struct Scene;
@@ -44,6 +47,15 @@ void BKE_collection_object_remove(struct Scene *scene, struct SceneCollection *s
 
 typedef void (*BKE_scene_objects_Cb)(struct Object *ob, void *data);
 void BKE_scene_objects_callback(struct Scene *scene, BKE_scene_objects_Cb callback, void *data);
+
+/* iterators */
+void BKE_scene_objects_Iterator_begin(struct Iterator *iter, void *data);
+
+#define SCENE_OBJECTS_BEGIN(scene, _ob)                                       \
+	ITER_BEGIN(BKE_scene_objects_Iterator_begin, scene, _ob)
+
+#define SCENE_OBJECTS_END                                                     \
+	ITER_END
 
 #ifdef __cplusplus
 }

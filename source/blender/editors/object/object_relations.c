@@ -1849,17 +1849,20 @@ static void single_object_users(Main *bmain, Scene *scene, View3D *v3d, const in
 	TODO_LAYER_SYNC_FILTER
 }
 
-static void object_untag_OB_DONE(Object *ob, void *UNUSED(data))
-{
-	ob->flag &= ~OB_DONE;
-}
-
 /* not an especially efficient function, only added so the single user
  * button can be functional.*/
 void ED_object_single_user(Main *bmain, Scene *scene, Object *ob)
 {
-	BKE_scene_objects_callback(scene, object_untag_OB_DONE, NULL);
+	Object *ob_iter;
+	SCENE_OBJECTS_BEGIN(scene, ob_iter)
+	{
+		ob_iter->flag &= ~OB_DONE;
+	}
+	SCENE_OBJECTS_END
+
+	/* tag only the one object */
 	ob->flag |= OB_DONE;
+
 	single_object_users(bmain, scene, NULL, OB_DONE, false);
 	BKE_main_id_clear_newpoins(bmain);
 }

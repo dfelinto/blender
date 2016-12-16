@@ -68,6 +68,7 @@
 #include "BLI_linklist_stack.h"
 
 #include "BKE_animsys.h"
+#include "BKE_collection.h"
 #include "BKE_constraint.h"
 #include "BKE_fcurve.h"
 #include "BKE_library.h"
@@ -383,6 +384,15 @@ void BKE_library_foreach_ID_link(ID *id, LibraryIDLinkCallback callback, void *u
 
 				for (base = scene->base.first; base; base = base->next) {
 					CALLBACK_INVOKE(base->object, IDWALK_USER);
+				}
+
+				{
+					Object* ob;
+					SCENE_OBJECTS_BEGIN(scene, ob)
+					{
+						CALLBACK_INVOKE(ob, IDWALK_USER);
+					}
+					SCENE_OBJECTS_END
 				}
 
 				for (TimeMarker *marker = scene->markers.first; marker; marker = marker->next) {
