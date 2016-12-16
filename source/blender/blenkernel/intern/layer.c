@@ -90,15 +90,7 @@ bool BKE_scene_layer_remove(Main *bmain, Scene *scene, SceneLayer *sl)
 
 	for (Scene *sce = bmain->scene.first; sce; sce = sce->id.next) {
 		if (sce->nodetree) {
-			bNode *node;
-			for (node = sce->nodetree->nodes.first; node; node = node->next) {
-				if (node->type == CMP_NODE_R_LAYERS && (Scene *)node->id == scene) {
-					if (node->custom1 == act)
-						node->custom1 = 0;
-					else if (node->custom1 > act)
-						node->custom1--;
-				}
-			}
+			BKE_nodetree_remove_layer_n(sce->nodetree, scene, act);
 		}
 	}
 
