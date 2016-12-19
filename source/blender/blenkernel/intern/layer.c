@@ -347,3 +347,36 @@ void BKE_collection_override_datablock_add(LayerCollection *UNUSED(lc), const ch
 {
 	TODO_LAYER_OVERRIDE;
 }
+
+/* Iterators */
+
+void BKE_selected_objects_Iterator_begin(Iterator *iter, void *data_in)
+{
+	SceneLayer *sl = data_in;
+	ObjectBase *base = sl->object_bases.first;
+
+	iter->current = base->object;
+	iter->data = base;
+	iter->valid = ((base->flag & BASE_SELECTED) != 0);
+}
+
+void BKE_selected_objects_Iterator_next(Iterator *iter)
+{
+	ObjectBase *ob_base = ((ObjectBase *)iter->data)->next;
+	do {
+		if ((ob_base->flag & BASE_SELECTED) != 0) {
+			iter->current = ob_base->object;
+			iter->data = ob_base;
+			iter->valid = true;
+		}
+		ob_base = ob_base->next;
+	} while (ob_base);
+
+	iter->current = NULL;
+	iter->valid = false;
+}
+
+void BKE_selected_objects_Iterator_end(Iterator *UNUSED(iter))
+{
+	/* do nothing */
+}

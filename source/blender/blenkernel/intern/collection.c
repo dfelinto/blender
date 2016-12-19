@@ -202,6 +202,13 @@ void BKE_collection_object_remove(struct Scene *UNUSED(scene), struct SceneColle
 
 /* ---------------------------------------------------------------------- */
 /* Iteractors */
+/* scene collection iteractor */
+
+typedef struct SceneCollectionsIteratorData {
+	Scene *scene;
+	void **array;
+	int tot, cur;
+ } SceneCollectionsIteratorData;
 
 static void scene_collection_callback(SceneCollection *sc, BKE_scene_collections_Cb callback, void *data)
 {
@@ -249,7 +256,104 @@ static void scene_collections_array(Scene *scene, SceneCollection ***collections
  * Only use this in non-performance critical situations
  * (it iterates over all scene collections twice)
  */
-void BKE_scene_collections_Iterator_begin(Iterator *iter, void *data)
+void BKE_scene_collections_Iterator_begin(Iterator *iter, void *data_in)
 {
-	scene_collections_array(data, (SceneCollection ***)&iter->array, &iter->tot);
+	Scene *scene = data_in;
+	SceneCollectionsIteratorData *data = MEM_callocN(sizeof(SceneCollectionIterData), __FUNCTION__);
+
+	data->scene = scene;
+	iter->data = data;
+
+	scene_collections_array(scene, (SceneCollection ***)&data->array, &data->tot);
+	BLI_assert(data->tot != 0);
+
+	data->cur = 0;
+	iter->current = data->array[data->cur];
+	iter->valid = true;
+}
+
+void BKE_scene_collections_Iterator_next(struct Iterator *iter)
+{
+	SceneCollectionsIteratorData *data = iter->data;
+
+	if (++data->cur < data->tot) {
+		iter->current = data->array[data->cur];
+	}
+	else {
+		iter->valid = false;
+	}
+}
+
+void BKE_scene_collections_Iterator_end(struct Iterator *iter)
+{
+	SceneCollectionsIteratorData *data = iter->data;
+
+	if (data->array) {
+		MEM_freeN(data->array);
+	}
+	iter->valid = false;
+}
+
+
+/* scene objects iteractor */
+
+typedef struct SceneObjectsIteratorData {
+	GSet *visited;
+	LinkData *link;
+	Iterator scene_collection_iter;
+} SceneObjectsIteratorData;
+
+void BKE_scene_objects_Iterator_begin(Iterator *iter, void *data_in)
+{
+	Scene *scene = data_in;
+	SceneObjectsIteratorData *data = MEM_callocN(sizeof(SceneObjectsIteratorData), __FUNCTION__);
+	iter->data = data;
+
+	/* lookup list ot make sure each object is object called once */
+	data->visited = BLI_gset_ptr_new(__func__);
+
+	/* we wrap the scenecollection iterator here to go over the scene collections */
+	BKE_scene_collections_Iterator_begin(&data->scene_collection_iter, scene);
+
+	SceneCollection *sc = data->scene_collection_iter.current;
+	iter->current = sc->objects.first;
+}
+
+void BKE_scene_objects_Iterator_next(Iterator *iter)
+{
+	SceneObjectsIteratorData *data = iter->data;
+
+	if (data->link->next) {
+		data->link = data->link->next;
+		iter->current = data->link->data;
+	}
+	else {
+		//TODO redo logic
+		while (data->scene_collection_iter.valid) {
+			SceneCollection *sc = data->scene_collection_iter.current;
+			if (sc->objects.first) {
+				data->link = sc->objects.first;
+				iter->current = data->link->data;
+				break;
+			}
+		BKE_scene_collections_Iterator_next(&data->scene_collection_iter);
+		}
+
+		if (!data->scene_collection_iter.valid) {
+			iter->valid = false;
+		}
+	}
+
+#if 0 // TODO
+	if (!BLI_gset_haskey(visited, ob)) {                                  \
+		BLI_gset_add(visited, ob);
+	}
+#endif
+}
+
+void BKE_scene_objects_Iterator_end(Iterator *iter)
+{
+	SceneObjectsIteratorData *data = iter->data;
+	BKE_scene_collections_Iterator_end(&data->scene_collection_iter);
+	BLI_gset_free(data->visited, NULL);
 }

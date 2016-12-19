@@ -38,6 +38,7 @@ extern "C" {
 struct Iterator;
 struct SceneCollection;
 struct Object;
+struct ObjectBase;
 struct Scene;
 
 struct SceneCollection *BKE_collection_add(struct Scene *scene, struct SceneCollection *sc_parent, const char *name);
@@ -54,8 +55,13 @@ void BKE_scene_collections_callback(struct Scene *scene, BKE_scene_collections_C
 void BKE_scene_objects_callback(struct Scene *scene, BKE_scene_objects_Cb callback, void *data);
 
 /* iterators */
-void BKE_scene_objects_Iterator_begin(struct Iterator *iter, void *data);
-void BKE_scene_collections_Iterator_begin(struct Iterator *iter, void *data);
+void BKE_scene_collections_Iterator_begin(struct Iterator *iter, void *data_in);
+void BKE_scene_collections_Iterator_next(struct Iterator *iter);
+void BKE_scene_collections_Iterator_end(struct Iterator *iter);
+
+void BKE_scene_objects_Iterator_begin(struct Iterator *iter, void *data_in);
+void BKE_scene_objects_Iterator_next(struct Iterator *iter);
+void BKE_scene_objects_Iterator_end(struct Iterator *iter);
 
 typedef struct SceneCollectionIterData {
 	struct SceneCollection *sc;
@@ -63,27 +69,22 @@ typedef struct SceneCollectionIterData {
 } SceneCollectionIterData;
 
 #define FOREACH_SCENE_COLLECTION(scene, _sc)                                  \
-	ITER_BEGIN(BKE_scene_collections_Iterator_begin, scene, _sc)
+	ITER_BEGIN(BKE_scene_collections_Iterator_begin,                          \
+	           BKE_scene_collections_Iterator_next,                           \
+	           BKE_scene_collections_Iterator_end,                            \
+	           scene, _sc)
 
 #define FOREACH_SCENE_COLLECTION_END                                          \
 	ITER_END
 
 #define FOREACH_SCENE_OBJECT(scene, _ob)                                      \
-{                                                                             \
-	GSet *visited = BLI_gset_ptr_new(__func__);                               \
-	SceneCollection *sc;                                                      \
-	FOREACH_SCENE_COLLECTION(scene, sc)                                       \
-	for (LinkData *link = sc->objects.first; link; link = link->next) {       \
-	    _ob = link->data;                                                     \
-	    if (!BLI_gset_haskey(visited, ob)) {                                  \
-	        BLI_gset_add(visited, ob);
+	ITER_BEGIN(BKE_scene_objects_Iterator_begin,                              \
+	BKE_scene_objects_Iterator_next,                                          \
+	BKE_scene_objects_Iterator_end,                                           \
+	scene, _ob)
 
 #define FOREACH_SCENE_OBJECT_END                                              \
-        }                                                                     \
-    }                                                                         \
-	FOREACH_SCENE_COLLECTION_END                                              \
-	BLI_gset_free(visited, NULL);                                             \
-}
+	ITER_END
 
 #ifdef __cplusplus
 }

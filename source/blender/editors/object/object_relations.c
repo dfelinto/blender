@@ -1992,17 +1992,15 @@ static void single_object_action_users(Scene *scene, const int flag)
 	}
 }
 
-static void single_mat_users(Main *bmain, Scene *scene, const int flag, const bool do_textures)
+static void single_mat_users(Main *bmain, Scene *scene, SceneLayer *sl, const int flag, const bool do_textures)
 {
 	Object *ob;
-	Base *base;
 	Material *ma, *man;
 	Tex *tex;
 	int a, b;
 
-	for (base = FIRSTBASE; base; base = base->next) {
-		ob = base->object;
-		if (!ID_IS_LINKED_DATABLOCK(ob) && (flag == 0 || (base->flag & SELECT)) ) {
+	FOREACH_OBJECT_FLAG(scene, sl, flag, ob)
+	    if (!ID_IS_LINKED_DATABLOCK(ob)) {
 			for (a = 1; a <= ob->totcol; a++) {
 				ma = give_current_material(ob, a);
 				if (ma) {
@@ -2031,7 +2029,7 @@ static void single_mat_users(Main *bmain, Scene *scene, const int flag, const bo
 				}
 			}
 		}
-	}
+	FOREACH_OBJECT_FLAG_END
 }
 
 static void do_single_tex_user(Main *bmain, Tex **from)
@@ -2401,6 +2399,7 @@ static int make_single_user_exec(bContext *C, wmOperator *op)
 {
 	Main *bmain = CTX_data_main(C);
 	Scene *scene = CTX_data_scene(C);
+	SceneLayer *sl = CTX_data_scene_layer(C);
 	View3D *v3d = CTX_wm_view3d(C); /* ok if this is NULL */
 	const int flag = (RNA_enum_get(op->ptr, "type") == MAKE_SINGLE_USER_SELECTED) ? SELECT : 0;
 	const bool copy_groups = false;
@@ -2408,8 +2407,6 @@ static int make_single_user_exec(bContext *C, wmOperator *op)
 
 	if (RNA_boolean_get(op->ptr, "object")) {
 		if (flag == SELECT) {
-			SceneLayer *sl = CTX_data_scene_layer(C);
-
 			BKE_scene_layer_selected_objects_tag(sl, OB_DONE);
 			single_object_users(bmain, scene, v3d, OB_DONE, copy_groups);
 		}
@@ -2426,7 +2423,7 @@ static int make_single_user_exec(bContext *C, wmOperator *op)
 	}
 
 	if (RNA_boolean_get(op->ptr, "material")) {
-		single_mat_users(bmain, scene, flag, RNA_boolean_get(op->ptr, "texture"));
+		single_mat_users(bmain, scene, sl, flag, RNA_boolean_get(op->ptr, "texture"));
 	}
 
 #if 0 /* can't do this separate from materials */

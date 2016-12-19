@@ -27,6 +27,8 @@
  *  \ingroup bke
  */
 
+#include "BKE_collection.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -72,6 +74,45 @@ void BKE_collection_unlink(struct SceneLayer *sl, struct LayerCollection *lc);
 
 void BKE_collection_override_datablock_add(struct LayerCollection *lc, const char *data_path, struct ID *id);
 
+/* iterators */
+
+void BKE_selected_objects_Iterator_begin(Iterator *iter, void *data_in);
+void BKE_selected_objects_Iterator_next(Iterator *iter);
+void BKE_selected_objects_Iterator_end(Iterator *iter);
+
+#define FOREACH_SELECTED_OBJECT(sl, _ob)                                      \
+	ITER_BEGIN(BKE_selected_objects_Iterator_begin,                           \
+	           BKE_selected_objects_Iterator_next,                            \
+	           BKE_selected_objects_Iterator_end,                             \
+	           sl, _ob)
+
+#define FOREACH_SELECTED_OBJECT_END                                           \
+	ITER_END
+
+#define FOREACH_OBJECT_FLAG(scene, sl, flag, _ob)                             \
+{                                                                             \
+	IteratorBeginCb func_begin;                                               \
+	IteratorCb func_next, func_end;                                           \
+	void *data_in;                                                            \
+	                                                                          \
+	if (flag == SELECT) {                                                     \
+	    func_begin = &BKE_selected_objects_Iterator_begin;                    \
+	    func_next = &BKE_selected_objects_Iterator_next;                      \
+	    func_end = &BKE_selected_objects_Iterator_end;                        \
+	    data_in = sl;                                                         \
+    }                                                                         \
+	else {                                                                    \
+	    func_begin = BKE_scene_objects_Iterator_begin;                        \
+	    func_next = BKE_scene_objects_Iterator_next;                          \
+	    func_end = BKE_scene_objects_Iterator_end;                            \
+	    data_in = scene;                                                      \
+    }                                                                         \
+	ITER_BEGIN(func_begin, func_next, func_end, data_in, _ob)
+
+
+#define FOREACH_OBJECT_FLAG_END                                               \
+	ITER_END                                                                  \
+}
 
 #ifdef __cplusplus
 }

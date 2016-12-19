@@ -28,31 +28,27 @@
  */
 
 typedef struct Iterator {
-	void **array;
-	int tot, cur;
-
-	void *data;
-	int valid;
+	void *current; /* current pointer we iterate over */
+	void *data;    /* stored data required for this iterator */
+	bool valid;
 } Iterator;
 
-typedef void (*IteratorCb)(Iterator *iter, void *data);
+typedef void (*IteratorCb)(Iterator *iter);
+typedef void (*IteratorBeginCb)(Iterator *iter, void *data_in);
 
-void BLI_iterator_begin(Iterator *iter, IteratorCb callback, void *data);
-void BLI_iterator_next(Iterator *iter);
-void BLI_iterator_end(Iterator *iter);
-
-#define ITER_BEGIN(callback, _data_in, _data_out)                             \
-	{                                                                         \
-	Iterator iter_macro;                                                      \
-	for (BLI_iterator_begin(&iter_macro, callback, _data_in);                 \
-	     iter_macro.valid;                                                    \
-	     BLI_iterator_next(&iter_macro))                                      \
-	{                                                                         \
+#define ITER_BEGIN(callback_begin, callback_next, callback_end, _data_in, _data_out) \
+{                                                                                    \
+	IteratorCb callback_end_func = callback_end;                                     \
+	Iterator iter_macro;                                                             \
+	for (callback_begin(&iter_macro, _data_in);                                      \
+	     iter_macro.valid;                                                           \
+	     callback_next(&iter_macro))                                                 \
+    {                                                                                \
 		_data_out = iter_macro.data;
 
-#define ITER_END                                                              \
-	    }                                                                     \
-	    BLI_iterator_end(&iter_macro);                                        \
-	}
+#define ITER_END                                                                     \
+	}                                                                                \
+	callback_end_func(&iter_macro);                                                  \
+}
 
 #endif /* __BLI_ITERATOR_H__ */

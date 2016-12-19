@@ -47,7 +47,6 @@ set(SRC
 	intern/BLI_ghash.c
 	intern/BLI_heap.c
 	intern/BLI_kdopbvh.c
-	intern/BLI_iterator.c
 	intern/BLI_kdtree.c
 	intern/BLI_linklist.c
 	intern/BLI_memarena.c
