@@ -319,36 +319,53 @@ void BKE_scene_objects_Iterator_begin(Iterator *iter, void *data_in)
 	iter->current = sc->objects.first;
 }
 
+/* gets the next unique object */
+static LinkData *object_base_next(GSet *gs, LinkData *link)
+{
+	if (link == NULL) {
+		return NULL;
+	}
+
+	LinkData *link_next = link->next;
+	if (link_next) {
+		Object *ob = link_next->data;
+		if (!BLI_gset_haskey(gs, ob)) {
+			BLI_gset_add(gs, ob);
+			return link_next;
+		}
+		else {
+			return object_base_next(gs, link_next);
+		}
+	}
+	return NULL;
+}
+
 void BKE_scene_objects_Iterator_next(Iterator *iter)
 {
 	SceneObjectsIteratorData *data = iter->data;
+	LinkData *link = object_base_next(data->visited, data->link);
 
-	if (data->link->next) {
-		data->link = data->link->next;
-		iter->current = data->link->data;
+	if (link) {
+		data->link = link;
+		iter->current = link->data;
 	}
 	else {
-		//TODO redo logic
-		while (data->scene_collection_iter.valid) {
+		do {
+			BKE_scene_collections_Iterator_next(&data->scene_collection_iter);
 			SceneCollection *sc = data->scene_collection_iter.current;
-			if (sc->objects.first) {
-				data->link = sc->objects.first;
+			/* get the first unique object of this collection */
+			LinkData *new_link = object_base_next(data->visited, sc->objects.first);
+			if (new_link) {
+				data->link = new_link;
 				iter->current = data->link->data;
 				break;
 			}
-		BKE_scene_collections_Iterator_next(&data->scene_collection_iter);
-		}
+		} while (data->scene_collection_iter.valid);
 
 		if (!data->scene_collection_iter.valid) {
 			iter->valid = false;
 		}
 	}
-
-#if 0 // TODO
-	if (!BLI_gset_haskey(visited, ob)) {                                  \
-		BLI_gset_add(visited, ob);
-	}
-#endif
 }
 
 void BKE_scene_objects_Iterator_end(Iterator *iter)
