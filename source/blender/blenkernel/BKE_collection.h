@@ -27,7 +27,9 @@
  *  \ingroup bke
  */
 
+#include "BLI_ghash.h"
 #include "BLI_iterator.h"
+#include "DNA_listBase.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -46,16 +48,42 @@ void BKE_collection_object_add(struct Scene *scene, struct SceneCollection *sc, 
 void BKE_collection_object_remove(struct Scene *scene, struct SceneCollection *sc, struct Object *object);
 
 typedef void (*BKE_scene_objects_Cb)(struct Object *ob, void *data);
+typedef void (*BKE_scene_collections_Cb)(struct SceneCollection *ob, void *data);
+
+void BKE_scene_collections_callback(struct Scene *scene, BKE_scene_collections_Cb callback, void *data);
 void BKE_scene_objects_callback(struct Scene *scene, BKE_scene_objects_Cb callback, void *data);
 
 /* iterators */
 void BKE_scene_objects_Iterator_begin(struct Iterator *iter, void *data);
+void BKE_scene_collections_Iterator_begin(struct Iterator *iter, void *data);
 
-#define SCENE_OBJECTS_BEGIN(scene, _ob)                                       \
-	ITER_BEGIN(BKE_scene_objects_Iterator_begin, scene, _ob)
+typedef struct SceneCollectionIterData {
+	struct SceneCollection *sc;
+	struct SceneCollectionIterData *parent;
+} SceneCollectionIterData;
 
-#define SCENE_OBJECTS_END                                                     \
+#define FOREACH_SCENE_COLLECTION(scene, _sc)                                  \
+	ITER_BEGIN(BKE_scene_collections_Iterator_begin, scene, _sc)
+
+#define FOREACH_SCENE_COLLECTION_END                                          \
 	ITER_END
+
+#define FOREACH_SCENE_OBJECT(scene, _ob)                                      \
+{                                                                             \
+	GSet *visited = BLI_gset_ptr_new(__func__);                               \
+	SceneCollection *sc;                                                      \
+	FOREACH_SCENE_COLLECTION(scene, sc)                                       \
+	for (LinkData *link = sc->objects.first; link; link = link->next) {       \
+	    _ob = link->data;                                                     \
+	    if (!BLI_gset_haskey(visited, ob)) {                                  \
+	        BLI_gset_add(visited, ob);
+
+#define FOREACH_SCENE_OBJECT_END                                              \
+        }                                                                     \
+    }                                                                         \
+	FOREACH_SCENE_COLLECTION_END                                              \
+	BLI_gset_free(visited, NULL);                                             \
+}
 
 #ifdef __cplusplus
 }

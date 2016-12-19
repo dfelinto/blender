@@ -1854,11 +1854,11 @@ static void single_object_users(Main *bmain, Scene *scene, View3D *v3d, const in
 void ED_object_single_user(Main *bmain, Scene *scene, Object *ob)
 {
 	Object *ob_iter;
-	SCENE_OBJECTS_BEGIN(scene, ob_iter)
+	FOREACH_SCENE_OBJECT(scene, ob_iter)
 	{
 		ob_iter->flag &= ~OB_DONE;
 	}
-	SCENE_OBJECTS_END
+	FOREACH_SCENE_OBJECT_END
 
 	/* tag only the one object */
 	ob->flag |= OB_DONE;

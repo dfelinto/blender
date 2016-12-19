@@ -388,11 +388,11 @@ void BKE_library_foreach_ID_link(ID *id, LibraryIDLinkCallback callback, void *u
 
 				{
 					Object* ob;
-					SCENE_OBJECTS_BEGIN(scene, ob)
+					FOREACH_SCENE_OBJECT(scene, ob)
 					{
 						CALLBACK_INVOKE(ob, IDWALK_USER);
 					}
-					SCENE_OBJECTS_END
+					FOREACH_SCENE_OBJECT_END
 				}
 
 				for (TimeMarker *marker = scene->markers.first; marker; marker = marker->next) {

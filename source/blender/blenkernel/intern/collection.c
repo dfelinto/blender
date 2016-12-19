@@ -25,6 +25,7 @@
  */
 
 #include "BLI_blenlib.h"
+#include "BLI_ghash.h"
 #include "BLI_iterator.h"
 #include "BLI_listbase.h"
 #include "BLT_translation.h"
@@ -199,102 +200,56 @@ void BKE_collection_object_remove(struct Scene *UNUSED(scene), struct SceneColle
 	 * also remove all reference to ob in the filter_objects */
 }
 
-/*
- * Tag util functions to make sure the same object is not called twice
- */
-
-static void object_tag(Object *ob)
-{
-	ob->flag |= BA_TEMP_TAG;
-}
-
-static void object_tag_clear(Object *ob, void *UNUSED(data))
-{
-	ob->flag &= ~BA_TEMP_TAG;
-}
-
-static bool object_tag_test(Object *ob)
-{
-	return (ob->flag & BA_TEMP_TAG) != 0;
-}
-
-/*
- * Recursively calls the callback function for the objects in a SceneCollection
- */
-static void collection_objects_callback(SceneCollection *sc, BKE_scene_objects_Cb callback, void *data)
-{
-	for (LinkData *link= sc->objects.first; link; link = link->next) {
-		if (object_tag_test(link->data)) {
-			callback(link->data, data);
-			object_tag(link->data);
-		}
-	}
-
-	for (LinkData *link= sc->filter_objects.first; link; link = link->next) {
-		callback(link->data, data);
-	}
-
-	for (SceneCollection *nsc = sc->scene_collections.first; nsc; nsc = nsc->next) {
-		collection_objects_callback(nsc, callback, data);
-	}
-}
-
-/*
- * Recursively calls the callback function for the objects in a Scene
- * The same object
- */
-void BKE_scene_objects_callback(Scene *scene, BKE_scene_objects_Cb callback, void *data)
-{
-	SceneCollection *sc = BKE_collection_master(scene);
-	collection_objects_callback(sc, object_tag_clear, NULL);
-	collection_objects_callback(sc, callback, data);
-}
-
-
 /* ---------------------------------------------------------------------- */
 /* Iteractors */
 
-/* sequence strip iterator:
- * - builds a full array, recursively into meta strips
- */
+static void scene_collection_callback(SceneCollection *sc, BKE_scene_collections_Cb callback, void *data)
+{
+	callback(sc, data);
 
-static void scene_objects_count(Object *UNUSED(ob), void *data)
+	for (SceneCollection *nsc = sc->scene_collections.first; nsc; nsc = nsc->next) {
+		scene_collection_callback(nsc, callback, data);
+	}
+}
+
+static void scene_collections_count(SceneCollection *UNUSED(sc), void *data)
 {
 	int *tot = data;
 	(*tot)++;
 }
 
-static void scene_objects_build_array(Object *ob, void *data)
+static void scene_collections_build_array(SceneCollection *sc, void *data)
 {
-	Object ***array = data;
-	**array = ob;
+	SceneCollection ***array = data;
+	**array = sc;
 	(*array)++;
 }
 
-static void scene_objects_array(Scene *scene, Object ***objects_array, int *tot)
+static void scene_collections_array(Scene *scene, SceneCollection ***collections_array, int *tot)
 {
-	Object **array;
+	SceneCollection *sc = BKE_collection_master(scene);
+	SceneCollection **array;
 
-	*objects_array = NULL;
+	*collections_array = NULL;
 	*tot = 0;
 
 	if (scene == NULL)
 		return;
 
-	BKE_scene_objects_callback(scene, scene_objects_count, tot);
+	scene_collection_callback(sc, scene_collections_count, tot);
 
 	if (*tot == 0)
 		return;
 
-	*objects_array = array = MEM_mallocN(sizeof(Object *) * (*tot), "ObjectsArray");
-	BKE_scene_objects_callback(scene, scene_objects_build_array, &array);
+	*collections_array = array = MEM_mallocN(sizeof(SceneCollection *) * (*tot), "SceneCollectionArray");
+	scene_collection_callback(sc, scene_collections_build_array, &array);
 }
 
 /*
  * Only use this in non-performance critical situations
  * (it iterates over all scene collections twice)
  */
-void BKE_scene_objects_Iterator_begin(Iterator *iter, void *data)
+void BKE_scene_collections_Iterator_begin(Iterator *iter, void *data)
 {
-	scene_objects_array(data, (Object ***)&iter->array, &iter->tot);
+	scene_collections_array(data, (SceneCollection ***)&iter->array, &iter->tot);
 }
