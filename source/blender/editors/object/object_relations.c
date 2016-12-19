@@ -1978,27 +1978,25 @@ static void single_obdata_users(Main *bmain, Scene *scene, const int flag)
 	}
 }
 
-static void single_object_action_users(Scene *scene, const int flag)
+static void single_object_action_users(Scene *scene, SceneLayer *sl, const int flag)
 {
 	Object *ob;
-	Base *base;
 
-	for (base = FIRSTBASE; base; base = base->next) {
-		ob = base->object;
-		if (!ID_IS_LINKED_DATABLOCK(ob) && (flag == 0 || (base->flag & SELECT)) ) {
+	FOREACH_OBJECT_FLAG(scene, sl, flag, ob)
+	    if (!ID_IS_LINKED_DATABLOCK(ob)) {
 			DAG_id_tag_update(&ob->id, OB_RECALC_DATA);
 			BKE_animdata_copy_id_action(&ob->id, false);
 		}
-	}
+	FOREACH_OBJECT_FLAG_END
 }
 
 static void single_mat_users(Main *bmain, Scene *scene, SceneLayer *sl, const int flag, const bool do_textures)
 {
-	Object *ob;
 	Material *ma, *man;
 	Tex *tex;
 	int a, b;
 
+	Object *ob;
 	FOREACH_OBJECT_FLAG(scene, sl, flag, ob)
 	    if (!ID_IS_LINKED_DATABLOCK(ob)) {
 			for (a = 1; a <= ob->totcol; a++) {
@@ -2133,7 +2131,7 @@ void ED_object_single_users(Main *bmain, Scene *scene, const bool full, const bo
 
 	if (full) {
 		single_obdata_users(bmain, scene, 0);
-		single_object_action_users(scene, 0);
+		single_object_action_users(scene, NULL, 0);
 		single_mat_users_expand(bmain);
 		single_tex_users_expand(bmain);
 	}
@@ -2431,7 +2429,7 @@ static int make_single_user_exec(bContext *C, wmOperator *op)
 		single_mat_users(scene, flag, true);
 #endif
 	if (RNA_boolean_get(op->ptr, "animation")) {
-		single_object_action_users(scene, flag);
+		single_object_action_users(scene, sl, flag);
 	}
 
 	BKE_main_id_clear_newpoins(bmain);
