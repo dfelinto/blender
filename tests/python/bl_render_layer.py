@@ -194,8 +194,11 @@ class UnitsTesting(unittest.TestCase):
                 os.path.exists(filepath),
                 "Test file \"{0}\" not found".format(filepath))
 
-    def test_parsing(self):
-        """Test if the arguments are properly set, and store ROOT"""
+    def test__parsing(self):
+        """
+        Test if the arguments are properly set, and store ROOT
+        name has extra _ because we need this test to run first
+        """
 
         arguments = {}
         for argument in extra_arguments:
@@ -326,6 +329,52 @@ class UnitsTesting(unittest.TestCase):
                     json_reference_file,
                     ),
                     "Scene copy \"{0}\" test failed".format(scene_type.title()))
+
+    def test_nesting(self):
+        import bpy
+        import os
+        import tempfile
+        import filecmp
+
+        with tempfile.TemporaryDirectory() as dirpath:
+            filepath_layers = os.path.join(ROOT, 'layers.blend')
+            filepath_json = os.path.join(ROOT, 'layers-nested.json')
+
+            # open file
+            bpy.ops.wm.open_mainfile('EXEC_DEFAULT', filepath=filepath_layers)
+
+            # create sub-collections
+            three_b = bpy.data.objects.get('T.3b')
+            three_c = bpy.data.objects.get('T.3c')
+
+            scene = bpy.context.scene
+
+            subzero = scene.master_collection.collections['1'].collections.new('sub-zero')
+            scorpion = scene.master_collection.collections['1'].collections.new('scorpion')
+
+            subzero.objects.link(three_b)
+            scorpion.objects.link(three_c)
+
+            # save file
+            filepath_nested = os.path.join(dirpath, 'nested.blend')
+            bpy.ops.wm.save_mainfile('EXEC_DEFAULT', filepath=filepath_nested)
+
+            # get the generated json
+            data = query_scene(filepath_nested, 'Main', (get_scene_collections, get_layers))
+            self.assertTrue(data, "Data is not valid")
+            collections, layers = data
+
+            filepath_nested_json = os.path.join(dirpath, "nested.json")
+            with open(filepath_nested_json, "w") as f:
+                f.write(dump(collections))
+                if not self._test_simple:
+                    f.write(dump(layers))
+
+            self.assertTrue(compare_files(
+                filepath_nested_json,
+                filepath_json,
+                ),
+                "Doversion test failed")
 
 
 # ############################################################
