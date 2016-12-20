@@ -49,7 +49,7 @@ void layer_collection_free(SceneLayer *sl, LayerCollection *lc);
 
 /* RenderLayer */
 
-/*
+/**
  * Add a new renderlayer
  * by default, a renderlayer has the master collection
  */
@@ -97,7 +97,7 @@ bool BKE_scene_layer_remove(Main *bmain, Scene *scene, SceneLayer *sl)
 	return true;
 }
 
-/*
+/**
  * Free (or release) any data used by this SceneLayer (does not free the SceneLayer itself).
  */
 void BKE_scene_layer_free(SceneLayer *sl)
@@ -111,7 +111,7 @@ void BKE_scene_layer_free(SceneLayer *sl)
 	BLI_freelistN(&sl->layer_collections);
 }
 
-/*
+/**
  * Set the render engine of a renderlayer
  */
 void BKE_scene_layer_engine_set(SceneLayer *sl, const char *engine)
@@ -119,7 +119,7 @@ void BKE_scene_layer_engine_set(SceneLayer *sl, const char *engine)
 	BLI_strncpy_utf8(sl->engine, engine, sizeof(sl->engine));
 }
 
-/*
+/**
  * Tag all the selected objects of a renderlayer
  */
 void BKE_scene_layer_selected_objects_tag(SceneLayer *sl, const int tag)
@@ -167,7 +167,8 @@ static ObjectBase *object_base_add(SceneLayer *sl, Object *ob)
 
 /* LayerCollection */
 
-/* When freeing the entire SceneLayer at once we don't bother with unref
+/**
+ * When freeing the entire SceneLayer at once we don't bother with unref
  * otherwise SceneLayer is passed to keep the syncing of the LayerCollection tree
  */
 void layer_collection_free(SceneLayer *sl, LayerCollection *lc)
@@ -187,7 +188,7 @@ void layer_collection_free(SceneLayer *sl, LayerCollection *lc)
 	BLI_freelistN(&lc->layer_collections);
 }
 
-/*
+/**
  * Free (or release) LayerCollection from SceneLayer
  * (does not free the LayerCollection itself).
  */
@@ -198,7 +199,9 @@ void BKE_layer_collection_free(SceneLayer *sl, LayerCollection *lc)
 
 /* LayerCollection */
 
-/* Recursively get the collection for a given index */
+/**
+ * Recursively get the collection for a given index
+ */
 static LayerCollection *collection_from_index(ListBase *lb, const int number, int *i)
 {
 	for (LayerCollection *lc = lb->first; lc; lc = lc->next) {
@@ -216,18 +219,18 @@ static LayerCollection *collection_from_index(ListBase *lb, const int number, in
 	return NULL;
 }
 
-/*
+/**
  * Get the active collection
-*/
+ */
 LayerCollection *BKE_layer_collection_active(SceneLayer *sl)
 {
 	int i = 0;
 	return collection_from_index(&sl->layer_collections, sl->active_collection, &i);
 }
 
-/*
+/**
  * Recursively get the count of collections
-*/
+ */
 static int collection_count(ListBase *lb)
 {
 	int i = 0;
@@ -237,7 +240,7 @@ static int collection_count(ListBase *lb)
 	return i;
 }
 
-/*
+/**
  * Get the total number of collections
  * (including all the nested collections)
  */
@@ -246,7 +249,9 @@ int BKE_layer_collection_count(SceneLayer *sl)
 	return collection_count(&sl->layer_collections);
 }
 
-/* Recursively get the index for a given collection */
+/**
+ * Recursively get the index for a given collection
+ */
 static int index_from_collection(ListBase *lb, LayerCollection *lc, int *i)
 {
 	for (LayerCollection *lcol = lb->first; lcol; lcol = lcol->next) {
@@ -264,7 +269,7 @@ static int index_from_collection(ListBase *lb, LayerCollection *lc, int *i)
 	return -1;
 }
 
-/*
+/**
  * Return -1 if not found
  */
 int BKE_layer_collection_findindex(SceneLayer *sl, LayerCollection *lc)
@@ -273,7 +278,7 @@ int BKE_layer_collection_findindex(SceneLayer *sl, LayerCollection *lc)
 	return index_from_collection(&sl->layer_collections, lc, &i);
 }
 
-/*
+/**
  * Link a collection to a renderlayer
  * The collection needs to be created separately
  */
@@ -283,7 +288,7 @@ LayerCollection *BKE_collection_link(SceneLayer *sl, SceneCollection *sc)
 	return lc;
 }
 
-/*
+/**
  * Unlink a collection base from a renderlayer
  * The corresponding collection is not removed from the master collection
  */
@@ -340,7 +345,7 @@ LayerCollection *layer_collection_add(SceneLayer *sl, ListBase *lb, SceneCollect
 
 /* Override */
 
-/*
+/**
  * Add a new datablock override
  */
 void BKE_collection_override_datablock_add(LayerCollection *UNUSED(lc), const char *UNUSED(data_path), ID *UNUSED(id))

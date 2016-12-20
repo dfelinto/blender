@@ -694,8 +694,6 @@ bool BKE_node_tree_iter_step(struct NodeTreeIterStore *ntreeiter,
 
 void BKE_nodetree_remove_layer_n(struct bNodeTree *ntree, struct Scene *scene, const int layer_index);
 
-/** \} */
-
 /* -------------------------------------------------------------------- */
 /** \name Shader Nodes
  */

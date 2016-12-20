@@ -41,7 +41,7 @@
 
 #include "MEM_guardedalloc.h"
 
-/*
+/**
  * Add a collection to a collection ListBase and syncronize all render layers
  * The ListBase is NULL when the collection is to be added to the master collection
  */
@@ -59,7 +59,9 @@ SceneCollection *BKE_collection_add(Scene *scene, SceneCollection *sc_parent, co
 	return sc;
 }
 
-/* free the collection items recursively */
+/**
+ * Free the collection items recursively
+ */
 static void collection_free(SceneCollection *sc)
 {
 	for (LinkData *link = sc->objects.first; link; link = link->next) {
@@ -78,8 +80,10 @@ static void collection_free(SceneCollection *sc)
 	BLI_freelistN(&sc->scene_collections);
 }
 
-/* unlink the collection recursively
- * return true if unlinked */
+/**
+ * Unlink the collection recursively
+ * return true if unlinked
+ */
 static bool collection_remlink(SceneCollection *sc_parent, SceneCollection *sc_gone)
 {
 	for (SceneCollection *sc = sc_parent->scene_collections.first; sc; sc = sc->next)
@@ -96,7 +100,7 @@ static bool collection_remlink(SceneCollection *sc_parent, SceneCollection *sc_g
 	return false;
 }
 
-/*
+/**
  * Recursively remove any instance of this SceneCollection
  */
 static void layer_collection_remove(SceneLayer *sl, ListBase *lb, const SceneCollection *sc)
@@ -126,7 +130,7 @@ static void layer_collection_remove(SceneLayer *sl, ListBase *lb, const SceneCol
 	}
 }
 
-/*
+/**
  * Remove a collection from the scene, and syncronize all render layers
  */
 bool BKE_collection_remove(Scene *scene, SceneCollection *sc)
@@ -156,7 +160,7 @@ bool BKE_collection_remove(Scene *scene, SceneCollection *sc)
 	return true;
 }
 
-/*
+/**
  * Returns the master collection
  */
 SceneCollection *BKE_collection_master(Scene *scene)
@@ -164,7 +168,7 @@ SceneCollection *BKE_collection_master(Scene *scene)
 	return scene->collection;
 }
 
-/*
+/**
  * Free (or release) any data used by the master collection (does not free the master collection itself).
  * Used only to clear the entire scene data since it's not doing re-syncing of the LayerCollection tree
  */
@@ -172,7 +176,7 @@ void BKE_collection_master_free(Scene *scene){
 	collection_free(BKE_collection_master(scene));
 }
 
-/*
+/**
  * Add object to collection
  */
 void BKE_collection_object_add(struct Scene *UNUSED(scene), struct SceneCollection *sc, struct Object *ob)
@@ -183,7 +187,7 @@ void BKE_collection_object_add(struct Scene *UNUSED(scene), struct SceneCollecti
 	/* add the equivalent object base to all layers that have this collection */
 }
 
-/*
+/**
  * Remove object from collection
  */
 void BKE_collection_object_remove(struct Scene *UNUSED(scene), struct SceneCollection *sc, struct Object *ob)
@@ -252,7 +256,7 @@ static void scene_collections_array(Scene *scene, SceneCollection ***collections
 	scene_collection_callback(sc, scene_collections_build_array, &array);
 }
 
-/*
+/**
  * Only use this in non-performance critical situations
  * (it iterates over all scene collections twice)
  */
@@ -322,7 +326,9 @@ void BKE_scene_objects_Iterator_begin(Iterator *iter, void *data_in)
 	iter->current = sc->objects.first;
 }
 
-/* gets the next unique object */
+/**
+ * Gets the next unique object
+ */
 static LinkData *object_base_next(GSet *gs, LinkData *link)
 {
 	if (link == NULL) {
