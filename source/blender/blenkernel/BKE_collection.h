@@ -63,11 +63,6 @@ void BKE_scene_objects_Iterator_begin(struct Iterator *iter, void *data_in);
 void BKE_scene_objects_Iterator_next(struct Iterator *iter);
 void BKE_scene_objects_Iterator_end(struct Iterator *iter);
 
-typedef struct SceneCollectionIterData {
-	struct SceneCollection *sc;
-	struct SceneCollectionIterData *parent;
-} SceneCollectionIterData;
-
 #define FOREACH_SCENE_COLLECTION(scene, _sc)                                  \
 	ITER_BEGIN(BKE_scene_collections_Iterator_begin,                          \
 	           BKE_scene_collections_Iterator_next,                           \

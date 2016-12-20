@@ -259,7 +259,7 @@ static void scene_collections_array(Scene *scene, SceneCollection ***collections
 void BKE_scene_collections_Iterator_begin(Iterator *iter, void *data_in)
 {
 	Scene *scene = data_in;
-	SceneCollectionsIteratorData *data = MEM_callocN(sizeof(SceneCollectionIterData), __FUNCTION__);
+	SceneCollectionsIteratorData *data = MEM_callocN(sizeof(SceneCollectionsIteratorData), __FUNCTION__);
 
 	data->scene = scene;
 	iter->data = data;
@@ -288,8 +288,11 @@ void BKE_scene_collections_Iterator_end(struct Iterator *iter)
 {
 	SceneCollectionsIteratorData *data = iter->data;
 
-	if (data->array) {
-		MEM_freeN(data->array);
+	if (data) {
+		if (data->array) {
+			MEM_freeN(data->array);
+		}
+		MEM_freeN(data);
 	}
 	iter->valid = false;
 }
@@ -350,16 +353,19 @@ void BKE_scene_objects_Iterator_next(Iterator *iter)
 		iter->current = link->data;
 	}
 	else {
+		/* if this is the last object of this ListBase look at the next SceneCollection */
+		SceneCollection *sc;
+		BKE_scene_collections_Iterator_next(&data->scene_collection_iter);
 		do {
-			BKE_scene_collections_Iterator_next(&data->scene_collection_iter);
-			SceneCollection *sc = data->scene_collection_iter.current;
+			sc = data->scene_collection_iter.current;
 			/* get the first unique object of this collection */
 			LinkData *new_link = object_base_next(data->visited, sc->objects.first);
 			if (new_link) {
 				data->link = new_link;
 				iter->current = data->link->data;
-				break;
+				return;
 			}
+			BKE_scene_collections_Iterator_next(&data->scene_collection_iter);
 		} while (data->scene_collection_iter.valid);
 
 		if (!data->scene_collection_iter.valid) {
@@ -371,6 +377,9 @@ void BKE_scene_objects_Iterator_next(Iterator *iter)
 void BKE_scene_objects_Iterator_end(Iterator *iter)
 {
 	SceneObjectsIteratorData *data = iter->data;
-	BKE_scene_collections_Iterator_end(&data->scene_collection_iter);
-	BLI_gset_free(data->visited, NULL);
+	if (data) {
+		BKE_scene_collections_Iterator_end(&data->scene_collection_iter);
+		BLI_gset_free(data->visited, NULL);
+		MEM_freeN(data);
+	}
 }
