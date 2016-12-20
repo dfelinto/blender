@@ -3049,6 +3049,48 @@ class VIEW3D_PT_viewport_debug(Panel):
         col.row(align=True).prop(view, "debug_background", expand=True)
 
 
+class VIEW3D_PT_layers_debug(Panel):
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_label = "Layers"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    @classmethod
+    def poll(cls, context):
+        view = context.space_data
+        return (view and view.use_modern_viewport)
+
+    def draw(self, context):
+        layout = self.layout
+        view = context.space_data
+        scene = context.scene
+
+        for layer in scene.render_layers:
+            col = layout.column()
+            col.label(text=layer.name)
+
+            box = col.box()
+            for collection in layer.collections:
+                self._draw_layer_collection(box, collection)
+
+    def _draw_layer_collection(self, box, collection, depth=0):
+        row = box.row()
+        row.label(text="{0}{1}{2}".format(
+            "  " * depth,
+            u'\u21b3 ' if depth else "",
+            collection.name))
+
+        row.prop(collection, "hide", text="", emboss=False)
+        row.prop(collection, "hide_select", text="", emboss=False)
+        row.prop(collection, "use_folded")
+
+        if collection.use_folded:
+            return
+
+        for nested_collection in collection.collections:
+            self._draw_layer_collection(box, nested_collection, depth + 1)
+
+
 class VIEW3D_PT_grease_pencil(GreasePencilDataPanel, Panel):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
