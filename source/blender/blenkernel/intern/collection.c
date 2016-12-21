@@ -55,7 +55,7 @@ SceneCollection *BKE_collection_add(Scene *scene, SceneCollection *sc_parent, co
 
 	BLI_addtail(&sc_parent->scene_collections, sc);
 
-	TODO_LAYER_SYNC;
+	BKE_layer_sync_new_scene_collection(scene, sc_parent, sc);
 	return sc;
 }
 

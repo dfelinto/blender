@@ -343,6 +343,41 @@ LayerCollection *layer_collection_add(SceneLayer *sl, ListBase *lb, SceneCollect
 	return lc;
 }
 
+
+/* ---------------------------------------------------------------------- */
+/* Syncing */
+
+static LayerCollection *find_layer_collection_by_scene_collection(LayerCollection *lc, const SceneCollection *sc)
+{
+	if (lc->scene_collection == sc) {
+		return lc;
+	}
+
+	for (LayerCollection *nlc = lc->layer_collections.first; nlc; nlc = nlc->next) {
+		LayerCollection *found = find_layer_collection_by_scene_collection(nlc, sc);
+		if (found) {
+			return found;
+		}
+	}
+	return NULL;
+}
+
+/**
+ * Add a new LayerCollection for all the SceneLayers that have sc_parent
+ */
+void BKE_layer_sync_new_scene_collection(Scene *scene, const SceneCollection *sc_parent, SceneCollection *sc)
+{
+	for (SceneLayer *sl = scene->render_layers.first; sl; sl = sl->next) {
+		for (LayerCollection *lc = sl->layer_collections.first; lc; lc = lc->next) {
+			LayerCollection *lc_parent = find_layer_collection_by_scene_collection(lc, sc_parent);
+			if (lc_parent) {
+				layer_collection_add(sl, &lc_parent->layer_collections, sc);
+			}
+		}
+	}
+}
+
+/* ---------------------------------------------------------------------- */
 /* Override */
 
 /**
