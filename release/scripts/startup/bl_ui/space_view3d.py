@@ -3071,10 +3071,11 @@ class VIEW3D_PT_layers_debug(Panel):
 
             box = col.box()
             for collection in layer.collections:
-                self._draw_layer_collection(box, collection)
+                self._draw_layer_collection(box, collection, True)
 
-    def _draw_layer_collection(self, box, collection, depth=0):
+    def _draw_layer_collection(self, box, collection, is_active, depth=0):
         row = box.row()
+        row.active = is_active
         row.label(text="{0}{1}{2}".format(
             "  " * depth,
             u'\u21b3 ' if depth else "",
@@ -3082,13 +3083,20 @@ class VIEW3D_PT_layers_debug(Panel):
 
         row.prop(collection, "hide", text="", emboss=False)
         row.prop(collection, "hide_select", text="", emboss=False)
-        row.prop(collection, "use_folded")
 
-        if collection.use_folded:
+        nested_collections = collection.collections
+        if nested_collections:
+            row.prop(collection, "is_unfolded", text="", emboss=False)
+        else:
+            row.label(icon='BLANK1')
             return
 
-        for nested_collection in collection.collections:
-            self._draw_layer_collection(box, nested_collection, depth + 1)
+        if not collection.is_unfolded:
+            return
+
+        is_active &= not collection.hide
+        for nested_collection in nested_collections:
+            self._draw_layer_collection(box, nested_collection, is_active, depth + 1)
 
 
 class VIEW3D_PT_grease_pencil(GreasePencilDataPanel, Panel):

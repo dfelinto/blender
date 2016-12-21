@@ -5356,8 +5356,9 @@ static void rna_def_layer_collection(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Hide Selectable", "Restrict selection");
 	RNA_def_property_update(prop, NC_SCENE | ND_LAYER_CONTENT, NULL);
 
-	prop = RNA_def_property(srna, "use_folded", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_sdna(prop, NULL, "flag", COLLECTION_FOLDED);
+	prop = RNA_def_property(srna, "is_unfolded", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_negative_sdna(prop, NULL, "flag", COLLECTION_FOLDED);
+	RNA_def_property_ui_icon(prop, ICON_RIGHTARROW, 1);
 	RNA_def_property_ui_text(prop, "Folded", "Folded collection");
 	RNA_def_property_update(prop, NC_SCENE | ND_LAYER_CONTENT, NULL);
 
