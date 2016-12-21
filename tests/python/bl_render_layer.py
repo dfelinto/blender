@@ -346,14 +346,20 @@ class UnitsTesting(unittest.TestCase):
             # create sub-collections
             three_b = bpy.data.objects.get('T.3b')
             three_c = bpy.data.objects.get('T.3c')
+            three_d = bpy.data.objects.get('T.3d')
 
             scene = bpy.context.scene
 
             subzero = scene.master_collection.collections['1'].collections.new('sub-zero')
             scorpion = scene.master_collection.collections['1'].collections.new('scorpion')
 
+            # test linking sync
             subzero.objects.link(three_b)
             scorpion.objects.link(three_c)
+
+            # test unlinking sync
+            scorpion.objects.link(three_d)
+            scorpion.objects.unlink(three_d)
 
             # save file
             filepath_nested = os.path.join(dirpath, 'nested.blend')
@@ -374,7 +380,7 @@ class UnitsTesting(unittest.TestCase):
                 filepath_nested_json,
                 filepath_json,
                 ),
-                "Doversion test failed")
+                "Nesting test failed")
 
 
 # ############################################################
