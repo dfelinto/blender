@@ -252,6 +252,7 @@ wmWindow *wm_window_copy(bContext *C, wmWindow *win_src)
 {
 	Main *bmain = CTX_data_main(C);
 	wmWindow *win_dst = wm_window_new(C);
+	Scene *scene = WM_window_get_active_scene(win_src);
 	bScreen *new_screen;
 
 	win_dst->posx = win_src->posx + 10;
@@ -259,6 +260,7 @@ wmWindow *wm_window_copy(bContext *C, wmWindow *win_src)
 	win_dst->sizex = win_src->sizex;
 	win_dst->sizey = win_src->sizey;
 
+	win_dst->scene = scene;
 	win_dst->workspace = ED_workspace_duplicate(win_src->workspace, bmain, win_dst);
 	new_screen = WM_window_get_active_screen(win_dst);
 	BLI_strncpy(win_dst->screenname, new_screen->id.name + 2, sizeof(win_dst->screenname));
@@ -669,11 +671,9 @@ wmWindow *WM_window_open_temp(bContext *C, const rcti *rect_init, int type)
 		screen = BKE_workspace_layout_screen_get(layout);
 		WM_window_set_active_layout(win, layout);
 	}
-	else {
-		/* switch scene for rendering */
-		if (WM_window_get_active_scene(win) != scene) {
-			WM_window_set_active_scene(bmain, C, win, scene);
-		}
+
+	if (WM_window_get_active_scene(win) != scene) {
+		WM_window_set_active_scene(bmain, C, win, scene);
 	}
 
 	screen->temp = 1;

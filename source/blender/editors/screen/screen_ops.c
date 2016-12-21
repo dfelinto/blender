@@ -980,12 +980,14 @@ static void SCREEN_OT_area_swap(wmOperatorType *ot)
 static int area_dupli_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
 	wmWindow *newwin, *win;
+	Scene *scene;
 	WorkSpaceLayout *layout_new;
 	bScreen *newsc, *sc;
 	ScrArea *sa;
 	rcti rect;
 	
 	win = CTX_wm_window(C);
+	scene = CTX_data_scene(C);
 	sc = CTX_wm_screen(C);
 	sa = CTX_wm_area(C);
 	
@@ -1013,7 +1015,8 @@ static int area_dupli_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 
 	*newwin->stereo3d_format = *win->stereo3d_format;
 
-	newwin->workspace = win->workspace;
+	newwin->scene = scene;
+	newwin->workspace = BKE_workspace_add(CTX_data_main(C), BKE_workspace_name_get(win->workspace));
 	/* allocs new screen and adds to newly created window, using window size */
 	layout_new = ED_workspace_layout_add(newwin->workspace, newwin, sc->id.name + 2);
 	newsc = BKE_workspace_layout_screen_get(layout_new);
