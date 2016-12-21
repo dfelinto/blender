@@ -326,6 +326,18 @@ static void layer_collection_object_add(SceneLayer *sl, LayerCollection *lc, Obj
 	BLI_addtail(&lc->object_bases, BLI_genericNodeN(ob_base));
 }
 
+static void layer_collection_object_remove(SceneLayer *sl, LayerCollection *lc, Object *ob)
+{
+	ObjectBase *ob_base;
+	ob_base = BKE_scene_layer_base_find(sl, ob);
+
+	LinkData *link = BLI_findptr(&lc->object_bases, ob_base, offsetof(LinkData, data));
+	BLI_remlink(&lc->object_bases, link);
+	MEM_freeN(link);
+
+	scene_layer_object_base_unref(sl, ob_base);
+}
+
 static void layer_collection_objects_populate(SceneLayer *sl, LayerCollection *lc, ListBase *objects)
 {
 	for (LinkData *link = objects->first; link; link = link->next) {
@@ -399,6 +411,22 @@ void BKE_layer_sync_object_link(Scene *scene, SceneCollection *sc, Object *ob)
 			LayerCollection *found = find_layer_collection_by_scene_collection(lc, sc);
 			if (found) {
 				layer_collection_object_add(sl, found, ob);
+			}
+		}
+	}
+}
+
+/**
+ * Remove the equivalent object base to all layers that have this collection
+ * also remove all reference to ob in the filter_objects
+ */
+void BKE_layer_sync_object_unlink(Scene *scene, SceneCollection *sc, Object *ob)
+{
+	for (SceneLayer *sl = scene->render_layers.first; sl; sl = sl->next) {
+		for (LayerCollection *lc = sl->layer_collections.first; lc; lc = lc->next) {
+			LayerCollection *found = find_layer_collection_by_scene_collection(lc, sc);
+			if (found) {
+				layer_collection_object_remove(sl, found, ob);
 			}
 		}
 	}

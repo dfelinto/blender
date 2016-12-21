@@ -194,7 +194,7 @@ void BKE_collection_object_add(struct Scene *scene, struct SceneCollection *sc, 
 /**
  * Remove object from collection
  */
-void BKE_collection_object_remove(struct Scene *UNUSED(scene), struct SceneCollection *sc, struct Object *ob)
+void BKE_collection_object_remove(struct Scene *scene, struct SceneCollection *sc, struct Object *ob)
 {
 
 	LinkData *link = BLI_findptr(&sc->objects, ob, offsetof(LinkData, data));
@@ -202,10 +202,9 @@ void BKE_collection_object_remove(struct Scene *UNUSED(scene), struct SceneColle
 	MEM_freeN(link);
 
 	id_us_min((ID *)ob);
-	TODO_LAYER_SYNC;
 
-	/* remove the equivalent object base to all layers that have this collection
-	 * also remove all reference to ob in the filter_objects */
+	TODO_LAYER_SYNC_FILTER; /* need to remove all instances of ob in scene collections -> filter_objects */
+	BKE_layer_sync_object_unlink(scene, sc, ob);
 }
 
 /* ---------------------------------------------------------------------- */

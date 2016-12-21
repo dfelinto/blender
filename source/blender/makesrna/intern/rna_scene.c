@@ -2139,7 +2139,7 @@ static void rna_SceneCollection_filter_set(PointerRNA *ptr, const char *value)
 	SceneCollection *sc = (SceneCollection *)ptr->data;
 	BLI_strncpy_utf8(sc->filter, value, sizeof(sc->filter));
 
-	TODO_LAYER_SYNC;
+	TODO_LAYER_SYNC_FILTER;
 	(void)scene;
 }
 
