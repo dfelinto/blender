@@ -429,7 +429,7 @@ class UnitsTesting(unittest.TestCase):
                 'LINK_OBJECTS',
                 (get_scene_collections, get_layers))
 
-    def do_syncing(self, filepath_json, do_unlink):
+    def do_syncing(self, filepath_json, unlink_mode):
         import bpy
         import os
         import tempfile
@@ -456,10 +456,15 @@ class UnitsTesting(unittest.TestCase):
             subzero.objects.link(three_b)
             scorpion.objects.link(three_c)
 
-            if do_unlink:
-                # test unlinking sync
+            # test unlinking sync
+            if unlink_mode in {'OBJECT', 'COLLECTION'}:
                 scorpion.objects.link(three_d)
                 scorpion.objects.unlink(three_d)
+
+            if unlink_mode == 'COLLECTION':
+                scorpion.objects.link(three_d)
+                scene.master_collection.collections['1'].collections.remove(subzero)
+                scene.master_collection.collections['1'].collections.remove(scorpion)
 
             # save file
             filepath_nested = os.path.join(dirpath, 'nested.blend')
@@ -488,9 +493,9 @@ class UnitsTesting(unittest.TestCase):
         import os
         ROOT = self.get_root()
         filepath_json = os.path.join(ROOT, 'layers_nested.json')
-        self.do_syncing(filepath_json, False)
+        self.do_syncing(filepath_json, 'NONE')
 
-    def test_syncing_unlink(self):
+    def test_syncing_unlink_object(self):
         """
         See if scene collections and layer collections are in sync
         when we create new subcollections, link new objects and unlink
@@ -499,7 +504,18 @@ class UnitsTesting(unittest.TestCase):
         import os
         ROOT = self.get_root()
         filepath_json = os.path.join(ROOT, 'layers_nested.json')
-        self.do_syncing(filepath_json, True)
+        self.do_syncing(filepath_json, 'OBJECT')
+
+    def test_syncing_unlink_collection(self):
+        """
+        See if scene collections and layer collections are in sync
+        when we create new subcollections, link new objects and unlink full collections
+        some.
+        """
+        import os
+        ROOT = self.get_root()
+        filepath_json = os.path.join(ROOT, 'layers.json')
+        self.do_syncing(filepath_json, 'COLLECTION')
 
 
 # ############################################################
