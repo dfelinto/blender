@@ -194,12 +194,10 @@ class UnitsTesting(unittest.TestCase):
                 os.path.exists(filepath),
                 "Test file \"{0}\" not found".format(filepath))
 
-    def test__parsing(self):
+    def get_root(self):
         """
-        Test if the arguments are properly set, and store ROOT
-        name has extra _ because we need this test to run first
+        return the folder with the test files
         """
-
         arguments = {}
         for argument in extra_arguments:
             name, value = argument.split('=')
@@ -207,138 +205,239 @@ class UnitsTesting(unittest.TestCase):
             self.assertTrue(value, "Invalid argument \"{0}\"".format(argument))
             arguments[name[2:]] = value.strip('"')
 
-        global ROOT
-        ROOT = arguments.get('testdir')
+        return arguments.get('testdir')
 
-        self.assertTrue(ROOT, "Testdir not set")
+    def test__parsing(self):
+        """
+        Test if the arguments are properly set, and store ROOT
+        name has extra _ because we need this test to run first
+        """
+        root = self.get_root()
+        self.assertTrue(root, "Testdir not set")
 
-    def test_import_blendfile(self):
-        """Make sure blendfile imports with no problems"""
+    def test__import_blendfile(self):
+        """
+        Make sure blendfile imports with no problems
+        name has extra _ because we need this test to run first
+        """
         import_blendfile()
         import blendfile
 
-    def test_scene_doversion(self):
-        """See if the doversion, writing and reading is working well"""
+    def do_scene_write_read(self, filepath_layers, filepath_layers_json, data_callbacks, do_read):
+        """
+        See if write/read is working for scene collections and layers
+        """
         import bpy
         import os
         import tempfile
         import filecmp
 
         with tempfile.TemporaryDirectory() as dirpath:
-            filepath_layers = os.path.join(ROOT, 'layers.blend')
-
-            if self._test_simple:
-                filepath_layers_json = os.path.join(ROOT, 'layers_simple.json')
-            else:
-                filepath_layers_json = os.path.join(ROOT, 'layers.json')
-
             (self.path_exists(f) for f in (filepath_layers, filepath_layers_json))
+
+            filepath_doversion = os.path.join(dirpath, 'doversion.blend')
+            filepath_saved = os.path.join(dirpath, 'doversion_saved.blend')
+            filepath_read_json = os.path.join(dirpath, "read.json")
 
             # doversion + write test
             bpy.ops.wm.open_mainfile('EXEC_DEFAULT', filepath=filepath_layers)
-
-            filepath_doversion = os.path.join(dirpath, 'doversion.blend')
             bpy.ops.wm.save_mainfile('EXEC_DEFAULT', filepath=filepath_doversion)
 
-            data = query_scene(filepath_doversion, 'Main', (get_scene_collections, get_layers))
-            self.assertTrue(data, "Data is not valid")
-            collections, layers = data
+            datas = query_scene(filepath_doversion, 'Main', data_callbacks)
+            self.assertTrue(datas, "Data is not valid")
 
             filepath_doversion_json = os.path.join(dirpath, "doversion.json")
             with open(filepath_doversion_json, "w") as f:
-                f.write(dump(collections))
-                if not self._test_simple:
-                    f.write(dump(layers))
+                for data in datas:
+                    f.write(dump(data))
 
             self.assertTrue(compare_files(
                 filepath_doversion_json,
                 filepath_layers_json,
                 ),
-                "Doversion test failed")
+                "Run: test_scene_write_layers")
 
-            # read test
-            bpy.ops.wm.open_mainfile('EXEC_DEFAULT', filepath=filepath_doversion)
-            filepath_saved = os.path.join(dirpath, 'doversion_saved.blend')
-            bpy.ops.wm.save_mainfile('EXEC_DEFAULT', filepath=filepath_saved)
+            if do_read:
+                # read test, simply open and save the file
+                bpy.ops.wm.open_mainfile('EXEC_DEFAULT', filepath=filepath_doversion)
+                bpy.ops.wm.save_mainfile('EXEC_DEFAULT', filepath=filepath_saved)
 
-            data = query_scene(filepath_saved, 'Main', (get_scene_collections, get_layers))
-            self.assertTrue(data, "Data is not valid")
-            collections, layers = data
+                datas = query_scene(filepath_saved, 'Main', data_callbacks)
+                self.assertTrue(datas, "Data is not valid")
 
-            filepath_read_json = os.path.join(dirpath, "read.json")
-            with open(filepath_read_json, "w") as f:
-                f.write(dump(collections))
-                if not self._test_simple:
-                    f.write(dump(layers))
+                with open(filepath_read_json, "w") as f:
+                    for data in datas:
+                        f.write(dump(data))
 
-            self.assertTrue(compare_files(
-                filepath_read_json,
+                self.assertTrue(compare_files(
+                    filepath_read_json,
+                    filepath_layers_json,
+                    ),
+                    "Scene dump files differ")
+
+    def test_scene_write_collections(self):
+        """
+        See if the doversion and writing are working for scene collections
+        """
+        import os
+
+        ROOT = self.get_root()
+        filepath_layers = os.path.join(ROOT, 'layers.blend')
+        filepath_layers_json = os.path.join(ROOT, 'layers_simple.json')
+
+        self.do_scene_write_read(
+                filepath_layers,
                 filepath_layers_json,
-                ),
-                "Read test failed")
+                (get_scene_collections,),
+                False)
 
-    def test_scene_copy(self):
+    def test_scene_write_layers(self):
+        """
+        See if the doversion and writing are working for collections and layers
+        """
+        import os
+
+        ROOT = self.get_root()
+        filepath_layers = os.path.join(ROOT, 'layers.blend')
+        filepath_layers_json = os.path.join(ROOT, 'layers.json')
+
+        self.do_scene_write_read(
+                filepath_layers,
+                filepath_layers_json,
+                (get_scene_collections, get_layers),
+                False)
+
+    def test_scene_read_collections(self):
+        """
+        See if read is working for scene collections
+        (run `test_scene_write_colections` first)
+        """
+        import os
+
+        ROOT = self.get_root()
+        filepath_layers = os.path.join(ROOT, 'layers.blend')
+        filepath_layers_json = os.path.join(ROOT, 'layers_simple.json')
+
+        self.do_scene_write_read(
+                filepath_layers,
+                filepath_layers_json,
+                (get_scene_collections,),
+                True)
+
+    def test_scene_read_layers(self):
+        """
+        See if read is working for scene layers
+        (run `test_scene_write_layers` first)
+        """
+        import os
+
+        ROOT = self.get_root()
+        filepath_layers = os.path.join(ROOT, 'layers.blend')
+        filepath_layers_json = os.path.join(ROOT, 'layers.json')
+
+        self.do_scene_write_read(
+                filepath_layers,
+                filepath_layers_json,
+                (get_scene_collections, get_layers),
+                True)
+
+    def do_scene_copy(self, filepath_json_reference, copy_mode, data_callbacks):
         import bpy
         import os
         import tempfile
         import filecmp
 
+        ROOT = self.get_root()
         with tempfile.TemporaryDirectory() as dirpath:
             filepath_layers = os.path.join(ROOT, 'layers.blend')
-
-            if self._test_simple:
-                filepath_layers_json = os.path.join(ROOT, 'layers_simple.json')
-                filepath_layers_json_copy_full = os.path.join(ROOT, 'layers_copy_full_simple.json')
-                filepath_layers_json_copy_link = os.path.join(ROOT, 'layers_simple.json')
-            else:
-                filepath_layers_json = os.path.join(ROOT, 'layers.json')
-                filepath_layers_json_copy_full = os.path.join(ROOT, 'layers_copy_full.json')
-                filepath_layers_json_copy_link = os.path.join(ROOT, 'layers_copy_link.json')
 
             (self.path_exists(f) for f in (
                 filepath_layers,
-                filepath_layers_json,
-                filepath_layers_json_copy_full,
-                filepath_layers_json_copy_link,
+                filepath_json_reference,
                 ))
 
-            type_lookup = {
-                    'LINK_OBJECTS': filepath_layers_json_copy_link,
-                    'FULL_COPY': filepath_layers_json_copy_full,
-                    }
+            filepath_saved = os.path.join(dirpath, '{0}.blend'.format(copy_mode))
+            filepath_json = os.path.join(dirpath, "{0}.json".format(copy_mode))
 
-            for scene_type, json_reference_file in type_lookup.items():
-                bpy.ops.wm.open_mainfile('EXEC_DEFAULT', filepath=filepath_layers)
-                bpy.ops.scene.new(type=scene_type)
+            bpy.ops.wm.open_mainfile('EXEC_DEFAULT', filepath=filepath_layers)
+            bpy.ops.scene.new(type=copy_mode)
+            bpy.ops.wm.save_mainfile('EXEC_DEFAULT', filepath=filepath_saved)
 
-                filepath_saved = os.path.join(dirpath, '{0}.blend'.format(scene_type))
-                bpy.ops.wm.save_mainfile('EXEC_DEFAULT', filepath=filepath_saved)
+            datas = query_scene(filepath_saved, 'Main.001', data_callbacks)
+            self.assertTrue(datas, "Data is not valid")
 
-                data = query_scene(filepath_saved, 'Main.001', (get_scene_collections, get_layers))
-                self.assertTrue(data, "Data is not valid")
-                collections, layers = data
+            with open(filepath_json, "w") as f:
+                for data in datas:
+                    f.write(dump(data))
 
-                filepath_json = os.path.join(dirpath, "{0}.json".format(scene_type))
-                with open(filepath_json, "w") as f:
-                    f.write(dump(collections))
-                    if not self._test_simple:
-                        f.write(dump(layers))
+            self.assertTrue(compare_files(
+                filepath_json,
+                filepath_json_reference,
+                ),
+                "Scene copy \"{0}\" test failed".format(copy_mode.title()))
 
-                self.assertTrue(compare_files(
-                    filepath_json,
-                    json_reference_file,
-                    ),
-                    "Scene copy \"{0}\" test failed".format(scene_type.title()))
+    def test_scene_collections_copy_full(self):
+        """
+        See if scene copying 'FULL_COPY' is working for scene collections
+        """
+        import os
+        ROOT = self.get_root()
 
-    def test_nesting(self):
+        filepath_layers_json_copy = os.path.join(ROOT, 'layers_copy_full_simple.json')
+        self.do_scene_copy(
+                filepath_layers_json_copy,
+                'FULL_COPY',
+                (get_scene_collections,))
+
+    def test_scene_collections_link(self):
+        """
+        See if scene copying 'LINK_OBJECTS' is working for scene collections
+        """
+        import os
+        ROOT = self.get_root()
+
+        # note: nothing should change, so using `layers_simple.json`
+        filepath_layers_json_copy = os.path.join(ROOT, 'layers_simple.json')
+        self.do_scene_copy(
+                filepath_layers_json_copy,
+                'LINK_OBJECTS',
+                (get_scene_collections,))
+
+    def test_scene_layers_copy(self):
+        """
+        See if scene copying 'FULL_COPY' is working for scene layers
+        """
+        import os
+        ROOT = self.get_root()
+
+        filepath_layers_json_copy = os.path.join(ROOT, 'layers_copy_full.json')
+        self.do_scene_copy(
+                filepath_layers_json_copy,
+                'FULL_COPY',
+                (get_scene_collections, get_layers))
+
+    def test_scene_layers_link(self):
+        """
+        See if scene copying 'FULL_COPY' is working for scene layers
+        """
+        import os
+        ROOT = self.get_root()
+
+        filepath_layers_json_copy = os.path.join(ROOT, 'layers_copy_link.json')
+        self.do_scene_copy(
+                filepath_layers_json_copy,
+                'LINK_OBJECTS',
+                (get_scene_collections, get_layers))
+
+    def do_syncing(self, filepath_json, do_unlink):
         import bpy
         import os
         import tempfile
         import filecmp
 
+        ROOT = self.get_root()
         with tempfile.TemporaryDirectory() as dirpath:
             filepath_layers = os.path.join(ROOT, 'layers.blend')
-            filepath_json = os.path.join(ROOT, 'layers-nested.json')
 
             # open file
             bpy.ops.wm.open_mainfile('EXEC_DEFAULT', filepath=filepath_layers)
@@ -357,30 +456,50 @@ class UnitsTesting(unittest.TestCase):
             subzero.objects.link(three_b)
             scorpion.objects.link(three_c)
 
-            # test unlinking sync
-            scorpion.objects.link(three_d)
-            scorpion.objects.unlink(three_d)
+            if do_unlink:
+                # test unlinking sync
+                scorpion.objects.link(three_d)
+                scorpion.objects.unlink(three_d)
 
             # save file
             filepath_nested = os.path.join(dirpath, 'nested.blend')
             bpy.ops.wm.save_mainfile('EXEC_DEFAULT', filepath=filepath_nested)
 
             # get the generated json
-            data = query_scene(filepath_nested, 'Main', (get_scene_collections, get_layers))
-            self.assertTrue(data, "Data is not valid")
-            collections, layers = data
+            datas = query_scene(filepath_nested, 'Main', (get_scene_collections, get_layers))
+            self.assertTrue(datas, "Data is not valid")
 
             filepath_nested_json = os.path.join(dirpath, "nested.json")
             with open(filepath_nested_json, "w") as f:
-                f.write(dump(collections))
-                if not self._test_simple:
-                    f.write(dump(layers))
+                for data in datas:
+                    f.write(dump(data))
 
             self.assertTrue(compare_files(
                 filepath_nested_json,
                 filepath_json,
                 ),
-                "Nesting test failed")
+                "Scene dump files differ")
+
+    def test_syncing_link(self):
+        """
+        See if scene collections and layer collections are in sync
+        when we create new subcollections and link new objects
+        """
+        import os
+        ROOT = self.get_root()
+        filepath_json = os.path.join(ROOT, 'layers_nested.json')
+        self.do_syncing(filepath_json, False)
+
+    def test_syncing_unlink(self):
+        """
+        See if scene collections and layer collections are in sync
+        when we create new subcollections, link new objects and unlink
+        some.
+        """
+        import os
+        ROOT = self.get_root()
+        filepath_json = os.path.join(ROOT, 'layers_nested.json')
+        self.do_syncing(filepath_json, True)
 
 
 # ############################################################
