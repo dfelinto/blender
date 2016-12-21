@@ -2169,7 +2169,7 @@ static void rna_SceneCollection_remove(
 	SceneCollection *sc = sc_ptr->data;
 
 	const int index = BLI_findindex(&sc_parent->scene_collections, sc);
-	if (index != -1) {
+	if (index == -1) {
 		BKE_reportf(reports, RPT_ERROR, "Collection '%s' is not a sub-collection of '%s'",
 		            sc->name, sc_parent->name);
 		return;
