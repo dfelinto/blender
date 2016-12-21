@@ -75,6 +75,7 @@ void BKE_collection_unlink(struct SceneLayer *sl, struct LayerCollection *lc);
 /* syncing */
 
 void BKE_layer_sync_new_scene_collection(struct Scene *scene, const struct SceneCollection *sc_parent, struct SceneCollection *sc);
+void BKE_layer_sync_object_link(struct Scene *scene, struct SceneCollection *sc, struct Object *ob);
 
 /* override */
 

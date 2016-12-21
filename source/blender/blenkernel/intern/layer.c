@@ -156,13 +156,24 @@ static void scene_layer_object_base_unref(SceneLayer* sl, ObjectBase *base)
 	}
 }
 
+/**
+ * Return the base if existent, or create it if necessary
+ * Always bump the refcount
+ */
 static ObjectBase *object_base_add(SceneLayer *sl, Object *ob)
 {
-	ObjectBase *base = MEM_callocN(sizeof(ObjectBase), "Object Base");
-	/* don't bump user count */
-	base->object = ob;
-	BLI_addtail(&sl->object_bases, base);
-	return base;
+	ObjectBase *ob_base;
+	ob_base = BKE_scene_layer_base_find(sl, ob);
+
+	if (ob_base == NULL) {
+		ob_base = MEM_callocN(sizeof(ObjectBase), "Object Base");
+
+		/* do not bump user count, leave it for SceneCollections */
+		ob_base->object = ob;
+		BLI_addtail(&sl->object_bases, ob_base);
+	}
+	ob_base->refcount++;
+	return ob_base;
 }
 
 /* LayerCollection */
@@ -301,30 +312,31 @@ void BKE_collection_unlink(SceneLayer *sl, LayerCollection *lc)
 	sl->active_collection = 0;
 }
 
-static void object_base_populate(SceneLayer *sl, LayerCollection *lc, ListBase *objects)
+static void layer_collection_object_add(SceneLayer *sl, LayerCollection *lc, Object *ob)
+{
+	ObjectBase *ob_base = object_base_add(sl, ob);
+
+	/* only add an object once - prevent SceneCollection->objects and
+	 * SceneCollection->filter_objects to add the same object */
+
+	if (BLI_findptr(&lc->object_bases, ob_base, offsetof(LinkData, data))) {
+		return;
+	}
+
+	BLI_addtail(&lc->object_bases, BLI_genericNodeN(ob_base));
+}
+
+static void layer_collection_objects_populate(SceneLayer *sl, LayerCollection *lc, ListBase *objects)
 {
 	for (LinkData *link = objects->first; link; link = link->next) {
-		ObjectBase *base = BLI_findptr(&sl->object_bases, link->data, offsetof(ObjectBase, object));
-
-		if (base == NULL) {
-			base = object_base_add(sl, link->data);
-		}
-		else {
-			/* only add an object once */
-			if (BLI_findptr(&lc->object_bases, base, offsetof(LinkData, data))) {
-				continue;
-			}
-		}
-
-		base->refcount++;
-		BLI_addtail(&lc->object_bases, BLI_genericNodeN(base));
+		layer_collection_object_add(sl, lc, link->data);
 	}
 }
 
 static void layer_collection_populate(SceneLayer *sl, LayerCollection *lc, SceneCollection *sc)
 {
-	object_base_populate(sl, lc, &sc->objects);
-	object_base_populate(sl, lc, &sc->filter_objects);
+	layer_collection_objects_populate(sl, lc, &sc->objects);
+	layer_collection_objects_populate(sl, lc, &sc->filter_objects);
 
 	for (SceneCollection *nsc = sc->scene_collections.first; nsc; nsc = nsc->next) {
 		layer_collection_add(sl, &lc->layer_collections, nsc);
@@ -372,6 +384,21 @@ void BKE_layer_sync_new_scene_collection(Scene *scene, const SceneCollection *sc
 			LayerCollection *lc_parent = find_layer_collection_by_scene_collection(lc, sc_parent);
 			if (lc_parent) {
 				layer_collection_add(sl, &lc_parent->layer_collections, sc);
+			}
+		}
+	}
+}
+
+/**
+ * Add a corresponding ObjectBase to all the equivalent LayerCollection
+ */
+void BKE_layer_sync_object_link(Scene *scene, SceneCollection *sc, Object *ob)
+{
+	for (SceneLayer *sl = scene->render_layers.first; sl; sl = sl->next) {
+		for (LayerCollection *lc = sl->layer_collections.first; lc; lc = lc->next) {
+			LayerCollection *found = find_layer_collection_by_scene_collection(lc, sc);
+			if (found) {
+				layer_collection_object_add(sl, found, ob);
 			}
 		}
 	}

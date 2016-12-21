@@ -179,12 +179,16 @@ void BKE_collection_master_free(Scene *scene){
 /**
  * Add object to collection
  */
-void BKE_collection_object_add(struct Scene *UNUSED(scene), struct SceneCollection *sc, struct Object *ob)
+void BKE_collection_object_add(struct Scene *scene, struct SceneCollection *sc, struct Object *ob)
 {
+	if (BLI_findptr(&sc->objects, ob, offsetof(LinkData, data))) {
+		/* don't add the same object twice */
+		return;
+	}
+
 	BLI_addtail(&sc->objects, BLI_genericNodeN(ob));
 	id_us_plus((ID *)ob);
-	TODO_LAYER_SYNC;
-	/* add the equivalent object base to all layers that have this collection */
+	BKE_layer_sync_object_link(scene, sc, ob);
 }
 
 /**
