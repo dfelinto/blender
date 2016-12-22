@@ -2289,6 +2289,38 @@ static void rna_LayerCollections_active_collection_set(PointerRNA *ptr, PointerR
 	if (index != -1) sl->active_collection = index;
 }
 
+LayerCollection * rna_SceneLayer_collection_link(
+        ID *id, SceneLayer *sl, Main *bmain, SceneCollection *sc)
+{
+	Scene *scene = (Scene *)id;
+	LayerCollection *lc = BKE_collection_link(sl, sc);
+
+	/* TODO(sergey/dfelinto): Only update relations for the current scenelayer. */
+	DAG_relations_tag_update(bmain);
+	WM_main_add_notifier(NC_SCENE | ND_LAYER, scene);
+
+	return lc;
+}
+
+static void rna_SceneLayer_collection_unlink(
+        ID *id, SceneLayer *sl, Main *bmain, ReportList *reports, LayerCollection *lc)
+{
+	Scene *scene = (Scene *)id;
+
+	if (BLI_findindex(&sl->layer_collections, lc) == -1) {
+		BKE_reportf(reports, RPT_ERROR, "Layer collection '%s' is not in '%s'", lc->scene_collection->name, sl->name);
+		return;
+	}
+
+	BKE_collection_unlink(sl, lc);
+
+	/* needed otherwise the depgraph will contain freed objects which can crash, see [#20958] */
+	/* TODO(sergey/dfelinto): Only update relations for the current scenelayer. */
+	DAG_relations_tag_update(bmain);
+
+	WM_main_add_notifier(NC_SCENE | ND_LAYER | ND_OB_ACTIVE, scene);
+}
+
 static PointerRNA rna_LayerObjects_active_object_get(PointerRNA *ptr)
 {
 	SceneLayer *sl = (SceneLayer *)ptr->data;
@@ -5368,7 +5400,9 @@ static void rna_def_layer_collection(BlenderRNA *brna)
 static void rna_def_layer_collections(BlenderRNA *brna, PropertyRNA *cprop)
 {
 	StructRNA *srna;
+	FunctionRNA *func;
 	PropertyRNA *prop;
+	PropertyRNA *parm;
 
 	RNA_def_property_srna(cprop, "LayerCollections");
 	srna = RNA_def_struct(brna, "LayerCollections", NULL);
@@ -5390,6 +5424,20 @@ static void rna_def_layer_collections(BlenderRNA *brna, PropertyRNA *cprop)
 	RNA_def_property_flag(prop, PROP_EDITABLE | PROP_NEVER_NULL);
 	RNA_def_property_ui_text(prop, "Active Layer Collection", "Active Layer Collection");
 	RNA_def_property_update(prop, NC_SCENE | ND_LAYER, NULL);
+
+	func = RNA_def_function(srna, "link", "rna_SceneLayer_collection_link");
+	RNA_def_function_ui_description(func, "Link a collection to render layer");
+	RNA_def_function_flag(func, FUNC_USE_SELF_ID | FUNC_USE_MAIN);
+	parm = RNA_def_pointer(func, "scene_collection", "SceneCollection", "", "Collection to add to render layer");
+	RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED);
+	parm = RNA_def_pointer(func, "result", "LayerCollection", "", "Newly created layer collection");
+	RNA_def_function_return(func, parm);
+
+	func = RNA_def_function(srna, "unlink", "rna_SceneLayer_collection_unlink");
+	RNA_def_function_ui_description(func, "Unlink a collection from render layer");
+	RNA_def_function_flag(func, FUNC_USE_SELF_ID | FUNC_USE_MAIN | FUNC_USE_REPORTS);
+	parm = RNA_def_pointer(func, "layer_collection", "LayerCollection", "", "Layer collection to remove from render layer");
+	RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED);
 }
 
 static void rna_def_layer_objects(BlenderRNA *brna, PropertyRNA *cprop)
