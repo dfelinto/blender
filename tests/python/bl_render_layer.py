@@ -547,11 +547,11 @@ class UnitsTesting(unittest.TestCase):
             layer = scene.render_layers.new('Fresh new Layer')
 
             if link_mode in {'COLLECTION_LINK', 'COLLECTION_UNLINK'}:
-                collection = layer.collections.link(subzero)
+                layer.collections.link(subzero)
 
             if link_mode == 'COLLECTION_UNLINK':
                 initial_collection = layer.collections['Master Collection']
-                collection = layer.collections.unlink(initial_collection)
+                layer.collections.unlink(initial_collection)
 
             # save file
             filepath_nested = os.path.join(dirpath, 'nested.blend')
