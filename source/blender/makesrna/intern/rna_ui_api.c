@@ -651,7 +651,7 @@ void RNA_api_ui_layout(StructRNA *srna)
 	api_ui_item_rna_common(func);
 	parm = RNA_def_pointer(func, "search_data", "AnyType", "", "Data from which to take collection to search in, "
 	                       "uses main ID collection if not set");
-	RNA_def_parameter_flags(parm, 0, PARM_REQUIRED | PARM_RNAPTR);
+	RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_RNAPTR);
 	parm = RNA_def_string(func, "search_property", NULL, 0, "", "Identifier of search collection property, "
 	                      "uses main ID collection if not set");
 	RNA_def_string(func, "new", NULL, 0, "", "Operator identifier to create a new ID block");
@@ -663,7 +663,7 @@ void RNA_api_ui_layout(StructRNA *srna)
 	api_ui_item_rna_common(func);
 	parm = RNA_def_pointer(func, "search_data", "AnyType", "", "Data from which to take collection to search in, "
 	                       "uses main ID collection if not set");
-	RNA_def_parameter_flags(parm, 0, PARM_REQUIRED | PARM_RNAPTR);
+	RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_RNAPTR);
 	parm = RNA_def_string(func, "search_property", NULL, 0, "", "Identifier of search collection property, "
 	                      "uses main ID collection if not set");
 	RNA_def_string(func, "new", NULL, 0, "", "Operator identifier to create a new ID block");
