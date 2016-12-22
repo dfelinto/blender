@@ -307,6 +307,7 @@ int WM_operator_confirm(struct bContext *C, struct wmOperator *op, const struct 
 struct MenuType *WM_menutype_find(const char *idname, bool quiet) RET_NULL
 void WM_operator_stack_clear(struct wmWindowManager *wm) RET_NONE
 void WM_operator_handlers_clear(wmWindowManager *wm, struct wmOperatorType *ot) RET_NONE
+void WM_windows_scene_data_sync(const struct ListBase *win_lb, struct Scene *scene) RET_NONE
 struct bScreen *WM_window_get_active_screen(const struct wmWindow *win) RET_NULL
 struct Scene *WM_window_get_active_scene(const struct wmWindow *win) RET_NULL
 void WM_window_set_active_scene(struct Main *bmain, struct bContext *C, struct wmWindow *win, struct Scene *scene_new) RET_NONE

@@ -611,24 +611,6 @@ void BKE_screen_view3d_scene_sync(bScreen *sc, Scene *scene)
 	}
 }
 
-void BKE_screen_view3d_main_sync(ListBase *screen_lb, Scene *scene)
-{
-	bScreen *sc;
-	ScrArea *sa;
-	SpaceLink *sl;
-
-	/* from scene copy to the other views */
-	for (sc = screen_lb->first; sc; sc = sc->id.next) {
-		if (sc->scene != scene)
-			continue;
-
-		for (sa = sc->areabase.first; sa; sa = sa->next)
-			for (sl = sa->spacedata.first; sl; sl = sl->next)
-				if (sl->spacetype == SPACE_VIEW3D)
-					BKE_screen_view3d_sync((View3D *)sl, scene);
-	}
-}
-
 void BKE_screen_view3d_twmode_remove(View3D *v3d, const int i)
 {
 	const int selected_index = (v3d->twmode - V3D_MANIP_CUSTOM);

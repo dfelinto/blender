@@ -119,6 +119,16 @@ bool ED_workspace_delete(Main *bmain, bContext *C, wmWindow *win, WorkSpace *ws)
 	return true;
 }
 
+/**
+ * Some editor data may need to be synced with scene data (3D View camera and layers).
+ * This function ensures data is synced for editors in active layout of \a workspace.
+ */
+void ED_workspace_scene_data_sync(WorkSpace *workspace, Scene *scene)
+{
+	bScreen *screen = BKE_workspace_active_screen_get(workspace);
+	BKE_screen_view3d_scene_sync(screen, scene);
+}
+
 /** \} Workspace API */
 
 

@@ -71,11 +71,10 @@ static void do_view3d_header_buttons(bContext *C, void *arg, int event);
 /* XXX quickly ported across */
 static void handle_view3d_lock(bContext *C)
 {
-	Main *bmain = CTX_data_main(C);
 	Scene *scene = CTX_data_scene(C);
 	ScrArea *sa = CTX_wm_area(C);
 	View3D *v3d = CTX_wm_view3d(C);
-	
+
 	if (v3d != NULL && sa != NULL) {
 		if (v3d->localvd == NULL && v3d->scenelock && sa->spacetype == SPACE_VIEW3D) {
 			/* copy to scene */
@@ -83,10 +82,6 @@ static void handle_view3d_lock(bContext *C)
 			scene->layact = v3d->layact;
 			scene->camera = v3d->camera;
 
-			/* not through notifier, listener don't have context
-			 * and non-open screens or spaces need to be updated too */
-			BKE_screen_view3d_main_sync(&bmain->screen, scene);
-			
 			/* notifiers for scene update */
 			WM_event_add_notifier(C, NC_SCENE | ND_LAYER, scene);
 		}

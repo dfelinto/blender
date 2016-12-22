@@ -457,8 +457,10 @@ static void rna_SpaceView3D_camera_update(Main *bmain, Scene *scene, PointerRNA 
 {
 	View3D *v3d = (View3D *)(ptr->data);
 	if (v3d->scenelock) {
+		wmWindowManager *wm = bmain->wm.first;
+
 		scene->camera = v3d->camera;
-		BKE_screen_view3d_main_sync(&bmain->screen, scene);
+		WM_windows_scene_data_sync(&wm->windows, scene);
 	}
 }
 

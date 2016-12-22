@@ -841,12 +841,17 @@ static void view3d_main_region_listener(bScreen *UNUSED(sc), ScrArea *sa, ARegio
 						view3d_recalc_used_layers(ar, wmn, wmn->reference);
 					ED_region_tag_redraw(ar);
 					break;
+				case ND_LAYER:
+					if (wmn->reference) {
+						BKE_screen_view3d_sync(v3d, wmn->reference);
+					}
+					ED_region_tag_redraw(ar);
+					break;
 				case ND_FRAME:
 				case ND_TRANSFORM:
 				case ND_OB_ACTIVE:
 				case ND_OB_SELECT:
 				case ND_OB_VISIBLE:
-				case ND_LAYER:
 				case ND_RENDER_OPTIONS:
 				case ND_MARKERS:
 				case ND_MODE:

@@ -307,7 +307,6 @@ unsigned int BKE_screen_view3d_layer_all(const struct bScreen *sc) ATTR_WARN_UNU
 
 void BKE_screen_view3d_sync(struct View3D *v3d, struct Scene *scene);
 void BKE_screen_view3d_scene_sync(struct bScreen *sc, struct Scene *scene);
-void BKE_screen_view3d_main_sync(ListBase *screen_lb, struct Scene *scene);
 void BKE_screen_view3d_twmode_remove(struct View3D *v3d, const int i);
 void BKE_screen_view3d_main_twmode_remove(ListBase *screen_lb, struct Scene *scene, const int i);
 void BKE_screen_gpu_fx_validate(struct GPUFXSettings *fx_settings);

@@ -55,6 +55,7 @@
 #include "BKE_library.h"
 #include "BKE_global.h"
 #include "BKE_main.h"
+#include "BKE_screen.h"
 #include "BKE_workspace.h"
 
 
@@ -1727,6 +1728,20 @@ int WM_window_pixels_y(wmWindow *win)
 bool WM_window_is_fullscreen(wmWindow *win)
 {
 	return win->windowstate == GHOST_kWindowStateFullScreen;
+}
+
+/**
+ * Some editor data may need to be synced with scene data (3D View camera and layers).
+ * This function ensures data is synced for editors in visible workspaces and their visible layouts.
+ */
+void WM_windows_scene_data_sync(const ListBase *win_lb, Scene *scene)
+{
+	for (wmWindow *win = win_lb->first; win; win = win->next) {
+		if (WM_window_get_active_scene(win) == scene) {
+			WorkSpace *workspace = win->workspace;
+			ED_workspace_scene_data_sync(workspace, scene);
+		}
+	}
 }
 
 Scene *WM_window_get_active_scene(const wmWindow *win)

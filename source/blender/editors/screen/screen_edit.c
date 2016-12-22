@@ -1208,6 +1208,7 @@ bScreen *screen_set_find_associated_fullscreen(const Main *bmain, bScreen *scree
  */
 void screen_set_refresh(Main *bmain, bContext *C, wmWindow *win)
 {
+	Scene *scene = WM_window_get_active_scene(win);
 	bScreen *sc = WM_window_get_active_screen(win);
 
 	CTX_wm_window_set(C, win);  // stores C->wm.screen... hrmf
@@ -1215,6 +1216,7 @@ void screen_set_refresh(Main *bmain, bContext *C, wmWindow *win)
 	/* prevent multiwin errors */
 	sc->winid = win->winid;
 
+	BKE_screen_view3d_scene_sync(sc, scene); /* sync new screen with scene data */
 	ED_screen_refresh(CTX_wm_manager(C), CTX_wm_window(C));
 	WM_event_add_notifier(C, NC_WINDOW, NULL);
 	WM_event_add_notifier(C, NC_WORKSPACE | ND_SCREENSET, sc);
