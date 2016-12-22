@@ -570,8 +570,13 @@ static void ui_item_enum_expand(
 
 	/* we dont want nested rows, cols in menus */
 	if (radial) {
-		layout_radial = uiLayoutRadial(layout);
-		UI_block_layout_set_current(block, layout_radial);
+		if (layout->root->layout == layout) {
+			layout_radial = uiLayoutRadial(layout);
+			UI_block_layout_set_current(block, layout_radial);
+		}
+		else {
+			UI_block_layout_set_current(block, layout);
+		}
 	}
 	else if (layout->root->type != UI_LAYOUT_MENU) {
 		UI_block_layout_set_current(block, ui_item_local_sublayout(layout, layout, 1));
@@ -1230,8 +1235,15 @@ static void ui_item_rna_size(
 		}
 	}
 
-	if (!w)
-		w = ui_text_icon_width(layout, name, icon, 0);
+	if (!w) {
+		if (type == PROP_ENUM && icon_only) {
+			w = ui_text_icon_width(layout, "", ICON_BLANK1, 0);
+			w += 0.6f * UI_UNIT_X;
+		}
+		else {
+			w = ui_text_icon_width(layout, name, icon, 0);
+		}
+	}
 	h = UI_UNIT_Y;
 
 	/* increase height for arrays */
@@ -1249,7 +1261,7 @@ static void ui_item_rna_size(
 	else if (ui_layout_vary_direction(layout) == UI_ITEM_VARY_X) {
 		if (type == PROP_BOOLEAN && name[0])
 			w += UI_UNIT_X / 5;
-		else if (type == PROP_ENUM)
+		else if (type == PROP_ENUM && !icon_only)
 			w += UI_UNIT_X / 4;
 		else if (type == PROP_FLOAT || type == PROP_INT)
 			w += UI_UNIT_X * 3;

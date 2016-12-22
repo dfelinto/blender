@@ -921,7 +921,7 @@ static void depthdropper_depth_sample_pt(bContext *C, DepthDropper *ddr, int mx,
 					float co_align[3];
 
 					/* quick way to get view-center aligned point */
-					ED_view3d_win_to_3d(ar, co, mval_center_fl, co_align);
+					ED_view3d_win_to_3d(v3d, ar, co, mval_center_fl, co_align);
 
 					*r_depth = len_v3v3(view_co, co_align);
 

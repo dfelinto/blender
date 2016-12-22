@@ -258,7 +258,7 @@ typedef struct wmNotifier {
 #define ND_JOB				(5<<16)
 #define ND_UNDO				(6<<16)
 
-	/* NC_WORKSPACE screen */
+	/* NC_WORKSPACE */
 #define ND_SCREENBROWSE		(1<<16)
 #define ND_SCREENDELETE		(2<<16)
 #define ND_SCREENCAST		(3<<16)
