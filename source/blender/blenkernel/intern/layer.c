@@ -141,21 +141,6 @@ ObjectBase *BKE_scene_layer_base_find(SceneLayer *sl, Object *ob)
 	return BLI_findptr(&sl->object_bases, ob, offsetof(ObjectBase, object));
 }
 
-void BKE_scene_layer_base_deselect_all(SceneLayer *sl)
-{
-	ObjectBase *ob_base;
-
-	for (ob_base = sl->object_bases.first; ob_base; ob_base = ob_base->next) {
-		ob_base->flag &= ~BASE_SELECTED;
-	}
-}
-
-void BKE_scene_layer_base_select(struct SceneLayer *sl, ObjectBase *selbase)
-{
-	selbase->flag |= BASE_SELECTED;
-	sl->basact = selbase;
-}
-
 static void scene_layer_object_base_unref(SceneLayer* sl, ObjectBase *base)
 {
 	base->refcount--;

@@ -408,7 +408,6 @@ Object *ED_object_add_type(
 {
 	Main *bmain = CTX_data_main(C);
 	Scene *scene = CTX_data_scene(C);
-	SceneLayer *sl = CTX_data_scene_layer(C);
 	Object *ob;
 
 	/* for as long scene has editmode... */
@@ -416,7 +415,7 @@ Object *ED_object_add_type(
 		ED_object_editmode_exit(C, EM_FREEDATA | EM_FREEUNDO | EM_WAITCURSOR | EM_DO_UNDO);  /* freedata, and undo */
 
 	/* deselects all, sets scene->basact */
-	ob = BKE_object_add(bmain, scene, sl, type, name);
+	ob = BKE_object_add(bmain, scene, type, name);
 	BASACT->lay = ob->lay = layer;
 	/* editor level activate, notifiers */
 	ED_base_object_activate(C, BASACT);
