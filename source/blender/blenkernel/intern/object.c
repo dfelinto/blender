@@ -93,6 +93,7 @@
 #include "BKE_icons.h"
 #include "BKE_key.h"
 #include "BKE_lamp.h"
+#include "BKE_layer.h"
 #include "BKE_lattice.h"
 #include "BKE_library.h"
 #include "BKE_library_query.h"
@@ -627,23 +628,25 @@ Object *BKE_object_add_only_object(Main *bmain, int type, const char *name)
 /* general add: to scene, with layer from area and default name */
 /* creates minimum required data, but without vertices etc. */
 Object *BKE_object_add(
-        Main *bmain, Scene *scene,
+        Main *bmain, Scene *scene, SceneLayer *sl,
         int type, const char *name)
 {
 	Object *ob;
-	Base *base;
+	ObjectBase *ob_base;
+	LayerCollection *lc;
 
 	ob = BKE_object_add_only_object(bmain, type, name);
 
 	ob->data = BKE_object_obdata_add_from_type(bmain, type, name);
 
-	ob->lay = scene->lay;
-	
-	base = BKE_scene_base_add(scene, ob);
-	BKE_scene_base_deselect_all(scene);
-	BKE_scene_base_select(scene, base);
-	DAG_id_tag_update_ex(bmain, &ob->id, OB_RECALC_OB | OB_RECALC_DATA | OB_RECALC_TIME);
+	lc = BKE_layer_collection_active(sl);
+	BKE_collection_object_add(scene, lc->scene_collection, ob);
 
+	ob_base = BKE_scene_layer_base_find(sl, ob);
+	BKE_scene_layer_base_deselect_all(sl);
+	BKE_scene_layer_base_select(sl, ob_base);
+
+	DAG_id_tag_update_ex(bmain, &ob->id, OB_RECALC_OB | OB_RECALC_DATA | OB_RECALC_TIME);
 	return ob;
 }
 

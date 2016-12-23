@@ -86,9 +86,9 @@ struct Object *BKE_object_add_only_object(
         int type, const char *name)
         ATTR_NONNULL(1) ATTR_RETURNS_NONNULL;
 struct Object *BKE_object_add(
-        struct Main *bmain, struct Scene *scene,
+        struct Main *bmain, struct Scene *scene, struct SceneLayer *sl,
         int type, const char *name)
-        ATTR_NONNULL(1, 2) ATTR_RETURNS_NONNULL;
+        ATTR_NONNULL(1, 2, 3) ATTR_RETURNS_NONNULL;
 void *BKE_object_obdata_add_from_type(
         struct Main *bmain,
         int type, const char *name)

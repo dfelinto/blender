@@ -59,6 +59,8 @@ void BKE_scene_layer_engine_set(struct SceneLayer *sl, const char *engine);
 void BKE_scene_layer_selected_objects_tag(struct SceneLayer *sl, const int tag);
 
 struct ObjectBase *BKE_scene_layer_base_find(struct SceneLayer *sl, struct Object *ob);
+void BKE_scene_layer_base_deselect_all(struct SceneLayer *sl);
+void BKE_scene_layer_base_select(struct SceneLayer *sl, struct ObjectBase *selbase);
 
 void BKE_layer_collection_free(struct SceneLayer *sl, struct LayerCollection *lc);
 
