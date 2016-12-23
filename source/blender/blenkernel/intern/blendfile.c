@@ -162,16 +162,19 @@ static void setup_app_data(
 		 * (otherwise we'd be undoing on an off-screen scene which isn't acceptable).
 		 * see: T43424
 		 */
+		wmWindow *win;
 		bScreen *curscreen = NULL;
 		bool track_undo_scene;
 
 		/* comes from readfile.c */
 		SWAP(ListBase, G.main->wm, bfd->main->wm);
+		SWAP(ListBase, G.main->workspaces, bfd->main->workspaces);
 		SWAP(ListBase, G.main->screen, bfd->main->screen);
 
-		/* we re-use current screen */
+		/* we re-use current window and screen */
+		win = CTX_wm_window(C);
 		curscreen = CTX_wm_screen(C);
-		/* but use new Scene pointer */
+		/* but use Scene pointer from new file */
 		curscene = bfd->curscene;
 
 		track_undo_scene = (mode == LOAD_UNDO && curscreen && curscene && bfd->main->wm.first);
@@ -188,19 +191,15 @@ static void setup_app_data(
 			/* keep the old (free'd) scene, let 'blo_lib_link_screen_restore'
 			 * replace it with 'curscene' if its needed */
 		}
-		else {
-			/* and we enforce curscene to be in current screen */
-			if (curscreen) {
-				/* can run in bgmode */
-				curscreen->scene = curscene;
-			}
+		/* and we enforce curscene to be in current screen */
+		else if (win) { /* can run in bgmode */
+			win->scene = curscene;
 		}
 
 		/* BKE_blender_globals_clear will free G.main, here we can still restore pointers */
-		blo_lib_link_screen_restore(bfd->main, curscreen, curscene);
-		/* curscreen might not be set when loading without ui (see T44217) so only re-assign if available */
-		if (curscreen) {
-			curscene = curscreen->scene;
+		blo_lib_link_restore(bfd->main, CTX_wm_manager(C), curscene);
+		if (win) {
+			curscene = win->scene;
 		}
 
 		if (track_undo_scene) {
@@ -261,12 +260,14 @@ static void setup_app_data(
 
 	/* this can happen when active scene was lib-linked, and doesn't exist anymore */
 	if (CTX_data_scene(C) == NULL) {
+		wmWindow *win = CTX_wm_window(C);
+
 		/* in case we don't even have a local scene, add one */
 		if (!G.main->scene.first)
 			BKE_scene_add(G.main, "Empty");
 
 		CTX_data_scene_set(C, G.main->scene.first);
-		CTX_wm_screen(C)->scene = CTX_data_scene(C);
+		win->scene = CTX_data_scene(C);
 		curscene = CTX_data_scene(C);
 	}
 

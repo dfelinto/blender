@@ -48,6 +48,7 @@ struct View3D;
 struct bContext;
 struct BHead;
 struct FileData;
+struct wmWindowManager;
 
 typedef struct BlendHandle BlendHandle;
 
@@ -111,7 +112,7 @@ void *BLO_library_read_struct(struct FileData *fd, struct BHead *bh, const char 
 BlendFileData *blo_read_blendafterruntime(int file, const char *name, int actualsize, struct ReportList *reports);
 
 /* internal function but we need to expose it */
-void blo_lib_link_screen_restore(struct Main *newmain, struct bScreen *curscreen, struct Scene *curscene);
+void blo_lib_link_restore(struct Main *newmain, struct wmWindowManager *curwm, struct Scene *curscene);
 
 typedef void (*BLOExpandDoitCallback) (void *fdhandle, struct Main *mainvar, void *idv);
 
