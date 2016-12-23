@@ -41,7 +41,6 @@ struct Scene;
 struct Object;
 struct BoundBox;
 struct View3D;
-struct SceneLayer;
 struct SoftBody;
 struct BulletSoftBody;
 struct MovieClip;
