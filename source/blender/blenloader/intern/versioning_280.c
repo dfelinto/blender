@@ -46,11 +46,12 @@
 
 #include "MEM_guardedalloc.h"
 
-void blo_do_versions_after_linking_280(FileData *fd, Library *UNUSED(lib), Main *main)
+void blo_do_versions_after_linking_280(Main *main)
 {
 	if (!MAIN_VERSION_ATLEAST(main, 280, 0)) {
-		if (!DNA_struct_elem_find(fd->filesdna, "Scene", "ListBase", "render_layers")) {
-			for (Scene *scene = main->scene.first; scene; scene = scene->id.next) {
+		for (Scene *scene = main->scene.first; scene; scene = scene->id.next) {
+			/* since we don't have access to FileData we check the (always valid) first render layer instead */
+			if (scene->render_layers.first == NULL) {
 				SceneCollection *sc_master = BKE_collection_master(scene);
 				BLI_strncpy(sc_master->name, "Master Collection", sizeof(sc_master->name));
 
