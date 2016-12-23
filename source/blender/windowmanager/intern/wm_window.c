@@ -328,7 +328,8 @@ void wm_window_close(bContext *C, wmWindowManager *wm, wmWindow *win)
 	}
 	else {
 		bScreen *screen = WM_window_get_active_screen(win);
-		
+		WorkSpace *workspace = win->workspace;
+
 		BLI_remlink(&wm->windows, win);
 		
 		wm_draw_window_clear(win);
@@ -348,7 +349,10 @@ void wm_window_close(bContext *C, wmWindowManager *wm, wmWindow *win)
 		/* if temp screen, delete it after window free (it stops jobs that can access it) */
 		if (screen && screen->temp) {
 			Main *bmain = CTX_data_main(C);
-			BKE_libblock_free(bmain, screen);
+			WorkSpaceLayout *layout = BKE_workspace_active_layout_get(workspace);
+
+			BKE_workspace_layout_remove(workspace, layout, bmain);
+			BKE_libblock_free(bmain, workspace);
 		}
 	}
 }
