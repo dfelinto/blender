@@ -314,7 +314,7 @@ void wm_event_do_notifiers(bContext *C)
 							printf("%s: screen set %p\n", __func__, note->reference);
 					}
 					else if (note->data == ND_SCREENDELETE) {
-						WorkSpace *workspace = win->workspace;
+						WorkSpace *workspace = WM_window_get_active_workspace(win);
 						WorkSpaceLayout *layout = note->reference;
 
 						ED_workspace_layout_delete(C, workspace, layout);   // XXX hrms, think this over!
@@ -360,7 +360,7 @@ void wm_event_do_notifiers(bContext *C)
 			if (note->category == NC_WORKSPACE &&
 			    note->reference &&
 			    note->reference != screen &&
-			    note->reference != win->workspace &&
+			    note->reference != WM_window_get_active_workspace(win) &&
 			    note->reference != WM_window_get_active_layout(win))
 			{
 				/* pass */
@@ -2453,7 +2453,7 @@ void wm_event_do_handlers(bContext *C)
 				if (is_playing_sound != -1) {
 					bool is_playing_screen;
 					CTX_wm_window_set(C, win);
-					CTX_wm_workspace_set(C, win->workspace);
+					CTX_wm_workspace_set(C, WM_window_get_active_workspace(win));
 					CTX_data_scene_set(C, scene);
 					
 					is_playing_screen = (ED_screen_animation_playing(wm) != NULL);

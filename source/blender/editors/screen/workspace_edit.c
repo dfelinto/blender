@@ -59,7 +59,8 @@
 bool ED_workspace_change(bContext *C, wmWindow *win, WorkSpace *ws_new)
 {
 	Main *bmain = CTX_data_main(C);
-	bScreen *screen_old = BKE_workspace_active_screen_get(win->workspace);
+	WorkSpace *workspace_old = WM_window_get_active_workspace(win);
+	bScreen *screen_old = BKE_workspace_active_screen_get(workspace_old);
 	bScreen *screen_new = BKE_workspace_active_screen_get(ws_new);
 
 	if (!(screen_new = screen_set_ensure_valid(bmain, win, screen_new))) {
@@ -68,7 +69,7 @@ bool ED_workspace_change(bContext *C, wmWindow *win, WorkSpace *ws_new)
 
 	if (screen_old != screen_new) {
 		screen_set_prepare(C, win, screen_new, screen_old);
-		win->workspace = ws_new;
+		WM_window_set_active_workspace(win, ws_new);
 		screen_set_refresh(bmain, C, win);
 	}
 	BLI_assert(CTX_wm_workspace(C) == ws_new);
@@ -108,7 +109,7 @@ bool ED_workspace_delete(Main *bmain, bContext *C, wmWindow *win, WorkSpace *ws)
 		return false;
 	}
 
-	if (win->workspace == ws) {
+	if (WM_window_get_active_workspace(win) == ws) {
 		WorkSpace *prev = BKE_workspace_prev_get(ws);
 		WorkSpace *next = BKE_workspace_next_get(ws);
 
@@ -140,10 +141,8 @@ static int workspace_new_exec(bContext *C, wmOperator *UNUSED(op))
 {
 	Main *bmain = CTX_data_main(C);
 	wmWindow *win = CTX_wm_window(C);
-	WorkSpace *workspace_old = win->workspace;
-	WorkSpace *workspace;
+	WorkSpace *workspace = ED_workspace_duplicate(WM_window_get_active_workspace(win), bmain, win);
 
-	workspace = ED_workspace_duplicate(workspace_old, bmain, win);
 	WM_event_add_notifier(C, NC_WORKSPACE | ND_WORKSPACE_SET, workspace);
 
 	return OPERATOR_FINISHED;
@@ -166,7 +165,7 @@ static int workspace_delete_exec(bContext *C, wmOperator *UNUSED(op))
 	Main *bmain = CTX_data_main(C);
 	wmWindow *win = CTX_wm_window(C);
 
-	ED_workspace_delete(bmain, C, win, win->workspace);
+	ED_workspace_delete(bmain, C, win, WM_window_get_active_workspace(win));
 
 	return OPERATOR_FINISHED;
 }

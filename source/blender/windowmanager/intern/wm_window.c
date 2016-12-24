@@ -253,6 +253,7 @@ wmWindow *wm_window_copy(bContext *C, wmWindow *win_src)
 {
 	Main *bmain = CTX_data_main(C);
 	wmWindow *win_dst = wm_window_new(C);
+	WorkSpace *workspace_src = WM_window_get_active_workspace(win_src);
 	Scene *scene = WM_window_get_active_scene(win_src);
 	bScreen *new_screen;
 
@@ -262,7 +263,7 @@ wmWindow *wm_window_copy(bContext *C, wmWindow *win_src)
 	win_dst->sizey = win_src->sizey;
 
 	win_dst->scene = scene;
-	win_dst->workspace = ED_workspace_duplicate(win_src->workspace, bmain, win_dst);
+	WM_window_set_active_workspace(win_dst, ED_workspace_duplicate(workspace_src, bmain, win_dst));
 	new_screen = WM_window_get_active_screen(win_dst);
 	BLI_strncpy(win_dst->screenname, new_screen->id.name + 2, sizeof(win_dst->screenname));
 
@@ -328,7 +329,7 @@ void wm_window_close(bContext *C, wmWindowManager *wm, wmWindow *win)
 	}
 	else {
 		bScreen *screen = WM_window_get_active_screen(win);
-		WorkSpace *workspace = win->workspace;
+		WorkSpace *workspace = WM_window_get_active_workspace(win);
 
 		BLI_remlink(&wm->windows, win);
 		
@@ -351,6 +352,7 @@ void wm_window_close(bContext *C, wmWindowManager *wm, wmWindow *win)
 			Main *bmain = CTX_data_main(C);
 			WorkSpaceLayout *layout = BKE_workspace_active_layout_get(workspace);
 
+			BLI_assert(BKE_workspace_layout_screen_get(layout) == screen);
 			BKE_workspace_layout_remove(workspace, layout, bmain);
 			BKE_libblock_free(bmain, workspace);
 		}
@@ -665,13 +667,13 @@ wmWindow *WM_window_open_temp(bContext *C, const rcti *rect_init, int type)
 		wm_window_raise(win);
 	}
 
-	if (win->workspace == NULL) {
-		win->workspace = BKE_workspace_add(bmain, "Temp");
+	if (WM_window_get_active_workspace(win) == NULL) {
+		WM_window_set_active_workspace(win, BKE_workspace_add(bmain, "Temp"));
 	}
 
 	if (screen == NULL) {
 		/* add new screen layout */
-		WorkSpaceLayout *layout = ED_workspace_layout_add(win->workspace, win, "temp");
+		WorkSpaceLayout *layout = ED_workspace_layout_add(WM_window_get_active_workspace(win), win, "temp");
 
 		screen = BKE_workspace_layout_screen_get(layout);
 		WM_window_set_active_layout(win, layout);
@@ -1742,8 +1744,7 @@ void WM_windows_scene_data_sync(const ListBase *win_lb, Scene *scene)
 {
 	for (wmWindow *win = win_lb->first; win; win = win->next) {
 		if (WM_window_get_active_scene(win) == scene) {
-			WorkSpace *workspace = win->workspace;
-			ED_workspace_scene_data_sync(workspace, scene);
+			ED_workspace_scene_data_sync(WM_window_get_active_workspace(win), scene);
 		}
 	}
 }
@@ -1763,6 +1764,15 @@ void WM_window_set_active_scene(Main *bmain, bContext *C, wmWindow *win, Scene *
 	ED_scene_exit(C);
 	win->scene = scene_new;
 	ED_scene_changed_update(bmain, C, scene_new, screen);
+}
+
+WorkSpace *WM_window_get_active_workspace(const wmWindow *win)
+{
+	return win->workspace;
+}
+void WM_window_set_active_workspace(wmWindow *win, WorkSpace *workspace)
+{
+	win->workspace = workspace;
 }
 
 WorkSpaceLayout *WM_window_get_active_layout(const wmWindow *win)

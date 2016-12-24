@@ -106,6 +106,8 @@ void WM_windows_scene_data_sync(const ListBase *win_lb, struct Scene *scene) ATT
 struct Scene *WM_window_get_active_scene(const struct wmWindow *win) ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
 void          WM_window_set_active_scene(struct Main *bmain, struct bContext *C, struct wmWindow *win,
                                          struct Scene *scene_new) ATTR_NONNULL();
+struct WorkSpace *WM_window_get_active_workspace(const struct wmWindow *win) ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
+void              WM_window_set_active_workspace(struct wmWindow *win, struct WorkSpace *workspace) ATTR_NONNULL(1);
 struct WorkSpaceLayout *WM_window_get_active_layout(const struct wmWindow *win) ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
 void                    WM_window_set_active_layout(struct wmWindow *win, struct WorkSpaceLayout *layout) ATTR_NONNULL(1);
 struct bScreen *WM_window_get_active_screen(const struct wmWindow *win) ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;

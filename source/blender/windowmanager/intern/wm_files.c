@@ -256,7 +256,7 @@ static void wm_window_match_do(bContext *C, ListBase *oldwmlist)
 							WM_window_set_active_screen(win, screen);
 						}
 						else {
-							WorkSpace *workspace = win->workspace;
+							WorkSpace *workspace = WM_window_get_active_workspace(win);
 							WorkSpaceLayout *layout_old = WM_window_get_active_layout(win);
 							WorkSpaceLayout *layout_new = ED_workspace_layout_duplicate(workspace, layout_old, win);
 

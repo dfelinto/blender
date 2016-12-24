@@ -956,8 +956,8 @@ void ED_screens_initialize(wmWindowManager *wm)
 	wmWindow *win;
 	
 	for (win = wm->windows.first; win; win = win->next) {
-		if (win->workspace == NULL) {
-			win->workspace = G.main->workspaces.first;
+		if (WM_window_get_active_workspace(win) == NULL) {
+			WM_window_set_active_workspace(win, G.main->workspaces.first);
 		}
 
 		ED_screen_refresh(wm, win);
@@ -1450,6 +1450,7 @@ void ED_screen_full_restore(bContext *C, ScrArea *sa)
 ScrArea *ED_screen_state_toggle(bContext *C, wmWindow *win, ScrArea *sa, const short state)
 {
 	wmWindowManager *wm = CTX_wm_manager(C);
+	WorkSpace *workspace = WM_window_get_active_workspace(win);
 	bScreen *sc, *oldscreen;
 	ARegion *ar;
 
@@ -1506,7 +1507,7 @@ ScrArea *ED_screen_state_toggle(bContext *C, wmWindow *win, ScrArea *sa, const s
 
 		ED_screen_set(C, sc);
 
-		BKE_workspace_layout_remove(win->workspace, layout_old, CTX_data_main(C));
+		BKE_workspace_layout_remove(workspace, layout_old, CTX_data_main(C));
 
 		/* After we've restored back to SCREENNORMAL, we have to wait with
 		 * screen handling as it uses the area coords which aren't updated yet.
@@ -1516,7 +1517,6 @@ ScrArea *ED_screen_state_toggle(bContext *C, wmWindow *win, ScrArea *sa, const s
 	}
 	else {
 		/* change from SCREENNORMAL to new state */
-		WorkSpace *workspace = win->workspace;
 		WorkSpaceLayout *layout_new;
 		ScrArea *newa;
 		char newname[MAX_ID_NAME - 2];
