@@ -201,6 +201,8 @@ static void do_version_bones_super_bbone(ListBase *lb)
  *
  * Adds a workspace for each screen of the old file and adds the needed workspace-layout to wrap the screen.
  * Rest of the conversion is done in #do_version_workspaces_after_lib_link.
+ *
+ * Note that some of the created workspaces might be deleted again in case of reading the default startup.blend.
  */
 static void do_version_workspaces_before_lib_link(Main *main)
 {

@@ -86,7 +86,8 @@ WorkSpace *ED_workspace_duplicate(WorkSpace *workspace_old, Main *bmain, wmWindo
 	ListBase *layouts_old = BKE_workspace_layouts_get(workspace_old);
 	WorkSpace *worspace_new = BKE_libblock_alloc(bmain, ID_WS, BKE_workspace_name_get(workspace_old));
 
-	BKE_workspace_layout_iter(layout_old, layouts_old->first) {
+	BKE_workspace_layout_iter_begin(layout_old, layouts_old->first)
+	{
 		WorkSpaceLayout *layout_new = ED_workspace_layout_duplicate(worspace_new, layout_old, win);
 
 		if (layout_active_old == layout_old) {
@@ -96,6 +97,7 @@ WorkSpace *ED_workspace_duplicate(WorkSpace *workspace_old, Main *bmain, wmWindo
 			BKE_workspace_active_layout_set(worspace_new, layout_new);
 		}
 	}
+	BKE_workspace_layout_iter_end;
 
 	return worspace_new;
 }

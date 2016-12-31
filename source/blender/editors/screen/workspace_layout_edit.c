@@ -104,16 +104,20 @@ static WorkSpaceLayout *workspace_layout_delete_find_new(const WorkSpaceLayout *
 	WorkSpaceLayout *prev = BKE_workspace_layout_prev_get(layout_old);
 	WorkSpaceLayout *next = BKE_workspace_layout_next_get(layout_old);
 
-	BKE_workspace_layout_iter_backwards(layout_new, prev) {
+	BKE_workspace_layout_iter_backwards_begin(layout_new, prev)
+	{
 		if (workspace_layout_set_poll(layout_new)) {
 			return layout_new;
 		}
 	}
-	BKE_workspace_layout_iter(layout_new, next) {
+	BKE_workspace_layout_iter_end;
+	BKE_workspace_layout_iter_begin(layout_new, next)
+	{
 		if (workspace_layout_set_poll(layout_new)) {
 			return layout_new;
 		}
 	}
+	BKE_workspace_layout_iter_end;
 
 	return NULL;
 }

@@ -39,6 +39,7 @@ typedef struct WorkSpaceLayout WorkSpaceLayout;
 
 WorkSpace *BKE_workspace_add(Main *bmain, const char *name);
 void BKE_workspace_free(WorkSpace *ws);
+void BKE_workspace_remove(WorkSpace *workspace, Main *bmain);
 
 struct WorkSpaceLayout *BKE_workspace_layout_add(WorkSpace *workspace, struct bScreen *screen) ATTR_NONNULL();
 void BKE_workspace_layout_remove(WorkSpace *workspace, WorkSpaceLayout *layout, Main *bmain) ATTR_NONNULL();
@@ -47,16 +48,21 @@ void BKE_workspace_layout_remove(WorkSpace *workspace, WorkSpaceLayout *layout, 
 /* -------------------------------------------------------------------- */
 /* General Utils */
 
-#define BKE_workspace_iter(_workspace, _start_workspace) \
-	for (WorkSpace *_workspace = _start_workspace; _workspace; _workspace = BKE_workspace_next_get(_workspace))
+#define BKE_workspace_iter_begin(_workspace, _start_workspace) \
+	for (WorkSpace *_workspace = _start_workspace, *_workspace##_next; _workspace; _workspace = _workspace##_next) { \
+		_workspace##_next = BKE_workspace_next_get(_workspace); /* support removing workspace from list */
+#define BKE_workspace_iter_end } (void)0
 
 WorkSpaceLayout *BKE_workspace_layout_find(const WorkSpace *ws, const struct bScreen *screen) ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
 WorkSpaceLayout *BKE_workspace_layout_find_exec(const WorkSpace *ws, const struct bScreen *screen) ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
 
-#define BKE_workspace_layout_iter(_layout, _start_layout) \
-	for (WorkSpaceLayout *_layout = _start_layout; _layout; _layout = BKE_workspace_layout_next_get(_layout))
-#define BKE_workspace_layout_iter_backwards(_layout, _start_layout) \
-	for (WorkSpaceLayout *_layout = _start_layout; _layout; _layout = BKE_workspace_layout_prev_get(_layout))
+#define BKE_workspace_layout_iter_begin(_layout, _start_layout) \
+	for (WorkSpaceLayout *_layout = _start_layout, *_layout##_next; _layout; _layout = _layout##_next) { \
+		_layout##_next = BKE_workspace_layout_next_get(_layout); /* support removing layout from list */
+#define BKE_workspace_layout_iter_backwards_begin(_layout, _start_layout) \
+	for (WorkSpaceLayout *_layout = _start_layout, *_layout##_prev; _layout; _layout = _layout##_prev) {\
+		_layout##_prev = BKE_workspace_layout_prev_get(_layout); /* support removing layout from list */
+#define BKE_workspace_layout_iter_end } (void)0
 
 WorkSpaceLayout *BKE_workspace_layout_iter_circular(const WorkSpace *workspace, WorkSpaceLayout *start,
                                                     bool (*callback)(const WorkSpaceLayout *layout, void *arg),

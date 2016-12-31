@@ -2746,19 +2746,23 @@ static void lib_link_workspaces(FileData *fd, Main *bmain)
 	/* Note the NULL pointer checks for result of newlibadr. This is needed for reading old files from before the
 	 * introduction of workspaces (in do_versioning code we already created workspaces for screens of old file). */
 
-	BKE_workspace_iter(workspace, bmain->workspaces.first) {
+	BKE_workspace_iter_begin(workspace, bmain->workspaces.first)
+	{
 		ID *id = BKE_workspace_id_get(workspace);
 		ListBase *layouts = BKE_workspace_layouts_get(workspace);
 
 		id_us_ensure_real(id);
 
-		BKE_workspace_layout_iter(layout, layouts->first) {
+		BKE_workspace_layout_iter_begin(layout, layouts->first)
+		{
 			bScreen *screen = newlibadr(fd, id->lib, BKE_workspace_layout_screen_get(layout));
 			if (screen) {
 				BKE_workspace_layout_screen_set(layout, screen);
 			}
 		}
+		BKE_workspace_layout_iter_end;
 	}
+	BKE_workspace_iter_end;
 }
 
 static void direct_link_workspace(FileData *fd, WorkSpace *ws)
@@ -6876,19 +6880,21 @@ static void lib_link_workspace_layout_restore(struct IDNameLib_Map *id_map, Main
  */
 void blo_lib_link_restore(Main *newmain, wmWindowManager *curwm, Scene *curscene)
 {
-	wmWindow *win;
-
 	struct IDNameLib_Map *id_map = BKE_main_idmap_create(newmain);
 
-	BKE_workspace_iter(workspace, newmain->workspaces.first) {
+	BKE_workspace_iter_begin(workspace, newmain->workspaces.first)
+	{
 		ListBase *layouts = BKE_workspace_layouts_get(workspace);
 
-		BKE_workspace_layout_iter(layout, layouts->first) {
+		BKE_workspace_layout_iter_begin(layout, layouts->first)
+		{
 			lib_link_workspace_layout_restore(id_map, newmain, layout);
 		}
+		BKE_workspace_layout_iter_end;
 	}
+	BKE_workspace_iter_end;
 
-	for (win = curwm->windows.first; win; win = win->next) {
+	for (wmWindow *win = curwm->windows.first; win; win = win->next) {
 		Scene *oldscene = win->scene;
 		WorkSpace *workspace = restore_pointer_by_name(id_map, (ID *)win->workspace, USER_REAL);
 

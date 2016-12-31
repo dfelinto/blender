@@ -43,6 +43,7 @@
 #include "BKE_brush.h"
 #include "BKE_library.h"
 #include "BKE_main.h"
+#include "BKE_workspace.h"
 
 #include "BLO_readfile.h"
 
@@ -68,6 +69,24 @@ void BLO_update_defaults_userpref_blend(void)
 	 * but take care since some hardware has driver bugs here (T46962).
 	 * Further hardware workarounds should be made in gpu_extensions.c */
 	U.glalphaclip = (1.0f / 255);
+}
+
+/**
+ * New workspace design: Remove all screens except of "Default" one.
+ * For compatibility, a new workspace has been created for each screen of old files,
+ * we only want one workspace and one screen in the default startup file however.
+ */
+static void update_defaults_startup_workspaces(Main *bmain)
+{
+	BKE_workspace_iter_begin(workspace, bmain->workspaces.first)
+	{
+		if (STREQ(BKE_workspace_name_get(workspace), "Default")) {
+		}
+		else {
+			BKE_workspace_remove(workspace, bmain);
+		}
+	}
+	BKE_workspace_iter_end;
 }
 
 /**
@@ -166,20 +185,18 @@ void BLO_update_defaults_startup_blend(Main *bmain)
 		linestyle->chain_count = 10;
 	}
 
-	for (bScreen *screen = bmain->screen.first; screen; screen = screen->id.next) {
-		ScrArea *area;
-		for (area = screen->areabase.first; area; area = area->next) {
-			SpaceLink *space_link;
-			ARegion *ar;
+	update_defaults_startup_workspaces(bmain);
 
-			for (space_link = area->spacedata.first; space_link; space_link = space_link->next) {
+	for (bScreen *screen = bmain->screen.first; screen; screen = screen->id.next) {
+		for (ScrArea *area = screen->areabase.first; area; area = area->next) {
+			for (SpaceLink *space_link = area->spacedata.first; space_link; space_link = space_link->next) {
 				if (space_link->spacetype == SPACE_CLIP) {
 					SpaceClip *space_clip = (SpaceClip *) space_link;
 					space_clip->flag &= ~SC_MANUAL_CALIBRATION;
 				}
 			}
 
-			for (ar = area->regionbase.first; ar; ar = ar->next) {
+			for (ARegion *ar = area->regionbase.first; ar; ar = ar->next) {
 				/* Remove all stored panels, we want to use defaults (order, open/closed) as defined by UI code here! */
 				BLI_freelistN(&ar->panels);
 

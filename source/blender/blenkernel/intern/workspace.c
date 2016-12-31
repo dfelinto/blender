@@ -55,6 +55,17 @@ void BKE_workspace_free(WorkSpace *ws)
 	BLI_freelistN(&ws->layouts);
 }
 
+void BKE_workspace_remove(WorkSpace *workspace, Main *bmain)
+{
+	BKE_workspace_layout_iter_begin(layout, workspace->layouts.first)
+	{
+		BKE_workspace_layout_remove(workspace, layout, bmain);
+	}
+	BKE_workspace_layout_iter_end;
+
+	BKE_libblock_free(bmain, workspace);
+}
+
 
 /**
  * Add a new layout to \a workspace for \a screen.
@@ -73,8 +84,7 @@ WorkSpaceLayout *BKE_workspace_layout_add(WorkSpace *workspace, bScreen *screen)
 void BKE_workspace_layout_remove(WorkSpace *workspace, WorkSpaceLayout *layout, Main *bmain)
 {
 	BKE_libblock_free(bmain, BKE_workspace_layout_screen_get(layout));
-	BLI_remlink(&workspace->layouts, layout);
-	MEM_freeN(layout);
+	BLI_freelinkN(&workspace->layouts, layout);
 }
 
 

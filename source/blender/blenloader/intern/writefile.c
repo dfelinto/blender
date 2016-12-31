@@ -3904,11 +3904,13 @@ static void write_cachefiles(WriteData *wd, ListBase *idbase)
 
 static void write_workspaces(WriteData *wd, ListBase *idbase)
 {
-	BKE_workspace_iter(workspace, idbase->first) {
+	BKE_workspace_iter_begin(workspace, idbase->first)
+	{
 		ListBase *layouts = BKE_workspace_layouts_get(workspace);
 		writestruct(wd, ID_WS, WorkSpace, 1, workspace);
 		writelist(wd, DATA, WorkSpaceLayout, layouts);
 	}
+	BKE_workspace_iter_end;
 }
 
 /* Keep it last of write_foodata functions. */
