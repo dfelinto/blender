@@ -404,7 +404,7 @@ static void rna_Space_view2d_sync_update(Main *UNUSED(bmain), Scene *UNUSED(scen
 
 static PointerRNA rna_CurrentOrientation_get(PointerRNA *ptr)
 {
-	Scene *scene = ((bScreen *)ptr->id.data)->scene;
+	Scene *scene = WM_windows_scene_get_from_screen(G.main->wm.first, ptr->id.data);
 	View3D *v3d = (View3D *)ptr->data;
 
 	if (v3d->twmode < V3D_MANIP_CUSTOM)
@@ -426,7 +426,7 @@ EnumPropertyItem *rna_TransformOrientation_itemf(bContext *C, PointerRNA *ptr, P
 	RNA_enum_items_add(&item, &totitem, transform_orientation_items);
 
 	if (ptr->type == &RNA_SpaceView3D)
-		scene = ((bScreen *)ptr->id.data)->scene;
+		scene = WM_windows_scene_get_from_screen(G.main->wm.first, ptr->id.data);
 	else
 		scene = CTX_data_scene(C);  /* can't use scene from ptr->id.data because that enum is also used by operators */
 
@@ -697,17 +697,13 @@ static void rna_RegionView3D_view_matrix_set(PointerRNA *ptr, const float *value
 
 static int rna_SpaceView3D_viewport_shade_get(PointerRNA *ptr)
 {
-#if 0
-	Scene *scene = ((bScreen *)ptr->id.data)->scene;
+	Scene *scene = WM_windows_scene_get_from_screen(G.main->wm.first, ptr->id.data);
 	RenderEngineType *type = RE_engines_find(scene->r.engine);
-#endif
 	View3D *v3d = (View3D *)ptr->data;
 	int drawtype = v3d->drawtype;
 
-#if 0
 	if (drawtype == OB_RENDER && !(type && type->view_draw))
 		return OB_SOLID;
-#endif
 
 	return drawtype;
 }

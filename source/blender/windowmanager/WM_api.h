@@ -102,6 +102,8 @@ int			WM_window_pixels_y		(struct wmWindow *win);
 bool		WM_window_is_fullscreen	(struct wmWindow *win);
 
 void WM_windows_scene_data_sync(const ListBase *win_lb, struct Scene *scene) ATTR_NONNULL();
+void WM_windows_scene_twmode_remove(const ListBase *win_lb, struct Scene *scene, const int twmode) ATTR_NONNULL();
+struct Scene *WM_windows_scene_get_from_screen(const struct wmWindowManager *wm, const struct bScreen *screen) ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
 
 struct Scene *WM_window_get_active_scene(const struct wmWindow *win) ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
 void          WM_window_set_active_scene(struct Main *bmain, struct bContext *C, struct wmWindow *win,

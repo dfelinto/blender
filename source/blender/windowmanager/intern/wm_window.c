@@ -1749,6 +1749,26 @@ void WM_windows_scene_data_sync(const ListBase *win_lb, Scene *scene)
 	}
 }
 
+void WM_windows_scene_twmode_remove(const ListBase *win_lb, Scene *scene, const int twmode)
+{
+	for (wmWindow *win = win_lb->first; win; win = win->next) {
+		if (WM_window_get_active_scene(win) == scene) {
+			BKE_screen_view3d_twmode_remove(WM_window_get_active_screen(win), twmode);
+		}
+	}
+}
+
+Scene *WM_windows_scene_get_from_screen(const wmWindowManager *wm, const bScreen *screen)
+{
+	for (wmWindow *win = wm->windows.first; win; win = win->next) {
+		if (WM_window_get_active_screen(win) == screen) {
+			return WM_window_get_active_scene(win);
+		}
+	}
+
+	return NULL;
+}
+
 Scene *WM_window_get_active_scene(const wmWindow *win)
 {
 	return win->scene;

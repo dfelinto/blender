@@ -57,6 +57,8 @@
 
 #include "ED_armature.h"
 
+#include "WM_api.h"
+
 #include "transform.h"
 
 /* *********************** TransSpace ************************** */
@@ -352,7 +354,9 @@ void BIF_removeTransformOrientation(bContext *C, TransformOrientation *target)
 
 	if (i != -1) {
 		Main *bmain = CTX_data_main(C);
-		BKE_screen_view3d_main_twmode_remove(&bmain->screen, scene, i);
+		wmWindowManager *wm = bmain->wm.first;
+
+		WM_windows_scene_twmode_remove(&wm->windows, scene, i);
 		BLI_freelinkN(transform_spaces, target);
 	}
 }

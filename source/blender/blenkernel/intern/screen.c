@@ -611,31 +611,24 @@ void BKE_screen_view3d_scene_sync(bScreen *sc, Scene *scene)
 	}
 }
 
-void BKE_screen_view3d_twmode_remove(View3D *v3d, const int i)
+/**
+ * TODO hrmpf... stupid issue: Removing a custom transform orientation only updates View3D orientations
+ * in visible workspaces/screens. If an invisible one uses it, it keeps using the removed orientation.
+ * Need to solve that somehow... Maybe store TranformOrientation * in View3D?
+ */
+void BKE_screen_view3d_twmode_remove(bScreen *screen, const int twmode)
 {
-	const int selected_index = (v3d->twmode - V3D_MANIP_CUSTOM);
-	if (selected_index == i) {
-		v3d->twmode = V3D_MANIP_GLOBAL; /* fallback to global	*/
-	}
-	else if (selected_index > i) {
-		v3d->twmode--;
-	}
-}
+	for (ScrArea *area = screen->areabase.first; area; area = area->next) {
+		for (SpaceLink *sl = area->spacedata.first; sl; sl = sl->next) {
+			if (sl->spacetype == SPACE_VIEW3D) {
+				View3D *v3d = (View3D *)sl;
+				const int selected_index = (v3d->twmode - V3D_MANIP_CUSTOM);
 
-void BKE_screen_view3d_main_twmode_remove(ListBase *screen_lb, Scene *scene, const int i)
-{
-	bScreen *sc;
-
-	for (sc = screen_lb->first; sc; sc = sc->id.next) {
-		if (sc->scene == scene) {
-			ScrArea *sa;
-			for (sa = sc->areabase.first; sa; sa = sa->next) {
-				SpaceLink *sl;
-				for (sl = sa->spacedata.first; sl; sl = sl->next) {
-					if (sl->spacetype == SPACE_VIEW3D) {
-						View3D *v3d = (View3D *)sl;
-						BKE_screen_view3d_twmode_remove(v3d, i);
-					}
+				if (selected_index == twmode) {
+					v3d->twmode = V3D_MANIP_GLOBAL; /* fallback to global	*/
+				}
+				else if (selected_index > twmode) {
+					v3d->twmode--;
 				}
 			}
 		}

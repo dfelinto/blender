@@ -317,11 +317,9 @@ static void setup_app_data(
 
 		if (wm) {
 			for (wmWindow *win = wm->windows.first; win; win = win->next) {
-				bScreen *screen = BKE_workspace_active_screen_get(win->workspace);
-
-				if (screen && screen->scene) /* zealous check... */
-					if (screen->scene != curscene)
-						BKE_scene_set_background(G.main, screen->scene);
+				if (win->scene && win->scene != curscene) {
+					BKE_scene_set_background(G.main, win->scene);
+				}
 			}
 		}
 	}
