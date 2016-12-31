@@ -155,8 +155,9 @@ typedef struct Library {
 	
 	struct PackedFile *packedfile;
 
+	/* Temp data needed by read/write code. */
 	int temp_index;
-	int _pad;
+	short versionfile, subversionfile;  /* see BLENDER_VERSION, BLENDER_SUBVERSION, needed for do_versions */
 } Library;
 
 enum eIconSizes {
@@ -246,6 +247,7 @@ typedef enum ID_Type {
 	ID_AC   = MAKE_ID2('A', 'C'), /* bAction */
 	ID_NT   = MAKE_ID2('N', 'T'), /* bNodeTree */
 	ID_BR   = MAKE_ID2('B', 'R'), /* Brush */
+	ID_PA   = MAKE_ID2('P', 'A'), /* ParticleSettings */
 	ID_GD   = MAKE_ID2('G', 'D'), /* bGPdata, (Grease Pencil) */
 	ID_WM   = MAKE_ID2('W', 'M'), /* WindowManager */
 	ID_MC   = MAKE_ID2('M', 'C'), /* MovieClip */
@@ -336,7 +338,8 @@ enum {
 	/* tag datablock has having actually increased usercount for the extra virtual user. */
 	LIB_TAG_EXTRAUSER_SET   = 1 << 7,
 
-	/* RESET_AFTER_USE tag newly duplicated/copied IDs. */
+	/* RESET_AFTER_USE tag newly duplicated/copied IDs.
+	 * Also used internally in readfile.c to mark datablocks needing do_versions. */
 	LIB_TAG_NEW             = 1 << 8,
 	/* RESET_BEFORE_USE free test flag.
      * TODO make it a RESET_AFTER_USE too. */
@@ -384,7 +387,8 @@ enum {
 	FILTER_ID_TXT       = (1 << 24),
 	FILTER_ID_VF        = (1 << 25),
 	FILTER_ID_WO        = (1 << 26),
-	FILTER_ID_CF        = (1 << 27),
+	FILTER_ID_PA        = (1 << 27),
+	FILTER_ID_CF        = (1 << 28),
 };
 
 /* IMPORTANT: this enum matches the order currently use in set_lisbasepointers,
@@ -414,6 +418,7 @@ enum {
 	INDEX_ID_PAL,
 	INDEX_ID_PC,
 	INDEX_ID_BR,
+	INDEX_ID_PA,
 	INDEX_ID_SPK,
 	INDEX_ID_WO,
 	INDEX_ID_MC,

@@ -41,7 +41,9 @@ struct Object;
 struct Scene;
 struct ListBase;
 struct Group;
-struct PointCacheKey;
+struct ParticleSimulationData;
+struct ParticleData;
+struct ParticleKey;
 
 struct EffectorWeights *BKE_add_effector_weights(struct Group *group);
 struct PartDeflect *object_add_collision_fields(int type);
@@ -93,6 +95,7 @@ typedef struct EffectorCache {
 
 	struct Scene *scene;
 	struct Object *ob;
+	struct ParticleSystem *psys;
 	struct SurfaceModifierData *surmd;
 	
 	struct PartDeflect *pd;
@@ -107,14 +110,17 @@ typedef struct EffectorCache {
 } EffectorCache;
 
 void            free_partdeflect(struct PartDeflect *pd);
-struct ListBase *pdInitEffectors(struct Scene *scene, struct Object *ob_src, struct EffectorWeights *weights, bool for_simulation);
+struct ListBase *pdInitEffectors(struct Scene *scene, struct Object *ob_src, struct ParticleSystem *psys_src, struct EffectorWeights *weights, bool for_simulation);
 void            pdEndEffectors(struct ListBase **effectors);
 void            pdPrecalculateEffectors(struct ListBase *effectors);
 void            pdDoEffectors(struct ListBase *effectors, struct ListBase *colliders, struct EffectorWeights *weights, struct EffectedPoint *point, float *force, float *impulse);
 
+void pd_point_from_particle(struct ParticleSimulationData *sim, struct ParticleData *pa, struct ParticleKey *state, struct EffectedPoint *point);
 void pd_point_from_loc(struct Scene *scene, float *loc, float *vel, int index, struct EffectedPoint *point);
 void pd_point_from_soft(struct Scene *scene, float *loc, float *vel, int index, struct EffectedPoint *point);
 
+/* needed for boids */
+float effector_falloff(struct EffectorCache *eff, struct EffectorData *efd, struct EffectedPoint *point, struct EffectorWeights *weights);
 int closest_point_on_surface(SurfaceModifierData *surmd, const float co[3], float surface_co[3], float surface_nor[3], float surface_vel[3]);
 int get_effector_data(struct EffectorCache *eff, struct EffectorData *efd, struct EffectedPoint *point, int real_velocity);
 
@@ -166,6 +172,7 @@ typedef struct SimDebugElement {
 	float color[3];
 	
 	float v1[3], v2[3];
+	char str[64];
 } SimDebugElement;
 
 typedef enum eSimDebugElement_Type {
@@ -173,6 +180,7 @@ typedef enum eSimDebugElement_Type {
 	SIM_DEBUG_ELEM_CIRCLE,
 	SIM_DEBUG_ELEM_LINE,
 	SIM_DEBUG_ELEM_VECTOR,
+	SIM_DEBUG_ELEM_STRING,
 } eSimDebugElement_Type;
 
 typedef struct SimDebugData {
@@ -185,26 +193,30 @@ void BKE_sim_debug_data_set_enabled(bool enable);
 bool BKE_sim_debug_data_get_enabled(void);
 void BKE_sim_debug_data_free(void);
 
-void BKE_sim_debug_data_add_element(int type, const float v1[3], const float v2[3],
+void BKE_sim_debug_data_add_element(int type, const float v1[3], const float v2[3], const char *str,
                                     float r, float g, float b, const char *category, unsigned int hash);
 void BKE_sim_debug_data_remove_element(unsigned int hash);
 
 #define BKE_sim_debug_data_add_dot(p, r, g, b, category, ...) { \
 	const float v2[3] = { 0.0f, 0.0f, 0.0f }; \
-	BKE_sim_debug_data_add_element(SIM_DEBUG_ELEM_DOT, p, v2, r, g, b, category, SIM_DEBUG_HASH(__VA_ARGS__)); \
+	BKE_sim_debug_data_add_element(SIM_DEBUG_ELEM_DOT, p, v2, NULL, r, g, b, category, SIM_DEBUG_HASH(__VA_ARGS__)); \
 }
 
 #define BKE_sim_debug_data_add_circle(p, radius, r, g, b, category, ...) { \
 	const float v2[3] = { radius, 0.0f, 0.0f }; \
-	BKE_sim_debug_data_add_element(SIM_DEBUG_ELEM_CIRCLE, p, v2, r, g, b, category, SIM_DEBUG_HASH(__VA_ARGS__)); \
+	BKE_sim_debug_data_add_element(SIM_DEBUG_ELEM_CIRCLE, p, v2, NULL, r, g, b, category, SIM_DEBUG_HASH(__VA_ARGS__)); \
 }
 
 #define BKE_sim_debug_data_add_line(p1, p2, r, g, b, category, ...) { \
-	BKE_sim_debug_data_add_element(SIM_DEBUG_ELEM_LINE, p1, p2, r, g, b, category, SIM_DEBUG_HASH(__VA_ARGS__)); \
+	BKE_sim_debug_data_add_element(SIM_DEBUG_ELEM_LINE, p1, p2, NULL, r, g, b, category, SIM_DEBUG_HASH(__VA_ARGS__)); \
 }
 
 #define BKE_sim_debug_data_add_vector(p, d, r, g, b, category, ...) { \
-	BKE_sim_debug_data_add_element(SIM_DEBUG_ELEM_VECTOR, p, d, r, g, b, category, SIM_DEBUG_HASH(__VA_ARGS__)); \
+	BKE_sim_debug_data_add_element(SIM_DEBUG_ELEM_VECTOR, p, d, NULL, r, g, b, category, SIM_DEBUG_HASH(__VA_ARGS__)); \
+}
+
+#define BKE_sim_debug_data_add_string(p, str, r, g, b, category, ...) { \
+	BKE_sim_debug_data_add_element(SIM_DEBUG_ELEM_STRING, p, NULL, str, r, g, b, category, SIM_DEBUG_HASH(__VA_ARGS__)); \
 }
 
 #define BKE_sim_debug_data_remove(...) \

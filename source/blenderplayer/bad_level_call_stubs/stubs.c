@@ -164,6 +164,7 @@ struct wmWindowManager;
 #include "../blender/editors/include/ED_mesh.h"
 #include "../blender/editors/include/ED_node.h"
 #include "../blender/editors/include/ED_object.h"
+#include "../blender/editors/include/ED_particle.h"
 #include "../blender/editors/include/ED_render.h"
 #include "../blender/editors/include/ED_screen.h"
 #include "../blender/editors/include/ED_space_api.h"
@@ -416,6 +417,9 @@ void ED_fsmenu_entry_set_path(struct FSMenuEntry *fsentry, const char *name) RET
 char *ED_fsmenu_entry_get_name(struct FSMenuEntry *fsentry) RET_NULL
 void ED_fsmenu_entry_set_name(struct FSMenuEntry *fsentry, const char *name) RET_NONE
 
+struct PTCacheEdit *PE_get_current(struct Scene *scene, struct Object *ob) RET_NULL
+void PE_current_changed(struct Scene *scene, struct Object *ob) RET_NONE
+
 /* rna keymap */
 struct wmKeyMap *WM_keymap_active(struct wmWindowManager *wm, struct wmKeyMap *keymap) RET_NULL
 struct wmKeyMap *WM_keymap_find(struct wmKeyConfig *keyconf, const char *idname, int spaceid, int regionid) RET_NULL
@@ -540,6 +544,7 @@ bool ED_space_image_check_show_maskedit(struct Scene *scene, struct SpaceImage *
 bool ED_texture_context_check_world(const struct bContext *C) RET_ZERO
 bool ED_texture_context_check_material(const struct bContext *C) RET_ZERO
 bool ED_texture_context_check_lamp(const struct bContext *C) RET_ZERO
+bool ED_texture_context_check_particles(const struct bContext *C) RET_ZERO
 bool ED_texture_context_check_others(const struct bContext *C) RET_ZERO
 
 bool ED_text_region_location_from_cursor(SpaceText *st, ARegion *ar, const int cursor_co[2], int r_pixel_co[2]) RET_ZERO
@@ -681,7 +686,7 @@ void RE_point_density_sample(struct Scene *scene, struct PointDensity *pd, int r
 void RE_point_density_free(struct PointDensity *pd) RET_NONE;
 void RE_instance_get_particle_info(struct ObjectInstanceRen *obi, float *index, float *age, float *lifetime, float co[3], float *size, float vel[3], float angvel[3]) RET_NONE
 void RE_FreeAllPersistentData(void) RET_NONE
-float RE_fresnel_dielectric(float incoming[3], float normal[3], float eta) RET_NONE
+float RE_fresnel_dielectric(float incoming[3], float normal[3], float eta) RET_ZERO
 
 /* python */
 struct wmOperatorType *WM_operatortype_find(const char *idname, bool quiet) RET_NULL

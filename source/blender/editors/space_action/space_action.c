@@ -338,7 +338,7 @@ static void action_channel_region_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(
 			}
 			break;
 		case NC_GPENCIL:
-			if (wmn->action == NA_RENAME)
+			if (ELEM(wmn->action, NA_RENAME, NA_SELECTED))
 				ED_region_tag_redraw(ar);
 			break;
 		case NC_ID:
@@ -409,10 +409,15 @@ static void action_listener(bScreen *UNUSED(sc), ScrArea *sa, wmNotifier *wmn, c
 	/* context changes */
 	switch (wmn->category) {
 		case NC_GPENCIL:
-			if (wmn->action == NA_EDITED) {
-				/* only handle this event in GPencil mode for performance considerations */
-				if (saction->mode == SACTCONT_GPENCIL)
+			/* only handle these events in GPencil mode for performance considerations */
+			if (saction->mode == SACTCONT_GPENCIL) {
+				if (wmn->action == NA_EDITED) {
 					ED_area_tag_redraw(sa);
+				}
+				else if (wmn->action == NA_SELECTED) {
+					saction->flag |= SACTION_TEMP_NEEDCHANSYNC;
+					ED_area_tag_refresh(sa);
+				}
 			}
 			break;
 		case NC_ANIMATION:
