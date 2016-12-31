@@ -6226,38 +6226,6 @@ static void direct_link_windowmanager(FileData *fd, wmWindowManager *wm)
 	wm->is_interface_locked = 0;
 }
 
-/**
- * \brief Window data compatibility conversion for 2.8
- *
- *  *  Active screen isn't stored directly in window anymore, but in the active workspace.
- *     We already created a new workspace for each screen in blo_do_versions_270, here we need
- *     to find and activate the workspace that contains the active screen of the old file.
- *  *  Active scene isn't stored in screen anymore, but in window.
- *
- * \return if conversion was done.
- */
-static bool lib_link_window_280_conversion(FileData *fd, Main *main, wmWindow *win)
-{
-	if (MAIN_VERSION_ATLEAST(main, 278, 5)) {
-		return false;
-	}
-
-	if (win->screen) {
-		win->screen = newlibadr(fd, NULL, win->screen);
-		win->workspace = BLI_findstring(&main->workspaces, win->screen->id.name + 2,
-		                                offsetof(ID, name) + 2);
-		/* Deprecated from now on! */
-		win->screen = NULL;
-	}
-
-	{
-		const bScreen *screen = BKE_workspace_active_screen_get(win->workspace);
-		win->scene = newlibadr(fd, NULL, screen->scene);
-	}
-
-	return true;
-}
-
 static void lib_link_windowmanager(FileData *fd, Main *main)
 {
 	wmWindowManager *wm;
@@ -6266,10 +6234,9 @@ static void lib_link_windowmanager(FileData *fd, Main *main)
 	for (wm = main->wm.first; wm; wm = wm->id.next) {
 		if (wm->id.tag & LIB_TAG_NEED_LINK) {
 			for (win = wm->windows.first; win; win = win->next) {
-				if (!lib_link_window_280_conversion(fd, main, win)) {
-					win->scene = newlibadr(fd, wm->id.lib, win->scene);
-					win->workspace = newlibadr(fd, wm->id.lib, win->workspace);
-				}
+				win->screen = newlibadr(fd, NULL, win->screen);
+				win->scene = newlibadr(fd, wm->id.lib, win->scene);
+				win->workspace = newlibadr(fd, wm->id.lib, win->workspace);
 			}
 
 			wm->id.tag &= ~LIB_TAG_NEED_LINK;
@@ -6357,8 +6324,8 @@ static void lib_link_screen(FileData *fd, Main *main)
 		if (sc->id.tag & LIB_TAG_NEED_LINK) {
 			id_us_ensure_real(&sc->id);
 
-			/* deprecated now */
-			sc->scene = NULL;
+			/* deprecated, but needed for versioning (will be NULL'ed then) */
+			sc->scene = newlibadr(fd, sc->id.lib, sc->scene);
 
 			sc->animtimer = NULL; /* saved in rare cases */
 			sc->scrubbing = false;
@@ -8467,9 +8434,9 @@ static void do_versions(FileData *fd, Library *lib, Main *main)
 	/* don't forget to set version number in BKE_blender_version.h! */
 }
 
-static void do_versions_after_linking(Main *main)
+static void do_versions_after_linking(FileData *fd, Main *main)
 {
-	UNUSED_VARS(main);
+	blo_do_versions_after_linking_270(fd, main);
 //	printf("%s for %s (%s), %d.%d\n", __func__, main->curlib ? main->curlib->name : main->name,
 //	       main->curlib ? "LIB" : "MAIN", main->versionfile, main->subversionfile);
 }
@@ -8681,7 +8648,7 @@ BlendFileData *blo_read_file_internal(FileData *fd, const char *filepath)
 		blo_split_main(&mainlist, bfd->main);
 		for (Main *mainvar = mainlist.first; mainvar; mainvar = mainvar->next) {
 			BLI_assert(mainvar->versionfile != 0);
-			do_versions_after_linking(mainvar);
+			do_versions_after_linking(fd, mainvar);
 		}
 		blo_join_main(&mainlist);
 	}
@@ -10291,7 +10258,7 @@ static void library_link_end(Main *mainl, FileData **fd, const short flag, Scene
 		/* We need to split out IDs already existing, or they will go again through do_versions - bad, very bad! */
 		split_main_newid(mainvar, &main_newid);
 
-		do_versions_after_linking(&main_newid);
+		do_versions_after_linking(*fd, &main_newid);
 
 		add_main_to_main(mainvar, &main_newid);
 	}
