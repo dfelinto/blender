@@ -72,21 +72,29 @@ void BLO_update_defaults_userpref_blend(void)
 }
 
 /**
- * New workspace design: Remove all screens except of "Default" one.
+ * New workspace design: Remove all screens/workspaces except of "Default" one and rename the workspace to "General".
  * For compatibility, a new workspace has been created for each screen of old files,
  * we only want one workspace and one screen in the default startup file however.
  */
 static void update_defaults_startup_workspaces(Main *bmain)
 {
+	WorkSpace *workspace_default = NULL;
+
 	BKE_workspace_iter_begin(workspace, bmain->workspaces.first)
 	{
 		if (STREQ(BKE_workspace_name_get(workspace), "Default")) {
+			/* don't rename within iterator, renaming causes listbase to be re-sorted */
+			workspace_default = workspace;
 		}
 		else {
 			BKE_workspace_remove(workspace, bmain);
 		}
 	}
 	BKE_workspace_iter_end;
+
+	/* rename "Default" workspace to "General" */
+	BKE_libblock_rename(bmain, BKE_workspace_id_get(workspace_default), "General");
+	BLI_assert(BLI_listbase_count(BKE_workspace_layouts_get(workspace_default)) == 1);
 }
 
 /**
