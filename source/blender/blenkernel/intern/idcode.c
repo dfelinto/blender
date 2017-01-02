@@ -90,7 +90,8 @@ static IDType idtypes[] = {
 	{ ID_TXT,  "Text",               "texts",           BLT_I18NCONTEXT_ID_TEXT,               IDTYPE_FLAGS_ISLINKABLE },
 	{ ID_VF,   "VFont",              "fonts",           BLT_I18NCONTEXT_ID_VFONT,              IDTYPE_FLAGS_ISLINKABLE },
 	{ ID_WO,   "World",              "worlds",          BLT_I18NCONTEXT_ID_WORLD,              IDTYPE_FLAGS_ISLINKABLE },
-	{ ID_WS,   "WorkSpace",          "workspaces",      BLT_I18NCONTEXT_ID_WORKSPACE,          0                       },
+	/* TODO only appendable */
+	{ ID_WS,   "WorkSpace",          "workspaces",      BLT_I18NCONTEXT_ID_WORKSPACE,          IDTYPE_FLAGS_ISLINKABLE },
 	{ ID_WM,   "WindowManager",      "window_managers", BLT_I18NCONTEXT_ID_WINDOWMANAGER,      0                       },
 
 	/** Keep last, not an ID exactly, only include for completeness */
@@ -211,6 +212,7 @@ int BKE_idcode_to_idfilter(const short idcode)
 		CASE_IDFILTER(TXT);
 		CASE_IDFILTER(VF);
 		CASE_IDFILTER(WO);
+		CASE_IDFILTER(WS);
 		default:
 			return 0;
 	}

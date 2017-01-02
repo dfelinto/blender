@@ -120,6 +120,7 @@
 #include "BKE_scene.h"
 #include "BKE_text.h"
 #include "BKE_texture.h"
+#include "BKE_workspace.h"
 #include "BKE_world.h"
 
 #include "DEG_depsgraph.h"
@@ -464,10 +465,12 @@ bool id_make_local(Main *bmain, ID *id, const bool test, const bool lib_local)
 		case ID_CF:
 			if (!test) BKE_cachefile_make_local(bmain, (CacheFile *)id, lib_local);
 			return true;
+		case ID_WS:
+//			if (!test) BKE_workspace_make_local(bmain, (WorkSpace *)id, lib_local);
+			return true;
 		case ID_SCR:
 		case ID_LI:
 		case ID_KE:
-		case ID_WS:
 		case ID_WM:
 			return false; /* can't be linked */
 		case ID_IP:
@@ -572,10 +575,12 @@ bool id_copy(Main *bmain, ID *id, ID **newid, bool test)
 		case ID_CF:
 			if (!test) *newid = (ID *)BKE_cachefile_copy(bmain, (CacheFile *)id);
 			return true;
+		case ID_WS:
+//			if (!test) *newid = (ID *)BKE_workspace_copy(bmain, (WorkSpace *)id);
+			return true;
 		case ID_SCE:
 		case ID_LI:
 		case ID_SCR:
-		case ID_WS:
 		case ID_WM:
 			return false;  /* can't be copied from here */
 		case ID_VF:

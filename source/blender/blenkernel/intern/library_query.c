@@ -79,6 +79,7 @@
 #include "BKE_sca.h"
 #include "BKE_sequencer.h"
 #include "BKE_tracking.h"
+#include "BKE_workspace.h"
 
 
 #define FOREACH_FINALIZE _finalize
@@ -875,6 +876,22 @@ void BKE_library_foreach_ID_link(ID *id, LibraryIDLinkCallback callback, void *u
 				break;
 			}
 
+			case ID_WS:
+			{
+				WorkSpace *workspace = (WorkSpace *)id;
+				ListBase *layouts = BKE_workspace_layouts_get(workspace);
+
+				BKE_workspace_layout_iter_begin(layout, layouts->first);
+				{
+					bScreen *screen = BKE_workspace_layout_screen_get(layout);
+
+					CALLBACK_INVOKE(screen, IDWALK_NOP);
+				}
+				BKE_workspace_layout_iter_end;
+
+				break;
+			}
+
 			/* Nothing needed for those... */
 			case ID_SCR:
 			case ID_IM:
@@ -886,7 +903,6 @@ void BKE_library_foreach_ID_link(ID *id, LibraryIDLinkCallback callback, void *u
 			case ID_PAL:
 			case ID_PC:
 			case ID_CF:
-			case ID_WS:
 				break;
 
 			/* Deprecated. */

@@ -8861,6 +8861,11 @@ static void expand_doit_library(void *fdhandle, Main *mainvar, void *old)
 			}
 		}
 		else {
+			/* in 2.50+ file identifier for screens is patched, forward compatibility */
+			if (bhead->code == ID_SCRN) {
+				bhead->code = ID_SCR;
+			}
+
 			id = is_yet_read(fd, mainvar, bhead);
 			if (id == NULL) {
 				read_libblock(fd, mainvar, bhead, LIB_TAG_TESTIND, NULL);
@@ -9700,6 +9705,17 @@ static void expand_gpencil(FileData *fd, Main *mainvar, bGPdata *gpd)
 		expand_animdata(fd, mainvar, gpd->adt);
 }
 
+static void expand_workspace(FileData *fd, Main *mainvar, WorkSpace *workspace)
+{
+	ListBase *layouts = BKE_workspace_layouts_get(workspace);
+
+	BKE_workspace_layout_iter_begin(layout, layouts->first)
+	{
+		expand_doit(fd, mainvar, BKE_workspace_layout_screen_get(layout));
+	}
+	BKE_workspace_layout_iter_end;
+}
+
 /**
  * Set the callback func used over all ID data found by \a BLO_expand_main func.
  *
@@ -9811,6 +9827,9 @@ void BLO_expand_main(void *fdhandle, Main *mainvar)
 						break;
 					case ID_CF:
 						expand_cachefile(fd, mainvar, (CacheFile *)id);
+						break;
+					case ID_WS:
+						expand_workspace(fd, mainvar, (WorkSpace *)id);
 						break;
 					}
 					
