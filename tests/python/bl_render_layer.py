@@ -654,7 +654,6 @@ class UnitsTesting(unittest.TestCase):
         ROOT = self.get_root()
         with tempfile.TemporaryDirectory() as dirpath:
             filepath_layers = os.path.join(ROOT, 'layers.blend')
-            filepath_json = os.path.join(ROOT, 'layers_object_add.json')
 
             # open file
             bpy.ops.wm.open_mainfile('EXEC_DEFAULT', filepath=filepath_layers)
