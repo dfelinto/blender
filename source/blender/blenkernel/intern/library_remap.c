@@ -71,6 +71,7 @@
 #include "BKE_brush.h"
 #include "BKE_camera.h"
 #include "BKE_cachefile.h"
+#include "BKE_collection.h"
 #include "BKE_curve.h"
 #include "BKE_depsgraph.h"
 #include "BKE_fcurve.h"
@@ -333,6 +334,15 @@ static void libblock_remap_data_postprocess_object_fromgroup_update(Main *bmain,
 	}
 }
 
+static void libblock_remap_data_postprocess_object_fromcollection_update(Main *bmain, Object *old_ob, Object *new_ob)
+{
+	if (new_ob == NULL) {
+		for (Scene *scene = bmain->scene.first; scene; scene = scene->id.next) {
+			BKE_collections_object_remove(scene, old_ob);
+		}
+	}
+}
+
 static void libblock_remap_data_postprocess_group_scene_unlink(Main *UNUSED(bmain), Scene *sce, ID *old_id)
 {
 	/* Note that here we assume no object has no base (i.e. all objects are assumed instanced
@@ -542,6 +552,7 @@ void BKE_libblock_remap_locked(
 	switch (GS(old_id->name)) {
 		case ID_OB:
 			libblock_remap_data_postprocess_object_fromgroup_update(bmain, (Object *)old_id, (Object *)new_id);
+			libblock_remap_data_postprocess_object_fromcollection_update(bmain, (Object *)old_id, (Object *)new_id);
 			break;
 		case ID_GR:
 			if (!new_id) {  /* Only affects us in case group was unlinked. */
