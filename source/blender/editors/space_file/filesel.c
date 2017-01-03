@@ -129,7 +129,7 @@ short ED_fileselect_set_params(SpaceFile *sfile)
 		if (is_filepath && RNA_struct_property_is_set_ex(op->ptr, "filepath", false)) {
 			char name[FILE_MAX];
 			RNA_string_get(op->ptr, "filepath", name);
-			if (params->type == FILE_LOADLIB) {
+			if (ELEM(params->type, FILE_LOADLIB_LINKABLE, FILE_LOADLIB_APPENDABLE)) {
 				BLI_strncpy(params->dir, name, sizeof(params->dir));
 				sfile->params->file[0] = '\0';
 			}
@@ -225,7 +225,7 @@ short ED_fileselect_set_params(SpaceFile *sfile)
 		}
 		
 
-		if (params->type == FILE_LOADLIB) {
+		if (ELEM(params->type, FILE_LOADLIB_LINKABLE, FILE_LOADLIB_APPENDABLE)) {
 			params->flag |= RNA_boolean_get(op->ptr, "link") ? FILE_LINK : 0;
 			params->flag |= RNA_boolean_get(op->ptr, "autoselect") ? FILE_AUTOSELECT : 0;
 			params->flag |= RNA_boolean_get(op->ptr, "active_layer") ? FILE_ACTIVELAY : 0;

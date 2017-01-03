@@ -689,13 +689,16 @@ enum FileSortTypeE {
 #define FILE_MAX_LIBEXTRA   (FILE_MAX + MAX_ID_NAME)
 
 /* filesel types */
-#define FILE_UNIX           8
-#define FILE_BLENDER        8 /* don't display relative paths */
-#define FILE_SPECIAL        9
+enum {
+	FILE_LOADLIB_LINKABLE   = 1,
+	FILE_MAIN               = 2,
+	FILE_LOADFONT           = 3,
+	FILE_LOADLIB_APPENDABLE = 4,
 
-#define FILE_LOADLIB        1
-#define FILE_MAIN           2
-#define FILE_LOADFONT       3
+	FILE_UNIX               = 8,
+	FILE_BLENDER            = 8, /* don't display relative paths */
+	FILE_SPECIAL            = 9,
+};
 
 /* filesel op property -> action */
 typedef enum eFileSel_Action {

@@ -47,55 +47,58 @@ typedef struct {
 	const char *name, *plural;
 
 	const char *i18n_context;
-	
-	int flags;
-#define IDTYPE_FLAGS_ISLINKABLE (1 << 0)
+
+	bool is_linkable;
+	bool is_appendable;
 } IDType;
 
-/* plural need to match rna_main.c's MainCollectionDef */
-/* WARNING! Keep it in sync with i18n contexts in BLT_translation.h */
+/**
+ * \note Plural need to match rna_main.c's MainCollectionDef.
+ * \note IDs that are only linkable (non-appendable) aren't used currently and thus poorly tested.
+ *
+ * \warning Keep it in sync with i19n contexts in BLT_translation.h!
+ */
 static IDType idtypes[] = {
-	/** ID's directly below must all be in #Main, and be kept in sync with #MAX_LIBARRAY (membership, not order) */
-	{ ID_AC,   "Action",             "actions",         BLT_I18NCONTEXT_ID_ACTION,             IDTYPE_FLAGS_ISLINKABLE },
-	{ ID_AR,   "Armature",           "armatures",       BLT_I18NCONTEXT_ID_ARMATURE,           IDTYPE_FLAGS_ISLINKABLE },
-	{ ID_BR,   "Brush",              "brushes",         BLT_I18NCONTEXT_ID_BRUSH,              IDTYPE_FLAGS_ISLINKABLE },
-	{ ID_CA,   "Camera",             "cameras",         BLT_I18NCONTEXT_ID_CAMERA,             IDTYPE_FLAGS_ISLINKABLE },
-	{ ID_CF,   "CacheFile",          "cache_files",     BLT_I18NCONTEXT_ID_CACHEFILE,          IDTYPE_FLAGS_ISLINKABLE },
-	{ ID_CU,   "Curve",              "curves",          BLT_I18NCONTEXT_ID_CURVE,              IDTYPE_FLAGS_ISLINKABLE },
-	{ ID_GD,   "GPencil",            "grease_pencil",   BLT_I18NCONTEXT_ID_GPENCIL,            IDTYPE_FLAGS_ISLINKABLE }, /* rename gpencil */
-	{ ID_GR,   "Group",              "groups",          BLT_I18NCONTEXT_ID_GROUP,              IDTYPE_FLAGS_ISLINKABLE },
-	{ ID_IM,   "Image",              "images",          BLT_I18NCONTEXT_ID_IMAGE,              IDTYPE_FLAGS_ISLINKABLE },
-	{ ID_IP,   "Ipo",                "ipos",            "",                                    IDTYPE_FLAGS_ISLINKABLE }, /* deprecated */
-	{ ID_KE,   "Key",                "shape_keys",      BLT_I18NCONTEXT_ID_SHAPEKEY,           0                       },
-	{ ID_LA,   "Lamp",               "lamps",           BLT_I18NCONTEXT_ID_LAMP,               IDTYPE_FLAGS_ISLINKABLE },
-	{ ID_LI,   "Library",            "libraries",       BLT_I18NCONTEXT_ID_LIBRARY,            0                       },
-	{ ID_LS,   "FreestyleLineStyle", "linestyles",      BLT_I18NCONTEXT_ID_FREESTYLELINESTYLE, IDTYPE_FLAGS_ISLINKABLE },
-	{ ID_LT,   "Lattice",            "lattices",        BLT_I18NCONTEXT_ID_LATTICE,            IDTYPE_FLAGS_ISLINKABLE },
-	{ ID_MA,   "Material",           "materials",       BLT_I18NCONTEXT_ID_MATERIAL,           IDTYPE_FLAGS_ISLINKABLE },
-	{ ID_MB,   "Metaball",           "metaballs",       BLT_I18NCONTEXT_ID_METABALL,           IDTYPE_FLAGS_ISLINKABLE },
-	{ ID_MC,   "MovieClip",          "movieclips",      BLT_I18NCONTEXT_ID_MOVIECLIP,          IDTYPE_FLAGS_ISLINKABLE },
-	{ ID_ME,   "Mesh",               "meshes",          BLT_I18NCONTEXT_ID_MESH,               IDTYPE_FLAGS_ISLINKABLE },
-	{ ID_MSK,  "Mask",               "masks",           BLT_I18NCONTEXT_ID_MASK,               IDTYPE_FLAGS_ISLINKABLE },
-	{ ID_NT,   "NodeTree",           "node_groups",     BLT_I18NCONTEXT_ID_NODETREE,           IDTYPE_FLAGS_ISLINKABLE },
-	{ ID_OB,   "Object",             "objects",         BLT_I18NCONTEXT_ID_OBJECT,             IDTYPE_FLAGS_ISLINKABLE },
-	{ ID_PA,   "ParticleSettings",   "particles",       BLT_I18NCONTEXT_ID_PARTICLESETTINGS,   IDTYPE_FLAGS_ISLINKABLE },
-	{ ID_PAL,  "Palettes",           "palettes",        BLT_I18NCONTEXT_ID_PALETTE,            IDTYPE_FLAGS_ISLINKABLE },
-	{ ID_PC,   "PaintCurve",         "paint_curves",    BLT_I18NCONTEXT_ID_PAINTCURVE,         IDTYPE_FLAGS_ISLINKABLE },
-	{ ID_SCE,  "Scene",              "scenes",          BLT_I18NCONTEXT_ID_SCENE,              IDTYPE_FLAGS_ISLINKABLE },
-	{ ID_SCR,  "Screen",             "screens",         BLT_I18NCONTEXT_ID_SCREEN,             0                       },
-	{ ID_SEQ,  "Sequence",           "sequences",       BLT_I18NCONTEXT_ID_SEQUENCE,           0                       }, /* not actually ID data */
-	{ ID_SPK,  "Speaker",            "speakers",        BLT_I18NCONTEXT_ID_SPEAKER,            IDTYPE_FLAGS_ISLINKABLE },
-	{ ID_SO,   "Sound",              "sounds",          BLT_I18NCONTEXT_ID_SOUND,              IDTYPE_FLAGS_ISLINKABLE },
-	{ ID_TE,   "Texture",            "textures",        BLT_I18NCONTEXT_ID_TEXTURE,            IDTYPE_FLAGS_ISLINKABLE },
-	{ ID_TXT,  "Text",               "texts",           BLT_I18NCONTEXT_ID_TEXT,               IDTYPE_FLAGS_ISLINKABLE },
-	{ ID_VF,   "VFont",              "fonts",           BLT_I18NCONTEXT_ID_VFONT,              IDTYPE_FLAGS_ISLINKABLE },
-	{ ID_WO,   "World",              "worlds",          BLT_I18NCONTEXT_ID_WORLD,              IDTYPE_FLAGS_ISLINKABLE },
-	/* TODO only appendable */
-	{ ID_WS,   "WorkSpace",          "workspaces",      BLT_I18NCONTEXT_ID_WORKSPACE,          IDTYPE_FLAGS_ISLINKABLE },
-	{ ID_WM,   "WindowManager",      "window_managers", BLT_I18NCONTEXT_ID_WINDOWMANAGER,      0                       },
+	/** ID's directly below must all be in #Main (membership, not order), and be kept in sync with #MAX_LIBARRAY */
+	{ID_AC,  "Action",             "actions",         BLT_I18NCONTEXT_ID_ACTION,             true, true  },
+	{ID_AR,  "Armature",           "armatures",       BLT_I18NCONTEXT_ID_ARMATURE,           true, true  },
+	{ID_BR,  "Brush",              "brushes",         BLT_I18NCONTEXT_ID_BRUSH,              true, true  },
+	{ID_CA,  "Camera",             "cameras",         BLT_I18NCONTEXT_ID_CAMERA,             true, true  },
+	{ID_CF,  "CacheFile",          "cache_files",     BLT_I18NCONTEXT_ID_CACHEFILE,          true, true  },
+	{ID_CU,  "Curve",              "curves",          BLT_I18NCONTEXT_ID_CURVE,              true, true  },
+	{ID_GD,  "GPencil",            "grease_pencil",   BLT_I18NCONTEXT_ID_GPENCIL,            true, true  }, /* rename gpencil */
+	{ID_GR,  "Group",              "groups",          BLT_I18NCONTEXT_ID_GROUP,              true, true  },
+	{ID_IM,  "Image",              "images",          BLT_I18NCONTEXT_ID_IMAGE,              true, true  },
+	{ID_IP,  "Ipo",                "ipos",            "",                                    true, true  }, /* deprecated */
+	{ID_KE,  "Key",                "shape_keys",      BLT_I18NCONTEXT_ID_SHAPEKEY,           false, false},
+	{ID_LA,  "Lamp",               "lamps",           BLT_I18NCONTEXT_ID_LAMP,               true, true  },
+	{ID_LI,  "Library",            "libraries",       BLT_I18NCONTEXT_ID_LIBRARY,            false, false},
+	{ID_LS,  "FreestyleLineStyle", "linestyles",      BLT_I18NCONTEXT_ID_FREESTYLELINESTYLE, true, true  },
+	{ID_LT,  "Lattice",            "lattices",        BLT_I18NCONTEXT_ID_LATTICE,            true, true  },
+	{ID_MA,  "Material",           "materials",       BLT_I18NCONTEXT_ID_MATERIAL,           true, true  },
+	{ID_MB,  "Metaball",           "metaballs",       BLT_I18NCONTEXT_ID_METABALL,           true, true  },
+	{ID_MC,  "MovieClip",          "movieclips",      BLT_I18NCONTEXT_ID_MOVIECLIP,          true, true  },
+	{ID_ME,  "Mesh",               "meshes",          BLT_I18NCONTEXT_ID_MESH,               true, true  },
+	{ID_MSK, "Mask",               "masks",           BLT_I18NCONTEXT_ID_MASK,               true, true  },
+	{ID_NT,  "NodeTree",           "node_groups",     BLT_I18NCONTEXT_ID_NODETREE,           true, true  },
+	{ID_OB,  "Object",             "objects",         BLT_I18NCONTEXT_ID_OBJECT,             true, true  },
+	{ID_PA,  "ParticleSettings",   "particles",       BLT_I18NCONTEXT_ID_PARTICLESETTINGS,   true, true  },
+	{ID_PAL, "Palettes",           "palettes",        BLT_I18NCONTEXT_ID_PALETTE,            true, true  },
+	{ID_PC,  "PaintCurve",         "paint_curves",    BLT_I18NCONTEXT_ID_PAINTCURVE,         true, true  },
+	{ID_SCE, "Scene",              "scenes",          BLT_I18NCONTEXT_ID_SCENE,              true, true  },
+	{ID_SCR, "Screen",             "screens",         BLT_I18NCONTEXT_ID_SCREEN,             false, false},
+	{ID_SEQ, "Sequence",           "sequences",       BLT_I18NCONTEXT_ID_SEQUENCE,           false, false}, /* not actually ID data */
+	{ID_SPK, "Speaker",            "speakers",        BLT_I18NCONTEXT_ID_SPEAKER,            true, true  },
+	{ID_SO,  "Sound",              "sounds",          BLT_I18NCONTEXT_ID_SOUND,              true, true  },
+	{ID_TE,  "Texture",            "textures",        BLT_I18NCONTEXT_ID_TEXTURE,            true, true  },
+	{ID_TXT, "Text",               "texts",           BLT_I18NCONTEXT_ID_TEXT,               true, true  },
+	{ID_VF,  "VFont",              "fonts",           BLT_I18NCONTEXT_ID_VFONT,              true, true  },
+	{ID_WO,  "World",              "worlds",          BLT_I18NCONTEXT_ID_WORLD,              true, true  },
+	{ID_WS,  "WorkSpace",          "workspaces",      BLT_I18NCONTEXT_ID_WORKSPACE,          false, true },
+	{ID_WM,  "WindowManager",      "window_managers", BLT_I18NCONTEXT_ID_WINDOWMANAGER,      false, false},
 
 	/** Keep last, not an ID exactly, only include for completeness */
-	{ ID_ID,   "ID",                 "ids",             BLT_I18NCONTEXT_ID_ID,                 0                       }, /* plural is fake */
+	{ID_ID,  "ID",                 "ids",             BLT_I18NCONTEXT_ID_ID,                 false, false}, /* plural is fake */
 };
 
 /* -1 for ID_ID */
@@ -135,17 +138,18 @@ bool BKE_idcode_is_valid(short idcode)
 	return idtype_from_code(idcode) ? true : false;
 }
 
-/**
- * Return non-zero when an ID type is linkable.
- *
- * \param idcode: The code to check.
- * \return Boolean, 0 when non linkable.
- */
 bool BKE_idcode_is_linkable(short idcode)
 {
 	IDType *idt = idtype_from_code(idcode);
 	BLI_assert(idt);
-	return idt ? ((idt->flags & IDTYPE_FLAGS_ISLINKABLE) != 0) : false;
+	return idt->is_linkable;
+}
+
+bool BKE_idcode_is_appendable(short idcode)
+{
+	IDType *idt = idtype_from_code(idcode);
+	BLI_assert(idt);
+	return idt->is_appendable;
 }
 
 /**

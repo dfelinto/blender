@@ -263,37 +263,63 @@ LinkNode *BLO_blendhandle_get_previews(BlendHandle *bh, int ofblocktype, int *to
 }
 
 /**
- * Gets the names of all the linkable datablock types available in a file. (e.g. "Scene", "Mesh", "Lamp", etc.).
+ * Gets the names of all the data-block types available in a file. (e.g. "Scene", "Mesh", "Lamp", etc.).
  *
  * \param bh The blendhandle to access.
+ * \param check_linkable:   Skip data-block types that are not linkable.
+ * \param check_appendable: Skip data-block types that are not appendable.
  * \return A BLI_linklist of strings. The string links should be freed with malloc.
  */
-LinkNode *BLO_blendhandle_get_linkable_groups(BlendHandle *bh)
+static LinkNode *blendhandle_get_lib_groups(BlendHandle *bh, const bool check_linkable, const bool check_appendable)
 {
 	FileData *fd = (FileData *) bh;
 	GSet *gathered = BLI_gset_ptr_new("linkable_groups gh");
 	LinkNode *names = NULL;
 	BHead *bhead;
-	
+
 	for (bhead = blo_firstbhead(fd); bhead; bhead = blo_nextbhead(fd, bhead)) {
 		if (bhead->code == ENDB) {
 			break;
 		}
 		else if (BKE_idcode_is_valid(bhead->code)) {
-			if (BKE_idcode_is_linkable(bhead->code)) {
-				const char *str = BKE_idcode_to_name(bhead->code);
-				
-				if (BLI_gset_add(gathered, (void *)str)) {
-					BLI_linklist_prepend(&names, strdup(str));
-				}
+			if ((check_linkable && !BKE_idcode_is_linkable(bhead->code)) ||
+			    (check_appendable && !BKE_idcode_is_appendable(bhead->code)))
+			{
+				continue;
+			}
+
+			const char *str = BKE_idcode_to_name(bhead->code);
+
+			if (BLI_gset_add(gathered, (void *)str)) {
+				BLI_linklist_prepend(&names, strdup(str));
 			}
 		}
 	}
-	
+
 	BLI_gset_free(gathered, NULL);
-	
+
 	return names;
-}		
+}
+
+/**
+ * Gets the names of all the linkable datablock types available in a file. (e.g. "Scene", "Mesh", "Lamp", etc.).
+ *
+ * \return A BLI_linklist of strings. The string links should be freed with malloc.
+ */
+LinkNode *BLO_blendhandle_get_linkable_groups(BlendHandle *bh)
+{
+	return blendhandle_get_lib_groups(bh, true, false);
+}
+
+/**
+ * Gets the names of all the appendable datablock types available in a file. (e.g. "Scene", "Mesh", "Lamp", etc.).
+ *
+ * \return A BLI_linklist of strings. The string links should be freed with malloc.
+ */
+LinkNode *BLO_blendhandle_get_appendable_groups(BlendHandle *bh)
+{
+	return blendhandle_get_lib_groups(bh, false, true);
+}
 
 /**
  * Close and free a blendhandle. The handle becomes invalid after this call.

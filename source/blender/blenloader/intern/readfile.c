@@ -584,7 +584,9 @@ static void read_file_bhead_idname_map_create(FileData *fd)
 	for (bhead = blo_firstbhead(fd); bhead; bhead = blo_nextbhead(fd, bhead)) {
 		if (code_prev != bhead->code) {
 			code_prev = bhead->code;
-			is_link = BKE_idcode_is_valid(code_prev) ? BKE_idcode_is_linkable(code_prev) : false;
+			is_link = BKE_idcode_is_valid(code_prev) ?
+			              /* insert both, linkable and appendable IDs */
+			              (BKE_idcode_is_linkable(code_prev) || BKE_idcode_is_appendable(code_prev)) : false;
 		}
 
 		if (is_link) {
@@ -599,7 +601,9 @@ static void read_file_bhead_idname_map_create(FileData *fd)
 	for (bhead = blo_firstbhead(fd); bhead; bhead = blo_nextbhead(fd, bhead)) {
 		if (code_prev != bhead->code) {
 			code_prev = bhead->code;
-			is_link = BKE_idcode_is_valid(code_prev) ? BKE_idcode_is_linkable(code_prev) : false;
+			is_link = BKE_idcode_is_valid(code_prev) ?
+			              /* insert both, linkable and appendable IDs */
+			              (BKE_idcode_is_linkable(code_prev) || BKE_idcode_is_appendable(code_prev)) : false;
 		}
 
 		if (is_link) {
@@ -9972,7 +9976,9 @@ static ID *link_named_part(
 	BHead *bhead = find_bhead_from_code_name(fd, idcode, name);
 	ID *id;
 
-	BLI_assert(BKE_idcode_is_linkable(idcode) && BKE_idcode_is_valid(idcode));
+	BLI_assert(BKE_idcode_is_valid(idcode));
+	/* This function may be called for appending too (which is basically link + make local). */
+	BLI_assert(BKE_idcode_is_linkable(idcode) || BKE_idcode_is_appendable(idcode));
 
 	if (bhead) {
 		id = is_yet_read(fd, mainl, bhead);

@@ -1668,7 +1668,7 @@ void BKE_library_make_local(
 
 		/* Do not explicitly make local non-linkable IDs (shapekeys, in fact), they are assumed to be handled
 		 * by real datablocks responsible of them. */
-		const bool do_skip = (id && !BKE_idcode_is_linkable(GS(id->name)));
+		const bool do_skip = (id && !BKE_idcode_is_appendable(GS(id->name)));
 
 		for (; id; id = id->next) {
 			id->tag &= ~LIB_TAG_DOIT;

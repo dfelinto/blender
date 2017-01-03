@@ -276,6 +276,36 @@ static void wm_link_do(
 	}
 }
 
+/**
+ * Check if an item defined by \a name and \a group can be appended/linked.
+ *
+ * \param reports: Optionally report an error when an item can't be appended/linked.
+ */
+static bool wm_link_append_item_poll(ReportList *reports, const char *path, const char *group, const char *name,
+                                     const bool is_append)
+{
+	short idcode;
+
+	if (!group || !name) {
+		printf("skipping %s\n", path);
+		return false;
+	}
+
+	idcode = BKE_idcode_from_name(group);
+
+	if ((is_append  && !BKE_idcode_is_appendable(idcode)) ||
+	    (!is_append && !BKE_idcode_is_linkable(idcode)))
+	{
+		if (reports) {
+			BKE_reportf(reports, RPT_ERROR_INVALID_INPUT, "Can't %s data-block '%s' of type '%s'",
+			            is_append ? "append" : "link", name, group);
+		}
+		return false;
+	}
+
+	return true;
+}
+
 static int wm_link_append_exec(bContext *C, wmOperator *op)
 {
 	Main *bmain = CTX_data_main(C);
@@ -286,6 +316,8 @@ static int wm_link_append_exec(bContext *C, wmOperator *op)
 	char *group, *name;
 	int totfiles = 0;
 	short flag;
+	bool has_item = false;
+	bool is_append;
 
 	RNA_string_get(op->ptr, "filename", relname);
 	RNA_string_get(op->ptr, "directory", root);
@@ -323,6 +355,7 @@ static int wm_link_append_exec(bContext *C, wmOperator *op)
 	}
 
 	flag = wm_link_append_flag(op);
+	is_append = (flag & FILE_LINK) == 0;
 
 	/* sanity checks for flag */
 	if (scene && scene->id.lib) {
@@ -358,7 +391,7 @@ static int wm_link_append_exec(bContext *C, wmOperator *op)
 			BLI_join_dirfile(path, sizeof(path), root, relname);
 
 			if (BLO_library_path_explode(path, libname, &group, &name)) {
-				if (!group || !name) {
+				if (!wm_link_append_item_poll(NULL, path, group, name, is_append)) {
 					continue;
 				}
 
@@ -366,6 +399,7 @@ static int wm_link_append_exec(bContext *C, wmOperator *op)
 					BLI_ghash_insert(libraries, BLI_strdup(libname), SET_INT_IN_POINTER(lib_idx));
 					lib_idx++;
 					wm_link_append_data_library_add(lapp_data, libname);
+					has_item = true;
 				}
 			}
 		}
@@ -379,8 +413,8 @@ static int wm_link_append_exec(bContext *C, wmOperator *op)
 
 			if (BLO_library_path_explode(path, libname, &group, &name)) {
 				WMLinkAppendDataItem *item;
-				if (!group || !name) {
-					printf("skipping %s\n", path);
+
+				if (!wm_link_append_item_poll(op->reports, path, group, name, is_append)) {
 					continue;
 				}
 
@@ -388,6 +422,7 @@ static int wm_link_append_exec(bContext *C, wmOperator *op)
 
 				item = wm_link_append_data_item_add(lapp_data, name, BKE_idcode_from_name(group), NULL);
 				BLI_BITMAP_ENABLE(item->libraries, lib_idx);
+				has_item = true;
 			}
 		}
 		RNA_END;
@@ -402,6 +437,11 @@ static int wm_link_append_exec(bContext *C, wmOperator *op)
 		BLI_BITMAP_ENABLE(item->libraries, 0);
 	}
 
+	if (!has_item) {
+		wm_link_append_data_free(lapp_data);
+		return OPERATOR_CANCELLED;
+	}
+
 	/* XXX We'd need re-entrant locking on Main for this to work... */
 	/* BKE_main_lock(bmain); */
 
@@ -414,7 +454,7 @@ static int wm_link_append_exec(bContext *C, wmOperator *op)
 	IMB_colormanagement_check_file_config(bmain);
 
 	/* append, rather than linking */
-	if ((flag & FILE_LINK) == 0) {
+	if (is_append) {
 		const bool set_fake = RNA_boolean_get(op->ptr, "set_fake");
 		const bool use_recursive = RNA_boolean_get(op->ptr, "use_recursive");
 
@@ -492,7 +532,7 @@ void WM_OT_link(wmOperatorType *ot)
 	ot->flag |= OPTYPE_UNDO;
 
 	WM_operator_properties_filesel(
-	        ot, FILE_TYPE_FOLDER | FILE_TYPE_BLENDER | FILE_TYPE_BLENDERLIB, FILE_LOADLIB, FILE_OPENFILE,
+	        ot, FILE_TYPE_FOLDER | FILE_TYPE_BLENDER | FILE_TYPE_BLENDERLIB, FILE_LOADLIB_LINKABLE, FILE_OPENFILE,
 	        WM_FILESEL_FILEPATH | WM_FILESEL_DIRECTORY | WM_FILESEL_FILENAME | WM_FILESEL_RELPATH | WM_FILESEL_FILES,
 	        FILE_DEFAULTDISPLAY, FILE_SORT_ALPHA);
 	
@@ -512,7 +552,7 @@ void WM_OT_append(wmOperatorType *ot)
 	ot->flag |= OPTYPE_UNDO;
 
 	WM_operator_properties_filesel(
-	        ot, FILE_TYPE_FOLDER | FILE_TYPE_BLENDER | FILE_TYPE_BLENDERLIB, FILE_LOADLIB, FILE_OPENFILE,
+	        ot, FILE_TYPE_FOLDER | FILE_TYPE_BLENDER | FILE_TYPE_BLENDERLIB, FILE_LOADLIB_APPENDABLE, FILE_OPENFILE,
 	        WM_FILESEL_FILEPATH | WM_FILESEL_DIRECTORY | WM_FILESEL_FILENAME | WM_FILESEL_FILES,
 	        FILE_DEFAULTDISPLAY, FILE_SORT_ALPHA);
 
@@ -560,6 +600,7 @@ static void lib_relocate_do(
 
 	LinkNode *itemlink;
 	int item_idx;
+	bool has_item = false;
 
 	/* Remove all IDs to be reloaded from Main. */
 	lba_idx = set_listbasepointers(bmain, lbarray);
@@ -567,26 +608,38 @@ static void lib_relocate_do(
 		ID *id = lbarray[lba_idx]->first;
 		const short idcode = id ? GS(id->name) : 0;
 
-		if (!id || !BKE_idcode_is_linkable(idcode)) {
-			/* No need to reload non-linkable datatypes, those will get relinked with their 'users ID'. */
-			continue;
-		}
+		/* Could continue for non-linkable ID types here already, but we
+		 * want to show an error message for all un-linkable IDs. */
 
 		for (; id; id = id->next) {
 			if (id->lib == library) {
 				WMLinkAppendDataItem *item;
+
+				if (!BKE_idcode_is_linkable(idcode)) {
+					/* No need to reload non-linkable datatypes, those will get relinked with their 'users ID'. */
+					BKE_reportf(reports, RPT_ERROR_INVALID_INPUT, "Can not %s '%s': Data-blocks of type '%s' "
+					            "don't support linking", do_reload ? "reload" : "relocate",
+					            id->name + 2, BKE_idcode_to_name(idcode));
+					continue;
+				}
 
 				/* We remove it from current Main, and add it to items to link... */
 				/* Note that non-linkable IDs (like e.g. shapekeys) are also explicitly linked here... */
 				BLI_remlink(lbarray[lba_idx], id);
 				item = wm_link_append_data_item_add(lapp_data, id->name + 2, idcode, id);
 				BLI_BITMAP_SET_ALL(item->libraries, true, lapp_data->num_libraries);
+				has_item = true;
 
 #ifdef PRINT_DEBUG
 				printf("\tdatablock to seek for: %s\n", id->name);
 #endif
 			}
 		}
+	}
+
+	if (!has_item) {
+		/* nothing to relocate */
+		return;
 	}
 
 	BKE_main_id_tag_all(bmain, LIB_TAG_PRE_EXISTING, true);

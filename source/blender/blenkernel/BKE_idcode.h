@@ -37,6 +37,7 @@ const char *BKE_idcode_to_name_plural(short idcode);
 const char *BKE_idcode_to_translation_context(short idcode);
 short       BKE_idcode_from_name(const char *name);
 bool        BKE_idcode_is_linkable(short idcode);
+bool        BKE_idcode_is_appendable(short idcode);
 bool        BKE_idcode_is_valid(short idcode);
 
 int         BKE_idcode_to_idfilter(const short idcode);
