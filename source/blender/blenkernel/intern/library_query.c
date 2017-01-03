@@ -386,13 +386,24 @@ void BKE_library_foreach_ID_link(ID *id, LibraryIDLinkCallback callback, void *u
 					CALLBACK_INVOKE(base->object, IDWALK_USER);
 				}
 
+				SceneCollection *sc;
+				FOREACH_SCENE_COLLECTION(scene, sc)
 				{
-					Object* ob;
-					FOREACH_SCENE_OBJECT(scene, ob)
-					{
-						CALLBACK_INVOKE(ob, IDWALK_USER);
+					for (LinkData *link = sc->objects.first; link; link = link->next) {
+						CALLBACK_INVOKE_ID(link->data, IDWALK_USER);
 					}
-					FOREACH_SCENE_OBJECT_END
+
+					for (LinkData *link = sc->filter_objects.first; link; link = link->next) {
+						CALLBACK_INVOKE_ID(link->data, IDWALK_USER);
+					}
+				}
+				FOREACH_SCENE_COLLECTION_END
+
+				SceneLayer *sl;
+				for (sl = scene->render_layers.first; sl; sl = sl->next) {
+					for (ObjectBase *ob_base = sl->object_bases.first; ob_base; ob_base = ob_base->next) {
+						CALLBACK_INVOKE(ob_base->object, IDWALK_NOP);
+					}
 				}
 
 				for (TimeMarker *marker = scene->markers.first; marker; marker = marker->next) {
