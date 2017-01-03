@@ -58,6 +58,8 @@
 #include "RE_pipeline.h"
 #include "RE_bake.h"
 
+#include "DRW_engine.h"
+
 #include "initrender.h"
 #include "renderpipeline.h"
 #include "render_types.h"
@@ -91,6 +93,7 @@ void RE_engines_init(void)
 #ifdef WITH_GAMEENGINE
 	BLI_addtail(&R_engines, &internal_game_type);
 #endif
+	DRW_viewport_engine_init();
 }
 
 void RE_engines_exit(void)

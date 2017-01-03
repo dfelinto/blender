@@ -515,6 +515,12 @@ void *GPU_shader_get_interface(GPUShader *shader)
 	return shader->uniform_interface;
 }
 
+/* Clement : Temp */
+int GPU_shader_get_program(GPUShader *shader)
+{
+	return (int)shader->program;
+}
+
 void GPU_shader_set_interface(GPUShader *shader, void *interface)
 {
 	shader->uniform_interface = interface;

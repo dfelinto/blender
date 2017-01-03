@@ -19,7 +19,41 @@
  *
  */
 
-#ifndef __DRW_DEFINES_H__
-#define __DRW_DEFINES_H__
+/** \file DRW_engine.h
+ *  \ingroup draw
+ */
 
-#endif  /* __DRW_DEFINES_H__ */
+#ifndef __DRW_ENGINE_H__
+#define __DRW_ENGINE_H__
+
+typedef enum {
+	DRW_UNIFORM_INT,
+	DRW_UNIFORM_FLOAT,
+	DRW_UNIFORM_TEXTURE,
+	DRW_UNIFORM_BUFFER,
+	DRW_UNIFORM_MAT3,
+	DRW_UNIFORM_MAT4
+} DRWUniformType;
+
+typedef struct DRWUniform {
+	struct DRWUniform *next, *prev;
+	DRWUniformType type;
+	int location;
+	int length;
+	int arraysize;
+	int bindloc;
+	const void *value;
+} DRWUniform;
+
+typedef struct DRWInterface {
+	ListBase uniforms;
+	/* matrices */
+	int modelview;
+	int projection;
+	int modelviewprojection;
+	int normal;
+} DRWInterface;
+
+void DRW_viewport_engine_init(void);
+
+#endif /* __DRW_ENGINE_H__ */

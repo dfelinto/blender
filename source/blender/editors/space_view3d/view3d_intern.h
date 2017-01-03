@@ -142,6 +142,8 @@ void draw_motion_paths_cleanup(View3D *v3d);
 
 
 /* drawobject.c */
+void draw_mesh(Base *base, const struct bContext *C, unsigned int program);
+
 void draw_object(Scene *scene, struct ARegion *ar, View3D *v3d, Base *base, const short dflag);
 void draw_mesh_object_outline(View3D *v3d, Object *ob, struct DerivedMesh *dm);
 

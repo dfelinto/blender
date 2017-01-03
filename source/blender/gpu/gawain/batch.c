@@ -247,3 +247,38 @@ void Batch_draw(Batch* batch)
 	Batch_done_using_program(batch);
 	glBindVertexArray(0);
 	}
+
+/* clement : temp stuff */
+void Batch_draw_stupid(Batch* batch)
+{
+	if (batch->vao_id)
+		glBindVertexArray(batch->vao_id);
+	else
+		Batch_prime(batch);
+
+	if (batch->program_dirty)
+		Batch_update_program_bindings(batch);
+
+	// Batch_use_program(batch);
+
+	//gpuBindMatrices(batch->program);
+
+	if (batch->elem)
+		{
+		const ElementList* el = batch->elem;
+
+#if TRACK_INDEX_RANGE
+		if (el->base_index)
+			glDrawRangeElementsBaseVertex(batch->prim_type, el->min_index, el->max_index, el->index_ct, el->index_type, 0, el->base_index);
+		else
+			glDrawRangeElements(batch->prim_type, el->min_index, el->max_index, el->index_ct, el->index_type, 0);
+#else
+		glDrawElements(batch->prim_type, el->index_ct, GL_UNSIGNED_INT, 0);
+#endif
+		}
+	else
+		glDrawArrays(batch->prim_type, 0, batch->verts->vertex_ct);
+
+	// Batch_done_using_program(batch);
+	glBindVertexArray(0);
+}

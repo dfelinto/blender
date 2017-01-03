@@ -77,6 +77,8 @@
 #include "BKE_unit.h"
 #include "BKE_tracking.h"
 
+#include "BKE_context.h" /* Clement : to remove */
+
 #include "BKE_editmesh.h"
 
 #include "IMB_imbuf.h"
@@ -4367,6 +4369,33 @@ static void draw_em_fancy(Scene *scene, ARegion *ar, View3D *v3d,
 #endif
 }
 
+/* Clement : temp solution to draw something simply */
+void draw_mesh(Base *base, const struct bContext *C, unsigned int program)
+{
+	Object *ob = base->object;
+	RegionView3D *rv3d = CTX_wm_region_view3d(C);
+	Scene *scene = CTX_data_scene(C);
+	View3D *v3d = CTX_wm_view3d(C);
+
+	if (ob->type == OB_MESH) {
+		Mesh *me = ob->data;
+		DerivedMesh *dm = NULL, *edm = NULL;
+
+		if (ob->mode & OB_MODE_EDIT) {
+			dm = editbmesh_get_derived_base(ob, me->edit_btmesh, CD_MASK_BAREMESH);
+		}
+		else {
+			dm = mesh_get_derived_final(scene, ob, CD_MASK_BAREMESH);
+		}
+
+		Batch *surface = MBC_get_all_triangles(dm);
+		Batch_set_program(surface, program);
+		Batch_draw_stupid(surface);
+
+		dm->release(dm);
+	}
+}
+
 static void draw_em_fancy_new(Scene *scene, ARegion *ar, View3D *v3d,
                               Object *ob, BMEditMesh *em, DerivedMesh *cageDM, DerivedMesh *finalDM, const char dt)
 {
@@ -7448,6 +7477,7 @@ void draw_rigidbody_shape(Object *ob)
 			break;
 	}
 }
+
 
 /**
  * main object drawing function, draws in selection
