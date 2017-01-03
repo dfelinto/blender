@@ -345,6 +345,10 @@ void BKE_scene_objects_Iterator_begin(Iterator *iter, void *data_in)
 
 	SceneCollection *sc = data->scene_collection_iter.current;
 	iter->current = sc->objects.first;
+
+	if (iter->current == NULL) {
+		BKE_scene_objects_Iterator_next(iter);
+	}
 }
 
 /**
