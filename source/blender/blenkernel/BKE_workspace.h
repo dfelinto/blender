@@ -91,4 +91,9 @@ void            BKE_workspace_layout_screen_set(WorkSpaceLayout *layout, struct 
 WorkSpaceLayout *BKE_workspace_layout_next_get(const WorkSpaceLayout *layout) ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
 WorkSpaceLayout *BKE_workspace_layout_prev_get(const WorkSpaceLayout *layout) ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
 
+/* -------------------------------------------------------------------- */
+/* Don't use outside of BKE! */
+
+WorkSpace *workspace_alloc(void) ATTR_WARN_UNUSED_RESULT;
+
 #endif /* __BKE_WORKSPACE_H__ */

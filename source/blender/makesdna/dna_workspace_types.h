@@ -18,14 +18,18 @@
  * ***** END GPL LICENSE BLOCK *****
  */
 
-/** \file blender/blenkernel/intern/workspace_dna.h
- *  \ingroup bke
+/** \file DNA_workspace_types.h
+ *  \ingroup DNA
  *
- * Local header with WorkSpace DNA types. makesdna.c includes this.
+ * Only use with API in BKE_workspace.h!
  */
 
-#ifndef __WORKSPACE_DNA_H__
-#define __WORKSPACE_DNA_H__
+#ifndef __DNA_WORKSPACE_TYPES_H__
+#define __DNA_WORKSPACE_TYPES_H__
+
+#if !defined(NAMESPACE_WORKSPACE) && !defined(NAMESPACE_DNA)
+#  error "This file shouldn't be included outside of workspace namespace."
+#endif
 
 /**
  * Layouts are basically bScreens. We use this struct to wrap a reference to a screen so that we can store it in
@@ -45,4 +49,4 @@ typedef struct WorkSpace {
 	struct WorkSpaceLayout *new_layout; /* temporary when switching screens */
 } WorkSpace;
 
-#endif /* __WORKSPACE_DNA_H__ */
+#endif /* __DNA_WORKSPACE_TYPES_H__ */

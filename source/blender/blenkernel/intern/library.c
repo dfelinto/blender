@@ -132,9 +132,6 @@
 
 #include "atomic_ops.h"
 
-/* local DNA files */
-#include "workspace_dna.h"
-
 
 /* GS reads the memory pointed at in a specific ordering. 
  * only use this definition, makes little and big endian systems
@@ -969,7 +966,7 @@ void *BKE_libblock_alloc_notest(short type)
 			id = MEM_callocN(sizeof(CacheFile), "Cache File");
 			break;
 		case ID_WS:
-			id = MEM_callocN(sizeof(WorkSpace), "Workspace");
+			id = (ID *)workspace_alloc();
 			break;
 	}
 	return id;

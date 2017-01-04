@@ -22,6 +22,8 @@
  *  \ingroup bke
  */
 
+#define NAMESPACE_WORKSPACE /* allow including specially guarded dna_workspace_types.h */
+
 #include "BLI_utildefines.h"
 
 #include "BKE_global.h"
@@ -32,10 +34,9 @@
 
 #include "DNA_scene_types.h"
 #include "DNA_screen_types.h"
+#include "dna_workspace_types.h"
 
 #include "MEM_guardedalloc.h"
-
-#include "workspace_dna.h"
 
 
 static bool workspaces_is_screen_used(const Main *bmain, bScreen *screen);
@@ -43,6 +44,14 @@ static bool workspaces_is_screen_used(const Main *bmain, bScreen *screen);
 
 /* -------------------------------------------------------------------- */
 /* Create, delete, init */
+
+/**
+ * Only to be called by #BKE_libblock_alloc_notest! Always use BKE_workspace_add to add a new workspace.
+ */
+WorkSpace *workspace_alloc(void)
+{
+	return MEM_callocN(sizeof(WorkSpace), "Workspace");
+}
 
 WorkSpace *BKE_workspace_add(Main *bmain, const char *name)
 {

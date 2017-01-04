@@ -84,22 +84,22 @@ WorkSpace *ED_workspace_duplicate(WorkSpace *workspace_old, Main *bmain, wmWindo
 {
 	WorkSpaceLayout *layout_active_old = BKE_workspace_active_layout_get(workspace_old);
 	ListBase *layouts_old = BKE_workspace_layouts_get(workspace_old);
-	WorkSpace *worspace_new = BKE_libblock_alloc(bmain, ID_WS, BKE_workspace_name_get(workspace_old));
+	WorkSpace *workspace_new = BKE_workspace_add(bmain, BKE_workspace_name_get(workspace_old));
 
 	BKE_workspace_layout_iter_begin(layout_old, layouts_old->first)
 	{
-		WorkSpaceLayout *layout_new = ED_workspace_layout_duplicate(worspace_new, layout_old, win);
+		WorkSpaceLayout *layout_new = ED_workspace_layout_duplicate(workspace_new, layout_old, win);
 
 		if (layout_active_old == layout_old) {
 			bScreen *screen_new = BKE_workspace_layout_screen_get(layout_new);
 
 			screen_new_activate_refresh(win, screen_new);
-			BKE_workspace_active_layout_set(worspace_new, layout_new);
+			BKE_workspace_active_layout_set(workspace_new, layout_new);
 		}
 	}
 	BKE_workspace_layout_iter_end;
 
-	return worspace_new;
+	return workspace_new;
 }
 
 /**
