@@ -86,7 +86,7 @@ static IDType idtypes[] = {
 	{ID_PAL, "Palettes",           "palettes",        BLT_I18NCONTEXT_ID_PALETTE,            true, true  },
 	{ID_PC,  "PaintCurve",         "paint_curves",    BLT_I18NCONTEXT_ID_PAINTCURVE,         true, true  },
 	{ID_SCE, "Scene",              "scenes",          BLT_I18NCONTEXT_ID_SCENE,              true, true  },
-	{ID_SCR, "Screen",             "screens",         BLT_I18NCONTEXT_ID_SCREEN,             false, false},
+	{ID_SCR, "Screen",             "screens",         BLT_I18NCONTEXT_ID_SCREEN,             false, true },
 	{ID_SEQ, "Sequence",           "sequences",       BLT_I18NCONTEXT_ID_SEQUENCE,           false, false}, /* not actually ID data */
 	{ID_SPK, "Speaker",            "speakers",        BLT_I18NCONTEXT_ID_SPEAKER,            true, true  },
 	{ID_SO,  "Sound",              "sounds",          BLT_I18NCONTEXT_ID_SOUND,              true, true  },

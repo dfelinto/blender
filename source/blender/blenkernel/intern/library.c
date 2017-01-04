@@ -466,9 +466,9 @@ bool id_make_local(Main *bmain, ID *id, const bool test, const bool lib_local)
 			if (!test) BKE_cachefile_make_local(bmain, (CacheFile *)id, lib_local);
 			return true;
 		case ID_WS:
-//			if (!test) BKE_workspace_make_local(bmain, (WorkSpace *)id, lib_local);
-			return true;
 		case ID_SCR:
+			/* A bit special: can be appended but not linked. Thus, supporting make-local doesn't make much sense. */
+			return false;
 		case ID_LI:
 		case ID_KE:
 		case ID_WM:
@@ -576,8 +576,6 @@ bool id_copy(Main *bmain, ID *id, ID **newid, bool test)
 			if (!test) *newid = (ID *)BKE_cachefile_copy(bmain, (CacheFile *)id);
 			return true;
 		case ID_WS:
-//			if (!test) *newid = (ID *)BKE_workspace_copy(bmain, (WorkSpace *)id);
-			return true;
 		case ID_SCE:
 		case ID_LI:
 		case ID_SCR:
