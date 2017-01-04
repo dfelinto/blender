@@ -26,7 +26,6 @@
 #include <stdio.h>
 
 #include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
 #include "BLI_rect.h"
 #include "BLI_string.h"
 
@@ -46,6 +45,7 @@
 #include "GPU_basic_shader.h"
 #include "GPU_batch.h"
 #include "GPU_draw.h"
+#include "GPU_extensions.h"
 #include "GPU_framebuffer.h"
 #include "GPU_immediate.h"
 #include "GPU_matrix.h"
@@ -73,6 +73,8 @@ static struct DRWGlobalState{
 	ListBase bound_texs;
 	int tex_bind_id;
 	int size[2];
+	/* Current rendering context set by DRW_viewport_init */
+	bContext *context;
 } DST = {NULL};
 
 /* Fullscreen Quad Buffer */
@@ -80,6 +82,13 @@ static const float fs_cos[4][2] = {{-1.0f, -1.0f}, {1.0f, -1.0f}, {-1.0f, 1.0f},
 static const float fs_uvs[4][2] = {{0.0f, 0.0f}, {1.0f, 0.0f}, {0.0f, 1.0f}, {1.0f, 1.0f}};
 static unsigned int fs_quad;
 static bool fs_quad_init = false;
+
+/* ***************************************** TEXTURES ******************************************/
+
+GPUTexture *DRW_texture_create_2D_array(int w, int h, int d, const float *fpixels)
+{
+	return GPU_texture_create_2D_array(w, h, d, fpixels);
+}
 
 /* ***************************************** BUFFERS ******************************************/
 
@@ -181,14 +190,39 @@ void DRW_interface_uniform_buffer(struct GPUShader *shader, DRWInterface *interf
 	DRW_interface_uniform(shader, interface, name, DRW_UNIFORM_BUFFER, NULL, value, 0, loc);
 }
 
-void DRW_interface_uniform_float(struct GPUShader *shader, DRWInterface *interface, const char *name, const float *value, int length)
+void DRW_interface_uniform_float(struct GPUShader *shader, DRWInterface *interface, const char *name, const float *value, int arraysize)
 {
-	DRW_interface_uniform(shader, interface, name, DRW_UNIFORM_FLOAT, value, length, 1, 0);
+	DRW_interface_uniform(shader, interface, name, DRW_UNIFORM_FLOAT, value, 1, arraysize, 0);
 }
 
-void DRW_interface_uniform_int(struct GPUShader *shader, DRWInterface *interface, const char *name, const int *value, int length)
+void DRW_interface_uniform_vec2(struct GPUShader *shader, DRWInterface *interface, const char *name, const float *value, int arraysize)
 {
-	DRW_interface_uniform(shader, interface, name, DRW_UNIFORM_INT, value, length, 1, 0);
+	DRW_interface_uniform(shader, interface, name, DRW_UNIFORM_FLOAT, value, 2, arraysize, 0);
+}
+
+void DRW_interface_uniform_vec3(struct GPUShader *shader, DRWInterface *interface, const char *name, const float *value, int arraysize)
+{
+	DRW_interface_uniform(shader, interface, name, DRW_UNIFORM_FLOAT, value, 3, arraysize, 0);
+}
+
+void DRW_interface_uniform_vec4(struct GPUShader *shader, DRWInterface *interface, const char *name, const float *value, int arraysize)
+{
+	DRW_interface_uniform(shader, interface, name, DRW_UNIFORM_FLOAT, value, 4, arraysize, 0);
+}
+
+void DRW_interface_uniform_int(struct GPUShader *shader, DRWInterface *interface, const char *name, const int *value, int arraysize)
+{
+	DRW_interface_uniform(shader, interface, name, DRW_UNIFORM_INT, value, 1, arraysize, 0);
+}
+
+void DRW_interface_uniform_ivec2(struct GPUShader *shader, DRWInterface *interface, const char *name, const int *value, int arraysize)
+{
+	DRW_interface_uniform(shader, interface, name, DRW_UNIFORM_INT, value, 2, arraysize, 0);
+}
+
+void DRW_interface_uniform_ivec3(struct GPUShader *shader, DRWInterface *interface, const char *name, const int *value, int arraysize)
+{
+	DRW_interface_uniform(shader, interface, name, DRW_UNIFORM_INT, value, 3, arraysize, 0);
 }
 
 void DRW_interface_uniform_mat3(struct GPUShader *shader, DRWInterface *interface, const char *name, const float *value)
@@ -199,6 +233,11 @@ void DRW_interface_uniform_mat3(struct GPUShader *shader, DRWInterface *interfac
 void DRW_interface_uniform_mat4(struct GPUShader *shader, DRWInterface *interface, const char *name, const float *value)
 {
 	DRW_interface_uniform(shader, interface, name, DRW_UNIFORM_MAT4, value, 16, 1, 0);
+}
+
+void DRW_get_dfdy_factors(float dfdyfac[2])
+{
+	GPU_get_dfdy_factors(dfdyfac);	
 }
 
 /* ****************************************** DRAW ******************************************/
@@ -247,7 +286,7 @@ typedef struct DRWBoundTexture {
 	GPUTexture *tex;
 } DRWBoundTexture;
 
-static void draw_batch(DRWBatch *batch, const struct bContext *context, const bool fullscreen)
+static void draw_batch(DRWBatch *batch, const bool fullscreen)
 {
 	BLI_assert(!batch->shader);
 	BLI_assert(!batch->interface);
@@ -308,7 +347,7 @@ static void draw_batch(DRWBatch *batch, const struct bContext *context, const bo
 		draw_fullscreen();
 	}
 	else {
-		RegionView3D *rv3d = CTX_wm_region_view3d(context);
+		RegionView3D *rv3d = CTX_wm_region_view3d(DST.context);
 
 		for (Base *base = batch->objects.first; base; base = base->next) {
 			/* Should be really simple */
@@ -332,8 +371,9 @@ static void draw_batch(DRWBatch *batch, const struct bContext *context, const bo
 				transpose_m3(n);
 				GPU_shader_uniform_vector(batch->shader, interface->normal, 9, 1, (float *)n);
 			}
+
 			/* step 2 : bind vertex array & draw */
-			draw_mesh(base, context, GPU_shader_get_program(batch->shader));
+			draw_mesh(base, DST.context, GPU_shader_get_program(batch->shader));
 		}
 	}
 }
@@ -383,7 +423,7 @@ static void set_state(short flag)
 	}
 }
 
-void DRW_draw_pass(DRWPass *pass, const struct bContext *context)
+void DRW_draw_pass(DRWPass *pass)
 {
 	/* Start fresh */
 	DST.shader = NULL;
@@ -393,7 +433,7 @@ void DRW_draw_pass(DRWPass *pass, const struct bContext *context)
 	BLI_listbase_clear(&DST.bound_texs);
 
 	for (DRWBatch *batch = pass->batches.first; batch; batch = batch->next) {
-		draw_batch(batch, context, false);
+		draw_batch(batch, false);
 	}
 
 	/* Clear Bound textures */
@@ -419,7 +459,7 @@ void DRW_draw_pass_fullscreen(DRWPass *pass)
 	BLI_listbase_clear(&DST.bound_texs);
 
 	DRWBatch *batch = pass->batches.first;
-	draw_batch(batch, NULL, true);
+	draw_batch(batch, true);
 
 	/* Clear Bound textures */
 	for (DRWBoundTexture *bound_tex = DST.bound_texs.first; bound_tex; bound_tex = bound_tex->next) {
@@ -435,7 +475,7 @@ void DRW_draw_pass_fullscreen(DRWPass *pass)
 }
 
 /* Reset state to not interfer with other UI drawcall */
-void DRW_reset_state(void)
+void DRW_state_reset(void)
 {
 	DRWState state = 0;
 	state |= DRW_STATE_WRITE_DEPTH;
@@ -444,23 +484,7 @@ void DRW_reset_state(void)
 	set_state(state);
 }
 
-void DRW_init_viewport(const bContext *C, void **buffers, void **textures)
-{
-	RegionView3D *rv3d = CTX_wm_region_view3d(C);
-	GPUViewport *viewport = rv3d->viewport;
-
-	GPU_viewport_get_engine_data(viewport, buffers, textures);
-
-	/* Refresh DST.size */
-	DefaultTextureList *txl = (DefaultTextureList *)*textures;
-	DST.size[0] = GPU_texture_width(txl->color);
-	DST.size[1] = GPU_texture_height(txl->color);
-	DST.current_txl = (TextureList *)*textures;
-
-	DefaultFramebufferList *fbl = (DefaultFramebufferList *)*buffers;
-	DST.default_framebuffer = fbl->default_fb;
-	DST.current_fbl = (FramebufferList *)*buffers;
-}
+/* ****************************************** Framebuffers ******************************************/
 
 void DRW_framebuffer_init(struct GPUFrameBuffer **fb, int width, int height, DRWFboTexture textures[MAX_FBO_TEX],
                           int texnbr)
@@ -473,15 +497,17 @@ void DRW_framebuffer_init(struct GPUFrameBuffer **fb, int width, int height, DRW
 		{
 			DRWFboTexture fbotex = textures[i];
 			
-			/* TODO refine to opengl formats */
-			if (fbotex.format == DRW_BUF_DEPTH_16 ||
-				fbotex.format == DRW_BUF_DEPTH_24) {
-				*fbotex.tex = GPU_texture_create_depth(width, height, NULL);
-				GPU_texture_filter_mode(*fbotex.tex, false, false);
-			}
-			else {
-				*fbotex.tex = GPU_texture_create_2D(width, height, NULL, GPU_HDR_NONE, NULL);
-				++color_attachment;
+			if (!*fbotex.tex) {
+				/* TODO refine to opengl formats */
+				if (fbotex.format == DRW_BUF_DEPTH_16 ||
+					fbotex.format == DRW_BUF_DEPTH_24) {
+					*fbotex.tex = GPU_texture_create_depth(width, height, NULL);
+					GPU_texture_filter_mode(*fbotex.tex, false, false);
+				}
+				else {
+					*fbotex.tex = GPU_texture_create_2D(width, height, NULL, GPU_HDR_NONE, NULL);
+					++color_attachment;
+				}
 			}
 			
 			GPU_framebuffer_texture_attach(*fb, *fbotex.tex, color_attachment);
@@ -500,9 +526,60 @@ void DRW_framebuffer_bind(struct GPUFrameBuffer *fb)
 	GPU_framebuffer_bind(fb);
 }
 
-int *DRW_get_viewport_size(void)
+void DRW_framebuffer_texture_attach(struct GPUFrameBuffer *fb, GPUTexture *tex, int slot)
+{
+	GPU_framebuffer_texture_attach(fb, tex, slot);
+}
+
+void DRW_framebuffer_texture_detach(GPUTexture *tex)
+{
+	GPU_framebuffer_texture_detach(tex);
+}
+
+/* ****************************************** Viewport ******************************************/
+
+int *DRW_viewport_size_get(void)
 {
 	return &DST.size[0];
+}
+
+void DRW_viewport_init(const bContext *C, void **buffers, void **textures)
+{
+	RegionView3D *rv3d = CTX_wm_region_view3d(C);
+	GPUViewport *viewport = rv3d->viewport;
+
+	/* Save context for all later needs */
+	DST.context = C;
+
+	GPU_viewport_get_engine_data(viewport, buffers, textures);
+
+	/* Refresh DST.size */
+	DefaultTextureList *txl = (DefaultTextureList *)*textures;
+	DST.size[0] = GPU_texture_width(txl->color);
+	DST.size[1] = GPU_texture_height(txl->color);
+	DST.current_txl = (TextureList *)*textures;
+
+	DefaultFramebufferList *fbl = (DefaultFramebufferList *)*buffers;
+	DST.default_framebuffer = fbl->default_fb;
+	DST.current_fbl = (FramebufferList *)*buffers;
+}
+
+void DRW_viewport_matrix_get(float mat[4][4], DRWViewportMatrixType type)
+{
+	RegionView3D *rv3d = CTX_wm_region_view3d(DST.context);
+
+	if (type == DRW_MAT_PERS)
+		copy_m4_m4(mat, rv3d->persmat);
+	else if (type == DRW_MAT_WIEW)
+		copy_m4_m4(mat, rv3d->viewmat);
+	else if (type == DRW_MAT_WIN)
+		copy_m4_m4(mat, rv3d->winmat);
+}
+
+bool DRW_viewport_is_persp(void)
+{
+	RegionView3D *rv3d = CTX_wm_region_view3d(DST.context);
+	return rv3d->is_persp;
 }
 
 /* ****************************************** INIT ******************************************/

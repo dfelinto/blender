@@ -49,7 +49,6 @@ static struct GPUTextureGlobal {
 } GG = {NULL, NULL, NULL};
 
 /* GPUTexture */
-
 struct GPUTexture {
 	int w, h;           /* width/height */
 	int number;         /* number for multitexture binding */
@@ -462,6 +461,40 @@ GPUTexture *GPU_texture_from_preview(PreviewImage *prv, int mipmap)
 	
 	return tex;
 
+}
+
+GPUTexture *GPU_texture_create_2D_array(int w, int h, int d, const float *fpixels)
+{
+	GPUTexture *tex = MEM_callocN(sizeof(GPUTexture), "GPUTexture");
+	tex->w = w;
+	tex->h = h;
+	tex->number = -1;
+	tex->refcount = 1;
+	tex->target = GL_TEXTURE_2D_ARRAY;
+	tex->target_base = GL_TEXTURE_2D_ARRAY;
+	tex->depth = d;
+	tex->fb_attachment = -1;
+
+	glGenTextures(1, &tex->bindcode);
+
+	if (!tex->bindcode) {
+		fprintf(stderr, "GPUTexture: texture create failed");
+		GPU_texture_free(tex);
+		return NULL;
+	}
+
+	glBindTexture(tex->target, tex->bindcode);
+	glTexImage3D(tex->target, 0, GL_RGBA8, w, h, d, 0, GL_RGBA, GL_FLOAT, fpixels);
+
+	glTexParameteri(tex->target_base, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(tex->target_base, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(tex->target_base, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(tex->target_base, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+	if (tex)
+		GPU_texture_unbind(tex);
+
+	return tex;
 }
 
 GPUTexture *GPU_texture_create_1D(int w, const float *fpixels, char err_out[256])

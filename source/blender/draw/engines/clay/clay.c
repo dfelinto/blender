@@ -21,36 +21,42 @@
 
 #include "DRW_render.h"
 
+#include "BKE_icons.h"
+
+#include "IMB_imbuf.h"
+#include "IMB_imbuf_types.h"
+
+#include "UI_resources.h"
+#include "UI_interface_icons.h"
+
 #include "clay.h"
 
 /* Shaders */
 
 extern char datatoc_clay_frag_glsl[];
 extern char datatoc_clay_vert_glsl[];
-extern char datatoc_clay_downsample_depth_frag_glsl[];
-extern char datatoc_clay_debug_frag_glsl[];
-
 
 /* Storage */
 
 static struct CLAY_data {
 	/* Depth Pre Pass */
 	struct DRWPass *depth_pass;
-	struct GPUShader *depth_shader;
-	struct DRWInterface *depth_interface;
-	/* Depth Downsample Pass */
-	struct DRWPass *downsample_pass;
-	struct GPUShader *downsample_shader;
-	struct DRWInterface *downsample_interface;
+	struct GPUShader *depth_sh;
+	struct DRWInterface *depth_itf;
 	/* Shading Pass */
 	struct DRWPass *clay_pass;
-	struct GPUShader *clay_shader;
-	struct DRWInterface *clay_interface;
+	struct GPUShader *clay_sh;
+	struct DRWInterface *clay_itf;
 
-	/* Debug Pass */
-	struct DRWPass *debug_pass;
-	struct GPUShader *debug_shader;
-	struct DRWInterface *debug_interface;
+	/* Matcap textures */
+	struct GPUTexture *matcap_array;
+
+	/* Ssao */
+	float dfdyfac[2];
+	float winmat[4][4];
+	float viewvecs[3][4];
+	float ssao_params[4];
+	float sample_params[3];
 } data = {NULL};
 
 /* keep it under MAX_BUFFERS */
@@ -70,88 +76,94 @@ typedef struct CLAY_TextureList{
 	struct GPUTexture *depth_low;
 } CLAY_TextureList;
 
-/* for clarity follow the same layout as TextureList */
+/* for clarity follow the same layout as CLAY_TextureList */
 #define SCENE_COLOR 0
 #define SCENE_DEPTH 1
 #define SCENE_DEPTH_LOW 2
 
 /* Functions */
+static void add_icon_to_rect(PreviewImage *prv, float *final_rect, int layer)
+{
+	int image_size = prv->w[0] * prv->h[0];
+	float *new_rect = &final_rect[image_size * 4 * layer];
+
+	IMB_buffer_float_from_byte(new_rect, prv->rect[0], IB_PROFILE_SRGB, IB_PROFILE_SRGB,
+	                           false, prv->w[0], prv->h[0], prv->w[0], prv->w[0]);
+}
 
 static void clay_init_engine(void)
 {
 	DRWBatch *batch;
 
+	/* Create Texture Array */
+	{
+		PreviewImage *prv[2];
+		int layers = 2; /* For now only use the 24 internal matcaps */
+
+		prv[0] = UI_icon_to_preview(ICON_MATCAP_02);
+		float *final_rect = MEM_callocN(sizeof(float) * 4 * prv[0]->w[0] * prv[0]->h[0] * layers, "Clay Matcap array rect");
+		add_icon_to_rect(prv[0], final_rect, 0);
+
+		prv[1] = UI_icon_to_preview(ICON_MATCAP_03);
+		add_icon_to_rect(prv[1], final_rect, 1);
+
+		data.matcap_array = DRW_texture_create_2D_array(prv[1]->w[0], prv[1]->h[0], layers, final_rect);
+		MEM_freeN(final_rect);
+		BKE_previewimg_free(&prv[0]);
+		BKE_previewimg_free(&prv[1]);
+	}
+
 	/* Depth prepass */
 	{
-		data.depth_shader = DRW_shader_create_3D_depth_only();
-		data.depth_interface = DRW_interface_create(data.depth_shader);
+		data.depth_sh = DRW_shader_create_3D_depth_only();
+		data.depth_itf = DRW_interface_create(data.depth_sh);
 
 		data.depth_pass = (DRWPass *)MEM_callocN(sizeof(DRWPass), "DRWPass depth_pass");
 		data.depth_pass->state = DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS;
 
 		batch = (DRWBatch *)MEM_callocN(sizeof(DRWBatch), "DRWBatch");
-		batch->shader = data.depth_shader;
-		batch->interface = data.depth_interface;
+		batch->shader = data.depth_sh;
+		batch->interface = data.depth_itf;
 		BLI_addtail(&data.depth_pass->batches, batch);
-	}
-
-	/* Downsample pass */
-	{
-		data.downsample_shader = DRW_shader_create_2D(datatoc_clay_downsample_depth_frag_glsl, NULL);
-		data.downsample_interface = DRW_interface_create(data.downsample_shader);
-		DRW_interface_uniform_int(data.downsample_shader, data.downsample_interface, "screenres", DRW_get_viewport_size(), 2);
-		DRW_interface_uniform_buffer(data.downsample_shader, data.downsample_interface, "depthtex", SCENE_DEPTH, 0);
-
-		data.downsample_pass = (DRWPass *)MEM_callocN(sizeof(DRWPass), "DRWPass downsample_pass");
-		data.downsample_pass->state = DRW_STATE_WRITE_DEPTH | DRW_STATE_WRITE_COLOR;
-
-		batch = (DRWBatch *)MEM_callocN(sizeof(DRWBatch), "DRWBatch");
-		batch->shader = data.downsample_shader;
-		batch->interface = data.downsample_interface;		
-		BLI_addtail(&data.downsample_pass->batches, batch);		
 	}
 
 	/* Shading pass */
 	{
-		data.clay_shader = DRW_shader_create(datatoc_clay_vert_glsl, NULL, datatoc_clay_frag_glsl, NULL);
-		data.clay_interface = DRW_interface_create(data.clay_shader);
-		//DRW_interface_uniform_int(data.clay_shader, data.clay_interface, "screenres", DRW_get_viewport_size(), 2);
-		//DRW_interface_uniform_float(data.clay_shader, data.clay_interface, "color", col, 4);
+		int bindloc = 0;
+
+		data.clay_sh = DRW_shader_create(datatoc_clay_vert_glsl, NULL, datatoc_clay_frag_glsl, NULL);
+		data.clay_itf = DRW_interface_create(data.clay_sh);
+
+		DRW_interface_uniform_ivec2(data.clay_sh, data.clay_itf, "screenres", DRW_viewport_size_get(), 1);
+		DRW_interface_uniform_buffer(data.clay_sh, data.clay_itf, "depthtex", SCENE_DEPTH, bindloc++);
+		DRW_interface_uniform_texture(data.clay_sh, data.clay_itf, "matcaps", data.matcap_array, bindloc++);
+
+		/* SSAO */
+		DRW_interface_uniform_mat4(data.clay_sh, data.clay_itf, "WinMatrix", data.winmat);
+		DRW_interface_uniform_vec4(data.clay_sh, data.clay_itf, "viewvecs", data.viewvecs, 3);
+		DRW_interface_uniform_vec4(data.clay_sh, data.clay_itf, "ssao_params", data.ssao_params, 1);
+		DRW_interface_uniform_vec3(data.clay_sh, data.clay_itf, "ssao_sample_params", data.sample_params, 1);
 
 		data.clay_pass = (DRWPass *)MEM_callocN(sizeof(DRWPass), "DRWPass clay_pass");
-		data.clay_pass->state = DRW_STATE_WRITE_COLOR | DRW_STATE_DEPTH_EQUAL;
+		data.clay_pass->state = DRW_STATE_WRITE_COLOR;
 
 		batch = (DRWBatch *)MEM_callocN(sizeof(DRWBatch), "DRWBatch");
-		batch->shader = data.clay_shader;
-		batch->interface = data.clay_interface;
-		BLI_addtail(&data.clay_pass->batches, batch);		
-	}
-
-	/* Debug */
-	{
-		data.debug_shader = DRW_shader_create_2D(datatoc_clay_debug_frag_glsl, NULL);
-		data.debug_interface = DRW_interface_create(data.debug_shader);
-		DRW_interface_uniform_int(data.debug_shader, data.debug_interface, "screenres", DRW_get_viewport_size(), 2);
-		DRW_interface_uniform_buffer(data.debug_shader, data.debug_interface, "depthtex", SCENE_DEPTH_LOW, 0);
-
-		data.debug_pass = (DRWPass *)MEM_callocN(sizeof(DRWPass), "DRWPass debug_pass");
-		data.debug_pass->state = DRW_STATE_WRITE_COLOR;
-
-		batch = (DRWBatch *)MEM_callocN(sizeof(DRWBatch), "DRWBatch");
-		batch->shader = data.debug_shader;
-		batch->interface = data.debug_interface;
-		BLI_addtail(&data.debug_pass->batches, batch);		
+		batch->shader = data.clay_sh;
+		batch->interface = data.clay_itf;
+		BLI_addtail(&data.clay_pass->batches, batch);
 	}
 }
 
+#if 0
 static void clay_init_view(CLAY_FramebufferList *buffers, CLAY_TextureList *textures)
 {
-	int *viewsize = DRW_get_viewport_size();
+	int *viewsize = DRW_viewport_size_get();
 
 	DRWFboTexture depth = {&textures->depth_low, DRW_BUF_R_16};
 
 	DRW_framebuffer_init(&buffers->downsample_depth, viewsize[0]/2, viewsize[1]/2, &depth, 1);
 }
+#endif
 
 static void clay_populate_batch(const struct bContext *C)
 {
@@ -168,6 +180,55 @@ static void clay_populate_batch(const struct bContext *C)
 	}
 }
 
+static void clay_ssao_setup(void)
+{
+	float invproj[4][4];
+	float dfdyfacs[2];
+	bool is_persp = DRW_viewport_is_persp();
+	/* view vectors for the corners of the view frustum. Can be used to recreate the world space position easily */
+	float viewvecs[3][4] = {
+	    {-1.0f, -1.0f, -1.0f, 1.0f},
+	    {1.0f, -1.0f, -1.0f, 1.0f},
+	    {-1.0f, 1.0f, -1.0f, 1.0f}
+	};
+	int i;
+
+	DRW_get_dfdy_factors(dfdyfacs);
+
+	data.ssao_params[0] = 1.0f; /* Max distance */
+	data.ssao_params[1] = 1.0f; /* Factor */
+	data.ssao_params[2] = 1.0f; /* Attenuation */
+	data.ssao_params[3] = dfdyfacs[1]; /* dfdy sign */
+
+	/* invert the view matrix */
+	DRW_viewport_matrix_get(data.winmat, DRW_MAT_WIN);
+	invert_m4_m4(invproj, data.winmat);
+
+	/* convert the view vectors to view space */
+	for (i = 0; i < 3; i++) {
+		mul_m4_v4(invproj, viewvecs[i]);
+		/* normalized trick see http://www.derschmale.com/2014/01/26/reconstructing-positions-from-the-depth-buffer */
+		mul_v3_fl(viewvecs[i], 1.0f / viewvecs[i][3]);
+		if (is_persp)
+			mul_v3_fl(viewvecs[i], 1.0f / viewvecs[i][2]);
+		viewvecs[i][3] = 1.0;
+
+		copy_v4_v4(data.viewvecs[i], viewvecs[i]);
+	}
+
+	/* we need to store the differences */
+	data.viewvecs[1][0] -= data.viewvecs[0][0];
+	data.viewvecs[1][1] = data.viewvecs[2][1] - data.viewvecs[0][1];
+
+	/* calculate a depth offset as well */
+	if (!is_persp) {
+		float vec_far[] = {-1.0f, -1.0f, 1.0f, 1.0f};
+		mul_m4_v4(invproj, vec_far);
+		mul_v3_fl(vec_far, 1.0f / vec_far[3]);
+		data.viewvecs[1][2] = vec_far[2] - data.viewvecs[0][2];
+	}
+}
+
 static void clay_view_draw(RenderEngine *UNUSED(engine), const struct bContext *context)
 {
 	/* This function may run for multiple viewports
@@ -175,12 +236,10 @@ static void clay_view_draw(RenderEngine *UNUSED(engine), const struct bContext *
 	CLAY_FramebufferList *buffers = NULL;
 	CLAY_TextureList *textures = NULL;
 
-	DRW_init_viewport(context, (void **)&buffers, (void **)&textures);
+	DRW_viewport_init(context, (void **)&buffers, (void **)&textures);
 	
-	if (!data.clay_shader)
+	if (!data.clay_sh)
 		clay_init_engine();
-
-	clay_init_view(buffers, textures);
 
 	/* TODO : tag to refresh by the deps graph */
 	/* ideally only refresh when objects are added/removed */
@@ -193,20 +252,18 @@ static void clay_view_draw(RenderEngine *UNUSED(engine), const struct bContext *
 
 	DRW_draw_background();
 
-	/* Step 1 : Depth pre-pass */
-	DRW_draw_pass(data.depth_pass, context);
+	/* Pass 1 : Depth pre-pass */
+	DRW_draw_pass(data.depth_pass);
 
-	/* Step 2 : downsample the depth buffer to a new buffer */
-	DRW_framebuffer_bind(buffers->downsample_depth);
-	DRW_draw_pass_fullscreen(data.downsample_pass);
+	clay_ssao_setup();
 
-	/* Step 3 : Shading pass */
-	DRW_framebuffer_bind(buffers->default_fb);
-	//DRW_draw_pass(data.clay_pass, context);
+	/* Pass 2 : Shading */
+	DRW_framebuffer_texture_detach(textures->depth);
+	DRW_draw_pass(data.clay_pass);
+	DRW_framebuffer_texture_attach(buffers->default_fb, textures->depth, 0);
 
-	DRW_draw_pass_fullscreen(data.debug_pass);
-
-	DRW_reset_state();
+	/* Always finish by this */
+	DRW_state_reset();
 }
 
 RenderEngineType viewport_clay_type = {

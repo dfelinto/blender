@@ -32,6 +32,8 @@
 #include "BKE_scene.h"
 
 #include "BLI_listbase.h"
+#include "BLI_math_matrix.h"
+#include "BLI_math_vector.h"
 #include "BLI_string.h"
 
 #include "BLT_translation.h"
@@ -66,6 +68,10 @@ typedef struct DRWPass {
 
 struct GPUFrameBuffer;
 
+/* Textures */
+
+struct GPUTexture *DRW_texture_create_2D_array(int w, int h, int d, const float *fpixels);
+
 /* Shaders */
 struct GPUShader *DRW_shader_create(const char *vert, const char *geom, const char *frag, const char *defines);
 struct GPUShader *DRW_shader_create_2D(const char *frag, const char *defines);
@@ -75,10 +81,17 @@ struct GPUShader *DRW_shader_create_3D_depth_only(void);
 struct DRWInterface *DRW_interface_create(struct GPUShader *shader);
 void DRW_interface_uniform_texture(struct GPUShader *shader, struct DRWInterface *uniforms, const char *name, const struct GPUTexture *tex, int loc);
 void DRW_interface_uniform_buffer(struct GPUShader *shader, struct DRWInterface *interface, const char *name, const int value, int loc);
-void DRW_interface_uniform_float(struct GPUShader *shader, struct DRWInterface *uniforms, const char *name, const float *value, int length);
-void DRW_interface_uniform_int(struct GPUShader *shader, struct DRWInterface *uniforms, const char *name, const int *value, int length);
+void DRW_interface_uniform_float(struct GPUShader *shader, struct DRWInterface *uniforms, const char *name, const float *value, int arraysize);
+void DRW_interface_uniform_vec2(struct GPUShader *shader, struct DRWInterface *uniforms, const char *name, const float *value, int arraysize);
+void DRW_interface_uniform_vec3(struct GPUShader *shader, struct DRWInterface *uniforms, const char *name, const float *value, int arraysize);
+void DRW_interface_uniform_vec4(struct GPUShader *shader, struct DRWInterface *uniforms, const char *name, const float *value, int arraysize);
+void DRW_interface_uniform_int(struct GPUShader *shader, struct DRWInterface *uniforms, const char *name, const int *value, int arraysize);
+void DRW_interface_uniform_ivec2(struct GPUShader *shader, struct DRWInterface *uniforms, const char *name, const int *value, int arraysize);
+void DRW_interface_uniform_ivec3(struct GPUShader *shader, struct DRWInterface *uniforms, const char *name, const int *value, int arraysize);
 void DRW_interface_uniform_mat3(struct GPUShader *shader, struct DRWInterface *interface, const char *name, const float *value);
 void DRW_interface_uniform_mat4(struct GPUShader *shader, struct DRWInterface *interface, const char *name, const float *value);
+
+void DRW_get_dfdy_factors(float dfdyfac[2]);
 
 /* DRWFboTexture->format */
 #define DRW_BUF_DEPTH_16		1
@@ -106,16 +119,26 @@ typedef struct DRWFboTexture {
 /* Buffers */
 void DRW_framebuffer_init(struct GPUFrameBuffer **fb, int width, int height, DRWFboTexture textures[MAX_FBO_TEX], int texnbr);
 void DRW_framebuffer_bind(struct GPUFrameBuffer *fb);
+void DRW_framebuffer_texture_attach(struct GPUFrameBuffer *fb, struct GPUTexture *tex, int slot);
+void DRW_framebuffer_texture_detach(struct GPUTexture *tex);
 
-void DRW_init_viewport(const bContext *C, void **buffers, void **textures);
+/* Viewport */
+typedef enum {
+	DRW_MAT_PERS,
+	DRW_MAT_WIEW,
+	DRW_MAT_WIN,
+} DRWViewportMatrixType;
 
-int *DRW_get_viewport_size(void);
+void DRW_viewport_init(const bContext *C, void **buffers, void **textures);
+void DRW_viewport_matrix_get(float mat[4][4], DRWViewportMatrixType type);
+int *DRW_viewport_size_get(void);
+bool DRW_viewport_is_persp(void);
 
 /* Draw commands */
 void DRW_draw_background(void);
-void DRW_draw_pass(DRWPass *pass, const struct bContext *context);
+void DRW_draw_pass(DRWPass *pass);
 void DRW_draw_pass_fullscreen(DRWPass *pass);
 
-void DRW_reset_state(void);
+void DRW_state_reset(void);
 
 #endif /* __DRW_RENDER_H__ */

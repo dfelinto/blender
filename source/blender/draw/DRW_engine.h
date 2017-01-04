@@ -47,7 +47,7 @@ typedef struct DRWUniform {
 
 typedef struct DRWInterface {
 	ListBase uniforms;
-	/* matrices */
+	/* matrices locations */
 	int modelview;
 	int projection;
 	int modelviewprojection;

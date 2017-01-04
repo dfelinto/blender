@@ -61,8 +61,6 @@ set(SRC
 
 data_to_c_simple(engines/clay/shaders/clay_frag.glsl SRC)
 data_to_c_simple(engines/clay/shaders/clay_vert.glsl SRC)
-data_to_c_simple(engines/clay/shaders/clay_downsample_depth_frag.glsl SRC)
-data_to_c_simple(engines/clay/shaders/clay_debug_frag.glsl SRC)
 
 list(APPEND INC
 )
