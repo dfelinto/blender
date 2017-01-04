@@ -87,7 +87,7 @@ bool ED_workspace_change(bContext *C, wmWindowManager *wm, wmWindow *win, WorkSp
 	if (screen_old != screen_new) {
 		screen_set_prepare(C, win, screen_new, screen_old);
 		WM_window_set_active_workspace(win, workspace_new);
-		screen_set_refresh(bmain, C, win);
+		screen_set_refresh(C, win);
 	}
 
 	workspace_change_update_mode(workspace_old, workspace_new, C, CTX_data_active_object(C), &wm->reports);

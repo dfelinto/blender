@@ -1206,7 +1206,7 @@ bScreen *screen_set_find_associated_fullscreen(const Main *bmain, bScreen *scree
 /**
  * Refresh data and make screen ready for drawing *after* activating it.
  */
-void screen_set_refresh(Main *bmain, bContext *C, wmWindow *win)
+void screen_set_refresh(bContext *C, wmWindow *win)
 {
 	Scene *scene = WM_window_get_active_scene(win);
 	bScreen *sc = WM_window_get_active_screen(win);
@@ -1223,12 +1223,6 @@ void screen_set_refresh(Main *bmain, bContext *C, wmWindow *win)
 
 	/* makes button hilites work */
 	WM_event_add_mousemove(C);
-
-	/* Always do visible update since it's possible new screen will
-	 * have different layers visible in 3D view-ports.
-	 * This is possible because of view3d.lock_camera_and_layers option.
-	 */
-	DAG_on_visible_update(bmain, false);
 }
 
 /**
@@ -1298,7 +1292,7 @@ bool ED_screen_set(bContext *C, bScreen *sc)
 	if (screen_old != screen_new) {
 		screen_set_prepare(C, win, screen_new, screen_old);
 		WM_window_set_active_screen(win, sc);
-		screen_set_refresh(bmain, C, win);
+		screen_set_refresh(C, win);
 	}
 
 	return true;

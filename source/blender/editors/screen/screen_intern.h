@@ -50,7 +50,7 @@ bScreen    *screen_add(wmWindow *win, const char *name, const int winsize_x, con
 void        screen_data_copy(bScreen *to, bScreen *from);
 void        screen_new_activate_refresh(const wmWindow *win, bScreen *screen_new);
 bScreen    *screen_set_find_associated_fullscreen(const struct Main *bmain, bScreen *screen);
-void        screen_set_refresh(struct Main *bmain, struct bContext *C, wmWindow *win);
+void        screen_set_refresh(struct bContext *C, wmWindow *win);
 bScreen    *screen_set_ensure_valid(const struct Main *bmain, const wmWindow *win, bScreen *screen_new);
 void        screen_set_prepare(struct bContext *C, wmWindow *win, bScreen *screen_new, bScreen *screen_old);
 ScrEdge    *screen_findedge(bScreen *sc, ScrVert *v1, ScrVert *v2);
