@@ -74,6 +74,7 @@
 #include "BKE_lattice.h"
 #include "BKE_mball.h"
 #include "BKE_world.h"
+#include "BKE_particle.h"
 #include "BKE_paint.h"
 #include "BKE_font.h"
 #include "BKE_node.h"
@@ -99,6 +100,7 @@
 #include "DNA_lattice_types.h"
 #include "DNA_meta_types.h"
 #include "DNA_world_types.h"
+#include "DNA_particle_types.h"
 #include "DNA_vfont_types.h"
 #include "DNA_node_types.h"
 #include "DNA_movieclip_types.h"
@@ -112,6 +114,13 @@
 #ifdef WITH_PYTHON
 #  include "BPY_extern.h"
 #endif
+
+
+static void rna_idname_validate(const char *name, char *r_name)
+{
+	BLI_strncpy(r_name, name, MAX_ID_NAME - 2);
+	BLI_utf8_invalid_strip(r_name, strlen(r_name));
+}
 
 
 static void rna_Main_ID_remove(Main *bmain, ReportList *reports, PointerRNA *id_ptr, int do_unlink)
@@ -135,14 +144,20 @@ static void rna_Main_ID_remove(Main *bmain, ReportList *reports, PointerRNA *id_
 
 static Camera *rna_Main_cameras_new(Main *bmain, const char *name)
 {
-	ID *id = BKE_camera_add(bmain, name);
+	char safe_name[MAX_ID_NAME - 2];
+	rna_idname_validate(name, safe_name);
+
+	ID *id = BKE_camera_add(bmain, safe_name);
 	id_us_min(id);
 	return (Camera *)id;
 }
 
 static Scene *rna_Main_scenes_new(Main *bmain, const char *name)
 {
-	return BKE_scene_add(bmain, name);
+	char safe_name[MAX_ID_NAME - 2];
+	rna_idname_validate(name, safe_name);
+
+	return BKE_scene_add(bmain, safe_name);
 }
 static void rna_Main_scenes_remove(Main *bmain, bContext *C, ReportList *reports, PointerRNA *scene_ptr, int do_unlink)
 {
@@ -178,6 +193,9 @@ static void rna_Main_scenes_remove(Main *bmain, bContext *C, ReportList *reports
 
 static Object *rna_Main_objects_new(Main *bmain, ReportList *reports, const char *name, ID *data)
 {
+	char safe_name[MAX_ID_NAME - 2];
+	rna_idname_validate(name, safe_name);
+
 	Object *ob;
 	int type = OB_EMPTY;
 	if (data) {
@@ -221,7 +239,7 @@ static Object *rna_Main_objects_new(Main *bmain, ReportList *reports, const char
 		id_us_plus(data);
 	}
 
-	ob = BKE_object_add_only_object(bmain, type, name);
+	ob = BKE_object_add_only_object(bmain, type, safe_name);
 	id_us_min(&ob->id);
 
 	ob->data = data;
@@ -232,7 +250,10 @@ static Object *rna_Main_objects_new(Main *bmain, ReportList *reports, const char
 
 static Material *rna_Main_materials_new(Main *bmain, const char *name)
 {
-	ID *id = (ID *)BKE_material_add(bmain, name);
+	char safe_name[MAX_ID_NAME - 2];
+	rna_idname_validate(name, safe_name);
+
+	ID *id = (ID *)BKE_material_add(bmain, safe_name);
 	id_us_min(id);
 	return (Material *)id;
 }
@@ -243,20 +264,27 @@ static EnumPropertyItem *rna_Main_nodetree_type_itemf(bContext *UNUSED(C), Point
 }
 static struct bNodeTree *rna_Main_nodetree_new(Main *bmain, const char *name, int type)
 {
+	char safe_name[MAX_ID_NAME - 2];
+	rna_idname_validate(name, safe_name);
+
 	bNodeTreeType *typeinfo = rna_node_tree_type_from_enum(type);
 	if (typeinfo) {
-		bNodeTree *ntree = ntreeAddTree(bmain, name, typeinfo->idname);
+		bNodeTree *ntree = ntreeAddTree(bmain, safe_name, typeinfo->idname);
 
 		id_us_min(&ntree->id);
 		return ntree;
 	}
-	else
+	else {
 		return NULL;
+	}
 }
 
 static Mesh *rna_Main_meshes_new(Main *bmain, const char *name)
 {
-	Mesh *me = BKE_mesh_add(bmain, name);
+	char safe_name[MAX_ID_NAME - 2];
+	rna_idname_validate(name, safe_name);
+
+	Mesh *me = BKE_mesh_add(bmain, safe_name);
 	id_us_min(&me->id);
 	return me;
 }
@@ -284,7 +312,10 @@ Mesh *rna_Main_meshes_new_from_object(
 
 static Lamp *rna_Main_lamps_new(Main *bmain, const char *name, int type)
 {
-	Lamp *lamp = BKE_lamp_add(bmain, name);
+	char safe_name[MAX_ID_NAME - 2];
+	rna_idname_validate(name, safe_name);
+
+	Lamp *lamp = BKE_lamp_add(bmain, safe_name);
 	lamp->type = type;
 	id_us_min(&lamp->id);
 	return lamp;
@@ -292,8 +323,11 @@ static Lamp *rna_Main_lamps_new(Main *bmain, const char *name, int type)
 
 static Image *rna_Main_images_new(Main *bmain, const char *name, int width, int height, int alpha, int float_buffer, int stereo3d)
 {
+	char safe_name[MAX_ID_NAME - 2];
+	rna_idname_validate(name, safe_name);
+
 	float color[4] = {0.0, 0.0, 0.0, 1.0};
-	Image *image = BKE_image_add_generated(bmain, width, height, name, alpha ? 32 : 24, float_buffer, 0, color, stereo3d);
+	Image *image = BKE_image_add_generated(bmain, width, height, safe_name, alpha ? 32 : 24, float_buffer, 0, color, stereo3d);
 	id_us_min(&image->id);
 	return image;
 }
@@ -320,21 +354,30 @@ static Image *rna_Main_images_load(Main *bmain, ReportList *reports, const char 
 
 static Lattice *rna_Main_lattices_new(Main *bmain, const char *name)
 {
-	Lattice *lt = BKE_lattice_add(bmain, name);
+	char safe_name[MAX_ID_NAME - 2];
+	rna_idname_validate(name, safe_name);
+
+	Lattice *lt = BKE_lattice_add(bmain, safe_name);
 	id_us_min(&lt->id);
 	return lt;
 }
 
 static Curve *rna_Main_curves_new(Main *bmain, const char *name, int type)
 {
-	Curve *cu = BKE_curve_add(bmain, name, type);
+	char safe_name[MAX_ID_NAME - 2];
+	rna_idname_validate(name, safe_name);
+
+	Curve *cu = BKE_curve_add(bmain, safe_name, type);
 	id_us_min(&cu->id);
 	return cu;
 }
 
 static MetaBall *rna_Main_metaballs_new(Main *bmain, const char *name)
 {
-	MetaBall *mb = BKE_mball_add(bmain, name);
+	char safe_name[MAX_ID_NAME - 2];
+	rna_idname_validate(name, safe_name);
+
+	MetaBall *mb = BKE_mball_add(bmain, safe_name);
 	id_us_min(&mb->id);
 	return mb;
 }
@@ -362,7 +405,10 @@ static VFont *rna_Main_fonts_load(Main *bmain, ReportList *reports, const char *
 
 static Tex *rna_Main_textures_new(Main *bmain, const char *name, int type)
 {
-	Tex *tex = BKE_texture_add(bmain, name);
+	char safe_name[MAX_ID_NAME - 2];
+	rna_idname_validate(name, safe_name);
+
+	Tex *tex = BKE_texture_add(bmain, safe_name);
 	BKE_texture_type_set(tex, type);
 	id_us_min(&tex->id);
 	return tex;
@@ -370,26 +416,38 @@ static Tex *rna_Main_textures_new(Main *bmain, const char *name, int type)
 
 static Brush *rna_Main_brushes_new(Main *bmain, const char *name, int mode)
 {
-	Brush *brush = BKE_brush_add(bmain, name, mode);
+	char safe_name[MAX_ID_NAME - 2];
+	rna_idname_validate(name, safe_name);
+
+	Brush *brush = BKE_brush_add(bmain, safe_name, mode);
 	id_us_min(&brush->id);
 	return brush;
 }
 
 static World *rna_Main_worlds_new(Main *bmain, const char *name)
 {
-	World *world = add_world(bmain, name);
+	char safe_name[MAX_ID_NAME - 2];
+	rna_idname_validate(name, safe_name);
+
+	World *world = add_world(bmain, safe_name);
 	id_us_min(&world->id);
 	return world;
 }
 
 static Group *rna_Main_groups_new(Main *bmain, const char *name)
 {
-	return BKE_group_add(bmain, name);
+	char safe_name[MAX_ID_NAME - 2];
+	rna_idname_validate(name, safe_name);
+
+	return BKE_group_add(bmain, safe_name);
 }
 
 static Speaker *rna_Main_speakers_new(Main *bmain, const char *name)
 {
-	Speaker *speaker = BKE_speaker_add(bmain, name);
+	char safe_name[MAX_ID_NAME - 2];
+	rna_idname_validate(name, safe_name);
+
+	Speaker *speaker = BKE_speaker_add(bmain, safe_name);
 	id_us_min(&speaker->id);
 	return speaker;
 }
@@ -411,7 +469,10 @@ static bSound *rna_Main_sounds_load(Main *bmain, const char *name, int check_exi
 
 static Text *rna_Main_texts_new(Main *bmain, const char *name)
 {
-	return BKE_text_add(bmain, name);
+	char safe_name[MAX_ID_NAME - 2];
+	rna_idname_validate(name, safe_name);
+
+	return BKE_text_add(bmain, safe_name);
 }
 
 static Text *rna_Main_texts_load(Main *bmain, ReportList *reports, const char *filepath, int is_internal)
@@ -430,21 +491,40 @@ static Text *rna_Main_texts_load(Main *bmain, ReportList *reports, const char *f
 
 static bArmature *rna_Main_armatures_new(Main *bmain, const char *name)
 {
-	bArmature *arm = BKE_armature_add(bmain, name);
+	char safe_name[MAX_ID_NAME - 2];
+	rna_idname_validate(name, safe_name);
+
+	bArmature *arm = BKE_armature_add(bmain, safe_name);
 	id_us_min(&arm->id);
 	return arm;
 }
 
 static bAction *rna_Main_actions_new(Main *bmain, const char *name)
 {
-	bAction *act = add_empty_action(bmain, name);
+	char safe_name[MAX_ID_NAME - 2];
+	rna_idname_validate(name, safe_name);
+
+	bAction *act = add_empty_action(bmain, safe_name);
 	id_fake_user_clear(&act->id);
 	return act;
 }
 
+static ParticleSettings *rna_Main_particles_new(Main *bmain, const char *name)
+{
+	char safe_name[MAX_ID_NAME - 2];
+	rna_idname_validate(name, safe_name);
+
+	ParticleSettings *part = psys_new_settings(safe_name, bmain);
+	id_us_min(&part->id);
+	return part;
+}
+
 static Palette *rna_Main_palettes_new(Main *bmain, const char *name)
 {
-	Palette *palette = BKE_palette_add(bmain, name);
+	char safe_name[MAX_ID_NAME - 2];
+	rna_idname_validate(name, safe_name);
+
+	Palette *palette = BKE_palette_add(bmain, safe_name);
 	id_us_min(&palette->id);
 	return (Palette *)palette;
 }
@@ -472,16 +552,18 @@ static MovieClip *rna_Main_movieclip_load(Main *bmain, ReportList *reports, cons
 
 static Mask *rna_Main_mask_new(Main *bmain, const char *name)
 {
-	Mask *mask;
+	char safe_name[MAX_ID_NAME - 2];
+	rna_idname_validate(name, safe_name);
 
-	mask = BKE_mask_new(bmain, name);
-
-	return mask;
+	return BKE_mask_new(bmain, safe_name);
 }
 
 static FreestyleLineStyle *rna_Main_linestyles_new(Main *bmain, const char *name)
 {
-	FreestyleLineStyle *linestyle = BKE_linestyle_new(bmain, name);
+	char safe_name[MAX_ID_NAME - 2];
+	rna_idname_validate(name, safe_name);
+
+	FreestyleLineStyle *linestyle = BKE_linestyle_new(bmain, safe_name);
 	id_us_min(&linestyle->id);
 	return linestyle;
 }
@@ -520,6 +602,7 @@ RNA_MAIN_ID_TAG_FUNCS_DEF(speakers, speaker, ID_SPK)
 RNA_MAIN_ID_TAG_FUNCS_DEF(sounds, sound, ID_SO)
 RNA_MAIN_ID_TAG_FUNCS_DEF(armatures, armature, ID_AR)
 RNA_MAIN_ID_TAG_FUNCS_DEF(actions, action, ID_AC)
+RNA_MAIN_ID_TAG_FUNCS_DEF(particles, particle, ID_PA)
 RNA_MAIN_ID_TAG_FUNCS_DEF(palettes, palettes, ID_PAL)
 RNA_MAIN_ID_TAG_FUNCS_DEF(gpencil, gpencil, ID_GD)
 RNA_MAIN_ID_TAG_FUNCS_DEF(movieclips, movieclip, ID_MC)
@@ -1467,6 +1550,42 @@ void RNA_def_main_actions(BlenderRNA *brna, PropertyRNA *cprop)
 	prop = RNA_def_property(srna, "is_updated", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 	RNA_def_property_boolean_funcs(prop, "rna_Main_actions_is_updated_get", NULL);
+}
+void RNA_def_main_particles(BlenderRNA *brna, PropertyRNA *cprop)
+{
+	StructRNA *srna;
+	FunctionRNA *func;
+	PropertyRNA *parm;
+	PropertyRNA *prop;
+
+	RNA_def_property_srna(cprop, "BlendDataParticles");
+	srna = RNA_def_struct(brna, "BlendDataParticles", NULL);
+	RNA_def_struct_sdna(srna, "Main");
+	RNA_def_struct_ui_text(srna, "Main Particle Settings", "Collection of particle settings");
+
+	func = RNA_def_function(srna, "new", "rna_Main_particles_new");
+	RNA_def_function_ui_description(func, "Add a new particle settings instance to the main database");
+	parm = RNA_def_string(func, "name", "ParticleSettings", 0, "", "New name for the data-block");
+	RNA_def_parameter_flags(parm, 0, PARM_REQUIRED);
+	/* return type */
+	parm = RNA_def_pointer(func, "particle", "ParticleSettings", "", "New particle settings data-block");
+	RNA_def_function_return(func, parm);
+
+	func = RNA_def_function(srna, "remove", "rna_Main_ID_remove");
+	RNA_def_function_flag(func, FUNC_USE_REPORTS);
+	RNA_def_function_ui_description(func, "Remove a particle settings instance from the current blendfile");
+	parm = RNA_def_pointer(func, "particle", "ParticleSettings", "", "Particle Settings to remove");
+	RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED | PARM_RNAPTR);
+	RNA_def_parameter_clear_flags(parm, PROP_THICK_WRAP, 0);
+	RNA_def_boolean(func, "do_unlink", true, "", "Unlink all usages of those particle settings before deleting them");
+
+	func = RNA_def_function(srna, "tag", "rna_Main_particles_tag");
+	parm = RNA_def_boolean(func, "value", 0, "Value", "");
+	RNA_def_parameter_flags(parm, 0, PARM_REQUIRED);
+
+	prop = RNA_def_property(srna, "is_updated", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+	RNA_def_property_boolean_funcs(prop, "rna_Main_particles_is_updated_get", NULL);
 }
 
 void RNA_def_main_palettes(BlenderRNA *brna, PropertyRNA *cprop)
