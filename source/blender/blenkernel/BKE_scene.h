@@ -70,6 +70,8 @@ void BKE_scene_free(struct Scene *sce);
 void BKE_scene_init(struct Scene *sce);
 struct Scene *BKE_scene_add(struct Main *bmain, const char *name);
 
+void BKE_scene_remove_rigidbody_object(struct Scene *scene, struct Object *ob);
+
 /* base functions */
 struct Base *BKE_scene_base_find_by_name(struct Scene *scene, const char *name);
 struct Base *BKE_scene_base_find(struct Scene *scene, struct Object *ob);

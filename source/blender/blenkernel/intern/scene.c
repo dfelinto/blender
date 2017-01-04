@@ -1226,6 +1226,15 @@ char *BKE_scene_find_last_marker_name(Scene *scene, int frame)
 	return best_marker ? best_marker->name : NULL;
 }
 
+void BKE_scene_remove_rigidbody_object(Scene *scene, Object *ob)
+{
+	/* remove rigid body constraint from world before removing object */
+	if (ob->rigidbody_constraint)
+		BKE_rigidbody_remove_constraint(scene, ob);
+	/* remove rigid body object from world before removing object */
+	if (ob->rigidbody_object)
+		BKE_rigidbody_remove_object(scene, ob);
+}
 
 Base *BKE_scene_base_add(Scene *sce, Object *ob)
 {
@@ -1241,13 +1250,8 @@ Base *BKE_scene_base_add(Scene *sce, Object *ob)
 
 void BKE_scene_base_unlink(Scene *sce, Base *base)
 {
-	/* remove rigid body constraint from world before removing object */
-	if (base->object->rigidbody_constraint)
-		BKE_rigidbody_remove_constraint(sce, base->object);
-	/* remove rigid body object from world before removing object */
-	if (base->object->rigidbody_object)
-		BKE_rigidbody_remove_object(sce, base->object);
-	
+	BKE_scene_remove_rigidbody_object(sce, base->object);
+
 	BLI_remlink(&sce->base, base);
 	if (sce->basact == base)
 		sce->basact = NULL;

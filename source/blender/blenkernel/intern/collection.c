@@ -33,6 +33,7 @@
 #include "BKE_collection.h"
 #include "BKE_layer.h"
 #include "BKE_library.h"
+#include "BKE_scene.h"
 
 #include "DNA_ID.h"
 #include "DNA_layer_types.h"
@@ -215,8 +216,10 @@ void BKE_collection_object_remove(struct Scene *scene, struct SceneCollection *s
 /**
  * Remove object from all collections of scene
  */
-void BKE_collections_object_remove(struct Scene *scene, struct Object *ob)
+void BKE_collections_object_remove(Scene *scene, Object *ob)
 {
+	BKE_scene_remove_rigidbody_object(scene, ob);
+
 	SceneCollection *sc;
 	FOREACH_SCENE_COLLECTION(scene, sc)
 	{

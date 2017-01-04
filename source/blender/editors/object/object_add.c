@@ -63,6 +63,7 @@
 #include "BKE_animsys.h"
 #include "BKE_armature.h"
 #include "BKE_camera.h"
+#include "BKE_collection.h"
 #include "BKE_context.h"
 #include "BKE_curve.h"
 #include "BKE_depsgraph.h"
@@ -1118,6 +1119,7 @@ void ED_base_object_free_and_unlink(Main *bmain, Scene *scene, Base *base)
 	}
 
 	BKE_scene_base_unlink(scene, base);
+	BKE_collections_object_remove(scene, base->object);
 	object_delete_check_glsl_update(base->object);
 	BKE_libblock_free_us(bmain, base->object);
 	MEM_freeN(base);
