@@ -30,9 +30,11 @@
 
 #include "BLI_listbase.h"
 
+#include "DNA_object_types.h"
 #include "DNA_screen_types.h"
 #include "DNA_windowmanager_types.h"
 
+#include "ED_object.h"
 #include "ED_screen.h"
 
 #include "WM_api.h"
@@ -46,6 +48,21 @@
  * \brief API for managing workspaces and their data.
  * \{ */
 
+/**
+ * Changes the object mode (if needed) to the one set in \a workspace_new.
+ * Object mode is still stored on object level. In future it should all be workspace level instead.
+ */
+static void workspace_change_update_mode(const WorkSpace *workspace_old, const WorkSpace *workspace_new,
+                                         bContext *C, Object *ob_act, ReportList *reports)
+{
+	ObjectMode mode_old = BKE_workspace_object_mode_get(workspace_old);
+	ObjectMode mode_new = BKE_workspace_object_mode_get(workspace_new);
+
+	if (mode_old != mode_new) {
+		ED_object_mode_compat_set(C, ob_act, mode_new, reports);
+		ED_object_toggle_modes(C, mode_new);
+	}
+}
 
 /**
  * \brief Change the active workspace.
@@ -56,12 +73,12 @@
  * \warning Do NOT call in area/region queues!
  * \returns success.
  */
-bool ED_workspace_change(bContext *C, wmWindow *win, WorkSpace *ws_new)
+bool ED_workspace_change(bContext *C, wmWindowManager *wm, wmWindow *win, WorkSpace *workspace_new)
 {
 	Main *bmain = CTX_data_main(C);
 	WorkSpace *workspace_old = WM_window_get_active_workspace(win);
 	bScreen *screen_old = BKE_workspace_active_screen_get(workspace_old);
-	bScreen *screen_new = BKE_workspace_active_screen_get(ws_new);
+	bScreen *screen_new = BKE_workspace_active_screen_get(workspace_new);
 
 	if (!(screen_new = screen_set_ensure_valid(bmain, win, screen_new))) {
 		return false;
@@ -69,10 +86,13 @@ bool ED_workspace_change(bContext *C, wmWindow *win, WorkSpace *ws_new)
 
 	if (screen_old != screen_new) {
 		screen_set_prepare(C, win, screen_new, screen_old);
-		WM_window_set_active_workspace(win, ws_new);
+		WM_window_set_active_workspace(win, workspace_new);
 		screen_set_refresh(bmain, C, win);
 	}
-	BLI_assert(CTX_wm_workspace(C) == ws_new);
+
+	workspace_change_update_mode(workspace_old, workspace_new, C, CTX_data_active_object(C), &wm->reports);
+
+	BLI_assert(CTX_wm_workspace(C) == workspace_new);
 
 	return true;
 }
@@ -105,7 +125,7 @@ WorkSpace *ED_workspace_duplicate(WorkSpace *workspace_old, Main *bmain, wmWindo
 /**
  * \return if succeeded.
  */
-bool ED_workspace_delete(Main *bmain, bContext *C, wmWindow *win, WorkSpace *ws)
+bool ED_workspace_delete(Main *bmain, bContext *C, wmWindowManager *wm, wmWindow *win, WorkSpace *ws)
 {
 	if (BLI_listbase_is_single(&bmain->workspaces)) {
 		return false;
@@ -115,7 +135,7 @@ bool ED_workspace_delete(Main *bmain, bContext *C, wmWindow *win, WorkSpace *ws)
 		WorkSpace *prev = BKE_workspace_prev_get(ws);
 		WorkSpace *next = BKE_workspace_next_get(ws);
 
-		ED_workspace_change(C, win, (prev != NULL) ? prev : next);
+		ED_workspace_change(C, wm, win, (prev != NULL) ? prev : next);
 	}
 	BKE_libblock_free(bmain, BKE_workspace_id_get(ws));
 
@@ -165,9 +185,10 @@ static void WORKSPACE_OT_workspace_new(wmOperatorType *ot)
 static int workspace_delete_exec(bContext *C, wmOperator *UNUSED(op))
 {
 	Main *bmain = CTX_data_main(C);
+	wmWindowManager *wm = CTX_wm_manager(C);
 	wmWindow *win = CTX_wm_window(C);
 
-	ED_workspace_delete(bmain, C, win, WM_window_get_active_workspace(win));
+	ED_workspace_delete(bmain, C, wm, win, WM_window_get_active_workspace(win));
 
 	return OPERATOR_FINISHED;
 }

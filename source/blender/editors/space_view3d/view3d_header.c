@@ -286,8 +286,8 @@ void uiTemplateHeader3D(uiLayout *layout, struct bContext *C)
 	bGPdata *gpd = CTX_data_gpencil_data(C);
 	uiBlock *block;
 	uiLayout *row;
-	bool is_paint = false;
-	int modeselect;
+	bool is_paint = ob && !(gpd && (gpd->flag & GP_DATA_STROKE_EDITMODE)) &&
+	                ELEM(ob->mode, OB_MODE_SCULPT, OB_MODE_VERTEX_PAINT, OB_MODE_WEIGHT_PAINT, OB_MODE_TEXTURE_PAINT);
 	
 	RNA_pointer_create(&screen->id, &RNA_SpaceView3D, v3d, &v3dptr);
 	RNA_pointer_create(&scene->id, &RNA_ToolSettings, ts, &toolsptr);
@@ -298,36 +298,6 @@ void uiTemplateHeader3D(uiLayout *layout, struct bContext *C)
 
 	/* other buttons: */
 	UI_block_emboss_set(block, UI_EMBOSS);
-	
-	/* mode */
-	if ((gpd) && (gpd->flag & GP_DATA_STROKE_EDITMODE)) {
-		modeselect = OB_MODE_GPENCIL;
-	}
-	else if (ob) {
-		modeselect = ob->mode;
-		is_paint = ELEM(ob->mode, OB_MODE_SCULPT, OB_MODE_VERTEX_PAINT, OB_MODE_WEIGHT_PAINT, OB_MODE_TEXTURE_PAINT);
-	}
-	else {
-		modeselect = OB_MODE_OBJECT;
-	}
-
-	row = uiLayoutRow(layout, false);
-	{
-		EnumPropertyItem *item = rna_enum_object_mode_items;
-		const char *name = "";
-		int icon = ICON_OBJECT_DATAMODE;
-
-		while (item->identifier) {
-			if (item->value == modeselect && item->identifier[0]) {
-				name = IFACE_(item->name);
-				icon = item->icon;
-				break;
-			}
-			item++;
-		}
-
-		uiItemMenuEnumO(row, C, "OBJECT_OT_mode_set", "mode", name, icon);
-	}
 
 	if (IS_VIEWPORT_LEGACY(v3d)) {
 		/* Draw type */

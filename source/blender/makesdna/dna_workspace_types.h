@@ -47,6 +47,9 @@ typedef struct WorkSpace {
 	ListBase layouts;
 	struct WorkSpaceLayout *act_layout;
 	struct WorkSpaceLayout *new_layout; /* temporary when switching screens */
+
+	int object_mode; /* enum ObjectMode */
+	int pad;
 } WorkSpace;
 
 #endif /* __DNA_WORKSPACE_TYPES_H__ */

@@ -123,13 +123,16 @@ Scene   *ED_screen_scene_find(const struct bScreen *screen, const struct wmWindo
 void    ED_screen_preview_render(const struct bScreen *screen, int size_x, int size_y, unsigned int *r_rect) ATTR_NONNULL();
 
 /* workspaces */
-bool ED_workspace_change(struct bContext *C, struct wmWindow *win, struct WorkSpace *ws_new) ATTR_NONNULL();
+bool ED_workspace_change(struct bContext *C, struct wmWindowManager *wm, struct wmWindow *win,
+                         struct WorkSpace *ws_new) ATTR_NONNULL();
 struct WorkSpace *ED_workspace_duplicate(struct WorkSpace *workspace_old, struct Main *bmain, struct wmWindow *win);
 struct WorkSpaceLayout *ED_workspace_layout_add(struct WorkSpace *workspace, struct wmWindow *win, const char *name) ATTR_NONNULL();
 struct WorkSpaceLayout *ED_workspace_layout_duplicate(struct WorkSpace *workspace,
                                                       const struct WorkSpaceLayout *layout_old,
                                                       struct wmWindow *win) ATTR_NONNULL();
-bool ED_workspace_delete(struct Main *bmain, struct bContext *C, struct wmWindow *win, struct WorkSpace *ws);
+bool ED_workspace_delete(struct Main *bmain, struct bContext *C,
+                         struct wmWindowManager *wm, struct wmWindow *win,
+                         struct WorkSpace *ws);
 void ED_workspace_scene_data_sync(struct WorkSpace *workspace, Scene *scene);
 bool ED_workspace_layout_delete(struct bContext *C, struct WorkSpace *workspace, struct WorkSpaceLayout *layout_old) ATTR_NONNULL();
 bool ED_workspace_layout_cycle(struct bContext *C, struct WorkSpace *workspace, const short direction) ATTR_NONNULL();

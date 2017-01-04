@@ -32,6 +32,7 @@
 #include "BKE_main.h"
 #include "BKE_workspace.h"
 
+#include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_screen_types.h"
 #include "dna_workspace_types.h"
@@ -211,6 +212,15 @@ void BKE_workspace_active_screen_set(WorkSpace *ws, bScreen *screen)
 {
 	/* we need to find the WorkspaceLayout that wraps this screen */
 	ws->act_layout = BKE_workspace_layout_find(ws, screen);
+}
+
+ObjectMode BKE_workspace_object_mode_get(const WorkSpace *workspace)
+{
+	return workspace->object_mode;
+}
+void BKE_workspace_object_mode_set(WorkSpace *workspace, const ObjectMode mode)
+{
+	workspace->object_mode = mode;
 }
 
 ListBase *BKE_workspace_layouts_get(WorkSpace *workspace)
