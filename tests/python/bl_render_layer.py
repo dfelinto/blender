@@ -169,17 +169,25 @@ def dump(data):
 # Tests
 # ############################################################
 
+PDB = False
+DUMP_DIFF = True
+
 def compare_files(file_a, file_b):
     import filecmp
 
     if not filecmp.cmp(
         file_a,
         file_b):
-        """
-        import pdb
-        print("Files differ:", file_a, file_b)
-        pdb.set_trace()
-        """
+
+        if DUMP_DIFF:
+            import subprocess
+            subprocess.call(["diff", "-u", file_a, file_b])
+
+        if PDB:
+            import pdb
+            print("Files differ:", file_a, file_b)
+            pdb.set_trace()
+
         return False
 
     return True
@@ -717,6 +725,28 @@ class UnitsTesting(unittest.TestCase):
         """
         self.do_object_delete('OPERATOR')
 
+    def do_link(self, master_collection):
+        import bpy
+        self.assertTrue(master_collection.name == "Master Collection")
+        self.assertTrue(master_collection == bpy.context.scene.master_collection)
+        master_collection.objects.link(bpy.data.objects.new('object', None))
+
+    def test_link_scene(self):
+        """
+        See if we can link objects
+        """
+        import bpy
+        master_collection = bpy.context.scene.master_collection
+        self.do_link(master_collection)
+
+    def test_link_context(self):
+        """
+        See if we can link objects via bpy.context.scene_collection
+        """
+        import bpy
+        master_collection = bpy.context.scene_collection
+        self.do_link(master_collection)
+
     def do_object_add(self, filepath_json, add_mode):
         import bpy
         import os
@@ -746,15 +776,19 @@ class UnitsTesting(unittest.TestCase):
             layer.collections.active_index = 3
             self.assertTrue(layer.collections.active.name == 'scorpion', "Run: test_syncing_object_add")
 
+            # change active layer
+            override = bpy.context.copy()
+            override["render_layer"] = layer
+
             # add new objects
             if add_mode == 'EMPTY':
-                bpy.ops.object.add() # 'Empty'
+                bpy.ops.object.add(override) # 'Empty'
 
             elif add_mode == 'CYLINDER':
-                bpy.ops.mesh.primitive_cylinder_add() # 'Cylinder'
+                bpy.ops.mesh.primitive_cylinder_add(override) # 'Cylinder'
 
             elif add_mode == 'TORUS':
-                bpy.ops.mesh.primitive_torus_add() # 'Torus'
+                bpy.ops.mesh.primitive_torus_add(override) # 'Torus'
 
             # save file
             filepath_objects = os.path.join(dirpath, 'objects.blend')
