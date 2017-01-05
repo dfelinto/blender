@@ -38,21 +38,24 @@ class INFO_HT_header(Header):
 
         INFO_MT_editor_menus.draw_collapsible(context, layout)
 
+        layout.separator()
+
         if screen.show_fullscreen:
             layout.operator("screen.back_to_previous", icon='SCREEN_BACK', text="Back to Previous")
             layout.separator()
         else:
             layout.template_ID(window, "workspace", new="workspace.workspace_new", unlink="workspace.workspace_delete")
             layout.template_ID_preview(workspace, "screen", workspace, "screens", new="screen.new", unlink="screen.delete", rows=2, cols=6)
-            layout.template_ID(window, "scene", new="scene.new", unlink="scene.delete")
-
-        layout.separator()
-
-        if rd.has_multiple_engines:
-            layout.prop(rd, "engine", text="")
 
         act_mode_item = bpy.types.Object.bl_rna.properties['mode'].enum_items[workspace.object_mode]
         layout.operator_menu_enum("object.mode_set", "mode", text=act_mode_item.name, icon=act_mode_item.icon)
+
+        layout.separator()
+
+        layout.template_ID(window, "scene", new="scene.new", unlink="scene.delete")
+
+        if rd.has_multiple_engines:
+            layout.prop(rd, "engine", text="")
 
         layout.separator()
 
