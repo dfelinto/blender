@@ -540,22 +540,6 @@ void screen_new_activate_prepare(const wmWindow *win, bScreen *screen_new)
 	screen_new->do_draw = true;
 }
 
-void screen_changed_update(bContext *C, wmWindow *win, bScreen *sc)
-{
-	Scene *scene = WM_window_get_active_scene(win);
-
-	CTX_wm_window_set(C, win);  /* stores C->wm.screen... hrmf */
-
-	ED_screen_refresh(CTX_wm_manager(C), win);
-
-	BKE_screen_view3d_scene_sync(sc, scene); /* sync new screen with scene data */
-	WM_event_add_notifier(C, NC_WINDOW, NULL);
-	WM_event_add_notifier(C, NC_WORKSPACE | ND_SCREENSET, sc);
-
-	/* makes button hilites work */
-	WM_event_add_mousemove(C);
-}
-
 
 /* with sa as center, sb is located at: 0=W, 1=N, 2=E, 3=S */
 /* -1 = not valid check */
@@ -1207,7 +1191,7 @@ int ED_screen_area_active(const bContext *C)
 
 
 /* -------------------------------------------------------------------- */
-/* Screen Activation (screen_set_xxx) */
+/* Screen changing */
 
 static bScreen *screen_find_associated_fullscreen(const Main *bmain, bScreen *screen)
 {
@@ -1266,6 +1250,23 @@ bScreen *screen_change_prepare(bScreen *screen_old, bScreen *screen_new, Main *b
 
 	return NULL;
 }
+
+void screen_changed_update(bContext *C, wmWindow *win, bScreen *sc)
+{
+	Scene *scene = WM_window_get_active_scene(win);
+
+	CTX_wm_window_set(C, win);  /* stores C->wm.screen... hrmf */
+
+	ED_screen_refresh(CTX_wm_manager(C), win);
+
+	BKE_screen_view3d_scene_sync(sc, scene); /* sync new screen with scene data */
+	WM_event_add_notifier(C, NC_WINDOW, NULL);
+	WM_event_add_notifier(C, NC_WORKSPACE | ND_SCREENSET, sc);
+
+	/* makes button hilites work */
+	WM_event_add_mousemove(C);
+}
+
 
 /**
  * \brief Change the active screen.

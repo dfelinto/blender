@@ -564,7 +564,7 @@ void outliner_do_object_operation_ex(
 				// when objects selected in other scenes... dunno if that should be allowed
 				Scene *scene_owner = (Scene *)outliner_search_back(soops, te, ID_SCE);
 				if (scene_owner && scene_act != scene_owner) {
-					WM_window_set_active_scene(CTX_data_main(C), C, CTX_wm_window(C), scene_owner);
+					WM_window_change_active_scene(CTX_data_main(C), C, CTX_wm_window(C), scene_owner);
 				}
 				/* important to use 'scene_owner' not scene_act else deleting objects can crash.
 				 * only use 'scene_act' when 'scene_owner' is NULL, which can happen when the
@@ -935,7 +935,7 @@ static int outliner_object_operation_exec(bContext *C, wmOperator *op)
 		Scene *sce = scene;  // to be able to delete, scenes are set...
 		outliner_do_object_operation(C, op->reports, scene, soops, &soops->tree, object_select_cb);
 		if (scene != sce) {
-			WM_window_set_active_scene(bmain, C, win, sce);
+			WM_window_change_active_scene(bmain, C, win, sce);
 		}
 		
 		str = "Select Objects";
@@ -945,7 +945,7 @@ static int outliner_object_operation_exec(bContext *C, wmOperator *op)
 		Scene *sce = scene;  // to be able to delete, scenes are set...
 		outliner_do_object_operation_ex(C, op->reports, scene, soops, &soops->tree, object_select_hierarchy_cb, false);
 		if (scene != sce) {
-			WM_window_set_active_scene(bmain, C, win, sce);
+			WM_window_change_active_scene(bmain, C, win, sce);
 		}
 		str = "Select Object Hierarchy";
 		WM_event_add_notifier(C, NC_SCENE | ND_OB_SELECT, scene);

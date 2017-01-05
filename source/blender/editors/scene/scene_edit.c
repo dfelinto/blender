@@ -68,7 +68,7 @@ Scene *ED_scene_add(Main *bmain, bContext *C, wmWindow *win, eSceneCopyMethod me
 		}
 	}
 
-	WM_window_set_active_scene(bmain, C, win, scene_new);
+	WM_window_change_active_scene(bmain, C, win, scene_new);
 
 	WM_event_add_notifier(C, NC_SCENE | ND_SCENEBROWSE, scene_new);
 
@@ -90,7 +90,7 @@ bool ED_scene_delete(bContext *C, Main *bmain, wmWindow *win, Scene *scene)
 	else
 		return false;
 
-	WM_window_set_active_scene(bmain, C, win, scene_new);
+	WM_window_change_active_scene(bmain, C, win, scene_new);
 
 	BKE_libblock_remap(bmain, scene, scene_new, ID_REMAP_SKIP_INDIRECT_USAGE | ID_REMAP_SKIP_NEVER_NULL_USAGE);
 	BKE_libblock_free(bmain, scene);

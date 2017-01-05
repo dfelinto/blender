@@ -305,7 +305,6 @@ void unpack_menu(bContext *C, const char *opname, const char *id_name, const cha
 	UI_popup_menu_end(C, pup);
 }
 
-
 /* ********************* generic callbacks for drawcall api *********************** */
 
 /**

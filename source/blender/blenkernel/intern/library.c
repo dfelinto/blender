@@ -132,7 +132,6 @@
 
 #include "atomic_ops.h"
 
-
 /* GS reads the memory pointed at in a specific ordering. 
  * only use this definition, makes little and big endian systems
  * work fine, in conjunction with MAKE_ID */

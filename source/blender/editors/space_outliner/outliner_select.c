@@ -159,7 +159,7 @@ static eOLDrawState tree_element_set_active_object(
 	
 	sce = (Scene *)outliner_search_back(soops, te, ID_SCE);
 	if (sce && scene != sce) {
-		WM_window_set_active_scene(CTX_data_main(C), C, CTX_wm_window(C), sce);
+		WM_window_change_active_scene(CTX_data_main(C), C, CTX_wm_window(C), sce);
 		scene = sce;
 	}
 	
@@ -391,7 +391,7 @@ static eOLDrawState tree_element_active_world(
 	if (set != OL_SETSEL_NONE) {
 		/* make new scene active */
 		if (sce && scene != sce) {
-			WM_window_set_active_scene(CTX_data_main(C), C, CTX_wm_window(C), sce);
+			WM_window_change_active_scene(CTX_data_main(C), C, CTX_wm_window(C), sce);
 		}
 	}
 	
@@ -857,7 +857,7 @@ static void outliner_item_activate(
 		/* editmode? */
 		if (te->idcode == ID_SCE) {
 			if (scene != (Scene *)tselem->id) {
-				WM_window_set_active_scene(CTX_data_main(C), C, CTX_wm_window(C), (Scene *)tselem->id);
+				WM_window_change_active_scene(CTX_data_main(C), C, CTX_wm_window(C), (Scene *)tselem->id);
 			}
 		}
 		else if (te->idcode == ID_GR) {

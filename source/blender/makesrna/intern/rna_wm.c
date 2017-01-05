@@ -651,7 +651,7 @@ static void rna_Window_scene_update(bContext *C, PointerRNA *ptr)
 		BPy_BEGIN_ALLOW_THREADS;
 #endif
 
-		WM_window_set_active_scene(bmain, C, win, win->new_scene);
+		WM_window_change_active_scene(bmain, C, win, win->new_scene);
 
 #ifdef WITH_PYTHON
 		BPy_END_ALLOW_THREADS;

@@ -2441,7 +2441,12 @@ void wm_event_do_handlers(bContext *C)
 	for (win = wm->windows.first; win; win = win->next) {
 		bScreen *screen = WM_window_get_active_screen(win);
 		wmEvent *event;
-		
+
+		/* some safty checks - these should always be set! */
+		BLI_assert(WM_window_get_active_scene(win));
+		BLI_assert(WM_window_get_active_screen(win));
+		BLI_assert(WM_window_get_active_workspace(win));
+
 		if (screen == NULL)
 			wm_event_free_all(win);
 		else {

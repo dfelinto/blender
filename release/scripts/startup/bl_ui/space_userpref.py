@@ -156,7 +156,6 @@ class USERPREF_PT_interface(Panel):
         col.prop(view, "show_large_cursors")
         col.prop(view, "show_view_name", text="View Name")
         col.prop(view, "show_playback_fps", text="Playback FPS")
-        col.prop(view, "use_global_scene")
         col.prop(view, "object_origin_size")
 
         col.separator()

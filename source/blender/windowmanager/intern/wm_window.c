@@ -680,7 +680,7 @@ wmWindow *WM_window_open_temp(bContext *C, const rcti *rect_init, int type)
 	}
 
 	if (WM_window_get_active_scene(win) != scene) {
-		WM_window_set_active_scene(bmain, C, win, scene);
+		WM_window_change_active_scene(bmain, C, win, scene);
 	}
 
 	screen->temp = 1;
@@ -1768,7 +1768,7 @@ Scene *WM_window_get_active_scene(const wmWindow *win)
 /**
  * \warning Only call outside of area/region loops
  */
-void WM_window_set_active_scene(Main *bmain, bContext *C, wmWindow *win, Scene *scene_new)
+void WM_window_change_active_scene(Main *bmain, bContext *C, wmWindow *win, Scene *scene_new)
 {
 	const bScreen *screen = WM_window_get_active_screen(win);
 

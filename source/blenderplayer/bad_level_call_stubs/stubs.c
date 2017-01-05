@@ -312,7 +312,7 @@ void WM_windows_scene_data_sync(const struct ListBase *win_lb, struct Scene *sce
 struct Scene *WM_windows_scene_get_from_screen(const struct wmWindowManager *wm, const struct bScreen *screen) RET_NULL
 struct bScreen *WM_window_get_active_screen(const struct wmWindow *win) RET_NULL
 struct Scene *WM_window_get_active_scene(const struct wmWindow *win) RET_NULL
-void WM_window_set_active_scene(struct Main *bmain, struct bContext *C, struct wmWindow *win, struct Scene *scene_new) RET_NONE
+void WM_window_change_active_scene(struct Main *bmain, struct bContext *C, struct wmWindow *win, struct Scene *scene_new) RET_NONE
 bool WM_window_is_temp_screen(const struct wmWindow *win) RET_ZERO
 
 void WM_autosave_init(wmWindowManager *wm) RET_NONE

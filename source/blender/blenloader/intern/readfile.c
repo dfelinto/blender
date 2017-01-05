@@ -6270,9 +6270,10 @@ static void lib_link_windowmanager(FileData *fd, Main *main)
 	for (wm = main->wm.first; wm; wm = wm->id.next) {
 		if (wm->id.tag & LIB_TAG_NEED_LINK) {
 			for (win = wm->windows.first; win; win = win->next) {
-				win->screen = newlibadr(fd, NULL, win->screen);
 				win->scene = newlibadr(fd, wm->id.lib, win->scene);
 				win->workspace = newlibadr(fd, wm->id.lib, win->workspace);
+				/* deprecated, but needed for versioning (will be NULL'ed then) */
+				win->screen = newlibadr(fd, NULL, win->screen);
 			}
 
 			wm->id.tag &= ~LIB_TAG_NEED_LINK;
