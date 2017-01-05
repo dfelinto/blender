@@ -1564,7 +1564,7 @@ void blo_do_versions_270(FileData *fd, Library *UNUSED(lib), Main *main)
 		}
 	}
 
-	if (!MAIN_VERSION_ATLEAST(main, 278, 5)) {
+	{
 		/* New workspace design */
 		if (!DNA_struct_find(fd->filesdna, "WorkSpace")) {
 			do_version_workspaces_before_lib_link(main);
@@ -1574,7 +1574,7 @@ void blo_do_versions_270(FileData *fd, Library *UNUSED(lib), Main *main)
 
 void blo_do_versions_after_linking_270(FileData *fd, Main *main)
 {
-	if (!MAIN_VERSION_ATLEAST(main, 278, 5)) {
+	{
 		if (!DNA_struct_find(fd->filesdna, "WorkSpace")) {
 			do_version_workspaces_after_lib_link(main);
 		}

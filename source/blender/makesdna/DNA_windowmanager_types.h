@@ -180,9 +180,10 @@ typedef struct wmWindow {
 	struct Scene *scene;     /* The scene displayed in this window. */
 	struct Scene *new_scene; /* temporary when switching */
 
-	struct bScreen *screen DNA_DEPRECATED;
-	struct WorkSpace *workspace; /* active workspace */
+	struct WorkSpace *workspace;     /* active workspace */
 	struct WorkSpace *new_workspace; /* temporary when switching */
+
+	struct bScreen *screen DNA_DEPRECATED;
 	char screenname[64];         /* MAX_ID_NAME for matching window with active screen after file read */
 
 	short posx, posy, sizex, sizey;  /* window coords */

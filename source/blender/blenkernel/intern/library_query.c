@@ -871,7 +871,13 @@ void BKE_library_foreach_ID_link(ID *id, LibraryIDLinkCallback callback, void *u
 				wmWindowManager *wm = (wmWindowManager *)id;
 
 				for (wmWindow *win = wm->windows.first; win; win = win->next) {
+					ID *workspace = BKE_workspace_id_get(win->workspace);
+
 					CALLBACK_INVOKE(win->scene, IDWALK_USER_ONE);
+
+					CALLBACK_INVOKE_ID(workspace, IDWALK_NOP);
+					/* allow callback to set a different workspace */
+					win->workspace = (WorkSpace *)workspace;
 				}
 				break;
 			}
@@ -886,6 +892,8 @@ void BKE_library_foreach_ID_link(ID *id, LibraryIDLinkCallback callback, void *u
 					bScreen *screen = BKE_workspace_layout_screen_get(layout);
 
 					CALLBACK_INVOKE(screen, IDWALK_NOP);
+					/* allow callback to set a different screen */
+					BKE_workspace_layout_screen_set(layout, screen);
 				}
 				BKE_workspace_layout_iter_end;
 
