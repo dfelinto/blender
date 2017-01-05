@@ -206,9 +206,8 @@ static void TRANSFORM_OT_select_orientation(struct wmOperatorType *ot)
 static int delete_orientation_exec(bContext *C, wmOperator *UNUSED(op))
 {
 	View3D *v3d = CTX_wm_view3d(C);
-	int selected_index = (v3d->twmode - V3D_MANIP_CUSTOM);
 
-	BIF_removeTransformOrientationIndex(C, selected_index);
+	BIF_removeTransformOrientation(C, v3d->custom_orientation);
 	
 	WM_event_add_notifier(C, NC_SPACE | ND_SPACE_VIEW3D, v3d);
 	WM_event_add_notifier(C, NC_SCENE | NA_EDITED, CTX_data_scene(C));
@@ -223,18 +222,12 @@ static int delete_orientation_invoke(bContext *C, wmOperator *op, const wmEvent 
 
 static int delete_orientation_poll(bContext *C)
 {
-	int selected_index = -1;
 	View3D *v3d = CTX_wm_view3d(C);
-	
+
 	if (ED_operator_areaactive(C) == 0)
 		return 0;
-	
-	
-	if (v3d) {
-		selected_index = (v3d->twmode - V3D_MANIP_CUSTOM);
-	}
-	
-	return selected_index >= 0;
+
+	return v3d->custom_orientation != NULL;
 }
 
 static void TRANSFORM_OT_delete_orientation(struct wmOperatorType *ot)

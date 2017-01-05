@@ -404,6 +404,14 @@ static void rna_Space_view2d_sync_update(Main *UNUSED(bmain), Scene *UNUSED(scen
 	}
 }
 
+static void rna_SpaceView3D_transform_orientation_update(Main *UNUSED(bmain), Scene *scene, PointerRNA *ptr)
+{
+	View3D *v3d = (View3D *)ptr->data;
+
+	v3d->custom_orientation = (v3d->twmode < V3D_MANIP_CUSTOM) ?
+	                              NULL : BLI_findlink(&scene->transform_spaces, v3d->twmode - V3D_MANIP_CUSTOM);
+}
+
 static PointerRNA rna_CurrentOrientation_get(PointerRNA *ptr)
 {
 	Scene *scene = WM_windows_scene_get_from_screen(G.main->wm.first, ptr->id.data);
@@ -2664,7 +2672,7 @@ static void rna_def_space_view3d(BlenderRNA *brna)
 	RNA_def_property_enum_items(prop, transform_orientation_items);
 	RNA_def_property_enum_funcs(prop, NULL, NULL, "rna_TransformOrientation_itemf");
 	RNA_def_property_ui_text(prop, "Transform Orientation", "Transformation orientation");
-	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
+	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, "rna_SpaceView3D_transform_orientation_update");
 
 	prop = RNA_def_property(srna, "current_orientation", PROP_POINTER, PROP_NONE);
 	RNA_def_property_struct_type(prop, "TransformOrientation");

@@ -611,24 +611,17 @@ void BKE_screen_view3d_scene_sync(bScreen *sc, Scene *scene)
 	}
 }
 
-/**
- * TODO hrmpf... stupid issue: Removing a custom transform orientation only updates View3D orientations
- * in visible workspaces/screens. If an invisible one uses it, it keeps using the removed orientation.
- * Need to solve that somehow... Maybe store TranformOrientation * in View3D?
- */
-void BKE_screen_view3d_twmode_remove(bScreen *screen, const int twmode)
+void BKE_screen_transform_orientation_remove(const bScreen *screen, const TransformOrientation *orientation)
 {
 	for (ScrArea *area = screen->areabase.first; area; area = area->next) {
 		for (SpaceLink *sl = area->spacedata.first; sl; sl = sl->next) {
 			if (sl->spacetype == SPACE_VIEW3D) {
 				View3D *v3d = (View3D *)sl;
-				const int selected_index = (v3d->twmode - V3D_MANIP_CUSTOM);
 
-				if (selected_index == twmode) {
-					v3d->twmode = V3D_MANIP_GLOBAL; /* fallback to global	*/
-				}
-				else if (selected_index > twmode) {
-					v3d->twmode--;
+				if (v3d->custom_orientation == orientation) {
+					/* could also use v3d->custom_orientation->prev. */
+					v3d->twmode = V3D_MANIP_GLOBAL;
+					v3d->custom_orientation = NULL;
 				}
 			}
 		}

@@ -28,6 +28,7 @@
 #include "BLI_compiler_attrs.h"
 
 struct bScreen;
+struct TransformOrientation;
 struct WorkSpace;
 
 typedef struct WorkSpace WorkSpace;
@@ -52,6 +53,9 @@ void BKE_workspace_layout_remove(WorkSpace *workspace, WorkSpaceLayout *layout, 
 	for (WorkSpace *_workspace = _start_workspace, *_workspace##_next; _workspace; _workspace = _workspace##_next) { \
 		_workspace##_next = BKE_workspace_next_get(_workspace); /* support removing workspace from list */
 #define BKE_workspace_iter_end } (void)0
+
+void BKE_workspaces_transform_orientation_remove(const ListBase *workspaces,
+                                                 const struct TransformOrientation *orientation) ATTR_NONNULL();
 
 WorkSpaceLayout *BKE_workspace_layout_find(const WorkSpace *ws, const struct bScreen *screen) ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
 WorkSpaceLayout *BKE_workspace_layout_find_exec(const WorkSpace *ws, const struct bScreen *screen) ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;

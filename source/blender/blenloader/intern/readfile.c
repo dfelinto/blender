@@ -5918,7 +5918,33 @@ static void direct_link_view_settings(FileData *fd, ColorManagedViewSettings *vi
 		direct_link_curvemapping(fd, view_settings->curve_mapping);
 }
 
-static void direct_link_scene(FileData *fd, Scene *sce)
+/**
+ * bScreen data may use pointers to Scene data. bScreens are however read before Scenes, meaning
+ * FileData.datamap doesn't contain the Scene data when reading bScreens. This function should
+ * be called during Scene direct linking to update needed pointers within bScreen data.
+ *
+ * Maybe we could change read order so that screens are read after scene. But guess that
+ * would be asking for trouble. Depending on the write/read order sounds ugly anyway...
+ * -- Julian
+ */
+static void direct_link_scene_update_screens(FileData *fd, const ListBase *screens)
+{
+	for (bScreen *screen = screens->first; screen; screen = screen->id.next) {
+		for (ScrArea *area = screen->areabase.first; area; area = area->next) {
+			for (SpaceLink *sl = area->spacedata.first; sl; sl = sl->next) {
+				if (sl->spacetype == SPACE_VIEW3D) {
+					View3D *v3d = (View3D *)sl;
+
+					if (v3d->custom_orientation) {
+						v3d->custom_orientation = newdataadr(fd, v3d->custom_orientation);
+					}
+				}
+			}
+		}
+	}
+}
+
+static void direct_link_scene(FileData *fd, Scene *sce, Main *bmain)
 {
 	Editing *ed;
 	Sequence *seq;
@@ -6167,6 +6193,8 @@ static void direct_link_scene(FileData *fd, Scene *sce)
 	sce->preview = direct_link_preview_image(fd, sce->preview);
 
 	direct_link_curvemapping(fd, &sce->r.mblur_shutter_curve);
+
+	direct_link_scene_update_screens(fd, &bmain->screen);
 }
 
 /* ************ READ WM ***************** */
@@ -7098,7 +7126,9 @@ static bool direct_link_screen(FileData *fd, bScreen *sc)
 			if (sl->spacetype == SPACE_VIEW3D) {
 				View3D *v3d= (View3D*) sl;
 				BGpic *bgpic;
-				
+
+				/* v3d->custom_orientation will be updated later, see direct_link_scene_update_screens */
+
 				v3d->flag |= V3D_INVALID_BACKBUF;
 				
 				link_list(fd, &v3d->bgpicbase);
@@ -8201,7 +8231,7 @@ static BHead *read_libblock(FileData *fd, Main *main, BHead *bhead, const short 
 			wrong_id = direct_link_screen(fd, (bScreen *)id);
 			break;
 		case ID_SCE:
-			direct_link_scene(fd, (Scene *)id);
+			direct_link_scene(fd, (Scene *)id, main);
 			break;
 		case ID_OB:
 			direct_link_object(fd, (Object *)id);

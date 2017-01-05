@@ -30,6 +30,7 @@
 #include "BKE_library.h"
 #include "BLI_listbase.h"
 #include "BKE_main.h"
+#include "BKE_screen.h"
 #include "BKE_workspace.h"
 
 #include "DNA_object_types.h"
@@ -100,6 +101,19 @@ void BKE_workspace_layout_remove(WorkSpace *workspace, WorkSpaceLayout *layout, 
 
 /* -------------------------------------------------------------------- */
 /* General Utils */
+
+void BKE_workspaces_transform_orientation_remove(const ListBase *workspaces, const TransformOrientation *orientation)
+{
+	BKE_workspace_iter_begin(workspace, workspaces->first)
+	{
+		BKE_workspace_layout_iter_begin(layout, workspace->layouts.first)
+		{
+			BKE_screen_transform_orientation_remove(BKE_workspace_layout_screen_get(layout), orientation);
+		}
+		BKE_workspace_layout_iter_end;
+	}
+	BKE_workspace_iter_end;
+}
 
 /**
  * Checks if \a screen is already used within any workspace. A screen should never be assigned to multiple

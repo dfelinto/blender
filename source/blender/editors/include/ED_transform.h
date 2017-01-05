@@ -123,7 +123,6 @@ struct ReportList;
 
 void BIF_clearTransformOrientation(struct bContext *C);
 void BIF_removeTransformOrientation(struct bContext *C, struct TransformOrientation *ts);
-void BIF_removeTransformOrientationIndex(struct bContext *C, int index);
 void BIF_createTransformOrientation(struct bContext *C, struct ReportList *reports,
                                     const char *name, const bool use_view,
                                     const bool activate, const bool overwrite);
