@@ -22,8 +22,8 @@
  * ***** END GPL LICENSE BLOCK *****
  */
 
-/** \file blender/editors/screen/screen_edit.c
- *  \ingroup edscr
+/** \file blender/editors/workspace/screen_edit.c
+ *  \ingroup edworkspace
  */
 
 

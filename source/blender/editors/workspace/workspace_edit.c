@@ -18,8 +18,8 @@
  * ***** END GPL LICENSE BLOCK *****
  */
 
-/** \file blender/editors/screen/workspace_edit.c
- *  \ingroup edscr
+/** \file blender/editors/workspace/workspace_edit.c
+ *  \ingroup edworkspace
  */
 
 #include "BKE_context.h"

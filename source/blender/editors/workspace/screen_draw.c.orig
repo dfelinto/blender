@@ -259,7 +259,10 @@ static void drawscredge_area(ScrArea *sa, int sizex, int sizey)
  */
 void ED_screen_draw(wmWindow *win)
 {
+<<<<<<< HEAD
 	bScreen *screen = WM_window_get_active_screen(win);
+=======
+>>>>>>> blender2.8
 	const int winsize_x = WM_window_pixels_x(win);
 	const int winsize_y = WM_window_pixels_y(win);
 
@@ -268,7 +271,11 @@ void ED_screen_draw(wmWindow *win)
 	ScrArea *sa2 = NULL;
 	ScrArea *sa3 = NULL;
 
+<<<<<<< HEAD
 	wmSubWindowSet(win, screen->mainwin);
+=======
+	wmSubWindowSet(win, win->screen->mainwin);
+>>>>>>> blender2.8
 
 	/* Note: first loop only draws if U.pixelsize > 1, skip otherwise */
 	if (U.pixelsize > 1.0f) {
@@ -276,7 +283,11 @@ void ED_screen_draw(wmWindow *win)
 		glLineWidth((2.0f * U.pixelsize) - 1);
 		glColor3ub(0x50, 0x50, 0x50);
 		glBegin(GL_LINES);
+<<<<<<< HEAD
 		for (sa = screen->areabase.first; sa; sa = sa->next)
+=======
+		for (sa = win->screen->areabase.first; sa; sa = sa->next)
+>>>>>>> blender2.8
 			drawscredge_area(sa, winsize_x, winsize_y);
 		glEnd();
 	}
@@ -284,7 +295,11 @@ void ED_screen_draw(wmWindow *win)
 	glLineWidth(1);
 	glColor3ub(0, 0, 0);
 	glBegin(GL_LINES);
+<<<<<<< HEAD
 	for (sa = screen->areabase.first; sa; sa = sa->next) {
+=======
+	for (sa = win->screen->areabase.first; sa; sa = sa->next) {
+>>>>>>> blender2.8
 		drawscredge_area(sa, winsize_x, winsize_y);
 
 		/* gather area split/join info */
@@ -348,7 +363,11 @@ void ED_screen_draw(wmWindow *win)
 		glDisable(GL_BLEND);
 	}
 
+<<<<<<< HEAD
 	screen->do_draw = false;
+=======
+	win->screen->do_draw = false;
+>>>>>>> blender2.8
 }
 
 

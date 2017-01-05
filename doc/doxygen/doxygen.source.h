@@ -219,7 +219,7 @@
  *  \ingroup editors
  */
 
-/** \defgroup edscr screen
+/** \defgroup edscene scene
  *  \ingroup editors
  */
 
@@ -228,6 +228,10 @@
  */
 
 /** \defgroup edsnd sound
+ *  \ingroup editors
+ */
+
+/** \defgroup edworkspace workspace
  *  \ingroup editors
  */
 

@@ -58,4 +58,4 @@ endif()
 
 add_definitions(${GL_DEFINITIONS})
 
-blender_add_lib(bf_editor_screen "${SRC}" "${INC}" "${INC_SYS}")
+blender_add_lib(bf_editor_workspace "${SRC}" "${INC}" "${INC_SYS}")

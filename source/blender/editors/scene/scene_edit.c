@@ -18,8 +18,8 @@
  * ***** END GPL LICENSE BLOCK *****
  */
 
-/** \file blender/editors/screen/scene_edit.c
- *  \ingroup edscr
+/** \file blender/editors/scene/scene_edit.c
+ *  \ingroup edscene
  */
 
 #include "BKE_context.h"

@@ -23,8 +23,8 @@
  * ***** END GPL LICENSE BLOCK *****
  */
 
-/** \file blender/editors/screen/glutil.c
- *  \ingroup edscr
+/** \file blender/editors/workspace/glutil.c
+ *  \ingroup workspace
  */
 
 
