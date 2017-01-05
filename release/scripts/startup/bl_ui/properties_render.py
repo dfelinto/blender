@@ -584,5 +584,14 @@ class RENDER_PT_bake(RenderButtonsPanel, Panel):
             sub.prop(rd, "bake_user_scale", text="User Scale")
 
 
+class RENDER_PT_clay(RenderButtonsPanel, Panel):
+    bl_label = "Default Clay"
+    COMPAT_ENGINES = {'BLENDER_CLAY'}
+
+    def draw(self, context):
+        settings = context.scene.clay_settings
+        self.layout.template_icon_view(settings, "matcap_icon")
+
+
 if __name__ == "__main__":  # only for live edit.
     bpy.utils.register_module(__name__)

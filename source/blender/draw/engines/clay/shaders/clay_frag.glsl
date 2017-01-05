@@ -3,6 +3,7 @@ uniform ivec2 screenres;
 uniform sampler2D depthtex;
 uniform sampler2DArray matcaps;
 uniform mat4 WinMatrix;
+uniform int matcap_index;
 
 /* store the view space vectors for the corners of the view frustum here.
  * It helps to quickly reconstruct view space vectors by using uv coordinates,
@@ -51,6 +52,6 @@ void main() {
 	vec3 position = get_view_space_from_depth(uvs, viewvecs[0].xyz, viewvecs[1].xyz, depth);
 	vec3 normal = calculate_view_space_normal(position);
 	// vec4 col = texture(matcaps, vec3(uvs, step(0.5, uvs.x)));
-	vec4 col = texture(matcaps, vec3(abs(normal.xy * .5 + 0.5), step(0.5, uvs.x)));
+	vec4 col = texture(matcaps, vec3(abs(normal.xy * .5 + 0.5), float(matcap_index)));
 	fragColor = col;
 }

@@ -106,7 +106,7 @@ class MaterialButtonsPanel:
 class MATERIAL_PT_context_material(MaterialButtonsPanel, Panel):
     bl_label = ""
     bl_options = {'HIDE_HEADER'}
-    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_GAME'}
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_GAME', 'BLENDER_CLAY'}
 
     @classmethod
     def poll(cls, context):
@@ -1051,6 +1051,15 @@ class MATERIAL_PT_custom_props(MaterialButtonsPanel, PropertyPanel, Panel):
     COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_GAME'}
     _context_path = "material"
     _property_type = bpy.types.Material
+
+
+class MATERIAL_PT_clay_settings(MaterialButtonsPanel, Panel):
+    bl_label = "Matcap"
+    COMPAT_ENGINES = {'BLENDER_CLAY'}
+
+    def draw(self, context):
+        settings = context.material.clay_settings
+        self.layout.template_icon_view(settings, "matcap_icon")
 
 if __name__ == "__main__":  # only for live edit.
     bpy.utils.register_module(__name__)

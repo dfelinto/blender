@@ -792,6 +792,15 @@ typedef struct RenderProfile {
 } RenderProfile;
 
 /* *************************************************************** */
+/* Clay Engine */
+
+/* Render Data */
+typedef struct EngineDataClay {
+	short matcap_icon; /* Icon ID */
+	short pad;
+} EngineDataClay;
+
+/* *************************************************************** */
 /* Game Engine - Dome */
 
 typedef struct GameDome {
@@ -1633,6 +1642,10 @@ typedef struct Scene {
 
 	ListBase render_layers;
 	struct SceneCollection *collection;
+
+	/* Engine Settings */
+	struct EngineDataClay claydata;
+	short pad10[2];
 } Scene;
 
 /* **************** RENDERDATA ********************* */
@@ -1822,6 +1835,7 @@ enum {
 extern const char *RE_engine_id_BLENDER_RENDER;
 extern const char *RE_engine_id_BLENDER_GAME;
 extern const char *RE_engine_id_CYCLES;
+extern const char *RE_engine_id_CLAY;
 
 /* **************** SCENE ********************* */
 

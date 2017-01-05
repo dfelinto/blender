@@ -50,6 +50,7 @@ static struct CLAY_data {
 
 	/* Matcap textures */
 	struct GPUTexture *matcap_array;
+	int matcap_id;
 
 	/* Ssao */
 	float dfdyfac[2];
@@ -91,26 +92,85 @@ static void add_icon_to_rect(PreviewImage *prv, float *final_rect, int layer)
 	                           false, prv->w[0], prv->h[0], prv->w[0], prv->w[0]);
 }
 
+static void load_matcaps(PreviewImage *prv[24], int nbr)
+{
+	int w = prv[0]->w[0];
+	int h = prv[0]->h[0];
+	float *final_rect = MEM_callocN(sizeof(float) * 4 * w * h * nbr, "Clay Matcap array rect");
+
+	for (int i = 0; i < nbr; ++i) {
+		add_icon_to_rect(prv[i], final_rect, i);
+		BKE_previewimg_free(&prv[i]);
+	}
+
+	data.matcap_array = DRW_texture_create_2D_array(w, h, nbr, final_rect);
+
+	MEM_freeN(final_rect);
+}
+
+static int matcap_to_index(int matcap)
+{
+	if (matcap == ICON_MATCAP_02) return 1;
+	else if (matcap == ICON_MATCAP_03) return 2;
+	else if (matcap == ICON_MATCAP_04) return 3;
+	else if (matcap == ICON_MATCAP_05) return 4;
+	else if (matcap == ICON_MATCAP_06) return 5;
+	else if (matcap == ICON_MATCAP_07) return 6;
+	else if (matcap == ICON_MATCAP_08) return 7;
+	else if (matcap == ICON_MATCAP_09) return 8;
+	else if (matcap == ICON_MATCAP_10) return 9;
+	else if (matcap == ICON_MATCAP_11) return 10;
+	else if (matcap == ICON_MATCAP_12) return 11;
+	else if (matcap == ICON_MATCAP_13) return 12;
+	else if (matcap == ICON_MATCAP_14) return 13;
+	else if (matcap == ICON_MATCAP_15) return 14;
+	else if (matcap == ICON_MATCAP_16) return 15;
+	else if (matcap == ICON_MATCAP_17) return 16;
+	else if (matcap == ICON_MATCAP_18) return 17;
+	else if (matcap == ICON_MATCAP_19) return 18;
+	else if (matcap == ICON_MATCAP_20) return 19;
+	else if (matcap == ICON_MATCAP_21) return 20;
+	else if (matcap == ICON_MATCAP_22) return 21;
+	else if (matcap == ICON_MATCAP_23) return 22;
+	else if (matcap == ICON_MATCAP_24) return 23;
+	return 0;
+}
+
 static void clay_init_engine(void)
 {
 	DRWBatch *batch;
 
 	/* Create Texture Array */
 	{
-		PreviewImage *prv[2];
-		int layers = 2; /* For now only use the 24 internal matcaps */
+		PreviewImage *prv[24]; /* For now use all of the 24 internal matcaps */
 
-		prv[0] = UI_icon_to_preview(ICON_MATCAP_02);
-		float *final_rect = MEM_callocN(sizeof(float) * 4 * prv[0]->w[0] * prv[0]->h[0] * layers, "Clay Matcap array rect");
-		add_icon_to_rect(prv[0], final_rect, 0);
+		/* TODO only load used matcaps */
+		prv[0]  = UI_icon_to_preview(ICON_MATCAP_01);
+		prv[1]  = UI_icon_to_preview(ICON_MATCAP_02);
+		prv[2]  = UI_icon_to_preview(ICON_MATCAP_03);
+		prv[3]  = UI_icon_to_preview(ICON_MATCAP_04);
+		prv[4]  = UI_icon_to_preview(ICON_MATCAP_05);
+		prv[5]  = UI_icon_to_preview(ICON_MATCAP_06);
+		prv[6]  = UI_icon_to_preview(ICON_MATCAP_07);
+		prv[7]  = UI_icon_to_preview(ICON_MATCAP_08);
+		prv[8]  = UI_icon_to_preview(ICON_MATCAP_09);
+		prv[9]  = UI_icon_to_preview(ICON_MATCAP_10);
+		prv[10] = UI_icon_to_preview(ICON_MATCAP_11);
+		prv[11] = UI_icon_to_preview(ICON_MATCAP_12);
+		prv[12] = UI_icon_to_preview(ICON_MATCAP_13);
+		prv[13] = UI_icon_to_preview(ICON_MATCAP_14);
+		prv[14] = UI_icon_to_preview(ICON_MATCAP_15);
+		prv[15] = UI_icon_to_preview(ICON_MATCAP_16);
+		prv[16] = UI_icon_to_preview(ICON_MATCAP_17);
+		prv[17] = UI_icon_to_preview(ICON_MATCAP_18);
+		prv[18] = UI_icon_to_preview(ICON_MATCAP_19);
+		prv[19] = UI_icon_to_preview(ICON_MATCAP_20);
+		prv[20] = UI_icon_to_preview(ICON_MATCAP_21);
+		prv[21] = UI_icon_to_preview(ICON_MATCAP_22);
+		prv[22] = UI_icon_to_preview(ICON_MATCAP_23);
+		prv[23] = UI_icon_to_preview(ICON_MATCAP_24);
 
-		prv[1] = UI_icon_to_preview(ICON_MATCAP_03);
-		add_icon_to_rect(prv[1], final_rect, 1);
-
-		data.matcap_array = DRW_texture_create_2D_array(prv[1]->w[0], prv[1]->h[0], layers, final_rect);
-		MEM_freeN(final_rect);
-		BKE_previewimg_free(&prv[0]);
-		BKE_previewimg_free(&prv[1]);
+		load_matcaps(prv, 24);
 	}
 
 	/* Depth prepass */
@@ -130,6 +190,7 @@ static void clay_init_engine(void)
 	/* Shading pass */
 	{
 		int bindloc = 0;
+		data.matcap_id = 5;
 
 		data.clay_sh = DRW_shader_create(datatoc_clay_vert_glsl, NULL, datatoc_clay_frag_glsl, NULL);
 		data.clay_itf = DRW_interface_create(data.clay_sh);
@@ -137,6 +198,7 @@ static void clay_init_engine(void)
 		DRW_interface_uniform_ivec2(data.clay_sh, data.clay_itf, "screenres", DRW_viewport_size_get(), 1);
 		DRW_interface_uniform_buffer(data.clay_sh, data.clay_itf, "depthtex", SCENE_DEPTH, bindloc++);
 		DRW_interface_uniform_texture(data.clay_sh, data.clay_itf, "matcaps", data.matcap_array, bindloc++);
+		DRW_interface_uniform_int(data.clay_sh, data.clay_itf, "matcap_index", &data.matcap_id, 1);
 
 		/* SSAO */
 		DRW_interface_uniform_mat4(data.clay_sh, data.clay_itf, "WinMatrix", data.winmat);
@@ -240,6 +302,17 @@ static void clay_view_draw(RenderEngine *UNUSED(engine), const struct bContext *
 	
 	if (!data.clay_sh)
 		clay_init_engine();
+
+	/* Settings */
+	EngineDataClay *engine_data = &CTX_data_scene(context)->claydata;
+
+	if (engine_data->matcap_icon < ICON_MATCAP_01 ||
+	    engine_data->matcap_icon > ICON_MATCAP_24)
+	{
+		engine_data->matcap_icon = ICON_MATCAP_01;
+	}
+
+	data.matcap_id = matcap_to_index(engine_data->matcap_icon);
 
 	/* TODO : tag to refresh by the deps graph */
 	/* ideally only refresh when objects are added/removed */

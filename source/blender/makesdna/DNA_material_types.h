@@ -90,6 +90,11 @@ typedef struct TexPaintSlot {
 	int pad;
 } TexPaintSlot;
 
+typedef struct EngineSettingsClay {
+	short matcap_icon; /* Icon ID */
+	short pad;
+} EngineSettingsClay;
+
 typedef struct Material {
 	ID id;
 	struct AnimData *adt;	/* animation data (must be immediately after id for utilities to use it) */ 
@@ -203,6 +208,10 @@ typedef struct Material {
 
 	struct TexPaintSlot *texpaintslot; /* cached slot for painting. Make sure to recalculate before use
 	                                    * with refresh_texpaint_image_cache */
+	/* Engine Settings */
+	struct EngineSettingsClay clay;
+	char pad6[4];
+
 	ListBase gpumaterial;		/* runtime */
 } Material;
 

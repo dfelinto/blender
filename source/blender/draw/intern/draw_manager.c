@@ -237,7 +237,7 @@ void DRW_interface_uniform_mat4(struct GPUShader *shader, DRWInterface *interfac
 
 void DRW_get_dfdy_factors(float dfdyfac[2])
 {
-	GPU_get_dfdy_factors(dfdyfac);	
+	GPU_get_dfdy_factors(dfdyfac);
 }
 
 /* ****************************************** DRAW ******************************************/
