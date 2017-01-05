@@ -370,6 +370,7 @@ Scene *BKE_scene_copy(Main *bmain, Scene *sce, int type)
 		BKE_paint_copy(&ts->imapaint.paint, &ts->imapaint.paint);
 		ts->imapaint.paintcursor = NULL;
 		id_us_plus((ID *)ts->imapaint.stencil);
+		ts->particle.paintcursor = NULL;
 		/* duplicate Grease Pencil Drawing Brushes */
 		BLI_listbase_clear(&ts->gp_brushes);
 		for (bGPDbrush *brush = sce->toolsettings->gp_brushes.first; brush; brush = brush->next) {
@@ -560,6 +561,8 @@ void BKE_scene_free(Scene *sce)
 
 void BKE_scene_init(Scene *sce)
 {
+	ParticleEditSettings *pset;
+	int a;
 	const char *colorspace_name;
 	SceneRenderView *srv;
 	CurveMapping *mblur_shutter_curve;
@@ -734,6 +737,23 @@ void BKE_scene_init(Scene *sce)
 	sce->physics_settings.flag = PHYS_GLOBAL_GRAVITY;
 
 	sce->unit.scale_length = 1.0f;
+
+	pset = &sce->toolsettings->particle;
+	pset->flag = PE_KEEP_LENGTHS | PE_LOCK_FIRST | PE_DEFLECT_EMITTER | PE_AUTO_VELOCITY;
+	pset->emitterdist = 0.25f;
+	pset->totrekey = 5;
+	pset->totaddkey = 5;
+	pset->brushtype = PE_BRUSH_NONE;
+	pset->draw_step = 2;
+	pset->fade_frames = 2;
+	pset->selectmode = SCE_SELECT_PATH;
+	for (a = 0; a < PE_TOT_BRUSH; a++) {
+		pset->brush[a].strength = 0.5f;
+		pset->brush[a].size = 50;
+		pset->brush[a].step = 10;
+		pset->brush[a].count = 10;
+	}
+	pset->brush[PE_BRUSH_CUT].strength = 1.0f;
 
 	sce->r.ffcodecdata.audio_mixrate = 48000;
 	sce->r.ffcodecdata.audio_volume = 1.0f;
@@ -1226,6 +1246,15 @@ char *BKE_scene_find_last_marker_name(Scene *scene, int frame)
 	return best_marker ? best_marker->name : NULL;
 }
 
+void BKE_scene_remove_rigidbody_object(Scene *scene, Object *ob)
+{
+	/* remove rigid body constraint from world before removing object */
+	if (ob->rigidbody_constraint)
+		BKE_rigidbody_remove_constraint(scene, ob);
+	/* remove rigid body object from world before removing object */
+	if (ob->rigidbody_object)
+		BKE_rigidbody_remove_object(scene, ob);
+}
 
 Base *BKE_scene_base_add(Scene *sce, Object *ob)
 {
@@ -1241,13 +1270,8 @@ Base *BKE_scene_base_add(Scene *sce, Object *ob)
 
 void BKE_scene_base_unlink(Scene *sce, Base *base)
 {
-	/* remove rigid body constraint from world before removing object */
-	if (base->object->rigidbody_constraint)
-		BKE_rigidbody_remove_constraint(sce, base->object);
-	/* remove rigid body object from world before removing object */
-	if (base->object->rigidbody_object)
-		BKE_rigidbody_remove_object(sce, base->object);
-	
+	BKE_scene_remove_rigidbody_object(sce, base->object);
+
 	BLI_remlink(&sce->base, base);
 	if (sce->basact == base)
 		sce->basact = NULL;

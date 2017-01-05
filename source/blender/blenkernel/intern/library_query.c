@@ -51,7 +51,6 @@
 #include "DNA_mask_types.h"
 #include "DNA_node_types.h"
 #include "DNA_object_force.h"
-#include "DNA_object_types.h"
 #include "DNA_rigidbody_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_sensor_types.h"
@@ -75,6 +74,7 @@
 #include "BKE_library_query.h"
 #include "BKE_main.h"
 #include "BKE_modifier.h"
+#include "BKE_particle.h"
 #include "BKE_rigidbody.h"
 #include "BKE_sca.h"
 #include "BKE_sequencer.h"
@@ -162,6 +162,15 @@ static void library_foreach_constraintObjectLooper(bConstraint *UNUSED(con), ID 
 {
 	LibraryForeachIDData *data = (LibraryForeachIDData *) user_data;
 	const int cd_flag = is_reference ? IDWALK_USER : IDWALK_NOP;
+	FOREACH_CALLBACK_INVOKE_ID_PP(data, id_pointer, cd_flag);
+
+	FOREACH_FINALIZE_VOID;
+}
+
+static void library_foreach_particlesystemsObjectLooper(
+        ParticleSystem *UNUSED(psys), ID **id_pointer, void *user_data, int cd_flag)
+{
+	LibraryForeachIDData *data = (LibraryForeachIDData *) user_data;
 	FOREACH_CALLBACK_INVOKE_ID_PP(data, id_pointer, cd_flag);
 
 	FOREACH_FINALIZE_VOID;
@@ -386,13 +395,24 @@ void BKE_library_foreach_ID_link(ID *id, LibraryIDLinkCallback callback, void *u
 					CALLBACK_INVOKE(base->object, IDWALK_USER);
 				}
 
+				SceneCollection *sc;
+				FOREACH_SCENE_COLLECTION(scene, sc)
 				{
-					Object* ob;
-					FOREACH_SCENE_OBJECT(scene, ob)
-					{
-						CALLBACK_INVOKE(ob, IDWALK_USER);
+					for (LinkData *link = sc->objects.first; link; link = link->next) {
+						CALLBACK_INVOKE_ID(link->data, IDWALK_USER);
 					}
-					FOREACH_SCENE_OBJECT_END
+
+					for (LinkData *link = sc->filter_objects.first; link; link = link->next) {
+						CALLBACK_INVOKE_ID(link->data, IDWALK_USER);
+					}
+				}
+				FOREACH_SCENE_COLLECTION_END
+
+				SceneLayer *sl;
+				for (sl = scene->render_layers.first; sl; sl = sl->next) {
+					for (ObjectBase *ob_base = sl->object_bases.first; ob_base; ob_base = ob_base->next) {
+						CALLBACK_INVOKE(ob_base->object, IDWALK_NOP);
+					}
 				}
 
 				for (TimeMarker *marker = scene->markers.first; marker; marker = marker->next) {
@@ -402,6 +422,9 @@ void BKE_library_foreach_ID_link(ID *id, LibraryIDLinkCallback callback, void *u
 				if (toolsett) {
 					CALLBACK_INVOKE(toolsett->skgen_template, IDWALK_NOP);
 
+					CALLBACK_INVOKE(toolsett->particle.scene, IDWALK_NOP);
+					CALLBACK_INVOKE(toolsett->particle.object, IDWALK_NOP);
+					CALLBACK_INVOKE(toolsett->particle.shape_object, IDWALK_NOP);
 					library_foreach_paint(&data, &toolsett->imapaint.paint);
 					CALLBACK_INVOKE(toolsett->imapaint.stencil, IDWALK_USER);
 					CALLBACK_INVOKE(toolsett->imapaint.clone, IDWALK_USER);
@@ -434,6 +457,7 @@ void BKE_library_foreach_ID_link(ID *id, LibraryIDLinkCallback callback, void *u
 			case ID_OB:
 			{
 				Object *object = (Object *) id;
+				ParticleSystem *psys;
 
 				/* Object is special, proxies make things hard... */
 				const int data_cd_flag = data.cd_flag;
@@ -510,6 +534,10 @@ void BKE_library_foreach_ID_link(ID *id, LibraryIDLinkCallback callback, void *u
 
 				modifiers_foreachIDLink(object, library_foreach_modifiersForeachIDLink, &data);
 				BKE_constraints_id_loop(&object->constraints, library_foreach_constraintObjectLooper, &data);
+
+				for (psys = object->particlesystem.first; psys; psys = psys->next) {
+					BKE_particlesystem_id_loop(psys, library_foreach_particlesystemsObjectLooper, &data);
+				}
 
 				if (object->soft) {
 					CALLBACK_INVOKE(object->soft->collision_group, IDWALK_NOP);
@@ -725,6 +753,53 @@ void BKE_library_foreach_ID_link(ID *id, LibraryIDLinkCallback callback, void *u
 				break;
 			}
 
+			case ID_PA:
+			{
+				ParticleSettings *psett = (ParticleSettings *) id;
+				CALLBACK_INVOKE(psett->dup_group, IDWALK_NOP);
+				CALLBACK_INVOKE(psett->dup_ob, IDWALK_NOP);
+				CALLBACK_INVOKE(psett->bb_ob, IDWALK_NOP);
+				CALLBACK_INVOKE(psett->collision_group, IDWALK_NOP);
+
+				for (i = 0; i < MAX_MTEX; i++) {
+					if (psett->mtex[i]) {
+						library_foreach_mtex(&data, psett->mtex[i]);
+					}
+				}
+
+				if (psett->effector_weights) {
+					CALLBACK_INVOKE(psett->effector_weights->group, IDWALK_NOP);
+				}
+
+				if (psett->pd) {
+					CALLBACK_INVOKE(psett->pd->tex, IDWALK_USER);
+					CALLBACK_INVOKE(psett->pd->f_source, IDWALK_NOP);
+				}
+				if (psett->pd2) {
+					CALLBACK_INVOKE(psett->pd2->tex, IDWALK_USER);
+					CALLBACK_INVOKE(psett->pd2->f_source, IDWALK_NOP);
+				}
+
+				if (psett->boids) {
+					BoidState *state;
+					BoidRule *rule;
+
+					for (state = psett->boids->states.first; state; state = state->next) {
+						for (rule = state->rules.first; rule; rule = rule->next) {
+							if (rule->type == eBoidRuleType_Avoid) {
+								BoidRuleGoalAvoid *gabr = (BoidRuleGoalAvoid *)rule;
+								CALLBACK_INVOKE(gabr->ob, IDWALK_NOP);
+							}
+							else if (rule->type == eBoidRuleType_FollowLeader) {
+								BoidRuleFollowLeader *flbr = (BoidRuleFollowLeader *)rule;
+								CALLBACK_INVOKE(flbr->ob, IDWALK_NOP);
+							}
+						}
+					}
+				}
+				break;
+			}
+
 			case ID_MC:
 			{
 				MovieClip *clip = (MovieClip *) id;
@@ -929,6 +1004,8 @@ bool BKE_library_idtype_can_use_idtype(const short id_type_owner, const short id
 #endif
 		case ID_BR:
 			return ELEM(id_type_used, ID_BR, ID_IM, ID_PC, ID_TE);
+		case ID_PA:
+			return ELEM(id_type_used, ID_OB, ID_GR, ID_TE);
 		case ID_MC:
 			return ELEM(id_type_used, ID_GD, ID_IM);
 		case ID_MSK:

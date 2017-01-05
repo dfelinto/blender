@@ -47,6 +47,7 @@ struct SceneCollection *BKE_collection_master(struct Scene *scene);
 void BKE_collection_master_free(struct Scene *scene);
 void BKE_collection_object_add(struct Scene *scene, struct SceneCollection *sc, struct Object *object);
 void BKE_collection_object_remove(struct Scene *scene, struct SceneCollection *sc, struct Object *object);
+void BKE_collections_object_remove(struct Scene *scene, struct Object *object);
 
 typedef void (*BKE_scene_objects_Cb)(struct Object *ob, void *data);
 typedef void (*BKE_scene_collections_Cb)(struct SceneCollection *ob, void *data);
@@ -74,9 +75,9 @@ void BKE_scene_objects_Iterator_end(struct Iterator *iter);
 
 #define FOREACH_SCENE_OBJECT(scene, _ob)                                      \
 	ITER_BEGIN(BKE_scene_objects_Iterator_begin,                              \
-	BKE_scene_objects_Iterator_next,                                          \
-	BKE_scene_objects_Iterator_end,                                           \
-	scene, _ob)
+	           BKE_scene_objects_Iterator_next,                               \
+	           BKE_scene_objects_Iterator_end,                                \
+	           scene, _ob)
 
 #define FOREACH_SCENE_OBJECT_END                                              \
 	ITER_END

@@ -63,6 +63,7 @@
 #include "BKE_animsys.h"
 #include "BKE_armature.h"
 #include "BKE_camera.h"
+#include "BKE_collection.h"
 #include "BKE_context.h"
 #include "BKE_curve.h"
 #include "BKE_depsgraph.h"
@@ -83,6 +84,7 @@
 #include "BKE_mesh.h"
 #include "BKE_nla.h"
 #include "BKE_object.h"
+#include "BKE_particle.h"
 #include "BKE_report.h"
 #include "BKE_sca.h"
 #include "BKE_scene.h"
@@ -1118,6 +1120,7 @@ void ED_base_object_free_and_unlink(Main *bmain, Scene *scene, Base *base)
 	}
 
 	BKE_scene_base_unlink(scene, base);
+	BKE_collections_object_remove(scene, base->object);
 	object_delete_check_glsl_update(base->object);
 	BKE_libblock_free_us(bmain, base->object);
 	MEM_freeN(base);
@@ -2018,6 +2021,24 @@ static Base *object_add_duplicate_internal(Main *bmain, Scene *scene, Base *base
 					if (dupflag & USER_DUP_ACT) {
 						BKE_animdata_copy_id_action(&obn->mat[a]->id, true);
 					}
+				}
+			}
+		}
+		if (dupflag & USER_DUP_PSYS) {
+			ParticleSystem *psys;
+			for (psys = obn->particlesystem.first; psys; psys = psys->next) {
+				id = (ID *) psys->part;
+				if (id) {
+					ID_NEW_REMAP_US(psys->part)
+					else {
+						psys->part = ID_NEW_SET(psys->part, BKE_particlesettings_copy(bmain, psys->part));
+					}
+
+					if (dupflag & USER_DUP_ACT) {
+						BKE_animdata_copy_id_action(&psys->part->id, true);
+					}
+
+					id_us_min(id);
 				}
 			}
 		}

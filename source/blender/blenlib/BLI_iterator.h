@@ -44,7 +44,7 @@ typedef void (*IteratorBeginCb)(Iterator *iter, void *data_in);
 	     iter_macro.valid;                                                           \
 	     callback_next(&iter_macro))                                                 \
     {                                                                                \
-		_data_out = iter_macro.data;
+		_data_out = iter_macro.current;
 
 #define ITER_END                                                                     \
 	}                                                                                \

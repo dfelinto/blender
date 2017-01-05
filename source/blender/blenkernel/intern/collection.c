@@ -33,6 +33,7 @@
 #include "BKE_collection.h"
 #include "BKE_layer.h"
 #include "BKE_library.h"
+#include "BKE_scene.h"
 
 #include "DNA_ID.h"
 #include "DNA_layer_types.h"
@@ -198,6 +199,11 @@ void BKE_collection_object_remove(struct Scene *scene, struct SceneCollection *s
 {
 
 	LinkData *link = BLI_findptr(&sc->objects, ob, offsetof(LinkData, data));
+
+	if (link == NULL) {
+		return;
+	}
+
 	BLI_remlink(&sc->objects, link);
 	MEM_freeN(link);
 
@@ -205,6 +211,21 @@ void BKE_collection_object_remove(struct Scene *scene, struct SceneCollection *s
 
 	TODO_LAYER_SYNC_FILTER; /* need to remove all instances of ob in scene collections -> filter_objects */
 	BKE_layer_sync_object_unlink(scene, sc, ob);
+}
+
+/**
+ * Remove object from all collections of scene
+ */
+void BKE_collections_object_remove(Scene *scene, Object *ob)
+{
+	BKE_scene_remove_rigidbody_object(scene, ob);
+
+	SceneCollection *sc;
+	FOREACH_SCENE_COLLECTION(scene, sc)
+	{
+		BKE_collection_object_remove(scene, sc, ob);
+	}
+	FOREACH_SCENE_COLLECTION_END
 }
 
 /* ---------------------------------------------------------------------- */
@@ -327,6 +348,10 @@ void BKE_scene_objects_Iterator_begin(Iterator *iter, void *data_in)
 
 	SceneCollection *sc = data->scene_collection_iter.current;
 	iter->current = sc->objects.first;
+
+	if (iter->current == NULL) {
+		BKE_scene_objects_Iterator_next(iter);
+	}
 }
 
 /**

@@ -71,6 +71,7 @@
 #include "BKE_brush.h"
 #include "BKE_camera.h"
 #include "BKE_cachefile.h"
+#include "BKE_collection.h"
 #include "BKE_curve.h"
 #include "BKE_depsgraph.h"
 #include "BKE_fcurve.h"
@@ -98,6 +99,7 @@
 #include "BKE_node.h"
 #include "BKE_object.h"
 #include "BKE_paint.h"
+#include "BKE_particle.h"
 #include "BKE_sca.h"
 #include "BKE_speaker.h"
 #include "BKE_sound.h"
@@ -253,6 +255,22 @@ static void libblock_remap_data_preprocess_scene_base_unlink(
 	}
 }
 
+/* Some reamapping unfortunately require extra and/or specific handling, tackle those here. */
+static void libblock_remap_data_preprocess_scene_object_unlink(
+        IDRemap *r_id_remap_data, Scene *sce, Object *ob, const bool skip_indirect, const bool is_indirect)
+{
+	if (skip_indirect && is_indirect) {
+		r_id_remap_data->skipped_indirect++;
+		r_id_remap_data->skipped_refcounted++;
+	}
+	else {
+		BKE_collections_object_remove(sce, ob);
+		if (!is_indirect) {
+			r_id_remap_data->status |= ID_REMAP_IS_LINKED_DIRECT;
+		}
+	}
+}
+
 static void libblock_remap_data_preprocess(IDRemap *r_id_remap_data)
 {
 	switch (GS(r_id_remap_data->id->name)) {
@@ -267,6 +285,15 @@ static void libblock_remap_data_preprocess(IDRemap *r_id_remap_data)
 				/* In case we are unlinking... */
 				if (!r_id_remap_data->old_id) {
 					/* ... everything from scene. */
+					Object *ob_iter;
+					FOREACH_SCENE_OBJECT(sce, ob_iter)
+					{
+						libblock_remap_data_preprocess_scene_object_unlink(
+						            r_id_remap_data, sce, ob_iter, skip_indirect, is_indirect);
+					}
+					FOREACH_SCENE_OBJECT_END
+
+
 					Base *base, *base_next;
 					for (base = sce->base.first; base; base = base_next) {
 						base_next = base->next;
@@ -277,8 +304,11 @@ static void libblock_remap_data_preprocess(IDRemap *r_id_remap_data)
 				else if (GS(r_id_remap_data->old_id->name) == ID_OB) {
 					/* ... a specific object from scene. */
 					Object *old_ob = (Object *)r_id_remap_data->old_id;
-					Base *base = BKE_scene_base_find(sce, old_ob);
 
+					libblock_remap_data_preprocess_scene_object_unlink(
+					            r_id_remap_data, sce, old_ob, skip_indirect, is_indirect);
+
+					Base *base = BKE_scene_base_find(sce, old_ob);
 					if (base) {
 						libblock_remap_data_preprocess_scene_base_unlink(
 						            r_id_remap_data, sce, base, skip_indirect, is_indirect);
@@ -815,6 +845,9 @@ void BKE_libblock_free_ex(Main *bmain, void *idv, const bool do_id_user, const b
 			break;
 		case ID_BR:
 			BKE_brush_free((Brush *)id);
+			break;
+		case ID_PA:
+			BKE_particlesettings_free((ParticleSettings *)id);
 			break;
 		case ID_WM:
 			if (free_windowmanager_cb)
