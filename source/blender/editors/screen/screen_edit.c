@@ -533,11 +533,27 @@ void screen_data_copy(bScreen *to, bScreen *from)
 /**
  * Prepare a newly created screen for initializing it as active screen.
  */
-void screen_new_activate_refresh(const wmWindow *win, bScreen *screen_new)
+void screen_new_activate_prepare(const wmWindow *win, bScreen *screen_new)
 {
 	screen_new->winid = win->winid;
 	screen_new->do_refresh = true;
 	screen_new->do_draw = true;
+}
+
+void screen_changed_update(bContext *C, wmWindow *win, bScreen *sc)
+{
+	Scene *scene = WM_window_get_active_scene(win);
+
+	CTX_wm_window_set(C, win);  /* stores C->wm.screen... hrmf */
+
+	ED_screen_refresh(CTX_wm_manager(C), win);
+
+	BKE_screen_view3d_scene_sync(sc, scene); /* sync new screen with scene data */
+	WM_event_add_notifier(C, NC_WINDOW, NULL);
+	WM_event_add_notifier(C, NC_WORKSPACE | ND_SCREENSET, sc);
+
+	/* makes button hilites work */
+	WM_event_add_mousemove(C);
 }
 
 
@@ -946,6 +962,8 @@ void ED_screen_refresh(wmWindowManager *wm, wmWindow *win)
 		printf("%s: set screen\n", __func__);
 	}
 	screen->do_refresh = false;
+	/* prevent multiwin errors */
+	screen->winid = win->winid;
 
 	screen->context = ed_screen_context;
 }
@@ -1191,7 +1209,7 @@ int ED_screen_area_active(const bContext *C)
 /* -------------------------------------------------------------------- */
 /* Screen Activation (screen_set_xxx) */
 
-bScreen *screen_set_find_associated_fullscreen(const Main *bmain, bScreen *screen)
+static bScreen *screen_find_associated_fullscreen(const Main *bmain, bScreen *screen)
 {
 	for (bScreen *screen_iter = bmain->screen.first; screen_iter; screen_iter = screen_iter->id.next) {
 		ScrArea *sa = screen_iter->areabase.first;
@@ -1204,33 +1222,10 @@ bScreen *screen_set_find_associated_fullscreen(const Main *bmain, bScreen *scree
 }
 
 /**
- * Refresh data and make screen ready for drawing *after* activating it.
+ * \return the screen to activate.
+ * \warning The returned screen may not always equal \a screen_new!
  */
-void screen_set_refresh(bContext *C, wmWindow *win)
-{
-	Scene *scene = WM_window_get_active_scene(win);
-	bScreen *sc = WM_window_get_active_screen(win);
-
-	CTX_wm_window_set(C, win);  // stores C->wm.screen... hrmf
-
-	/* prevent multiwin errors */
-	sc->winid = win->winid;
-
-	BKE_screen_view3d_scene_sync(sc, scene); /* sync new screen with scene data */
-	ED_screen_refresh(CTX_wm_manager(C), CTX_wm_window(C));
-	WM_event_add_notifier(C, NC_WINDOW, NULL);
-	WM_event_add_notifier(C, NC_WORKSPACE | ND_SCREENSET, sc);
-
-	/* makes button hilites work */
-	WM_event_add_mousemove(C);
-}
-
-/**
- * Make sure the correct screen is used and that it's valid for display in \a win.
- * \return the screen to activate (might differ from \a screen_new in case
- *         of fullscreen) or NULL if no valid one found.
- */
-bScreen *screen_set_ensure_valid(const Main *bmain, const wmWindow *win, bScreen *screen_new)
+bScreen *screen_change_prepare(bScreen *screen_old, bScreen *screen_new, Main *bmain, bContext *C, wmWindow *win)
 {
 	/* validate screen, it's called with notifier reference */
 	if (BLI_findindex(&bmain->screen, screen_new) == -1) {
@@ -1238,7 +1233,7 @@ bScreen *screen_set_ensure_valid(const Main *bmain, const wmWindow *win, bScreen
 	}
 
 	if (ELEM(screen_new->state, SCREENMAXIMIZED, SCREENFULL)) {
-		screen_new = screen_set_find_associated_fullscreen(bmain, screen_new);
+		screen_new = screen_find_associated_fullscreen(bmain, screen_new);
 	}
 
 	/* check for valid winid */
@@ -1246,56 +1241,55 @@ bScreen *screen_set_ensure_valid(const Main *bmain, const wmWindow *win, bScreen
 		return NULL;
 	}
 
-	return screen_new;
-}
+	if (screen_old != screen_new) {
+		wmTimer *wt = screen_old->animtimer;
 
-void screen_set_prepare(bContext *C, wmWindow *win, bScreen *screen_new, bScreen *screen_old)
-{
-	wmWindowManager *wm = CTX_wm_manager(C);
-	wmTimer *wt = screen_old->animtimer;
-	ScrArea *sa;
+		/* remove handlers referencing areas in old screen */
+		for (ScrArea *sa = screen_old->areabase.first; sa; sa = sa->next) {
+			WM_event_remove_area_handler(&win->modalhandlers, sa);
+		}
 
-	/* remove handlers referencing areas in old screen */
-	for (sa = screen_old->areabase.first; sa; sa = sa->next) {
-		WM_event_remove_area_handler(&win->modalhandlers, sa);
+		/* we put timer to sleep, so screen_exit has to think there's no timer */
+		screen_old->animtimer = NULL;
+		if (wt) {
+			WM_event_timer_sleep(CTX_wm_manager(C), win, wt, true);
+		}
+		ED_screen_exit(C, win, screen_old);
+
+		/* Same scene, "transfer" playback to new screen. */
+		if (wt) {
+			screen_new->animtimer = wt;
+		}
+
+		return screen_new;
 	}
 
-	/* we put timer to sleep, so screen_exit has to think there's no timer */
-	screen_old->animtimer = NULL;
-	if (wt) {
-		WM_event_timer_sleep(wm, win, wt, true);
-	}
-	ED_screen_exit(C, win, screen_old);
-
-	/* Same scene, "transfer" playback to new screen. */
-	if (wt) {
-		screen_new->animtimer = wt;
-	}
+	return NULL;
 }
 
 /**
- * operator call, WM + Window + screen already existed before
+ * \brief Change the active screen.
+ *
+ * Operator call, WM + Window + screen already existed before
+ *
  * \warning Do NOT call in area/region queues!
- * \returns success.
+ * \returns if screen changing was successful.
  */
-bool ED_screen_set(bContext *C, bScreen *sc)
+bool ED_screen_change(bContext *C, bScreen *sc)
 {
 	Main *bmain = CTX_data_main(C);
 	wmWindow *win = CTX_wm_window(C);
 	bScreen *screen_old = CTX_wm_screen(C);
-	bScreen *screen_new;
+	bScreen *screen_new = screen_change_prepare(screen_old, sc, bmain, C, win);
 
-	if (!(screen_new = screen_set_ensure_valid(bmain, win, sc))) {
-		return false;
-	}
-
-	if (screen_old != screen_new) {
-		screen_set_prepare(C, win, screen_new, screen_old);
+	if (screen_new) {
 		WM_window_set_active_screen(win, sc);
-		screen_set_refresh(C, win);
+		screen_changed_update(C, win, screen_new);
+
+		return true;
 	}
 
-	return true;
+	return false;
 }
 
 static void screen_set_3dview_camera(Scene *scene, ScrArea *sa, View3D *v3d)
@@ -1499,7 +1493,7 @@ ScrArea *ED_screen_state_toggle(bContext *C, wmWindow *win, ScrArea *sa, const s
 		sc->animtimer = oldscreen->animtimer;
 		oldscreen->animtimer = NULL;
 
-		ED_screen_set(C, sc);
+		ED_screen_change(C, sc);
 
 		BKE_workspace_layout_remove(workspace, layout_old, CTX_data_main(C));
 
@@ -1577,7 +1571,7 @@ ScrArea *ED_screen_state_toggle(bContext *C, wmWindow *win, ScrArea *sa, const s
 			BLI_assert(false);
 		}
 
-		ED_screen_set(C, sc);
+		ED_screen_change(C, sc);
 	}
 
 	/* XXX bad code: setscreen() ends with first area active. fullscreen render assumes this too */

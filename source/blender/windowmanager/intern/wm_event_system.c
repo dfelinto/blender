@@ -309,7 +309,7 @@ void wm_event_do_notifiers(bContext *C)
 						UI_popup_handlers_remove_all(C, &win->modalhandlers);
 
 
-						ED_screen_set(C, ref_screen);  // XXX hrms, think this over!
+						ED_screen_change(C, ref_screen);  /* XXX hrms, think this over! */
 						if (G.debug & G_DEBUG_EVENTS)
 							printf("%s: screen set %p\n", __func__, note->reference);
 					}

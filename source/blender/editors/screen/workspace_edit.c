@@ -68,10 +68,10 @@ static void workspace_change_update_mode(const WorkSpace *workspace_old, const W
  * \brief Change the active workspace.
  *
  * Operator call, WM + Window + screen already existed before
- * Pretty similar to #ED_screen_set since changing workspace also changes screen.
+ * Pretty similar to #ED_screen_change since changing workspace also changes screen.
  *
  * \warning Do NOT call in area/region queues!
- * \returns success.
+ * \returns if workspace changing was successful.
  */
 bool ED_workspace_change(bContext *C, wmWindowManager *wm, wmWindow *win, WorkSpace *workspace_new)
 {
@@ -80,21 +80,22 @@ bool ED_workspace_change(bContext *C, wmWindowManager *wm, wmWindow *win, WorkSp
 	bScreen *screen_old = BKE_workspace_active_screen_get(workspace_old);
 	bScreen *screen_new = BKE_workspace_active_screen_get(workspace_new);
 
-	if (!(screen_new = screen_set_ensure_valid(bmain, win, screen_new))) {
-		return false;
-	}
+	screen_new = screen_change_prepare(screen_old, screen_new, bmain, C, win);
 
-	if (screen_old != screen_new) {
-		screen_set_prepare(C, win, screen_new, screen_old);
+	if (screen_new) {
 		WM_window_set_active_workspace(win, workspace_new);
-		screen_set_refresh(C, win);
+
+		/* update screen *after* changing workspace - which also causes the actual screen change */
+		screen_changed_update(C, win, screen_new);
+
+		workspace_change_update_mode(workspace_old, workspace_new, C, CTX_data_active_object(C), &wm->reports);
+
+		BLI_assert(CTX_wm_workspace(C) == workspace_new);
+
+		return true;
 	}
 
-	workspace_change_update_mode(workspace_old, workspace_new, C, CTX_data_active_object(C), &wm->reports);
-
-	BLI_assert(CTX_wm_workspace(C) == workspace_new);
-
-	return true;
+	return false;
 }
 
 /**
@@ -113,7 +114,7 @@ WorkSpace *ED_workspace_duplicate(WorkSpace *workspace_old, Main *bmain, wmWindo
 		if (layout_active_old == layout_old) {
 			bScreen *screen_new = BKE_workspace_layout_screen_get(layout_new);
 
-			screen_new_activate_refresh(win, screen_new);
+			screen_new_activate_prepare(win, screen_new);
 			BKE_workspace_active_layout_set(workspace_new, layout_new);
 		}
 	}

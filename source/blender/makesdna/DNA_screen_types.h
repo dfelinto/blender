@@ -57,7 +57,7 @@ typedef struct bScreen {
 
 	struct Scene *scene DNA_DEPRECATED;
 
-	short winid;						/* winid from WM, starts with 1 TODO will have to rework this */
+	short winid;						/* winid from WM, starts with 1 */
 	short redraws_flag;					/* user-setting for which editors get redrawn during anim playback (used to be time->redraws) */
 
 	char temp;							/* temp screen in a temp window, don't save (like user prefs) */

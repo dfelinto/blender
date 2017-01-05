@@ -77,7 +77,7 @@ static bool workspace_layout_delete_doit(bContext *C, WorkSpace *workspace,
 	Main *bmain = CTX_data_main(C);
 	bScreen *screen_new = BKE_workspace_layout_screen_get(layout_new);
 
-	ED_screen_set(C, screen_new);
+	ED_screen_change(C, screen_new);
 
 	if (BKE_workspace_active_layout_get(workspace) != layout_old) {
 		BKE_workspace_layout_remove(workspace, layout_old, bmain);
@@ -179,7 +179,7 @@ bool ED_workspace_layout_cycle(bContext *C, WorkSpace *workspace, const short di
 			ED_screen_full_restore(C, sa); /* may free screen of old_layout */
 		}
 
-		ED_screen_set(C, new_screen);
+		ED_screen_change(C, new_screen);
 
 		return true;
 	}

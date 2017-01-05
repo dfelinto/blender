@@ -32,8 +32,13 @@
 #endif
 
 /**
- * Layouts are basically bScreens. We use this struct to wrap a reference to a screen so that we can store it in
- * a ListBase within a workspace. Usually you shouldn't have to deal with it, only with bScreen and WorkSpace.
+ * \brief Wrapper for bScreen.
+ *
+ * bScreens are IDs and thus stored in a main list-base. We also want to store a list-base of them within the
+ * workspace (so each workspace can have its own set of screen-layouts) which would mess with the next/prev pointers.
+ * So we use this struct to wrap a bScreen pointer with another pair of next/prev pointers.
+ *
+ * We could also use LinkNode for this but in future we may want to move stuff from bScreen to this level.
  */
 typedef struct WorkSpaceLayout {
 	struct WorkSpaceLayout *next, *prev;

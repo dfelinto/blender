@@ -48,11 +48,9 @@ void        region_toggle_hidden(struct bContext *C, ARegion *ar, const bool do_
 /* screen_edit.c */
 bScreen    *screen_add(wmWindow *win, const char *name, const int winsize_x, const int winsize_y);
 void        screen_data_copy(bScreen *to, bScreen *from);
-void        screen_new_activate_refresh(const wmWindow *win, bScreen *screen_new);
-bScreen    *screen_set_find_associated_fullscreen(const struct Main *bmain, bScreen *screen);
-void        screen_set_refresh(struct bContext *C, wmWindow *win);
-bScreen    *screen_set_ensure_valid(const struct Main *bmain, const wmWindow *win, bScreen *screen_new);
-void        screen_set_prepare(struct bContext *C, wmWindow *win, bScreen *screen_new, bScreen *screen_old);
+void        screen_new_activate_prepare(const wmWindow *win, bScreen *screen_new);
+void        screen_changed_update(struct bContext *C, wmWindow *win, bScreen *sc);
+bScreen    *screen_change_prepare(bScreen *screen_old, bScreen *screen_new, struct Main *bmain, struct bContext *C, wmWindow *win);
 ScrEdge    *screen_findedge(bScreen *sc, ScrVert *v1, ScrVert *v2);
 ScrArea    *area_split(bScreen *sc, ScrArea *sa, char dir, float fac, int merge);
 int         screen_area_join(struct bContext *C, bScreen *scr, ScrArea *sa1, ScrArea *sa2);

@@ -706,7 +706,7 @@ wmWindow *WM_window_open_temp(bContext *C, const rcti *rect_init, int type)
 		ED_area_newspace(C, sa, SPACE_USERPREF, false);
 	}
 	
-	ED_screen_set(C, screen);
+	ED_screen_change(C, screen);
 	ED_screen_refresh(CTX_wm_manager(C), win); /* test scale */
 	
 	if (sa->spacetype == SPACE_IMAGE)
