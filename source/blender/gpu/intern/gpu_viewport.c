@@ -43,6 +43,8 @@
 #include "GPU_texture.h"
 #include "GPU_viewport.h"
 
+#include "DRW_engine.h"
+
 #include "MEM_guardedalloc.h"
 
 struct GPUViewport {
@@ -55,27 +57,31 @@ struct GPUViewport {
 	/* Viewport Buffer Storage */
 	/* TODO indentify to what engine conf are theses buffers */
 	DefaultFramebufferList *fbl;
-	DefaultTextureList *tl;
+	DefaultTextureList *txl;
+	DefaultPassList *psl;
 };
 
-static void GPU_viewport_free_buffers(GPUViewport *viewport);
+static void GPU_viewport_buffers_free(GPUViewport *viewport);
 
 GPUViewport *GPU_viewport_create(void)
 {
 	GPUViewport *viewport = MEM_callocN(sizeof(GPUViewport), "GPUViewport");
 	viewport->fbl = MEM_callocN(sizeof(FramebufferList), "FramebufferList");
-	viewport->tl = MEM_callocN(sizeof(TextureList), "TextureList");
+	viewport->txl = MEM_callocN(sizeof(TextureList), "TextureList");
+	viewport->psl = MEM_callocN(sizeof(PassList), "PassList");
 	memset(viewport->fbl, 0, sizeof(FramebufferList));
-	memset(viewport->tl, 0, sizeof(TextureList));
+	memset(viewport->txl, 0, sizeof(TextureList));
+	memset(viewport->psl, 0, sizeof(PassList));
 	viewport->size[0] = viewport->size[1] = -1;
 
 	return viewport;
 }
 
-void GPU_viewport_get_engine_data(GPUViewport *viewport, void **fbs, void **txs)
+void GPU_viewport_get_engine_data(GPUViewport *viewport, void **fbs, void **txs, void **pss)
 {
 	*fbs = viewport->fbl;
-	*txs = viewport->tl;
+	*txs = viewport->txl;
+	*pss = viewport->psl;
 }
 
 void GPU_viewport_bind(GPUViewport *viewport, const rcti *rect)
@@ -85,7 +91,7 @@ void GPU_viewport_bind(GPUViewport *viewport, const rcti *rect)
 
 	if (viewport->fbl->default_fb)
 		if (rect_w != viewport->size[0] || rect_h != viewport->size[1])
-			GPU_viewport_free_buffers(viewport);
+			GPU_viewport_buffers_free(viewport);
 
 	if (!viewport->fbl->default_fb) {
 		viewport->size[0] = rect_w;
@@ -99,25 +105,25 @@ void GPU_viewport_bind(GPUViewport *viewport, const rcti *rect)
 
 		/* Color */
 		/* No multi samples for now */
-		viewport->tl->color = GPU_texture_create_2D(rect_w, rect_h, NULL, GPU_HDR_NONE, NULL);
-		if (!viewport->tl->color) {
+		viewport->txl->color = GPU_texture_create_2D(rect_w, rect_h, NULL, GPU_HDR_NONE, NULL);
+		if (!viewport->txl->color) {
 			GPU_viewport_free(viewport);
 			return;
 		}
 
-		if (!GPU_framebuffer_texture_attach(viewport->fbl->default_fb, viewport->tl->color, 0)) {
+		if (!GPU_framebuffer_texture_attach(viewport->fbl->default_fb, viewport->txl->color, 0)) {
 			GPU_viewport_free(viewport);
 			return;
 		}
 
 		/* Depth */
-		viewport->tl->depth = GPU_texture_create_depth(rect_w, rect_h, NULL);
-		if (!viewport->tl->depth) {
+		viewport->txl->depth = GPU_texture_create_depth(rect_w, rect_h, NULL);
+		if (!viewport->txl->depth) {
 			GPU_viewport_free(viewport);
 			return;
 		}
 
-		if (!GPU_framebuffer_texture_attach(viewport->fbl->default_fb, viewport->tl->depth, 0)) {
+		if (!GPU_framebuffer_texture_attach(viewport->fbl->default_fb, viewport->txl->depth, 0)) {
 			GPU_viewport_free(viewport);
 			return;
 		}
@@ -135,7 +141,7 @@ void GPU_viewport_bind(GPUViewport *viewport, const rcti *rect)
 
 static void draw_ofs_to_screen(GPUViewport *viewport)
 {
-	GPUTexture *color = viewport->tl->color;
+	GPUTexture *color = viewport->txl->color;
 
 	const float w = (float)GPU_texture_width(color);
 	const float h = (float)GPU_texture_height(color);
@@ -184,10 +190,10 @@ void GPU_viewport_unbind(GPUViewport *viewport)
 	}
 }
 
-static void GPU_viewport_free_buffers(GPUViewport *viewport)
+static void GPU_viewport_buffers_free(GPUViewport *viewport)
 {
 	FramebufferList *fbl = (FramebufferList *)viewport->fbl;
-	TextureList *tl = (TextureList *)viewport->tl;
+	TextureList *txl = (TextureList *)viewport->txl;
 	int i;
 	for (i = MAX_BUFFERS - 1; i > -1; --i) {
 		GPUFrameBuffer *fb = fbl->framebuffers[i];
@@ -197,10 +203,24 @@ static void GPU_viewport_free_buffers(GPUViewport *viewport)
 		}
 	}
 	for (i = MAX_TEXTURES - 1; i > -1; --i) {
-		GPUTexture *tex = tl->textures[i];
+		GPUTexture *tex = txl->textures[i];
 		if (tex) {
 			GPU_texture_free(tex);
-			tl->textures[i] = NULL;
+			txl->textures[i] = NULL;
+		}
+	}
+}
+
+static void GPU_viewport_passes_free(GPUViewport *viewport)
+{
+	PassList *psl = (PassList *)viewport->psl;
+	int i;
+
+	for (i = MAX_PASSES - 1; i > -1; --i) {
+		struct DRWPass *pass = psl->passes[i];
+		if (pass) {
+			DRW_pass_free(pass);
+			psl->passes[i] = NULL;
 		}
 	}
 }
@@ -208,7 +228,12 @@ static void GPU_viewport_free_buffers(GPUViewport *viewport)
 void GPU_viewport_free(GPUViewport *viewport)
 {
 	GPU_viewport_debug_depth_free(viewport);
-	GPU_viewport_free_buffers(viewport);
+	GPU_viewport_buffers_free(viewport);
+	GPU_viewport_passes_free(viewport);
+
+	MEM_freeN(viewport->fbl);
+	MEM_freeN(viewport->txl);
+	MEM_freeN(viewport->psl);
 
 	MEM_freeN(viewport);
 }

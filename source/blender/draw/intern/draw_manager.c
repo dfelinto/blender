@@ -64,6 +64,47 @@ extern char datatoc_gpu_shader_2D_vert_glsl[];
 extern char datatoc_gpu_shader_3D_vert_glsl[];
 extern char datatoc_gpu_shader_basic_vert_glsl[];
 
+/* Structures */
+typedef enum {
+	DRW_UNIFORM_INT,
+	DRW_UNIFORM_FLOAT,
+	DRW_UNIFORM_TEXTURE,
+	DRW_UNIFORM_BUFFER,
+	DRW_UNIFORM_MAT3,
+	DRW_UNIFORM_MAT4
+} DRWUniformType;
+
+struct DRWUniform {
+	struct DRWUniform *next, *prev;
+	DRWUniformType type;
+	int location;
+	int length;
+	int arraysize;
+	int bindloc;
+	const void *value;
+};
+
+struct DRWInterface {
+	ListBase uniforms;
+	/* matrices locations */
+	int modelview;
+	int projection;
+	int modelviewprojection;
+	int normal;
+};
+
+struct DRWPass {
+	ListBase batches;
+	DRWState state;
+};
+
+struct DRWBatch {
+	struct DRWBatch *next, *prev;
+	struct GPUShader *shader;        // Shader to bind
+	struct DRWInterface *interface;  // Uniforms values
+	ListBase objects;               // List with all objects and transform
+};
+
 /* Render State */
 static struct DRWGlobalState{
 	GPUShader *shader;
@@ -88,6 +129,11 @@ static bool fs_quad_init = false;
 GPUTexture *DRW_texture_create_2D_array(int w, int h, int d, const float *fpixels)
 {
 	return GPU_texture_create_2D_array(w, h, d, fpixels);
+}
+
+void DRW_texture_free(GPUTexture *tex)
+{
+	GPU_texture_free(tex);
 }
 
 /* ***************************************** BUFFERS ******************************************/
@@ -139,9 +185,15 @@ GPUShader *DRW_shader_create_3D_depth_only(void)
 {
 	return GPU_shader_get_builtin_shader(GPU_SHADER_3D_DEPTH_ONLY);
 }
+
+void DRW_shader_free(GPUShader *shader)
+{
+	GPU_shader_free(shader);
+}
+
 /* ***************************************** INTERFACE ******************************************/
 
-struct DRWInterface *DRW_interface_create(struct GPUShader *shader)
+static DRWInterface *DRW_interface_create(struct GPUShader *shader)
 {
 	DRWInterface *interface = MEM_callocN(sizeof(DRWInterface), "DRWInterface");
 
@@ -155,19 +207,20 @@ struct DRWInterface *DRW_interface_create(struct GPUShader *shader)
 	return interface;
 }
 
-static void DRW_interface_uniform(struct GPUShader *shader, DRWInterface *interface, const char *name,
+static void DRW_interface_uniform(DRWBatch *batch, const char *name,
                                   DRWUniformType type, const void *value, int length, int arraysize, int bindloc)
 {
 	DRWUniform *uni = MEM_callocN(sizeof(DRWUniform), "DRWUniform");
 
-	int loc = GPU_shader_get_uniform(shader, name);
+	int loc = GPU_shader_get_uniform(batch->shader, name);
 
-	if (G.debug & G_DEBUG) {
-		if (loc == -1) 
-			printf("Uniform '%s' not found!\n", name);
+	if (loc == -1) {
+		if (G.debug & G_DEBUG)
+			fprintf(stderr, "Uniform '%s' not found!\n", name);
+
+		MEM_freeN(uni);
+		return;
 	}
-
-	if (loc == -1) return;
 
 	uni->type = type;
 	uni->location = loc;
@@ -176,68 +229,108 @@ static void DRW_interface_uniform(struct GPUShader *shader, DRWInterface *interf
 	uni->arraysize = arraysize;
 	uni->bindloc = bindloc; /* for textures */
 
-	BLI_addtail(&interface->uniforms, uni);
-}
-
-void DRW_interface_uniform_texture(struct GPUShader *shader, DRWInterface *interface, const char *name, const GPUTexture *tex, int loc)
-{
-	DRW_interface_uniform(shader, interface, name, DRW_UNIFORM_TEXTURE, tex, 0, 0, loc);
-}
-
-void DRW_interface_uniform_buffer(struct GPUShader *shader, DRWInterface *interface, const char *name, const int value, int loc)
-{
-	/* we abuse the lenght attrib to store the buffer index */
-	DRW_interface_uniform(shader, interface, name, DRW_UNIFORM_BUFFER, NULL, value, 0, loc);
-}
-
-void DRW_interface_uniform_float(struct GPUShader *shader, DRWInterface *interface, const char *name, const float *value, int arraysize)
-{
-	DRW_interface_uniform(shader, interface, name, DRW_UNIFORM_FLOAT, value, 1, arraysize, 0);
-}
-
-void DRW_interface_uniform_vec2(struct GPUShader *shader, DRWInterface *interface, const char *name, const float *value, int arraysize)
-{
-	DRW_interface_uniform(shader, interface, name, DRW_UNIFORM_FLOAT, value, 2, arraysize, 0);
-}
-
-void DRW_interface_uniform_vec3(struct GPUShader *shader, DRWInterface *interface, const char *name, const float *value, int arraysize)
-{
-	DRW_interface_uniform(shader, interface, name, DRW_UNIFORM_FLOAT, value, 3, arraysize, 0);
-}
-
-void DRW_interface_uniform_vec4(struct GPUShader *shader, DRWInterface *interface, const char *name, const float *value, int arraysize)
-{
-	DRW_interface_uniform(shader, interface, name, DRW_UNIFORM_FLOAT, value, 4, arraysize, 0);
-}
-
-void DRW_interface_uniform_int(struct GPUShader *shader, DRWInterface *interface, const char *name, const int *value, int arraysize)
-{
-	DRW_interface_uniform(shader, interface, name, DRW_UNIFORM_INT, value, 1, arraysize, 0);
-}
-
-void DRW_interface_uniform_ivec2(struct GPUShader *shader, DRWInterface *interface, const char *name, const int *value, int arraysize)
-{
-	DRW_interface_uniform(shader, interface, name, DRW_UNIFORM_INT, value, 2, arraysize, 0);
-}
-
-void DRW_interface_uniform_ivec3(struct GPUShader *shader, DRWInterface *interface, const char *name, const int *value, int arraysize)
-{
-	DRW_interface_uniform(shader, interface, name, DRW_UNIFORM_INT, value, 3, arraysize, 0);
-}
-
-void DRW_interface_uniform_mat3(struct GPUShader *shader, DRWInterface *interface, const char *name, const float *value)
-{
-	DRW_interface_uniform(shader, interface, name, DRW_UNIFORM_MAT3, value, 9, 1, 0);
-}
-
-void DRW_interface_uniform_mat4(struct GPUShader *shader, DRWInterface *interface, const char *name, const float *value)
-{
-	DRW_interface_uniform(shader, interface, name, DRW_UNIFORM_MAT4, value, 16, 1, 0);
+	BLI_addtail(&batch->interface->uniforms, uni);
 }
 
 void DRW_get_dfdy_factors(float dfdyfac[2])
 {
 	GPU_get_dfdy_factors(dfdyfac);
+}
+
+/* ***************************************** BATCH ******************************************/
+
+DRWBatch *DRW_batch_create(struct GPUShader *shader, DRWPass *pass)
+{
+	DRWBatch *batch = MEM_callocN(sizeof(DRWBatch), "DRWBatch");
+
+	batch->shader = shader;
+	batch->interface = DRW_interface_create(shader);
+
+	BLI_addtail(&pass->batches, batch);
+
+	return batch;
+}
+
+/* Later use VBO */
+void DRW_batch_add_surface(DRWBatch *batch, Base *base)
+{
+	BLI_addtail(&batch->objects, base);
+}
+
+void DRW_batch_uniform_texture(DRWBatch *batch, const char *name, const GPUTexture *tex, int loc)
+{
+	DRW_interface_uniform(batch, name, DRW_UNIFORM_TEXTURE, tex, 0, 0, loc);
+}
+
+void DRW_batch_uniform_buffer(DRWBatch *batch, const char *name, const int value, int loc)
+{
+	/* we abuse the lenght attrib to store the buffer index */
+	DRW_interface_uniform(batch, name, DRW_UNIFORM_BUFFER, NULL, value, 0, loc);
+}
+
+void DRW_batch_uniform_float(DRWBatch *batch, const char *name, const float *value, int arraysize)
+{
+	DRW_interface_uniform(batch, name, DRW_UNIFORM_FLOAT, value, 1, arraysize, 0);
+}
+
+void DRW_batch_uniform_vec2(DRWBatch *batch, const char *name, const float *value, int arraysize)
+{
+	DRW_interface_uniform(batch, name, DRW_UNIFORM_FLOAT, value, 2, arraysize, 0);
+}
+
+void DRW_batch_uniform_vec3(DRWBatch *batch, const char *name, const float *value, int arraysize)
+{
+	DRW_interface_uniform(batch, name, DRW_UNIFORM_FLOAT, value, 3, arraysize, 0);
+}
+
+void DRW_batch_uniform_vec4(DRWBatch *batch, const char *name, const float *value, int arraysize)
+{
+	DRW_interface_uniform(batch, name, DRW_UNIFORM_FLOAT, value, 4, arraysize, 0);
+}
+
+void DRW_batch_uniform_int(DRWBatch *batch, const char *name, const int *value, int arraysize)
+{
+	DRW_interface_uniform(batch, name, DRW_UNIFORM_INT, value, 1, arraysize, 0);
+}
+
+void DRW_batch_uniform_ivec2(DRWBatch *batch, const char *name, const int *value, int arraysize)
+{
+	DRW_interface_uniform(batch, name, DRW_UNIFORM_INT, value, 2, arraysize, 0);
+}
+
+void DRW_batch_uniform_ivec3(DRWBatch *batch, const char *name, const int *value, int arraysize)
+{
+	DRW_interface_uniform(batch, name, DRW_UNIFORM_INT, value, 3, arraysize, 0);
+}
+
+void DRW_batch_uniform_mat3(DRWBatch *batch, const char *name, const float *value)
+{
+	DRW_interface_uniform(batch, name, DRW_UNIFORM_MAT3, value, 9, 1, 0);
+}
+
+void DRW_batch_uniform_mat4(DRWBatch *batch, const char *name, const float *value)
+{
+	DRW_interface_uniform(batch, name, DRW_UNIFORM_MAT4, value, 16, 1, 0);
+}
+
+/* ***************************************** PASSES ******************************************/
+
+DRWPass *DRW_pass_create(const char *name, DRWState state)
+{
+	DRWPass *pass = (DRWPass *)MEM_callocN(sizeof(DRWPass), name);
+	pass->state = state;
+
+	return pass;
+}
+
+void DRW_pass_free(DRWPass *pass)
+{
+	for (DRWBatch *batch = pass->batches.first; batch; batch = batch->next) {
+		BLI_freelistN(&batch->interface->uniforms);
+		MEM_freeN(batch->interface);
+	}
+	BLI_freelistN(&pass->batches);
+	MEM_freeN(pass);
 }
 
 /* ****************************************** DRAW ******************************************/
@@ -543,7 +636,7 @@ int *DRW_viewport_size_get(void)
 	return &DST.size[0];
 }
 
-void DRW_viewport_init(const bContext *C, void **buffers, void **textures)
+void DRW_viewport_init(const bContext *C, void **buffers, void **textures, void **passes)
 {
 	RegionView3D *rv3d = CTX_wm_region_view3d(C);
 	GPUViewport *viewport = rv3d->viewport;
@@ -551,7 +644,7 @@ void DRW_viewport_init(const bContext *C, void **buffers, void **textures)
 	/* Save context for all later needs */
 	DST.context = C;
 
-	GPU_viewport_get_engine_data(viewport, buffers, textures);
+	GPU_viewport_get_engine_data(viewport, buffers, textures, passes);
 
 	/* Refresh DST.size */
 	DefaultTextureList *txl = (DefaultTextureList *)*textures;
@@ -584,9 +677,16 @@ bool DRW_viewport_is_persp(void)
 
 /* ****************************************** INIT ******************************************/
 
-void DRW_viewport_engine_init(void)
+void DRW_engines_init(void)
 {
 	BLI_addtail(&R_engines, &viewport_clay_type);
+}
+
+void DRW_engines_free(void)
+{
+	clay_engine_free();
+
+	BLI_remlink(&R_engines, &viewport_clay_type);
 }
 
 /* TODO Free memory */

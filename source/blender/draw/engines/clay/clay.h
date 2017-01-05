@@ -23,4 +23,6 @@
 
 extern RenderEngineType viewport_clay_type;
 
+void clay_engine_free(void);
+
 #endif /* __ENGINE_CLAY_H__ */

@@ -93,12 +93,14 @@ void RE_engines_init(void)
 #ifdef WITH_GAMEENGINE
 	BLI_addtail(&R_engines, &internal_game_type);
 #endif
-	DRW_viewport_engine_init();
+	DRW_engines_init();
 }
 
 void RE_engines_exit(void)
 {
 	RenderEngineType *type, *next;
+
+	DRW_engines_free();
 
 	for (type = R_engines.first; type; type = next) {
 		next = type->next;

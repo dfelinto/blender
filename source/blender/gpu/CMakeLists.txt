@@ -31,6 +31,7 @@ set(INC
 	../imbuf
 	../makesdna
 	../makesrna
+	../draw
 
 	../editors/include
 

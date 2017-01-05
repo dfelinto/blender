@@ -26,34 +26,11 @@
 #ifndef __DRW_ENGINE_H__
 #define __DRW_ENGINE_H__
 
-typedef enum {
-	DRW_UNIFORM_INT,
-	DRW_UNIFORM_FLOAT,
-	DRW_UNIFORM_TEXTURE,
-	DRW_UNIFORM_BUFFER,
-	DRW_UNIFORM_MAT3,
-	DRW_UNIFORM_MAT4
-} DRWUniformType;
+struct DRWPass;
 
-typedef struct DRWUniform {
-	struct DRWUniform *next, *prev;
-	DRWUniformType type;
-	int location;
-	int length;
-	int arraysize;
-	int bindloc;
-	const void *value;
-} DRWUniform;
+void DRW_engines_init(void);
+void DRW_engines_free(void);
 
-typedef struct DRWInterface {
-	ListBase uniforms;
-	/* matrices locations */
-	int modelview;
-	int projection;
-	int modelviewprojection;
-	int normal;
-} DRWInterface;
-
-void DRW_viewport_engine_init(void);
+void DRW_pass_free(struct DRWPass *pass);
 
 #endif /* __DRW_ENGINE_H__ */

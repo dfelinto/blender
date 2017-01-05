@@ -40,11 +40,9 @@ extern char datatoc_clay_vert_glsl[];
 
 static struct CLAY_data {
 	/* Depth Pre Pass */
-	struct DRWPass *depth_pass;
 	struct GPUShader *depth_sh;
 	struct DRWInterface *depth_itf;
 	/* Shading Pass */
-	struct DRWPass *clay_pass;
 	struct GPUShader *clay_sh;
 	struct DRWInterface *clay_itf;
 
@@ -82,13 +80,19 @@ typedef struct CLAY_TextureList{
 #define SCENE_DEPTH 1
 #define SCENE_DEPTH_LOW 2
 
+/* keep it under MAX_PASSES */
+typedef struct CLAY_PassList{
+	struct DRWPass *depth_pass;
+	struct DRWPass *clay_pass;
+} CLAY_PassList;
+
 /* Functions */
 static void add_icon_to_rect(PreviewImage *prv, float *final_rect, int layer)
 {
 	int image_size = prv->w[0] * prv->h[0];
 	float *new_rect = &final_rect[image_size * 4 * layer];
 
-	IMB_buffer_float_from_byte(new_rect, prv->rect[0], IB_PROFILE_SRGB, IB_PROFILE_SRGB,
+	IMB_buffer_float_from_byte(new_rect, (unsigned char *)prv->rect[0], IB_PROFILE_SRGB, IB_PROFILE_SRGB,
 	                           false, prv->w[0], prv->h[0], prv->w[0], prv->w[0]);
 }
 
@@ -136,9 +140,12 @@ static int matcap_to_index(int matcap)
 	return 0;
 }
 
-static void clay_init_engine(void)
+static void clay_engine_init(void)
 {
-	DRWBatch *batch;
+	static bool done = false;
+
+	/* Only init Once */
+	if (done) return;
 
 	/* Create Texture Array */
 	{
@@ -174,46 +181,12 @@ static void clay_init_engine(void)
 	}
 
 	/* Depth prepass */
-	{
-		data.depth_sh = DRW_shader_create_3D_depth_only();
-		data.depth_itf = DRW_interface_create(data.depth_sh);
-
-		data.depth_pass = (DRWPass *)MEM_callocN(sizeof(DRWPass), "DRWPass depth_pass");
-		data.depth_pass->state = DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS;
-
-		batch = (DRWBatch *)MEM_callocN(sizeof(DRWBatch), "DRWBatch");
-		batch->shader = data.depth_sh;
-		batch->interface = data.depth_itf;
-		BLI_addtail(&data.depth_pass->batches, batch);
-	}
+	data.depth_sh = DRW_shader_create_3D_depth_only();
 
 	/* Shading pass */
-	{
-		int bindloc = 0;
-		data.matcap_id = 5;
+	data.clay_sh = DRW_shader_create(datatoc_clay_vert_glsl, NULL, datatoc_clay_frag_glsl, NULL);
 
-		data.clay_sh = DRW_shader_create(datatoc_clay_vert_glsl, NULL, datatoc_clay_frag_glsl, NULL);
-		data.clay_itf = DRW_interface_create(data.clay_sh);
-
-		DRW_interface_uniform_ivec2(data.clay_sh, data.clay_itf, "screenres", DRW_viewport_size_get(), 1);
-		DRW_interface_uniform_buffer(data.clay_sh, data.clay_itf, "depthtex", SCENE_DEPTH, bindloc++);
-		DRW_interface_uniform_texture(data.clay_sh, data.clay_itf, "matcaps", data.matcap_array, bindloc++);
-		DRW_interface_uniform_int(data.clay_sh, data.clay_itf, "matcap_index", &data.matcap_id, 1);
-
-		/* SSAO */
-		DRW_interface_uniform_mat4(data.clay_sh, data.clay_itf, "WinMatrix", data.winmat);
-		DRW_interface_uniform_vec4(data.clay_sh, data.clay_itf, "viewvecs", data.viewvecs, 3);
-		DRW_interface_uniform_vec4(data.clay_sh, data.clay_itf, "ssao_params", data.ssao_params, 1);
-		DRW_interface_uniform_vec3(data.clay_sh, data.clay_itf, "ssao_sample_params", data.sample_params, 1);
-
-		data.clay_pass = (DRWPass *)MEM_callocN(sizeof(DRWPass), "DRWPass clay_pass");
-		data.clay_pass->state = DRW_STATE_WRITE_COLOR;
-
-		batch = (DRWBatch *)MEM_callocN(sizeof(DRWBatch), "DRWBatch");
-		batch->shader = data.clay_sh;
-		batch->interface = data.clay_itf;
-		BLI_addtail(&data.clay_pass->batches, batch);
-	}
+	done = true;
 }
 
 #if 0
@@ -227,18 +200,50 @@ static void clay_init_view(CLAY_FramebufferList *buffers, CLAY_TextureList *text
 }
 #endif
 
-static void clay_populate_batch(const struct bContext *C)
+static void clay_populate_passes(CLAY_PassList *passes, const struct bContext *C)
 {
 	Scene *scene = CTX_data_scene(C);
 	Scene *sce_iter;
 	Base *base;
-	DRWBatch *matcapbatch = data.clay_pass->batches.first;
-	DRWBatch *depthbatch = data.depth_pass->batches.first;
+	struct DRWBatch *matcapbatch, *depthbatch;
+	bool pop_depth = false;
+	bool pop_clay = false;
+
+	if (!passes->depth_pass) {
+		passes->depth_pass = DRW_pass_create("Clay Pass", DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS);
+
+		depthbatch = DRW_batch_create(data.depth_sh, passes->depth_pass);
+		pop_depth = true;
+	}
+
+	if (!passes->clay_pass) {
+		struct DRWBatch *batch;
+		const int depthloc = 0;
+		const int matcaploc = 1;
+
+		passes->clay_pass = DRW_pass_create("Clay Pass", DRW_STATE_WRITE_COLOR);
+
+		batch = DRW_batch_create(data.clay_sh, passes->clay_pass);
+
+		DRW_batch_uniform_ivec2(batch, "screenres", DRW_viewport_size_get(), 1);
+		DRW_batch_uniform_buffer(batch, "depthtex", SCENE_DEPTH, depthloc);
+		DRW_batch_uniform_texture(batch, "matcaps", data.matcap_array, matcaploc);
+		DRW_batch_uniform_int(batch, "matcap_index", &data.matcap_id, 1);
+
+		/* SSAO */
+		DRW_batch_uniform_mat4(batch, "WinMatrix", (float *)data.winmat);
+		DRW_batch_uniform_vec4(batch, "viewvecs", (float *)data.viewvecs, 3);
+		DRW_batch_uniform_vec4(batch, "ssao_params", data.ssao_params, 1);
+		DRW_batch_uniform_vec3(batch, "ssao_sample_params", data.sample_params, 1);
+
+		matcapbatch = batch;
+		pop_clay = true;
+	}
 
 	for (SETLOOPER(scene, sce_iter, base)) {
 		/* Add everything for now */
-		BLI_addtail(&matcapbatch->objects, base);
-		BLI_addtail(&depthbatch->objects, base);
+		if (pop_clay) DRW_batch_add_surface(matcapbatch, base);
+		if (pop_depth) DRW_batch_add_surface(depthbatch, base);
 	}
 }
 
@@ -297,11 +302,11 @@ static void clay_view_draw(RenderEngine *UNUSED(engine), const struct bContext *
 	 * so get the current viewport buffers */
 	CLAY_FramebufferList *buffers = NULL;
 	CLAY_TextureList *textures = NULL;
+	CLAY_PassList *passes = NULL;
 
-	DRW_viewport_init(context, (void **)&buffers, (void **)&textures);
-	
-	if (!data.clay_sh)
-		clay_init_engine();
+	DRW_viewport_init(context, (void **)&buffers, (void **)&textures, (void **)&passes);
+
+	clay_engine_init();
 
 	/* Settings */
 	EngineDataClay *engine_data = &CTX_data_scene(context)->claydata;
@@ -320,23 +325,34 @@ static void clay_view_draw(RenderEngine *UNUSED(engine), const struct bContext *
 	static bool first = true;
 	if (first) {
 		first = false;
-		clay_populate_batch(context);
+		clay_populate_passes(passes, context);
 	}
 
 	DRW_draw_background();
 
 	/* Pass 1 : Depth pre-pass */
-	DRW_draw_pass(data.depth_pass);
-
-	clay_ssao_setup();
+	DRW_draw_pass(passes->depth_pass);
 
 	/* Pass 2 : Shading */
+	clay_ssao_setup();
 	DRW_framebuffer_texture_detach(textures->depth);
-	DRW_draw_pass(data.clay_pass);
+	DRW_draw_pass(passes->clay_pass);
 	DRW_framebuffer_texture_attach(buffers->default_fb, textures->depth, 0);
 
 	/* Always finish by this */
 	DRW_state_reset();
+}
+
+void clay_engine_free(void)
+{
+	/* data.depth_sh Is builtin so it's automaticaly freed */
+	if (data.clay_sh) {
+		DRW_shader_free(data.clay_sh);
+	}
+
+	if (data.matcap_array) {
+		DRW_texture_free(data.matcap_array);
+	}
 }
 
 RenderEngineType viewport_clay_type = {

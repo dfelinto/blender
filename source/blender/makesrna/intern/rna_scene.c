@@ -6291,7 +6291,6 @@ static void rna_def_scene_quicktime_settings(BlenderRNA *brna)
 }
 #endif
 
-
 static void rna_def_clay_data(BlenderRNA *brna)
 {
 	StructRNA *srna;
@@ -6336,7 +6335,6 @@ static void rna_def_clay_data(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Matcap", "Image to use for Material Capture, this affect default material");
 	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, "rna_Scene_glsl_update");
 }
-
 
 static void rna_def_scene_render_data(BlenderRNA *brna)
 {

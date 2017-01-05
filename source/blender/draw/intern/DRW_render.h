@@ -45,54 +45,20 @@
 
 #include "RE_engine.h"
 
-typedef struct DRWBatch {
-	struct DRWBatch *next, *prev;
-	struct GPUShader *shader;        // Shader to bind
-	struct DRWInterface *interface;  // Uniforms values
-	ListBase objects;               // List with all objects and transform
-} DRWBatch;
-
-typedef enum {
-	DRW_STATE_WRITE_DEPTH = (1 << 0),
-	DRW_STATE_WRITE_COLOR = (1 << 1),
-	DRW_STATE_DEPTH_LESS  = (1 << 2),
-	DRW_STATE_DEPTH_EQUAL = (1 << 3),
-	DRW_STATE_CULL_BACK   = (1 << 4),
-	DRW_STATE_CULL_FRONT  = (1 << 5)
-	/* TODO GL_BLEND */
-} DRWState;
-
-typedef struct DRWPass {
-	ListBase batches;
-	DRWState state;
-} DRWPass;
-
 struct GPUFrameBuffer;
+struct GPUShader;
+struct GPUTexture;
+
+typedef struct DRWUniform DRWUniform;
+typedef struct DRWInterface DRWInterface;
+typedef struct DRWPass DRWPass;
+typedef struct DRWBatch DRWBatch;
 
 /* Textures */
-
 struct GPUTexture *DRW_texture_create_2D_array(int w, int h, int d, const float *fpixels);
+void DRW_texture_free(struct GPUTexture *tex);
 
-/* Shaders */
-struct GPUShader *DRW_shader_create(const char *vert, const char *geom, const char *frag, const char *defines);
-struct GPUShader *DRW_shader_create_2D(const char *frag, const char *defines);
-struct GPUShader *DRW_shader_create_3D(const char *frag, const char *defines);
-struct GPUShader *DRW_shader_create_3D_depth_only(void);
-
-struct DRWInterface *DRW_interface_create(struct GPUShader *shader);
-void DRW_interface_uniform_texture(struct GPUShader *shader, struct DRWInterface *uniforms, const char *name, const struct GPUTexture *tex, int loc);
-void DRW_interface_uniform_buffer(struct GPUShader *shader, struct DRWInterface *interface, const char *name, const int value, int loc);
-void DRW_interface_uniform_float(struct GPUShader *shader, struct DRWInterface *uniforms, const char *name, const float *value, int arraysize);
-void DRW_interface_uniform_vec2(struct GPUShader *shader, struct DRWInterface *uniforms, const char *name, const float *value, int arraysize);
-void DRW_interface_uniform_vec3(struct GPUShader *shader, struct DRWInterface *uniforms, const char *name, const float *value, int arraysize);
-void DRW_interface_uniform_vec4(struct GPUShader *shader, struct DRWInterface *uniforms, const char *name, const float *value, int arraysize);
-void DRW_interface_uniform_int(struct GPUShader *shader, struct DRWInterface *uniforms, const char *name, const int *value, int arraysize);
-void DRW_interface_uniform_ivec2(struct GPUShader *shader, struct DRWInterface *uniforms, const char *name, const int *value, int arraysize);
-void DRW_interface_uniform_ivec3(struct GPUShader *shader, struct DRWInterface *uniforms, const char *name, const int *value, int arraysize);
-void DRW_interface_uniform_mat3(struct GPUShader *shader, struct DRWInterface *interface, const char *name, const float *value);
-void DRW_interface_uniform_mat4(struct GPUShader *shader, struct DRWInterface *interface, const char *name, const float *value);
-
-void DRW_get_dfdy_factors(float dfdyfac[2]);
+/* Buffers */
 
 /* DRWFboTexture->format */
 #define DRW_BUF_DEPTH_16		1
@@ -117,11 +83,46 @@ typedef struct DRWFboTexture {
 	int format;
 } DRWFboTexture;
 
-/* Buffers */
 void DRW_framebuffer_init(struct GPUFrameBuffer **fb, int width, int height, DRWFboTexture textures[MAX_FBO_TEX], int texnbr);
 void DRW_framebuffer_bind(struct GPUFrameBuffer *fb);
 void DRW_framebuffer_texture_attach(struct GPUFrameBuffer *fb, struct GPUTexture *tex, int slot);
 void DRW_framebuffer_texture_detach(struct GPUTexture *tex);
+
+/* Shaders */
+struct GPUShader *DRW_shader_create(const char *vert, const char *geom, const char *frag, const char *defines);
+struct GPUShader *DRW_shader_create_2D(const char *frag, const char *defines);
+struct GPUShader *DRW_shader_create_3D(const char *frag, const char *defines);
+struct GPUShader *DRW_shader_create_3D_depth_only(void);
+void DRW_shader_free(struct GPUShader *shader);
+
+/* Batches */
+DRWBatch *DRW_batch_create(struct GPUShader *shader, DRWPass *pass);
+void DRW_batch_add_surface(DRWBatch *batch, Base *base);
+
+void DRW_batch_uniform_texture(DRWBatch *batch, const char *name, const struct GPUTexture *tex, int loc);
+void DRW_batch_uniform_buffer(DRWBatch *batch, const char *name, const int value, int loc);
+void DRW_batch_uniform_float(DRWBatch *batch, const char *name, const float *value, int arraysize);
+void DRW_batch_uniform_vec2(DRWBatch *batch, const char *name, const float *value, int arraysize);
+void DRW_batch_uniform_vec3(DRWBatch *batch, const char *name, const float *value, int arraysize);
+void DRW_batch_uniform_vec4(DRWBatch *batch, const char *name, const float *value, int arraysize);
+void DRW_batch_uniform_int(DRWBatch *batch, const char *name, const int *value, int arraysize);
+void DRW_batch_uniform_ivec2(DRWBatch *batch, const char *name, const int *value, int arraysize);
+void DRW_batch_uniform_ivec3(DRWBatch *batch, const char *name, const int *value, int arraysize);
+void DRW_batch_uniform_mat3(DRWBatch *batch, const char *name, const float *value);
+void DRW_batch_uniform_mat4(DRWBatch *batch, const char *name, const float *value);
+
+/* Passes */
+typedef enum {
+	DRW_STATE_WRITE_DEPTH = (1 << 0),
+	DRW_STATE_WRITE_COLOR = (1 << 1),
+	DRW_STATE_DEPTH_LESS  = (1 << 2),
+	DRW_STATE_DEPTH_EQUAL = (1 << 3),
+	DRW_STATE_CULL_BACK   = (1 << 4),
+	DRW_STATE_CULL_FRONT  = (1 << 5)
+	/* TODO GL_BLEND */
+} DRWState;
+
+DRWPass *DRW_pass_create(const char *name, DRWState state);
 
 /* Viewport */
 typedef enum {
@@ -130,7 +131,7 @@ typedef enum {
 	DRW_MAT_WIN,
 } DRWViewportMatrixType;
 
-void DRW_viewport_init(const bContext *C, void **buffers, void **textures);
+void DRW_viewport_init(const bContext *C, void **buffers, void **textures, void **passes);
 void DRW_viewport_matrix_get(float mat[4][4], DRWViewportMatrixType type);
 int *DRW_viewport_size_get(void);
 bool DRW_viewport_is_persp(void);
@@ -141,5 +142,8 @@ void DRW_draw_pass(DRWPass *pass);
 void DRW_draw_pass_fullscreen(DRWPass *pass);
 
 void DRW_state_reset(void);
+
+/* Other */
+void DRW_get_dfdy_factors(float dfdyfac[2]);
 
 #endif /* __DRW_RENDER_H__ */
