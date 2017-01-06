@@ -649,7 +649,7 @@ class UnitsTesting(unittest.TestCase):
 
         for i, name in enumerate(lookup):
             layer.collections.active_index = i
-            self.assertTrue(name == layer.collections.active.name,
+            self.assertEqual(name, layer.collections.active.name,
                     "Collection index mismatch: [{0}] : {1} != {2}".format(
                         i, name, layer.collections.active.name))
 
@@ -727,8 +727,8 @@ class UnitsTesting(unittest.TestCase):
 
     def do_link(self, master_collection):
         import bpy
-        self.assertTrue(master_collection.name == "Master Collection")
-        self.assertTrue(master_collection == bpy.context.scene.master_collection)
+        self.assertEqual(master_collection.name, "Master Collection")
+        self.assertEqual(master_collection, bpy.context.scene.master_collection)
         master_collection.objects.link(bpy.data.objects.new('object', None))
 
     def test_link_scene(self):
@@ -774,7 +774,7 @@ class UnitsTesting(unittest.TestCase):
 
             # change active collection
             layer.collections.active_index = 3
-            self.assertTrue(layer.collections.active.name == 'scorpion', "Run: test_syncing_object_add")
+            self.assertEqual(layer.collections.active.name, 'scorpion', "Run: test_syncing_object_add")
 
             # change active layer
             override = bpy.context.copy()
