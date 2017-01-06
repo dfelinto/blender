@@ -41,7 +41,7 @@
 #include "MEM_guardedalloc.h"
 
 
-static bool workspaces_is_screen_used(const Main *bmain, bScreen *screen);
+bool workspaces_is_screen_used(const Main *bmain, bScreen *screen);
 
 
 /* -------------------------------------------------------------------- */
@@ -120,7 +120,7 @@ void BKE_workspaces_transform_orientation_remove(const ListBase *workspaces, con
  * WorkSpaceLayouts, but that should be ensured outside of the BKE_workspace module and without such checks.
  * Hence, this should only be used as assert check before assigining a screen to a workflow.
  */
-static bool workspaces_is_screen_used(const Main *bmain, bScreen *screen)
+bool workspaces_is_screen_used(const Main *bmain, bScreen *screen)
 {
 	for (WorkSpace *workspace = bmain->workspaces.first; workspace; workspace = workspace->id.next) {
 		if (BKE_workspace_layout_find_exec(workspace, screen)) {

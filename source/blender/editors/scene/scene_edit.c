@@ -22,6 +22,8 @@
  *  \ingroup edscene
  */
 
+#include <stdio.h>
+
 #include "BKE_context.h"
 #include "BKE_depsgraph.h"
 #include "BKE_global.h"
