@@ -87,6 +87,7 @@ typedef struct CLAY_PassList{
 } CLAY_PassList;
 
 /* Functions */
+
 static void add_icon_to_rect(PreviewImage *prv, float *final_rect, int layer)
 {
 	int image_size = prv->w[0] * prv->h[0];
@@ -139,7 +140,42 @@ static int matcap_to_index(int matcap)
 	else if (matcap == ICON_MATCAP_24) return 23;
 	return 0;
 }
+#if 0
+static GPUTexture *create_spiral_sample_texture(int numsaples)
+{
+	GPUTexture *tex;
+	float (*texels)[2] = MEM_mallocN(sizeof(float[2]) * numsaples, "concentric_tex");
+	const float numsaples_inv = 1.0f / numsaples;
+	int i;
+	/* arbitrary number to ensure we don't get conciding samples every circle */
+	const float spirals = 7.357;
 
+	for (i = 0; i < numsaples; i++) {
+		float r = (i + 0.5f) * numsaples_inv;
+		float phi = r * spirals * (float)(2.0 * M_PI);
+		texels[i][0] = r * cosf(phi);
+		texels[i][1] = r * sinf(phi);
+	}
+
+	tex = GPU_texture_create_1D_procedural(numsaples, (float *)texels, NULL);
+	MEM_freeN(texels);
+	return tex;
+}
+
+static GPUTexture * create_jitter_texture(void)
+{
+	float jitter[64 * 64][2];
+	int i;
+
+	for (i = 0; i < 64 * 64; i++) {
+		jitter[i][0] = 2.0f * BLI_frand() - 1.0f;
+		jitter[i][1] = 2.0f * BLI_frand() - 1.0f;
+		normalize_v2(jitter[i]);
+	}
+
+	return GPU_texture_create_2D_procedural(64, 64, &jitter[0][0], true, NULL);
+}
+#endif
 static void clay_engine_init(void)
 {
 	static bool done = false;
@@ -179,7 +215,11 @@ static void clay_engine_init(void)
 
 		load_matcaps(prv, 24);
 	}
-
+#if 0
+	/* AO Textures */
+	data.random_tx = 
+	data.random_tx = 
+#endif
 	/* Depth prepass */
 	data.depth_sh = DRW_shader_create_3D_depth_only();
 

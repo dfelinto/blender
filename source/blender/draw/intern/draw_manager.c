@@ -128,7 +128,7 @@ static bool fs_quad_init = false;
 
 GPUTexture *DRW_texture_create_2D_array(int w, int h, int d, const float *fpixels)
 {
-	return GPU_texture_create_2D_array(w, h, d, fpixels);
+	return GPU_texture_create_2D_array(w, h, d, fpixels, NULL);
 }
 
 void DRW_texture_free(GPUTexture *tex)
@@ -417,7 +417,8 @@ static void draw_batch(DRWBatch *batch, const bool fullscreen)
 			case DRW_UNIFORM_BUFFER:
 				/* restore index from lenght we abused */
 				GPU_texture_bind(DST.current_txl->textures[uni->length], uni->bindloc);
-				GPU_texture_filter_mode(DST.current_txl->textures[uni->length], false, false);
+				GPU_texture_compare_mode(DST.current_txl->textures[uni->length], false);
+				GPU_texture_filter_mode(DST.current_txl->textures[uni->length], false);
 				
 				bound_tex = MEM_callocN(sizeof(DRWBoundTexture), "DRWBoundTexture");
 				bound_tex->tex = DST.current_txl->textures[uni->length];
@@ -595,10 +596,11 @@ void DRW_framebuffer_init(struct GPUFrameBuffer **fb, int width, int height, DRW
 				if (fbotex.format == DRW_BUF_DEPTH_16 ||
 					fbotex.format == DRW_BUF_DEPTH_24) {
 					*fbotex.tex = GPU_texture_create_depth(width, height, NULL);
-					GPU_texture_filter_mode(*fbotex.tex, false, false);
+					GPU_texture_compare_mode(*fbotex.tex, false);
+					GPU_texture_filter_mode(*fbotex.tex, false);
 				}
 				else {
-					*fbotex.tex = GPU_texture_create_2D(width, height, NULL, GPU_HDR_NONE, NULL);
+					*fbotex.tex = GPU_texture_create_2D(width, height, NULL, NULL);
 					++color_attachment;
 				}
 			}
@@ -643,7 +645,6 @@ void DRW_viewport_init(const bContext *C, void **buffers, void **textures, void 
 
 	/* Save context for all later needs */
 	DST.context = C;
-
 	GPU_viewport_get_engine_data(viewport, buffers, textures, passes);
 
 	/* Refresh DST.size */
@@ -688,5 +689,3 @@ void DRW_engines_free(void)
 
 	BLI_remlink(&R_engines, &viewport_clay_type);
 }
-
-/* TODO Free memory */

@@ -105,7 +105,7 @@ void GPU_viewport_bind(GPUViewport *viewport, const rcti *rect)
 
 		/* Color */
 		/* No multi samples for now */
-		viewport->txl->color = GPU_texture_create_2D(rect_w, rect_h, NULL, GPU_HDR_NONE, NULL);
+		viewport->txl->color = GPU_texture_create_2D(rect_w, rect_h, NULL, NULL);
 		if (!viewport->txl->color) {
 			GPU_viewport_free(viewport);
 			return;
