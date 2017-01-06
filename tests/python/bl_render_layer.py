@@ -196,34 +196,42 @@ def compare_files(file_a, file_b):
 class UnitsTesting(unittest.TestCase):
     _test_simple = False
 
+    @classmethod
+    def setUpClass(cls):
+        cls.pretest_import_blendfile()
+        cls.pretest_parsing()
+
     def path_exists(self, filepath):
         import os
         self.assertTrue(
                 os.path.exists(filepath),
                 "Test file \"{0}\" not found".format(filepath))
 
-    def get_root(self):
+    @classmethod
+    def get_root(cls):
         """
         return the folder with the test files
         """
         arguments = {}
         for argument in extra_arguments:
             name, value = argument.split('=')
-            self.assertTrue(name and name.startswith("--"), "Invalid argument \"{0}\"".format(argument))
-            self.assertTrue(value, "Invalid argument \"{0}\"".format(argument))
+            cls.assertTrue(name and name.startswith("--"), "Invalid argument \"{0}\"".format(argument))
+            cls.assertTrue(value, "Invalid argument \"{0}\"".format(argument))
             arguments[name[2:]] = value.strip('"')
 
         return arguments.get('testdir')
 
-    def test__parsing(self):
+    @classmethod
+    def pretest_parsing(cls):
         """
         Test if the arguments are properly set, and store ROOT
         name has extra _ because we need this test to run first
         """
-        root = self.get_root()
-        self.assertTrue(root, "Testdir not set")
+        root = cls.get_root()
+        cls.assertTrue(root, "Testdir not set")
 
-    def test__import_blendfile(self):
+    @staticmethod
+    def pretest_import_blendfile():
         """
         Make sure blendfile imports with no problems
         name has extra _ because we need this test to run first
