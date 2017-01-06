@@ -2415,7 +2415,7 @@ GPULamp *GPU_lamp_from_blender(Scene *scene, Object *ob, Object *par)
 			}
 
 			/* Shadow color map */
-			lamp->tex = GPU_texture_create_vsm_shadow_map(lamp->size, NULL);
+			lamp->tex = GPU_texture_create_2D_custom(lamp->size, lamp->size, 2, GPU_RG32F, NULL, NULL);
 			if (!lamp->tex) {
 				gpu_lamp_shadow_free(lamp);
 				return lamp;
@@ -2438,7 +2438,7 @@ GPULamp *GPU_lamp_from_blender(Scene *scene, Object *ob, Object *par)
 				return lamp;
 			}
 
-			lamp->blurtex = GPU_texture_create_vsm_shadow_map(lamp->size * 0.5, NULL);
+			lamp->blurtex = GPU_texture_create_2D_custom(lamp->size * 0.5, lamp->size * 0.5, 2, GPU_RG32F, NULL, NULL);
 			if (!lamp->blurtex) {
 				gpu_lamp_shadow_free(lamp);
 				return lamp;
