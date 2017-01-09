@@ -104,8 +104,8 @@ void BKE_selected_objects_Iterator_end(Iterator *iter);
 	    _ob = ob_base->object;
 
 #define FOREACH_OBJECT_END                                                    \
+    }                                                                         \
 }
-
 
 #define FOREACH_OBJECT_FLAG(scene, sl, flag, _ob)                             \
 {                                                                             \
