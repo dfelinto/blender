@@ -80,6 +80,7 @@ struct bContext {
 		struct Main *main;
 		struct Scene *scene;
 		struct SceneLayer *render_layer;
+		struct SceneCollection *scene_collection;
 
 		int recursion;
 		int py_init; /* true if python is initialized */
@@ -911,6 +912,18 @@ SceneLayer *CTX_data_scene_layer(const bContext *C)
 	}
 }
 
+SceneCollection *CTX_data_scene_collection(const bContext *C)
+{
+	SceneCollection *sc;
+
+	if (ctx_data_pointer_verify(C, "scene_collection", (void *)&sc)) {
+		return sc;
+	}
+	else {
+		return C->data.scene_collection;
+	}
+}
+
 int CTX_data_mode_enum(const bContext *C)
 {
 	Object *obedit = CTX_data_edit_object(C);
@@ -985,9 +998,18 @@ void CTX_data_scene_set(bContext *C, Scene *scene)
 	CTX_data_scene_layer_set(C, scene->render_layers.last);
 }
 
+void CTX_data_scene_collection_set(bContext *C, SceneCollection *sc)
+{
+	C->data.scene_collection = sc;
+}
+
 void CTX_data_scene_layer_set(bContext *C, SceneLayer *sl)
 {
 	C->data.render_layer = sl;
+
+	/* update the related data */
+	LayerCollection *lc = BKE_layer_collection_active(sl);
+	CTX_data_scene_collection_set(C, lc->scene_collection);
 }
 
 ToolSettings *CTX_data_tool_settings(const bContext *C)

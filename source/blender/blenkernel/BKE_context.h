@@ -46,6 +46,7 @@ struct Object;
 struct PointerRNA;
 struct ReportList;
 struct Scene;
+struct SceneCollection;
 struct SceneLayer;
 struct ScrArea;
 struct SpaceLink;
@@ -240,6 +241,7 @@ int ctx_data_list_count(const bContext *C, int (*func)(const bContext *, ListBas
 
 struct Main *CTX_data_main(const bContext *C);
 struct Scene *CTX_data_scene(const bContext *C);
+struct SceneCollection *CTX_data_scene_collection(const bContext *C);
 struct SceneLayer *CTX_data_scene_layer(const bContext *C);
 struct ToolSettings *CTX_data_tool_settings(const bContext *C);
 
@@ -248,6 +250,7 @@ int CTX_data_mode_enum(const bContext *C);
 
 void CTX_data_main_set(bContext *C, struct Main *bmain);
 void CTX_data_scene_set(bContext *C, struct Scene *bmain);
+void CTX_data_scene_collection_set(bContext *C, struct SceneCollection *sc);
 void CTX_data_scene_layer_set(bContext *C, struct SceneLayer *sl);
 
 int CTX_data_selected_editable_objects(const bContext *C, ListBase *list);

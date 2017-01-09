@@ -97,6 +97,16 @@ void BKE_selected_objects_Iterator_end(Iterator *iter);
 #define FOREACH_SELECTED_OBJECT_END                                           \
 	ITER_END
 
+#define FOREACH_OBJECT(sl, _ob)                                               \
+{                                                                             \
+	ObjectBase *ob_base;                                                      \
+	for (ob_base = sl->object_bases.first; ob_base; ob_base = ob_base->next) {\
+	    _ob = ob_base->object;
+
+#define FOREACH_OBJECT_END                                                    \
+    }                                                                         \
+}
+
 #define FOREACH_OBJECT_FLAG(scene, sl, flag, _ob)                             \
 {                                                                             \
 	IteratorBeginCb func_begin;                                               \

@@ -169,17 +169,25 @@ def dump(data):
 # Tests
 # ############################################################
 
+PDB = False
+DUMP_DIFF = True
+
 def compare_files(file_a, file_b):
     import filecmp
 
     if not filecmp.cmp(
         file_a,
         file_b):
-        """
-        import pdb
-        print("Files differ:", file_a, file_b)
-        pdb.set_trace()
-        """
+
+        if DUMP_DIFF:
+            import subprocess
+            subprocess.call(["diff", "-u", file_a, file_b])
+
+        if PDB:
+            import pdb
+            print("Files differ:", file_a, file_b)
+            pdb.set_trace()
+
         return False
 
     return True
@@ -188,34 +196,42 @@ def compare_files(file_a, file_b):
 class UnitsTesting(unittest.TestCase):
     _test_simple = False
 
+    @classmethod
+    def setUpClass(cls):
+        cls.pretest_import_blendfile()
+        cls.pretest_parsing()
+
     def path_exists(self, filepath):
         import os
         self.assertTrue(
                 os.path.exists(filepath),
                 "Test file \"{0}\" not found".format(filepath))
 
-    def get_root(self):
+    @classmethod
+    def get_root(cls):
         """
         return the folder with the test files
         """
         arguments = {}
         for argument in extra_arguments:
             name, value = argument.split('=')
-            self.assertTrue(name and name.startswith("--"), "Invalid argument \"{0}\"".format(argument))
-            self.assertTrue(value, "Invalid argument \"{0}\"".format(argument))
+            cls.assertTrue(name and name.startswith("--"), "Invalid argument \"{0}\"".format(argument))
+            cls.assertTrue(value, "Invalid argument \"{0}\"".format(argument))
             arguments[name[2:]] = value.strip('"')
 
         return arguments.get('testdir')
 
-    def test__parsing(self):
+    @classmethod
+    def pretest_parsing(cls):
         """
         Test if the arguments are properly set, and store ROOT
         name has extra _ because we need this test to run first
         """
-        root = self.get_root()
-        self.assertTrue(root, "Testdir not set")
+        root = cls.get_root()
+        cls.assertTrue(root, "Testdir not set")
 
-    def test__import_blendfile(self):
+    @staticmethod
+    def pretest_import_blendfile():
         """
         Make sure blendfile imports with no problems
         name has extra _ because we need this test to run first
@@ -641,7 +657,7 @@ class UnitsTesting(unittest.TestCase):
 
         for i, name in enumerate(lookup):
             layer.collections.active_index = i
-            self.assertTrue(name == layer.collections.active.name,
+            self.assertEqual(name, layer.collections.active.name,
                     "Collection index mismatch: [{0}] : {1} != {2}".format(
                         i, name, layer.collections.active.name))
 
@@ -717,6 +733,124 @@ class UnitsTesting(unittest.TestCase):
         """
         self.do_object_delete('OPERATOR')
 
+    def do_link(self, master_collection):
+        import bpy
+        self.assertEqual(master_collection.name, "Master Collection")
+        self.assertEqual(master_collection, bpy.context.scene.master_collection)
+        master_collection.objects.link(bpy.data.objects.new('object', None))
+
+    def test_link_scene(self):
+        """
+        See if we can link objects
+        """
+        import bpy
+        master_collection = bpy.context.scene.master_collection
+        self.do_link(master_collection)
+
+    def test_link_context(self):
+        """
+        See if we can link objects via bpy.context.scene_collection
+        """
+        import bpy
+        master_collection = bpy.context.scene_collection
+        self.do_link(master_collection)
+
+    def test_operator_context(self):
+        """
+        See if render layer context is properly set/get with operators overrides
+        when we set render_layer in context, the collection should change as well
+        """
+        import bpy
+        import os
+
+        class SampleOperator(bpy.types.Operator):
+            bl_idname = "testing.sample"
+            bl_label = "Sample Operator"
+
+            render_layer = bpy.props.StringProperty(
+                    default="Not Set",
+                    options={'SKIP_SAVE'},
+                    )
+
+            scene_collection = bpy.props.StringProperty(
+                    default="",
+                    options={'SKIP_SAVE'},
+                    )
+
+            use_verbose = bpy.props.BoolProperty(
+                    default=False,
+                    options={'SKIP_SAVE'},
+                    )
+
+            def execute(self, context):
+                render_layer = context.render_layer
+                ret = {'FINISHED'}
+
+                # this is simply playing safe
+                if render_layer.name != self.render_layer:
+                    if self.use_verbose:
+                        print('ERROR: Render Layer mismatch: "{0}" != "{1}"'.format(
+                            render_layer.name, self.render_layer))
+                    ret = {'CANCELLED'}
+
+                scene_collection_name = None
+                if self.scene_collection:
+                    scene_collection_name = self.scene_collection
+                else:
+                    scene_collection_name = render_layer.collections.active.name
+
+                # while this is the real test
+                if context.scene_collection.name != scene_collection_name:
+                    if self.use_verbose:
+                        print('ERROR: Scene Collection mismatch: "{0}" != "{1}"'.format(
+                            context.scene_collection.name, scene_collection_name))
+                    ret = {'CANCELLED'}
+                return ret
+
+        bpy.utils.register_class(SampleOperator)
+
+        # open sample file
+        ROOT = self.get_root()
+        filepath_layers = os.path.join(ROOT, 'layers.blend')
+        bpy.ops.wm.open_mainfile('EXEC_DEFAULT', filepath=filepath_layers)
+
+        # change the file
+        three_b = bpy.data.objects.get('T.3b')
+        three_c = bpy.data.objects.get('T.3c')
+        scene = bpy.context.scene
+        subzero = scene.master_collection.collections['1'].collections.new('sub-zero')
+        scorpion = subzero.collections.new('scorpion')
+        subzero.objects.link(three_b)
+        scorpion.objects.link(three_c)
+        layer = scene.render_layers.new('Fresh new Layer')
+        layer.collections.link(subzero)
+        layer.collections.active_index = 3
+        self.assertEqual(layer.collections.active.name, 'scorpion')
+
+        # old layer
+        self.assertEqual(bpy.ops.testing.sample(render_layer='Render Layer', use_verbose=True), {'FINISHED'})
+
+        # expected to fail
+        self.assertTrue(bpy.ops.testing.sample(render_layer=layer.name), {'CANCELLED'})
+
+        # set render layer and scene collection
+        override = bpy.context.copy()
+        override["render_layer"] = layer
+        override["scene_collection"] = subzero
+        self.assertEqual(bpy.ops.testing.sample(override,
+            render_layer=layer.name,
+            scene_collection=subzero.name, # 'sub-zero'
+            use_verbose=True), {'FINISHED'})
+
+        # set only render layer
+        override = bpy.context.copy()
+        override["render_layer"] = layer
+
+        self.assertEqual(bpy.ops.testing.sample(override,
+            render_layer=layer.name,
+            scene_collection=layer.collections.active.name, # 'scorpion'
+            use_verbose=True), {'FINISHED'})
+
     def do_object_add(self, filepath_json, add_mode):
         import bpy
         import os
@@ -744,17 +878,21 @@ class UnitsTesting(unittest.TestCase):
 
             # change active collection
             layer.collections.active_index = 3
-            self.assertTrue(layer.collections.active.name == 'scorpion', "Run: test_syncing_object_add")
+            self.assertEqual(layer.collections.active.name, 'scorpion', "Run: test_syncing_object_add")
+
+            # change active layer
+            override = bpy.context.copy()
+            override["render_layer"] = layer
 
             # add new objects
             if add_mode == 'EMPTY':
-                bpy.ops.object.add() # 'Empty'
+                bpy.ops.object.add(override) # 'Empty'
 
             elif add_mode == 'CYLINDER':
-                bpy.ops.mesh.primitive_cylinder_add() # 'Cylinder'
+                bpy.ops.mesh.primitive_cylinder_add(override) # 'Cylinder'
 
             elif add_mode == 'TORUS':
-                bpy.ops.mesh.primitive_torus_add() # 'Torus'
+                bpy.ops.mesh.primitive_torus_add(override) # 'Torus'
 
             # save file
             filepath_objects = os.path.join(dirpath, 'objects.blend')
