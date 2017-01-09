@@ -91,8 +91,10 @@ typedef struct TexPaintSlot {
 } TexPaintSlot;
 
 typedef struct EngineSettingsClay {
+	short type;
 	short matcap_icon; /* Icon ID */
-	short pad;
+	float rot;
+	float hue;
 } EngineSettingsClay;
 
 typedef struct Material {

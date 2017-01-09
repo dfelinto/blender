@@ -281,9 +281,13 @@ static void clay_populate_passes(CLAY_PassList *passes, const struct bContext *C
 	}
 
 	for (SETLOOPER(scene, sce_iter, base)) {
+		/* Create hash table of batch based on material id*/
+
 		/* Add everything for now */
 		if (pop_clay) DRW_batch_add_surface(matcapbatch, base);
 		if (pop_depth) DRW_batch_add_surface(depthbatch, base);
+
+		/* Free hash table */
 	}
 }
 

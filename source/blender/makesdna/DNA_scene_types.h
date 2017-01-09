@@ -796,8 +796,10 @@ typedef struct RenderProfile {
 
 /* Render Data */
 typedef struct EngineDataClay {
+	short type;
 	short matcap_icon; /* Icon ID */
-	short pad;
+	float rot;
+	float hue;
 } EngineDataClay;
 
 /* *************************************************************** */
@@ -1870,8 +1872,8 @@ enum {
 /* scene->r.engine (scene.c) */
 extern const char *RE_engine_id_BLENDER_RENDER;
 extern const char *RE_engine_id_BLENDER_GAME;
+extern const char *RE_engine_id_BLENDER_CLAY;
 extern const char *RE_engine_id_CYCLES;
-extern const char *RE_engine_id_CLAY;
 
 /* **************** SCENE ********************* */
 

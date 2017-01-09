@@ -136,6 +136,10 @@ void DRW_viewport_matrix_get(float mat[4][4], DRWViewportMatrixType type);
 int *DRW_viewport_size_get(void);
 bool DRW_viewport_is_persp(void);
 
+/* Settings */
+void *DRW_material_settings(Material *ma);
+void *DRW_render_settings(void);
+
 /* Draw commands */
 void DRW_draw_background(void);
 void DRW_draw_pass(DRWPass *pass);

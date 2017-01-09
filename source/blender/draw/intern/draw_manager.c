@@ -578,6 +578,30 @@ void DRW_state_reset(void)
 	set_state(state);
 }
 
+/* ****************************************** Materials ******************************************/
+
+void *DRW_material_settings(Material *ma)
+{
+	Scene *scene = CTX_data_scene(DST.context);
+
+	if (STREQ(scene->r.engine, RE_engine_id_BLENDER_CLAY))
+		return &ma->clay;
+
+	BLI_assert(false);
+	return NULL;
+}
+
+void *DRW_render_settings(void)
+{
+	Scene *scene = CTX_data_scene(DST.context);
+
+	if (STREQ(scene->r.engine, RE_engine_id_BLENDER_CLAY))
+		return &scene->claydata;
+
+	BLI_assert(false);
+	return NULL;
+}
+
 /* ****************************************** Framebuffers ******************************************/
 
 void DRW_framebuffer_init(struct GPUFrameBuffer **fb, int width, int height, DRWFboTexture textures[MAX_FBO_TEX],
