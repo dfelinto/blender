@@ -100,9 +100,9 @@ struct DRWPass {
 
 struct DRWBatch {
 	struct DRWBatch *next, *prev;
-	struct GPUShader *shader;        // Shader to bind
-	struct DRWInterface *interface;  // Uniforms values
-	ListBase objects;               // List with all objects and transform
+	struct GPUShader *shader;        /* Shader to bind */
+	struct DRWInterface *interface;  /* Uniforms values */
+	ListBase objects;               /* (Object *) LinkData->data - List with all objects and transform */
 };
 
 /* Render State */
@@ -251,10 +251,21 @@ DRWBatch *DRW_batch_create(struct GPUShader *shader, DRWPass *pass)
 	return batch;
 }
 
-/* Later use VBO */
-void DRW_batch_add_surface(DRWBatch *batch, Base *base)
+void DRW_batch_free(struct DRWBatch *batch)
 {
-	BLI_addtail(&batch->objects, base);
+	for (LinkData *link = batch->objects.first; link; link = link->next) {
+		MEM_freeN(link->data);
+	}
+	BLI_freelistN(&batch->objects);
+
+	BLI_freelistN(&batch->interface->uniforms);
+	MEM_freeN(batch->interface);
+}
+
+/* Later use VBO */
+void DRW_batch_add_surface(DRWBatch *batch, Object *ob)
+{
+	BLI_addtail(&batch->objects, BLI_genericNodeN(ob));
 }
 
 void DRW_batch_uniform_texture(DRWBatch *batch, const char *name, const GPUTexture *tex, int loc)
@@ -326,8 +337,7 @@ DRWPass *DRW_pass_create(const char *name, DRWState state)
 void DRW_pass_free(DRWPass *pass)
 {
 	for (DRWBatch *batch = pass->batches.first; batch; batch = batch->next) {
-		BLI_freelistN(&batch->interface->uniforms);
-		MEM_freeN(batch->interface);
+		DRW_batch_free(batch);
 	}
 	BLI_freelistN(&pass->batches);
 	MEM_freeN(pass);
@@ -443,23 +453,25 @@ static void draw_batch(DRWBatch *batch, const bool fullscreen)
 	else {
 		RegionView3D *rv3d = CTX_wm_region_view3d(DST.context);
 
-		for (Base *base = batch->objects.first; base; base = base->next) {
+		for (LinkData *link = batch->objects.first; link; link = link->next) {
+			Object *ob = link->data;
+
 			/* Should be really simple */
 			/* step 1 : bind object dependent matrices */
 			if (interface->modelviewprojection != -1) {
 				float mvp[4][4];
-				mul_m4_m4m4(mvp, rv3d->persmat, base->object->obmat);
+				mul_m4_m4m4(mvp, rv3d->persmat, ob->obmat);
 				GPU_shader_uniform_vector(batch->shader, interface->modelviewprojection, 16, 1, (float *)mvp);
 			}
 			if (interface->modelview != -1) {
 				float mv[4][4];
-				mul_m4_m4m4(mv, rv3d->viewmat, base->object->obmat);
+				mul_m4_m4m4(mv, rv3d->viewmat, ob->obmat);
 				GPU_shader_uniform_vector(batch->shader, interface->modelview, 16, 1, (float *)mv);
 			}
 			if (interface->normal != -1) {
 				float mv[4][4];
 				float n[3][3];
-				mul_m4_m4m4(mv, rv3d->viewmat, base->object->obmat);
+				mul_m4_m4m4(mv, rv3d->viewmat, ob->obmat);
 				copy_m3_m4(n, mv);
 				invert_m3(n);
 				transpose_m3(n);
@@ -467,7 +479,8 @@ static void draw_batch(DRWBatch *batch, const bool fullscreen)
 			}
 
 			/* step 2 : bind vertex array & draw */
-			draw_mesh(base, DST.context, GPU_shader_get_program(batch->shader));
+			/* we won't use any function that doesn't comply to the new API, this is a short-lived exception TODO */
+			draw_mesh(ob, DST.context, GPU_shader_get_program(batch->shader));
 		}
 	}
 }

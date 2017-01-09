@@ -4372,16 +4372,13 @@ static void draw_em_fancy(Scene *scene, ARegion *ar, View3D *v3d,
 }
 
 /* Clement : temp solution to draw something simply */
-void draw_mesh(Base *base, const struct bContext *C, unsigned int program)
+void draw_mesh(Object *ob, const struct bContext *C, unsigned int program)
 {
-	Object *ob = base->object;
-	RegionView3D *rv3d = CTX_wm_region_view3d(C);
 	Scene *scene = CTX_data_scene(C);
-	View3D *v3d = CTX_wm_view3d(C);
 
 	if (ob->type == OB_MESH) {
 		Mesh *me = ob->data;
-		DerivedMesh *dm = NULL, *edm = NULL;
+		DerivedMesh *dm = NULL;
 
 		if (ob->mode & OB_MODE_EDIT) {
 			dm = editbmesh_get_derived_base(ob, me->edit_btmesh, CD_MASK_BAREMESH);

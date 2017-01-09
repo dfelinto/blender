@@ -29,6 +29,7 @@
 #define __DRW_RENDER_H__
 
 #include "BKE_context.h"
+#include "BKE_layer.h"
 #include "BKE_scene.h"
 
 #include "BLI_listbase.h"
@@ -38,6 +39,7 @@
 
 #include "BLT_translation.h"
 
+#include "DNA_object_types.h"
 #include "DNA_material_types.h"
 #include "DNA_scene_types.h"
 
@@ -48,6 +50,7 @@
 struct GPUFrameBuffer;
 struct GPUShader;
 struct GPUTexture;
+struct Object;
 
 typedef struct DRWUniform DRWUniform;
 typedef struct DRWInterface DRWInterface;
@@ -97,7 +100,8 @@ void DRW_shader_free(struct GPUShader *shader);
 
 /* Batches */
 DRWBatch *DRW_batch_create(struct GPUShader *shader, DRWPass *pass);
-void DRW_batch_add_surface(DRWBatch *batch, Base *base);
+void DRW_batch_free(struct DRWBatch *batch);
+void DRW_batch_add_surface(DRWBatch *batch, struct Object *ob);
 
 void DRW_batch_uniform_texture(DRWBatch *batch, const char *name, const struct GPUTexture *tex, int loc);
 void DRW_batch_uniform_buffer(DRWBatch *batch, const char *name, const int value, int loc);

@@ -243,6 +243,7 @@ static void clay_init_view(CLAY_FramebufferList *buffers, CLAY_TextureList *text
 static void clay_populate_passes(CLAY_PassList *passes, const struct bContext *C)
 {
 	Scene *scene = CTX_data_scene(C);
+	SceneLayer *sl = CTX_data_scene_layer(C);
 	Scene *sce_iter;
 	Base *base;
 	struct DRWBatch *matcapbatch, *depthbatch;
@@ -280,15 +281,23 @@ static void clay_populate_passes(CLAY_PassList *passes, const struct bContext *C
 		pop_clay = true;
 	}
 
-	for (SETLOOPER(scene, sce_iter, base)) {
+	Object *ob;
+	FOREACH_OBJECT(sl, ob)
+	{
 		/* Create hash table of batch based on material id*/
 
 		/* Add everything for now */
-		if (pop_clay) DRW_batch_add_surface(matcapbatch, base);
-		if (pop_depth) DRW_batch_add_surface(depthbatch, base);
+		if (pop_clay) {
+			DRW_batch_add_surface(matcapbatch, ob);
+		}
+
+		if (pop_depth) {
+			DRW_batch_add_surface(depthbatch, ob);
+		}
 
 		/* Free hash table */
 	}
+	FOREACH_OBJECT_END
 }
 
 static void clay_ssao_setup(void)
