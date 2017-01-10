@@ -23,6 +23,8 @@
 
 #include "BKE_icons.h"
 
+#include "BLI_rand.h"
+
 #include "IMB_imbuf.h"
 #include "IMB_imbuf_types.h"
 
@@ -54,8 +56,10 @@ static struct CLAY_data {
 	float dfdyfac[2];
 	float winmat[4][4];
 	float viewvecs[3][4];
+	float ssao_params_var[4];
 	float ssao_params[4];
-	float sample_params[3];
+	struct GPUTexture *jitter_tx;
+	struct GPUTexture *sampling_tx;
 } data = {NULL};
 
 /* keep it under MAX_BUFFERS */
@@ -97,8 +101,9 @@ static void add_icon_to_rect(PreviewImage *prv, float *final_rect, int layer)
 	                           false, prv->w[0], prv->h[0], prv->w[0], prv->w[0]);
 }
 
-static void load_matcaps(PreviewImage *prv[24], int nbr)
+static struct GPUTexture *load_matcaps(PreviewImage *prv[24], int nbr)
 {
+	struct GPUTexture *tex;
 	int w = prv[0]->w[0];
 	int h = prv[0]->h[0];
 	float *final_rect = MEM_callocN(sizeof(float) * 4 * w * h * nbr, "Clay Matcap array rect");
@@ -108,9 +113,10 @@ static void load_matcaps(PreviewImage *prv[24], int nbr)
 		BKE_previewimg_free(&prv[i]);
 	}
 
-	data.matcap_array = DRW_texture_create_2D_array(w, h, nbr, final_rect);
-
+	tex = DRW_texture_create_2D_array(w, h, nbr, DRW_TEX_RGBA_8, DRW_TEX_FILTER, final_rect);
 	MEM_freeN(final_rect);
+
+	return tex;
 }
 
 static int matcap_to_index(int matcap)
@@ -140,10 +146,10 @@ static int matcap_to_index(int matcap)
 	else if (matcap == ICON_MATCAP_24) return 23;
 	return 0;
 }
-#if 0
-static GPUTexture *create_spiral_sample_texture(int numsaples)
+
+static struct GPUTexture *create_spiral_sample_texture(int numsaples)
 {
-	GPUTexture *tex;
+	struct GPUTexture *tex;
 	float (*texels)[2] = MEM_mallocN(sizeof(float[2]) * numsaples, "concentric_tex");
 	const float numsaples_inv = 1.0f / numsaples;
 	int i;
@@ -157,12 +163,13 @@ static GPUTexture *create_spiral_sample_texture(int numsaples)
 		texels[i][1] = r * sinf(phi);
 	}
 
-	tex = GPU_texture_create_1D_procedural(numsaples, (float *)texels, NULL);
+	tex = DRW_texture_create_1D(numsaples, DRW_TEX_RG_16, 0, (float *)texels);
+
 	MEM_freeN(texels);
 	return tex;
 }
 
-static GPUTexture * create_jitter_texture(void)
+static struct GPUTexture *create_jitter_texture(void)
 {
 	float jitter[64 * 64][2];
 	int i;
@@ -173,18 +180,13 @@ static GPUTexture * create_jitter_texture(void)
 		normalize_v2(jitter[i]);
 	}
 
-	return GPU_texture_create_2D_procedural(64, 64, &jitter[0][0], true, NULL);
+	return DRW_texture_create_2D(64, 64, DRW_TEX_RG_16, DRW_TEX_FILTER | DRW_TEX_WRAP, &jitter[0][0]);
 }
-#endif
+
 static void clay_engine_init(void)
 {
-	static bool done = false;
-
-	/* Only init Once */
-	if (done) return;
-
 	/* Create Texture Array */
-	{
+	if (!data.matcap_array) {
 		PreviewImage *prv[24]; /* For now use all of the 24 internal matcaps */
 
 		/* TODO only load used matcaps */
@@ -213,20 +215,33 @@ static void clay_engine_init(void)
 		prv[22] = UI_icon_to_preview(ICON_MATCAP_23);
 		prv[23] = UI_icon_to_preview(ICON_MATCAP_24);
 
-		load_matcaps(prv, 24);
+		data.matcap_array = load_matcaps(prv, 24);
 	}
-#if 0
-	/* AO Textures */
-	data.random_tx = 
-	data.random_tx = 
-#endif
+
+	/* AO Jitter */
+	if (!data.jitter_tx) {
+		data.jitter_tx = create_jitter_texture();
+	}
+
+	/* AO Samples */
+	/* TODO use hammersley sequence */
+	if (!data.sampling_tx) {
+		data.sampling_tx = create_spiral_sample_texture(500);
+	}
+
 	/* Depth prepass */
-	data.depth_sh = DRW_shader_create_3D_depth_only();
+	if (!data.depth_sh) {
+		data.depth_sh = DRW_shader_create_3D_depth_only();
+	}
 
 	/* Shading pass */
-	data.clay_sh = DRW_shader_create(datatoc_clay_vert_glsl, NULL, datatoc_clay_frag_glsl, NULL);
+	if (!data.clay_sh) {
+		const char *defines =
+		        "#define USE_AO;\n"
+		        "//#define USE_ROTATION;\n";
 
-	done = true;
+		data.clay_sh = DRW_shader_create(datatoc_clay_vert_glsl, NULL, datatoc_clay_frag_glsl, defines);
+	}
 }
 
 #if 0
@@ -242,11 +257,8 @@ static void clay_init_view(CLAY_FramebufferList *buffers, CLAY_TextureList *text
 
 static void clay_populate_passes(CLAY_PassList *passes, const struct bContext *C)
 {
-	Scene *scene = CTX_data_scene(C);
 	SceneLayer *sl = CTX_data_scene_layer(C);
-	Scene *sce_iter;
-	Base *base;
-	struct DRWBatch *matcapbatch, *depthbatch;
+	DRWBatch *matcapbatch, *depthbatch;
 	bool pop_depth = false;
 	bool pop_clay = false;
 
@@ -258,9 +270,11 @@ static void clay_populate_passes(CLAY_PassList *passes, const struct bContext *C
 	}
 
 	if (!passes->clay_pass) {
-		struct DRWBatch *batch;
+		DRWBatch *batch;
 		const int depthloc = 0;
 		const int matcaploc = 1;
+		const int jitterloc = 2;
+		const int sampleloc = 3;
 
 		passes->clay_pass = DRW_pass_create("Clay Pass", DRW_STATE_WRITE_COLOR);
 
@@ -274,8 +288,10 @@ static void clay_populate_passes(CLAY_PassList *passes, const struct bContext *C
 		/* SSAO */
 		DRW_batch_uniform_mat4(batch, "WinMatrix", (float *)data.winmat);
 		DRW_batch_uniform_vec4(batch, "viewvecs", (float *)data.viewvecs, 3);
+		DRW_batch_uniform_vec4(batch, "ssao_params_var", data.ssao_params_var, 1);
 		DRW_batch_uniform_vec4(batch, "ssao_params", data.ssao_params, 1);
-		DRW_batch_uniform_vec3(batch, "ssao_sample_params", data.sample_params, 1);
+		DRW_batch_uniform_texture(batch, "ssao_jitter", data.jitter_tx, jitterloc);
+		DRW_batch_uniform_texture(batch, "ssao_samples", data.sampling_tx, sampleloc);
 
 		matcapbatch = batch;
 		pop_clay = true;
@@ -312,13 +328,20 @@ static void clay_ssao_setup(void)
 	    {-1.0f, 1.0f, -1.0f, 1.0f}
 	};
 	int i;
+	int *size = DRW_viewport_size_get();
+	EngineDataClay *settings = DRW_render_settings();
 
 	DRW_get_dfdy_factors(dfdyfacs);
 
-	data.ssao_params[0] = 1.0f; /* Max distance */
-	data.ssao_params[1] = 1.0f; /* Factor */
-	data.ssao_params[2] = 1.0f; /* Attenuation */
-	data.ssao_params[3] = dfdyfacs[1]; /* dfdy sign */
+	data.ssao_params_var[0] = settings->ssao_distance;
+	data.ssao_params_var[1] = settings->ssao_factor_cavity;
+	data.ssao_params_var[2] = settings->ssao_factor_edge;
+	data.ssao_params_var[3] = settings->ssao_attenuation;
+
+	data.ssao_params[0] = settings->ssao_samples;
+	data.ssao_params[1] = size[0] / 64.0;
+	data.ssao_params[2] = size[1] / 64.0;
+	data.ssao_params[3] = dfdyfacs[1]; /* dfdy sign for offscreen */
 
 	/* invert the view matrix */
 	DRW_viewport_matrix_get(data.winmat, DRW_MAT_WIN);

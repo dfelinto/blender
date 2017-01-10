@@ -125,10 +125,92 @@ static unsigned int fs_quad;
 static bool fs_quad_init = false;
 
 /* ***************************************** TEXTURES ******************************************/
-
-GPUTexture *DRW_texture_create_2D_array(int w, int h, int d, const float *fpixels)
+static void drw_texture_get_format(DRWTextureFormat format, GPUFormat *data_type, int *channels)
 {
-	return GPU_texture_create_2D_array(w, h, d, fpixels, NULL);
+	switch (format) {
+		case DRW_TEX_RGBA_8: *data_type = GPU_RGBA8; break;
+		case DRW_TEX_RGBA_16: *data_type = GPU_RGBA16F; break;
+		case DRW_TEX_RGBA_32: *data_type = GPU_RGBA32F; break;
+		case DRW_TEX_RGB_8: *data_type = GPU_RGB8; break;
+		case DRW_TEX_RGB_16: *data_type = GPU_RGB16F; break;
+		case DRW_TEX_RGB_32: *data_type = GPU_RGB32F; break;
+		case DRW_TEX_RG_8: *data_type = GPU_RG8; break;
+		case DRW_TEX_RG_16: *data_type = GPU_RG16F; break;
+		case DRW_TEX_RG_32: *data_type = GPU_RG32F; break;
+		case DRW_TEX_R_8: *data_type = GPU_R8; break;
+		case DRW_TEX_R_16: *data_type = GPU_R16F; break;
+		case DRW_TEX_R_32: *data_type = GPU_R32F; break;
+		case DRW_TEX_DEPTH_16: *data_type = GPU_DEPTH_COMPONENT16; break;
+		case DRW_TEX_DEPTH_24: *data_type = GPU_DEPTH_COMPONENT24; break;
+		case DRW_TEX_DEPTH_32: *data_type = GPU_DEPTH_COMPONENT32F; break;
+	}
+
+	switch (format) {
+		case DRW_TEX_RGBA_8:
+		case DRW_TEX_RGBA_16:
+		case DRW_TEX_RGBA_32:
+			*channels = 4;
+			break;
+		case DRW_TEX_RGB_8:
+		case DRW_TEX_RGB_16:
+		case DRW_TEX_RGB_32:
+			*channels = 3;
+			break;
+		case DRW_TEX_RG_8:
+		case DRW_TEX_RG_16:
+		case DRW_TEX_RG_32:
+			*channels = 2;
+			break;
+		default:
+			*channels = 1;
+			break;
+	}
+}
+
+static void drw_texture_set_parameters(GPUTexture *tex, DRWTextureFlag flags)
+{
+	GPU_texture_bind(tex, 0);
+	GPU_texture_filter_mode(tex, flags & DRW_TEX_FILTER);
+	GPU_texture_wrap_mode(tex, flags & DRW_TEX_WRAP);
+	GPU_texture_compare_mode(tex, flags & DRW_TEX_COMPARE);
+	GPU_texture_unbind(tex);
+}
+
+GPUTexture *DRW_texture_create_1D(int w, DRWTextureFormat format, DRWTextureFlag flags, const float *fpixels)
+{
+	GPUTexture *tex;
+	GPUFormat data_type;
+	int channels;
+
+	drw_texture_get_format(format, &data_type, &channels);
+	tex = GPU_texture_create_1D_custom(w, channels, data_type, fpixels, NULL);
+	drw_texture_set_parameters(tex, flags);
+
+	return tex;
+}
+
+GPUTexture *DRW_texture_create_2D(int w, int h, DRWTextureFormat format, DRWTextureFlag flags, const float *fpixels)
+{
+	GPUTexture *tex;
+	GPUFormat data_type;
+	int channels;
+
+	drw_texture_get_format(format, &data_type, &channels);
+	tex = GPU_texture_create_2D_custom(w, h, channels, data_type, fpixels, NULL);
+	drw_texture_set_parameters(tex, flags);
+
+	return tex;
+}
+
+/* TODO make use of format */
+GPUTexture *DRW_texture_create_2D_array(int w, int h, int d, DRWTextureFormat UNUSED(format), DRWTextureFlag flags, const float *fpixels)
+{
+	GPUTexture *tex;
+
+	tex = GPU_texture_create_2D_array(w, h, d, fpixels, NULL);
+	drw_texture_set_parameters(tex, flags);
+
+	return tex;
 }
 
 void DRW_texture_free(GPUTexture *tex)

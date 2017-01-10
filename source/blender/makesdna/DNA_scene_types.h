@@ -796,11 +796,22 @@ typedef struct RenderProfile {
 
 /* Render Data */
 typedef struct EngineDataClay {
-	short type;
+	/* Default Matcap settings */
+	short options;
 	short matcap_icon; /* Icon ID */
-	float rot;
-	float hue;
+	float matcap_rot;
+	float matcap_hue;
+	float ssao_distance;
+	float ssao_attenuation;
+	float ssao_factor_cavity;
+	float ssao_factor_edge;
+	/* Global Settings */
+	int ssao_samples;
+	int pad;
 } EngineDataClay;
+
+/* EngineDataClay.options */
+#define CLAY_USE_AO				1
 
 /* *************************************************************** */
 /* Game Engine - Dome */

@@ -58,7 +58,37 @@ typedef struct DRWPass DRWPass;
 typedef struct DRWBatch DRWBatch;
 
 /* Textures */
-struct GPUTexture *DRW_texture_create_2D_array(int w, int h, int d, const float *fpixels);
+
+typedef enum {
+	DRW_TEX_RGBA_8,
+	DRW_TEX_RGBA_16,
+	DRW_TEX_RGBA_32,
+	DRW_TEX_RGB_8,
+	DRW_TEX_RGB_16,
+	DRW_TEX_RGB_32,
+	DRW_TEX_RG_8,
+	DRW_TEX_RG_16,
+	DRW_TEX_RG_32,
+	DRW_TEX_R_8,
+	DRW_TEX_R_16,
+	DRW_TEX_R_32,
+	DRW_TEX_DEPTH_16,
+	DRW_TEX_DEPTH_24,
+	DRW_TEX_DEPTH_32,
+} DRWTextureFormat;
+
+typedef enum {
+	DRW_TEX_FILTER = (1 << 0),
+	DRW_TEX_WRAP = (1 << 1),
+	DRW_TEX_COMPARE = (1 << 2),
+} DRWTextureFlag;
+
+struct GPUTexture *DRW_texture_create_1D(
+		int w, DRWTextureFormat format, DRWTextureFlag flags, const float *fpixels);
+struct GPUTexture *DRW_texture_create_2D(
+		int w, int h, DRWTextureFormat format, DRWTextureFlag flags, const float *fpixels);
+struct GPUTexture *DRW_texture_create_2D_array(
+		int w, int h, int d, DRWTextureFormat UNUSED(format), DRWTextureFlag flags, const float *fpixels);
 void DRW_texture_free(struct GPUTexture *tex);
 
 /* Buffers */

@@ -93,9 +93,17 @@ typedef struct TexPaintSlot {
 typedef struct EngineSettingsClay {
 	short type;
 	short matcap_icon; /* Icon ID */
-	float rot;
-	float hue;
+	float matcap_rot;
+	float matcap_hue;
+	float ssao_distance;
+	float ssao_attenuation;
+	float ssao_factor_cavity;
+	float ssao_factor_edge;
 } EngineSettingsClay;
+
+#define CLAY_MATCAP_NONE		0
+#define CLAY_MATCAP_SIMPLE		1
+#define CLAY_MATCAP_COMPLETE	2
 
 typedef struct Material {
 	ID id;

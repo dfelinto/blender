@@ -589,8 +589,16 @@ class RENDER_PT_clay(RenderButtonsPanel, Panel):
     COMPAT_ENGINES = {'BLENDER_CLAY'}
 
     def draw(self, context):
+        layout = self.layout;
         settings = context.scene.clay_settings
-        self.layout.template_icon_view(settings, "matcap_icon")
+        layout.template_icon_view(settings, "matcap_icon")
+        layout.prop(settings, "matcap_rotation")
+        layout.prop(settings, "matcap_hue")
+        layout.prop(settings, "ssao_factor_cavity")
+        layout.prop(settings, "ssao_factor_edge")
+        layout.prop(settings, "ssao_distance")
+        layout.prop(settings, "ssao_attenuation")
+        layout.prop(settings, "ssao_samples")
 
 
 if __name__ == "__main__":  # only for live edit.
