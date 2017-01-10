@@ -51,6 +51,7 @@ vec3 get_view_space_from_depth(in vec2 uvcoords, in vec3 viewvec_origin, in vec3
 	return zview * (viewvec_origin + vec3(uvcoords, 0.0) * viewvec_diff);
 }
 
+/* TODO remove this when switching to geometric normals */
 vec3 calculate_view_space_normal(in vec3 viewposition)
 {
 	vec3 normal = cross(normalize(dFdx(viewposition)), dfdy_sign * normalize(dFdy(viewposition)));
@@ -58,6 +59,7 @@ vec3 calculate_view_space_normal(in vec3 viewposition)
 	return normalize(normal);
 }
 
+#ifdef USE_AO
 void calculate_ssao_factor(in float depth, in vec3 normal, in vec3 position, out float cavities, out float edges)
 {
 	vec2 uvs = vec2(gl_FragCoord.xy) / vec2(screenres);
@@ -118,7 +120,7 @@ void calculate_ssao_factor(in float depth, in vec3 normal, in vec3 position, out
 	cavities = clamp(cavities * ssao_factor_cavity, 0.0, 0.85);
 	edges = edges * ssao_factor_edge;
 }
-
+#endif
 
 void main() {
 	vec2 uvs = vec2(gl_FragCoord.xy) / vec2(screenres);
@@ -133,11 +135,12 @@ void main() {
 	if (gl_FragCoord.z > depth + 1e-5)
 		discard;
 
-	vec2 texco = abs(normal.xy * .49 + 0.5);
 #ifdef USE_ROTATION
 	/* Rotate texture coordinates */
-	vec2 rotY = vec2(-matcap_roation.y, matcap_roation.x);
-	texco = vec2(dot(texco, matcap_roation), dot(texco, rotY));
+	vec2 rotY = vec2(-matcap_rotation.y, matcap_rotation.x);
+	vec2 texco = abs(vec2(dot(normal.xy, matcap_rotation), dot(normal.xy, rotY)) * .49 + 0.5);
+#else
+	vec2 texco = abs(normal.xy * .49 + 0.5);
 #endif
 	vec3 col = texture(matcaps, vec3(texco, float(matcap_index))).rgb;
 
@@ -145,7 +148,7 @@ void main() {
 	float cavity, edges;
 	calculate_ssao_factor(depth, normal, position, cavity, edges);
 
-	col = mix(col, matcaps_color[int(matcap_index)] * 0.5, cavity);
+	col = mix(col, matcaps_color[int(matcap_index)], cavity);
 	col *= edges + 1.0;
 #endif
 

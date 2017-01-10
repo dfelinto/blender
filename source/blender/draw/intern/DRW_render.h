@@ -131,7 +131,8 @@ void DRW_shader_free(struct GPUShader *shader);
 /* Batches */
 DRWBatch *DRW_batch_create(struct GPUShader *shader, DRWPass *pass);
 void DRW_batch_free(struct DRWBatch *batch);
-void DRW_batch_add_surface(DRWBatch *batch, struct Object *ob);
+void DRW_batch_surface_add(DRWBatch *batch, struct Object *ob);
+void DRW_batch_surface_clear(DRWBatch *batch);
 
 void DRW_batch_uniform_texture(DRWBatch *batch, const char *name, const struct GPUTexture *tex, int loc);
 void DRW_batch_uniform_buffer(DRWBatch *batch, const char *name, const int value, int loc);

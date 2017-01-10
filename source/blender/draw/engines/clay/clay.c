@@ -51,6 +51,7 @@ static struct CLAY_data {
 	/* Matcap textures */
 	struct GPUTexture *matcap_array;
 	float matcap_colors[24][3];
+	float matcap_rot[2];
 	int matcap_id;
 
 	/* Ssao */
@@ -110,9 +111,9 @@ static void add_icon_to_rect(PreviewImage *prv, float *final_rect, int layer)
 		}
 	}
 
-	data.matcap_colors[layer][0] /= 16.0f;
-	data.matcap_colors[layer][1] /= 16.0f;
-	data.matcap_colors[layer][2] /= 16.0f;
+	data.matcap_colors[layer][0] /= 16.0f * 2.0f; /* the * 2 is to darken for shadows */
+	data.matcap_colors[layer][1] /= 16.0f * 2.0f;
+	data.matcap_colors[layer][2] /= 16.0f * 2.0f;
 }
 
 static struct GPUTexture *load_matcaps(PreviewImage *prv[24], int nbr)
@@ -188,6 +189,7 @@ static struct GPUTexture *create_jitter_texture(void)
 	float jitter[64 * 64][2];
 	int i;
 
+	/* TODO replace by something more evenly distributed like blue noise */
 	for (i = 0; i < 64 * 64; i++) {
 		jitter[i][0] = 2.0f * BLI_frand() - 1.0f;
 		jitter[i][1] = 2.0f * BLI_frand() - 1.0f;
@@ -252,8 +254,10 @@ static void clay_engine_init(void)
 	if (!data.clay_sh) {
 		const char *defines =
 		        "#define USE_AO;\n"
-		        "//#define USE_ROTATION;\n";
+		        "#define USE_ROTATION;\n";
 
+		/* TODO Optimisation : Create shader combinations and bind the right 
+		 * shader depending on the material settings */
 		data.clay_sh = DRW_shader_create(datatoc_clay_vert_glsl, NULL, datatoc_clay_frag_glsl, defines);
 	}
 }
@@ -298,7 +302,7 @@ static void clay_populate_passes(CLAY_PassList *passes, const struct bContext *C
 		DRW_batch_uniform_buffer(batch, "depthtex", SCENE_DEPTH, depthloc);
 		DRW_batch_uniform_texture(batch, "matcaps", data.matcap_array, matcaploc);
 		DRW_batch_uniform_vec3(batch, "matcaps_color", (float *)data.matcap_colors, 24);
-		DRW_batch_uniform_vec3(batch, "matcaps_color", (float *)data.matcap_colors, 24);
+		DRW_batch_uniform_vec2(batch, "matcap_rotation", (float *)data.matcap_rot, 1);
 		DRW_batch_uniform_int(batch, "matcap_index", &data.matcap_id, 1);
 
 		/* SSAO */
@@ -313,23 +317,46 @@ static void clay_populate_passes(CLAY_PassList *passes, const struct bContext *C
 		pop_clay = true;
 	}
 
-	Object *ob;
-	FOREACH_OBJECT(sl, ob)
+	/* Update default material */
 	{
-		/* Create hash table of batch based on material id*/
+		EngineDataClay *settings = DRW_render_settings();
 
-		/* Add everything for now */
-		if (pop_clay) {
-			DRW_batch_add_surface(matcapbatch, ob);
-		}
+		data.matcap_rot[0] = cosf(settings->matcap_rot * 3.14159f * 2.0f);
+		data.matcap_rot[1] = sinf(settings->matcap_rot * 3.14159f * 2.0f);
 
-		if (pop_depth) {
-			DRW_batch_add_surface(depthbatch, ob);
-		}
-
-		/* Free hash table */
+		data.ssao_params_var[0] = settings->ssao_distance;
+		data.ssao_params_var[1] = settings->ssao_factor_cavity;
+		data.ssao_params_var[2] = settings->ssao_factor_edge;
+		data.ssao_params_var[3] = settings->ssao_attenuation;
 	}
-	FOREACH_OBJECT_END
+
+	static bool first = true;
+	if (first) {
+		first = false;
+
+		/* TODO Why this is crashing? we want to start from an empty list
+		 * Seems like ob genericNode (see below) is freed two times */
+		// DRW_batch_surface_clear(matcapbatch);
+		// DRW_batch_surface_clear(depthbatch);
+
+		Object *ob;
+		FOREACH_OBJECT(sl, ob)
+		{
+			/* Create hash table of batch based on material id*/
+
+			/* Add everything for now */
+			if (pop_clay) {
+				DRW_batch_surface_add(matcapbatch, ob);
+			}
+
+			if (pop_depth) {
+				DRW_batch_surface_add(depthbatch, ob);
+			}
+
+			/* Free hash table */
+		}
+		FOREACH_OBJECT_END
+	}
 }
 
 static void clay_ssao_setup(void)
@@ -348,11 +375,6 @@ static void clay_ssao_setup(void)
 	EngineDataClay *settings = DRW_render_settings();
 
 	DRW_get_dfdy_factors(dfdyfacs);
-
-	data.ssao_params_var[0] = settings->ssao_distance;
-	data.ssao_params_var[1] = settings->ssao_factor_cavity;
-	data.ssao_params_var[2] = settings->ssao_factor_edge;
-	data.ssao_params_var[3] = settings->ssao_attenuation;
 
 	data.ssao_params[0] = settings->ssao_samples;
 	data.ssao_params[1] = size[0] / 64.0;
@@ -414,11 +436,7 @@ static void clay_view_draw(RenderEngine *UNUSED(engine), const struct bContext *
 	/* TODO : tag to refresh by the deps graph */
 	/* ideally only refresh when objects are added/removed */
 	/* or render properties / materials change */
-	static bool first = true;
-	if (first) {
-		first = false;
-		clay_populate_passes(passes, context);
-	}
+	clay_populate_passes(passes, context);
 
 	DRW_draw_background();
 

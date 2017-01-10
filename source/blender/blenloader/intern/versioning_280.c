@@ -143,5 +143,18 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *main)
 				BLI_strncpy(scene->collection->name, "Master Collection", sizeof(scene->collection->name));
 			}
 		}
+
+		/* Clay engine defaults */
+		for (Scene *scene = main->scene.first; scene; scene = scene->id.next) {
+			EngineDataClay *settings = &scene->claydata;
+
+			settings->matcap_rot = 0.0;
+			settings->matcap_hue = 0.0;
+			settings->ssao_distance = 0.2;
+			settings->ssao_attenuation = 1.0f;
+			settings->ssao_factor_cavity = 2.0f;
+			settings->ssao_factor_edge = 2.0f;
+			settings->ssao_samples = 32;
+		}
 	}
 }

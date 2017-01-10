@@ -345,9 +345,18 @@ void DRW_batch_free(struct DRWBatch *batch)
 }
 
 /* Later use VBO */
-void DRW_batch_add_surface(DRWBatch *batch, Object *ob)
+void DRW_batch_surface_add(DRWBatch *batch, Object *ob)
 {
 	BLI_addtail(&batch->objects, BLI_genericNodeN(ob));
+}
+
+void DRW_batch_surface_clear(DRWBatch *batch)
+{
+	for (LinkData *link = batch->objects.first; link; link = link->next) {
+		MEM_freeN(link->data);
+	}
+	BLI_freelistN(&batch->objects);
+	//BLI_listbase_clear(&batch->objects);
 }
 
 void DRW_batch_uniform_texture(DRWBatch *batch, const char *name, const GPUTexture *tex, int loc)
