@@ -50,6 +50,7 @@
 #include "BKE_fcurve.h"
 #include "BKE_global.h"
 #include "BKE_key.h"
+#include "BKE_layer.h"
 #include "BKE_library.h"
 #include "BKE_main.h"
 #include "BKE_report.h"
@@ -1268,10 +1269,11 @@ void ED_curve_editnurb_free(Object *obedit)
 
 static int separate_exec(bContext *C, wmOperator *op)
 {
+#if 0
 	Main *bmain = CTX_data_main(C);
 	Scene *scene = CTX_data_scene(C);
 	Object *oldob, *newob;
-	Base *oldbase, *newbase;
+	ObjectBase *oldbase, *newbase;
 	Curve *oldcu, *newcu;
 	EditNurb *newedit;
 	ListBase newnurb = {NULL, NULL};
@@ -1327,6 +1329,13 @@ static int separate_exec(bContext *C, wmOperator *op)
 	WM_cursor_wait(0);
 
 	return OPERATOR_FINISHED;
+#else
+	/* need to refactor this to use ObjectBase and create a new object in the correct SceneCollection */
+	TODO_LAYER_BASE
+	(void)C;
+	BKE_report(op->reports, RPT_ERROR, "CURVE_OT_separate not supported at the moment");
+	return OPERATOR_CANCELLED;
+#endif
 }
 
 void CURVE_OT_separate(wmOperatorType *ot)

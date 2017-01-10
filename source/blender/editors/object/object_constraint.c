@@ -1682,11 +1682,12 @@ static bool get_new_constraint_target(bContext *C, int con_type, Object **tar_ob
 	if ((found == false) && (add)) {
 		Main *bmain = CTX_data_main(C);
 		Scene *scene = CTX_data_scene(C);
+		SceneLayer *sl = CTX_data_scene_layer(C);
 		Base *base = BASACT, *newbase = NULL;
 		Object *obt;
 		
 		/* add new target object */
-		obt = BKE_object_add(bmain, scene, OB_EMPTY, NULL);
+		obt = BKE_object_add(bmain, scene, sl, OB_EMPTY, NULL);
 		
 		/* set layers OK */
 		newbase = BASACT;

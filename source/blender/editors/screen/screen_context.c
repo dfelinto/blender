@@ -47,6 +47,7 @@
 #include "BKE_action.h"
 #include "BKE_armature.h"
 #include "BKE_gpencil.h"
+#include "BKE_layer.h"
 #include "BKE_screen.h"
 #include "BKE_sequencer.h"
 
@@ -73,7 +74,7 @@ static unsigned int context_layers(bScreen *sc, Scene *scene, ScrArea *sa_ctx)
 }
 
 const char *screen_context_dir[] = {
-	"scene", "visible_objects", "visible_bases", "selectable_objects", "selectable_bases",
+	"scene", "render_layer", "visible_objects", "visible_bases", "selectable_objects", "selectable_bases",
 	"selected_objects", "selected_bases",
 	"editable_objects", "editable_bases",
 	"selected_editable_objects", "selected_editable_bases",
@@ -95,17 +96,9 @@ int ed_screen_context(const bContext *C, const char *member, bContextDataResult 
 	bScreen *sc = CTX_wm_screen(C);
 	ScrArea *sa = CTX_wm_area(C);
 	Scene *scene = sc->scene;
-	Base *base;
-
-#if 0  /* Using the context breaks adding objects in the UI. Need to find out why - campbell */
-	Object *obact = CTX_data_active_object(C);
-	Object *obedit = CTX_data_edit_object(C);
-	base = CTX_data_active_base(C);
-#else
+	SceneLayer *sl = CTX_data_scene_layer(C);
 	Object *obedit = scene->obedit;
-	Object *obact = OBACT;
-	base = BASACT;
-#endif
+	Object *obact = sl->basact ? sl->basact->object : NULL;
 
 	if (CTX_data_dir(member)) {
 		CTX_data_dir_set(result, screen_context_dir);
@@ -115,65 +108,103 @@ int ed_screen_context(const bContext *C, const char *member, bContextDataResult 
 		CTX_data_id_pointer_set(result, &scene->id);
 		return 1;
 	}
-	else if (CTX_data_equals(member, "visible_objects") || CTX_data_equals(member, "visible_bases")) {
-		const unsigned int lay = context_layers(sc, scene, sa);
-		const bool visible_objects = CTX_data_equals(member, "visible_objects");
-
-		for (base = scene->base.first; base; base = base->next) {
-			if (((base->object->restrictflag & OB_RESTRICT_VIEW) == 0) && (base->lay & lay)) {
-				if (visible_objects)
-					CTX_data_id_list_add(result, &base->object->id);
-				else
-					CTX_data_list_add(result, &scene->id, &RNA_ObjectBase, base);
+	else if (CTX_data_equals(member, "visible_objects")) {
+		for (ObjectBase *base = sl->object_bases.first; base; base = base->next) {
+			if (((base->object->restrictflag & OB_RESTRICT_VIEW) == 0)) {
+				CTX_data_id_list_add(result, &base->object->id);
 			}
 		}
 		CTX_data_type_set(result, CTX_DATA_TYPE_COLLECTION);
 		return 1;
 	}
-	else if (CTX_data_equals(member, "selectable_objects") || CTX_data_equals(member, "selectable_bases")) {
-		const unsigned int lay = context_layers(sc, scene, sa);
-		const bool selectable_objects = CTX_data_equals(member, "selectable_objects");
-
-		for (base = scene->base.first; base; base = base->next) {
-			if (base->lay & lay) {
-				if ((base->object->restrictflag & OB_RESTRICT_VIEW) == 0 && (base->object->restrictflag & OB_RESTRICT_SELECT) == 0) {
-					if (selectable_objects)
-						CTX_data_id_list_add(result, &base->object->id);
-					else
-						CTX_data_list_add(result, &scene->id, &RNA_ObjectBase, base);
+	else if (CTX_data_equals(member, "selectable_objects")) {
+		for (ObjectBase *base = sl->object_bases.first; base; base = base->next) {
+			if ((base->object->restrictflag & OB_RESTRICT_VIEW) == 0 && (base->object->restrictflag & OB_RESTRICT_SELECT) == 0) {
+				CTX_data_id_list_add(result, &base->object->id);
+			}
+		}
+		CTX_data_type_set(result, CTX_DATA_TYPE_COLLECTION);
+		return 1;
+	}
+	else if (CTX_data_equals(member, "selected_objects")) {
+		Object *ob;
+		FOREACH_SELECTED_OBJECT(sl, ob)
+		{
+			CTX_data_id_list_add(result, &ob->id);
+		}
+		FOREACH_SELECTED_OBJECT_END
+		CTX_data_type_set(result, CTX_DATA_TYPE_COLLECTION);
+		return 1;
+	}
+	else if (CTX_data_equals(member, "selected_editable_objects")) {
+		Object *ob;
+		FOREACH_SELECTED_OBJECT(sl, ob)
+		{
+			if ((ob->restrictflag & OB_RESTRICT_VIEW) == 0) {
+				if (0 == BKE_object_is_libdata(ob)) {
+					CTX_data_id_list_add(result, &ob->id);
+				}
+			}
+		}
+		FOREACH_SELECTED_OBJECT_END
+		CTX_data_type_set(result, CTX_DATA_TYPE_COLLECTION);
+		return 1;
+	}
+	else if (CTX_data_equals(member, "editable_objects")) {
+		/* Visible + Editable, but not necessarily selected */
+		for (ObjectBase *base = sl->object_bases.first; base; base = base->next) {
+			if (((base->object->restrictflag & OB_RESTRICT_VIEW) == 0)) {
+				if (0 == BKE_object_is_libdata(base->object)) {
+					CTX_data_id_list_add(result, &base->object->id);
 				}
 			}
 		}
 		CTX_data_type_set(result, CTX_DATA_TYPE_COLLECTION);
 		return 1;
 	}
-	else if (CTX_data_equals(member, "selected_objects") || CTX_data_equals(member, "selected_bases")) {
+	else if ( CTX_data_equals(member, "visible_bases")) {
 		const unsigned int lay = context_layers(sc, scene, sa);
-		const bool selected_objects = CTX_data_equals(member, "selected_objects");
 
-		for (base = scene->base.first; base; base = base->next) {
-			if ((base->flag & SELECT) && (base->lay & lay)) {
-				if (selected_objects)
-					CTX_data_id_list_add(result, &base->object->id);
-				else
-					CTX_data_list_add(result, &scene->id, &RNA_ObjectBase, base);
+		for (Base *base = scene->base.first; base; base = base->next) {
+			if (((base->object->restrictflag & OB_RESTRICT_VIEW) == 0) && (base->lay & lay)) {
+				CTX_data_list_add(result, &scene->id, &RNA_ObjectBase, base);
 			}
 		}
 		CTX_data_type_set(result, CTX_DATA_TYPE_COLLECTION);
 		return 1;
 	}
-	else if (CTX_data_equals(member, "selected_editable_objects") || CTX_data_equals(member, "selected_editable_bases")) {
+	else if (CTX_data_equals(member, "selectable_bases")) {
 		const unsigned int lay = context_layers(sc, scene, sa);
-		const bool selected_editable_objects = CTX_data_equals(member, "selected_editable_objects");
 
-		for (base = scene->base.first; base; base = base->next) {
+		for (Base *base = scene->base.first; base; base = base->next) {
+			if (base->lay & lay) {
+				if ((base->object->restrictflag & OB_RESTRICT_VIEW) == 0 && (base->object->restrictflag & OB_RESTRICT_SELECT) == 0) {
+					CTX_data_list_add(result, &scene->id, &RNA_ObjectBase, base);
+				}
+			}
+		}
+		CTX_data_type_set(result, CTX_DATA_TYPE_COLLECTION);
+		return 1;
+	}
+	else if (CTX_data_equals(member, "selected_bases")) {
+		const unsigned int lay = context_layers(sc, scene, sa);
+
+		for (Base *base = scene->base.first; base; base = base->next) {
+			if ((base->flag & SELECT) && (base->lay & lay)) {
+				CTX_data_list_add(result, &scene->id, &RNA_ObjectBase, base);
+			}
+		}
+		CTX_data_type_set(result, CTX_DATA_TYPE_COLLECTION);
+		return 1;
+	}
+	else if (CTX_data_equals(member, "selected_editable_bases")) {
+		const unsigned int lay = context_layers(sc, scene, sa);
+
+		for (Base *base = scene->base.first; base; base = base->next) {
 			if ((base->flag & SELECT) && (base->lay & lay)) {
 				if ((base->object->restrictflag & OB_RESTRICT_VIEW) == 0) {
 					if (0 == BKE_object_is_libdata(base->object)) {
-						if (selected_editable_objects)
-							CTX_data_id_list_add(result, &base->object->id);
-						else
-							CTX_data_list_add(result, &scene->id, &RNA_ObjectBase, base);
+						CTX_data_list_add(result, &scene->id, &RNA_ObjectBase, base);
 					}
 				}
 			}
@@ -181,18 +212,14 @@ int ed_screen_context(const bContext *C, const char *member, bContextDataResult 
 		CTX_data_type_set(result, CTX_DATA_TYPE_COLLECTION);
 		return 1;
 	}
-	else if (CTX_data_equals(member, "editable_objects") || CTX_data_equals(member, "editable_bases")) {
+	else if (CTX_data_equals(member, "editable_bases")) {
 		const unsigned int lay = context_layers(sc, scene, sa);
-		const bool editable_objects = CTX_data_equals(member, "editable_objects");
 		
 		/* Visible + Editable, but not necessarily selected */
-		for (base = scene->base.first; base; base = base->next) {
+		for (Base *base = scene->base.first; base; base = base->next) {
 			if (((base->object->restrictflag & OB_RESTRICT_VIEW) == 0) && (base->lay & lay)) {
 				if (0 == BKE_object_is_libdata(base->object)) {
-					if (editable_objects)
-						CTX_data_id_list_add(result, &base->object->id);
-					else
-						CTX_data_list_add(result, &scene->id, &RNA_ObjectBase, base);
+					CTX_data_list_add(result, &scene->id, &RNA_ObjectBase, base);
 				}
 			}
 		}
@@ -344,8 +371,8 @@ int ed_screen_context(const bContext *C, const char *member, bContextDataResult 
 		}
 	}
 	else if (CTX_data_equals(member, "active_base")) {
-		if (base)
-			CTX_data_pointer_set(result, &scene->id, &RNA_ObjectBase, base);
+		if (sl->basact)
+			CTX_data_pointer_set(result, &scene->id, &RNA_ObjectBase, sl->basact);
 
 		return 1;
 	}

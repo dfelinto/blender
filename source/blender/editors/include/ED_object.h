@@ -41,8 +41,10 @@ struct ID;
 struct Main;
 struct ModifierData;
 struct Object;
+struct ObjectBase;
 struct ReportList;
 struct Scene;
+struct SceneLayer;
 struct bConstraint;
 struct bContext;
 struct bPoseChannel;
@@ -102,6 +104,9 @@ void ED_base_object_select(struct Base *base, short mode);
 /* includes notifier */
 void ED_base_object_activate(struct bContext *C, struct Base *base);
 
+void ED_object_base_select(struct ObjectBase *base, short mode);
+void ED_object_base_activate(struct bContext *C, struct ObjectBase *base);
+
 void ED_base_object_free_and_unlink(struct Main *bmain, struct Scene *scene, struct Base *base);
 
 /* single object duplicate, if (dupflag == 0), fully linked, else it uses the flags given */
@@ -126,7 +131,7 @@ bool ED_object_editmode_calc_active_center(struct Object *obedit, const bool sel
 
 void ED_object_location_from_view(struct bContext *C, float loc[3]);
 void ED_object_rotation_from_view(struct bContext *C, float rot[3], const char align_axis);
-void ED_object_base_init_transform(struct bContext *C, struct Base *base, const float loc[3], const float rot[3]);
+void ED_object_base_init_transform(struct bContext *C, struct ObjectBase *base, const float loc[3], const float rot[3]);
 float ED_object_new_primitive_matrix(
         struct bContext *C, struct Object *editob,
         const float loc[3], const float rot[3], float primmat[4][4]);
@@ -191,7 +196,7 @@ void ED_object_modifier_clear(struct Main *bmain, struct Object *ob);
 int ED_object_modifier_move_down(struct ReportList *reports, struct Object *ob, struct ModifierData *md);
 int ED_object_modifier_move_up(struct ReportList *reports, struct Object *ob, struct ModifierData *md);
 int ED_object_modifier_convert(struct ReportList *reports, struct Main *bmain, struct Scene *scene,
-                               struct Object *ob, struct ModifierData *md);
+                               struct SceneLayer *sl, struct Object *ob, struct ModifierData *md);
 int ED_object_modifier_apply(struct ReportList *reports, struct Scene *scene,
                              struct Object *ob, struct ModifierData *md, int mode);
 int ED_object_modifier_copy(struct ReportList *reports, struct Object *ob, struct ModifierData *md);

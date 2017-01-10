@@ -333,6 +333,7 @@ static int make_proxy_exec(bContext *C, wmOperator *op)
 	Object *ob, *gob = ED_object_active_context(C);
 	GroupObject *go;
 	Scene *scene = CTX_data_scene(C);
+	SceneLayer *sl = CTX_data_scene_layer(C);
 
 	if (gob->dup_group != NULL) {
 		go = BLI_findlink(&gob->dup_group->gobject, RNA_enum_get(op->ptr, "object"));
@@ -351,7 +352,7 @@ static int make_proxy_exec(bContext *C, wmOperator *op)
 		BLI_snprintf(name, sizeof(name), "%s_proxy", ((ID *)(gob ? gob : ob))->name + 2);
 
 		/* Add new object for the proxy */
-		newob = BKE_object_add(bmain, scene, OB_EMPTY, name);
+		newob = BKE_object_add(bmain, scene, sl, OB_EMPTY, name);
 
 		/* set layers OK */
 		newbase = BASACT;    /* BKE_object_add sets active... */

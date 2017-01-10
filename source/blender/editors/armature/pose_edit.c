@@ -81,7 +81,7 @@ Object *ED_pose_object_from_context(bContext *C)
 }
 
 /* This function is used to process the necessary updates for */
-void ED_armature_enter_posemode(bContext *C, Base *base)
+void ED_armature_enter_posemode(bContext *C, ObjectBase *base)
 {
 	ReportList *reports = CTX_wm_reports(C);
 	Object *ob = base->object;
@@ -107,7 +107,7 @@ void ED_armature_enter_posemode(bContext *C, Base *base)
 	//ED_object_toggle_modes(C, ob->mode);
 }
 
-void ED_armature_exit_posemode(bContext *C, Base *base)
+void ED_armature_exit_posemode(bContext *C, ObjectBase *base)
 {
 	if (base) {
 		Object *ob = base->object;

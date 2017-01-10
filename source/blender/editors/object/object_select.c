@@ -51,6 +51,7 @@
 
 #include "BKE_context.h"
 #include "BKE_group.h"
+#include "BKE_layer.h"
 #include "BKE_main.h"
 #include "BKE_material.h"
 #include "BKE_particle.h"
@@ -116,6 +117,32 @@ void ED_base_object_activate(bContext *C, Base *base)
 	}
 	else
 		WM_event_add_notifier(C, NC_SCENE | ND_OB_ACTIVE, NULL);
+}
+
+void ED_object_base_select(ObjectBase *base, short mode)
+{
+	if (base) {
+		if (mode == BA_SELECT) {
+			if (!(base->object->restrictflag & OB_RESTRICT_SELECT))
+				base->flag |= BASE_SELECTED;
+		}
+		else if (mode == BA_DESELECT) {
+			base->flag &= ~BASE_SELECTED;
+		}
+	}
+}
+
+void ED_object_base_activate(bContext *C, ObjectBase *base)
+{
+	SceneLayer *sl = CTX_data_scene_layer(C);
+	sl->basact = base;
+
+	if (base) {
+		WM_event_add_notifier(C, NC_SCENE | ND_OB_ACTIVE, sl);
+	}
+	else {
+		WM_event_add_notifier(C, NC_SCENE | ND_OB_ACTIVE, NULL);
+	}
 }
 
 /********************** Selection Operators **********************/
@@ -565,20 +592,21 @@ static bool select_grouped_children(bContext *C, Object *ob, const bool recursiv
 
 static bool select_grouped_parent(bContext *C) /* Makes parent active and de-selected OBACT */
 {
-	Scene *scene = CTX_data_scene(C);
+	SceneLayer *sl = CTX_data_scene_layer(C);
 	View3D *v3d = CTX_wm_view3d(C);
-
+	ObjectBase *baspar, *basact = CTX_data_active_base(C);
 	bool changed = false;
-	Base *baspar, *basact = CTX_data_active_base(C);
 
-	if (!basact || !(basact->object->parent)) return 0;  /* we know OBACT is valid */
+	if (!basact || !(basact->object->parent)) {
+		return 0;  /* we know OBACT is valid */
+	}
 
-	baspar = BKE_scene_base_find(scene, basact->object->parent);
+	baspar = BKE_scene_layer_base_find(sl, basact->object->parent);
 
 	/* can be NULL if parent in other scene */
 	if (baspar && BASE_SELECTABLE(v3d, baspar)) {
-		ED_base_object_select(baspar, BA_SELECT);
-		ED_base_object_activate(C, baspar);
+		ED_object_base_select(baspar, BA_SELECT);
+		ED_object_base_activate(C, baspar);
 		changed = true;
 	}
 	return changed;

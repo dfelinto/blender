@@ -50,6 +50,7 @@
 #include "BKE_depsgraph.h"
 #include "BKE_fcurve.h"
 #include "BKE_global.h"
+#include "BKE_layer.h"
 #include "BKE_main.h"
 #include "BKE_report.h"
 
@@ -577,11 +578,13 @@ static void separate_armature_bones(Object *ob, short sel)
 /* separate selected bones into their armature */
 static int separate_armature_exec(bContext *C, wmOperator *op)
 {
+#if 0 /* TODO_LAYER */
 	Main *bmain = CTX_data_main(C);
 	Scene *scene = CTX_data_scene(C);
+	SceneLayer *sl = CTX_data_scene_layer(C);
 	Object *obedit = CTX_data_edit_object(C);
 	Object *oldob, *newob;
-	Base *oldbase, *newbase;
+	ObjectBase *oldbase, *newbase;
 	
 	/* sanity checks */
 	if (obedit == NULL)
@@ -609,7 +612,7 @@ static int separate_armature_exec(bContext *C, wmOperator *op)
 	
 	/* 1) store starting settings and exit editmode */
 	oldob = obedit;
-	oldbase = BASACT;
+	oldbase = sl->basact;
 	oldob->mode &= ~OB_MODE_POSE;
 	//oldbase->flag &= ~OB_POSEMODE;
 	
@@ -621,9 +624,9 @@ static int separate_armature_exec(bContext *C, wmOperator *op)
 	DAG_relations_tag_update(bmain);
 
 	newob = newbase->object;
-	newbase->flag &= ~SELECT;
-	
-	
+	newbase->flag &= ~BASE_SELECTED;
+
+
 	/* 3) remove bones that shouldn't still be around on both armatures */
 	separate_armature_bones(oldob, 1);
 	separate_armature_bones(newob, 0);
@@ -653,6 +656,13 @@ static int separate_armature_exec(bContext *C, wmOperator *op)
 	WM_cursor_wait(0);
 	
 	return OPERATOR_FINISHED;
+#else
+	(void)C;
+	(void)op;
+	(void)separate_armature_bones;
+	(void)separated_armature_fix_links;
+	return OPERATOR_CANCELLED;
+#endif
 }
 
 void ARMATURE_OT_separate(wmOperatorType *ot)
