@@ -450,14 +450,20 @@ void BKE_selected_objects_Iterator_begin(Iterator *iter, void *data_in)
 	SceneLayer *sl = data_in;
 	ObjectBase *base = sl->object_bases.first;
 
+	/* when there are no objects */
+	if (base ==  NULL) {
+		iter->valid = false;
+		return;
+	}
+
 	iter->valid = true;
+	iter->data = base;
 
 	if ((base->flag & BASE_SELECTED) == 0) {
 		BKE_selected_objects_Iterator_next(iter);
 	}
 	else {
 		iter->current = base->object;
-		iter->data = base;
 	}
 }
 
