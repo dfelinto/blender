@@ -6,6 +6,7 @@ uniform mat4 WinMatrix;
 uniform sampler2DArray matcaps;
 uniform int matcap_index;
 uniform vec2 matcap_rotation;
+uniform vec3 matcaps_color[24];
 uniform float matcap_hue;
 
 /* Screen Space Occlusion */
@@ -57,17 +58,13 @@ vec3 calculate_view_space_normal(in vec3 viewposition)
 	return normalize(normal);
 }
 
-float calculate_ssao_factor(float depth, vec3 normal, vec3 position)
+void calculate_ssao_factor(in float depth, in vec3 normal, in vec3 position, out float cavities, out float edges)
 {
 	vec2 uvs = vec2(gl_FragCoord.xy) / vec2(screenres);
 
 	/* take the normalized ray direction here */
 	vec2 rotX = texture2D(ssao_jitter, uvs.xy * jitter_tilling).rg;
 	vec2 rotY = vec2(-rotX.y, rotX.x);
-
-	/* occlusion is zero in full depth */
-	if (depth == 1.0)
-		return 1.0;
 
 	/* find the offset in screen space by multiplying a point
 	 * in camera space at the depth of the point by the projection matrix. */
@@ -78,8 +75,7 @@ float calculate_ssao_factor(float depth, vec3 normal, vec3 position)
 	/* convert from -1.0...1.0 range to 0.0..1.0 for easy use with texture coordinates */
 	offset *= 0.5;
 
-	float obscurance_cavity = 0.0;
-	float obscurance_edge = 0.0;
+	cavities = edges = 0.0;
 	int x;
 	int num_samples = int(ssao_samples_num);
 
@@ -100,28 +96,27 @@ float calculate_ssao_factor(float depth, vec3 normal, vec3 position)
 			vec3 pos_new = get_view_space_from_depth(uvcoords, viewvecs[0].xyz, viewvecs[1].xyz, depth_new);
 			vec3 dir = pos_new - position;
 			float len = length(dir);
-			float f_cavity = dot(dir, normal);
+			float f_cavities = dot(dir, normal);
 			float f_edge = dot(dir, -normal);
 			float f_bias = 0.05 * len + 0.0001;
 
 			float attenuation = 1.0 / (len * (1.0 + len * len * ssao_attenuation));
 
 			/* use minor bias here to avoid self shadowing */
-			if (f_cavity > f_bias)
-				obscurance_cavity += f_cavity * attenuation;
+			if (f_cavities > f_bias)
+				cavities += f_cavities * attenuation;
 
 			if (f_edge > f_bias)
-				obscurance_edge += f_edge * attenuation;
+				edges += f_edge * attenuation;
 		}
 	}
 
-	obscurance_cavity /= ssao_samples_num;
-	obscurance_edge /= ssao_samples_num;
+	cavities /= ssao_samples_num;
+	edges /= ssao_samples_num;
 
-	obscurance_cavity = clamp(obscurance_cavity * ssao_factor_cavity, 0.0, 1.0);
-	obscurance_edge = clamp(obscurance_edge * ssao_factor_edge, 0.0, 1.0);
-
-	return 1.0 - obscurance_cavity + obscurance_edge;
+	/* don't let cavity wash out the surface appearance */
+	cavities = clamp(cavities * ssao_factor_cavity, 0.0, 0.85);
+	edges = edges * ssao_factor_edge;
 }
 
 
@@ -144,11 +139,15 @@ void main() {
 	vec2 rotY = vec2(-matcap_roation.y, matcap_roation.x);
 	texco = vec2(dot(texco, matcap_roation), dot(texco, rotY));
 #endif
-	vec4 col = texture(matcaps, vec3(texco, float(matcap_index)));
+	vec3 col = texture(matcaps, vec3(texco, float(matcap_index))).rgb;
 
 #ifdef USE_AO
-	col *= calculate_ssao_factor(depth, normal, position);
+	float cavity, edges;
+	calculate_ssao_factor(depth, normal, position, cavity, edges);
+
+	col = mix(col, matcaps_color[int(matcap_index)] * 0.5, cavity);
+	col *= edges + 1.0;
 #endif
 
-	fragColor = vec4(col.rgb, 1.0);
+	fragColor = vec4(col, 1.0);
 }

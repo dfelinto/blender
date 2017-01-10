@@ -50,6 +50,7 @@ static struct CLAY_data {
 
 	/* Matcap textures */
 	struct GPUTexture *matcap_array;
+	float matcap_colors[24][3];
 	int matcap_id;
 
 	/* Ssao */
@@ -99,6 +100,19 @@ static void add_icon_to_rect(PreviewImage *prv, float *final_rect, int layer)
 
 	IMB_buffer_float_from_byte(new_rect, (unsigned char *)prv->rect[0], IB_PROFILE_SRGB, IB_PROFILE_SRGB,
 	                           false, prv->w[0], prv->h[0], prv->w[0], prv->w[0]);
+
+	/* Find overall color */
+	for (int y = 0; y < 4; ++y)	{
+		for (int x = 0; x < 4; ++x) {
+			data.matcap_colors[layer][0] += new_rect[y * 512 * 128 * 4 + x * 128 * 4 + 0];
+			data.matcap_colors[layer][1] += new_rect[y * 512 * 128 * 4 + x * 128 * 4 + 1];
+			data.matcap_colors[layer][2] += new_rect[y * 512 * 128 * 4 + x * 128 * 4 + 2];
+		}
+	}
+
+	data.matcap_colors[layer][0] /= 16.0f;
+	data.matcap_colors[layer][1] /= 16.0f;
+	data.matcap_colors[layer][2] /= 16.0f;
 }
 
 static struct GPUTexture *load_matcaps(PreviewImage *prv[24], int nbr)
@@ -283,6 +297,8 @@ static void clay_populate_passes(CLAY_PassList *passes, const struct bContext *C
 		DRW_batch_uniform_ivec2(batch, "screenres", DRW_viewport_size_get(), 1);
 		DRW_batch_uniform_buffer(batch, "depthtex", SCENE_DEPTH, depthloc);
 		DRW_batch_uniform_texture(batch, "matcaps", data.matcap_array, matcaploc);
+		DRW_batch_uniform_vec3(batch, "matcaps_color", (float *)data.matcap_colors, 24);
+		DRW_batch_uniform_vec3(batch, "matcaps_color", (float *)data.matcap_colors, 24);
 		DRW_batch_uniform_int(batch, "matcap_index", &data.matcap_id, 1);
 
 		/* SSAO */
