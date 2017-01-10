@@ -99,9 +99,9 @@ void BKE_selected_objects_Iterator_end(Iterator *iter);
 
 #define FOREACH_OBJECT(sl, _ob)                                               \
 {                                                                             \
-	ObjectBase *ob_base;                                                      \
-	for (ob_base = sl->object_bases.first; ob_base; ob_base = ob_base->next) {\
-	    _ob = ob_base->object;
+	ObjectBase *base;                                                         \
+	for (base = sl->object_bases.first; base; base = base->next) {            \
+	    _ob = base->object;
 
 #define FOREACH_OBJECT_END                                                    \
     }                                                                         \

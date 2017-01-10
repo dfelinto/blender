@@ -1808,8 +1808,8 @@ static void single_object_users(Main *bmain, Scene *scene, View3D *v3d, const in
 
 	/* loop over SceneLayers and assign the pointers accordingly */
 	for (SceneLayer *sl = scene->render_layers.first; sl; sl = sl->next) {
-		for (ObjectBase *ob_base = sl->object_bases.first; ob_base; ob_base = ob_base->next) {
-			ID_NEW_REMAP(ob_base->object);
+		for (ObjectBase *base = sl->object_bases.first; base; base = base->next) {
+			ID_NEW_REMAP(base->object);
 		}
 	}
 

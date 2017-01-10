@@ -334,7 +334,7 @@ void BKE_library_foreach_ID_link(ID *id, LibraryIDLinkCallback callback, void *u
 				Scene *scene = (Scene *) id;
 				ToolSettings *toolsett = scene->toolsettings;
 				SceneRenderLayer *srl;
-				Base *base;
+				Base *legacy_base;
 
 				CALLBACK_INVOKE(scene->camera, IDWALK_NOP);
 				CALLBACK_INVOKE(scene->world, IDWALK_USER);
@@ -391,8 +391,8 @@ void BKE_library_foreach_ID_link(ID *id, LibraryIDLinkCallback callback, void *u
 
 				CALLBACK_INVOKE(scene->gpd, IDWALK_USER);
 
-				for (base = scene->base.first; base; base = base->next) {
-					CALLBACK_INVOKE(base->object, IDWALK_USER);
+				for (legacy_base = scene->base.first; legacy_base; legacy_base = legacy_base->next) {
+					CALLBACK_INVOKE(legacy_base->object, IDWALK_USER);
 				}
 
 				SceneCollection *sc;
@@ -410,8 +410,8 @@ void BKE_library_foreach_ID_link(ID *id, LibraryIDLinkCallback callback, void *u
 
 				SceneLayer *sl;
 				for (sl = scene->render_layers.first; sl; sl = sl->next) {
-					for (ObjectBase *ob_base = sl->object_bases.first; ob_base; ob_base = ob_base->next) {
-						CALLBACK_INVOKE(ob_base->object, IDWALK_NOP);
+					for (ObjectBase *base = sl->object_bases.first; base; base = base->next) {
+						CALLBACK_INVOKE(base->object, IDWALK_NOP);
 					}
 				}
 
