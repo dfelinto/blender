@@ -124,12 +124,12 @@ void BKE_scene_layer_engine_set(SceneLayer *sl, const char *engine)
  */
 void BKE_scene_layer_selected_objects_tag(SceneLayer *sl, const int tag)
 {
-	for (ObjectBase *ob_base = sl->object_bases.first; ob_base; ob_base = ob_base->next) {
-		if ((ob_base->flag & BASE_SELECTED) != 0) {
-			ob_base->object->flag |= tag;
+	for (ObjectBase *base = sl->object_bases.first; base; base = base->next) {
+		if ((base->flag & BASE_SELECTED) != 0) {
+			base->object->flag |= tag;
 		}
 		else {
-			ob_base->object->flag &= ~tag;
+			base->object->flag &= ~tag;
 		}
 	}
 }
@@ -139,6 +139,21 @@ void BKE_scene_layer_selected_objects_tag(SceneLayer *sl, const int tag)
 ObjectBase *BKE_scene_layer_base_find(SceneLayer *sl, Object *ob)
 {
 	return BLI_findptr(&sl->object_bases, ob, offsetof(ObjectBase, object));
+}
+
+void BKE_scene_layer_base_deselect_all(SceneLayer *sl)
+{
+	ObjectBase *base;
+
+	for (base = sl->object_bases.first; base; base = base->next) {
+		base->flag &= ~BASE_SELECTED;
+	}
+}
+
+void BKE_scene_layer_base_select(struct SceneLayer *sl, ObjectBase *selbase)
+{
+	selbase->flag |= BASE_SELECTED;
+	sl->basact = selbase;
 }
 
 static void scene_layer_object_base_unref(SceneLayer* sl, ObjectBase *base)
@@ -162,18 +177,18 @@ static void scene_layer_object_base_unref(SceneLayer* sl, ObjectBase *base)
  */
 static ObjectBase *object_base_add(SceneLayer *sl, Object *ob)
 {
-	ObjectBase *ob_base;
-	ob_base = BKE_scene_layer_base_find(sl, ob);
+	ObjectBase *base;
+	base = BKE_scene_layer_base_find(sl, ob);
 
-	if (ob_base == NULL) {
-		ob_base = MEM_callocN(sizeof(ObjectBase), "Object Base");
+	if (base == NULL) {
+		base = MEM_callocN(sizeof(ObjectBase), "Object Base");
 
 		/* do not bump user count, leave it for SceneCollections */
-		ob_base->object = ob;
-		BLI_addtail(&sl->object_bases, ob_base);
+		base->object = ob;
+		BLI_addtail(&sl->object_bases, base);
 	}
-	ob_base->refcount++;
-	return ob_base;
+	base->refcount++;
+	return base;
 }
 
 /* LayerCollection */
@@ -314,28 +329,28 @@ void BKE_collection_unlink(SceneLayer *sl, LayerCollection *lc)
 
 static void layer_collection_object_add(SceneLayer *sl, LayerCollection *lc, Object *ob)
 {
-	ObjectBase *ob_base = object_base_add(sl, ob);
+	ObjectBase *base = object_base_add(sl, ob);
 
 	/* only add an object once - prevent SceneCollection->objects and
 	 * SceneCollection->filter_objects to add the same object */
 
-	if (BLI_findptr(&lc->object_bases, ob_base, offsetof(LinkData, data))) {
+	if (BLI_findptr(&lc->object_bases, base, offsetof(LinkData, data))) {
 		return;
 	}
 
-	BLI_addtail(&lc->object_bases, BLI_genericNodeN(ob_base));
+	BLI_addtail(&lc->object_bases, BLI_genericNodeN(base));
 }
 
 static void layer_collection_object_remove(SceneLayer *sl, LayerCollection *lc, Object *ob)
 {
-	ObjectBase *ob_base;
-	ob_base = BKE_scene_layer_base_find(sl, ob);
+	ObjectBase *base;
+	base = BKE_scene_layer_base_find(sl, ob);
 
-	LinkData *link = BLI_findptr(&lc->object_bases, ob_base, offsetof(LinkData, data));
+	LinkData *link = BLI_findptr(&lc->object_bases, base, offsetof(LinkData, data));
 	BLI_remlink(&lc->object_bases, link);
 	MEM_freeN(link);
 
-	scene_layer_object_base_unref(sl, ob_base);
+	scene_layer_object_base_unref(sl, base);
 }
 
 static void layer_collection_objects_populate(SceneLayer *sl, LayerCollection *lc, ListBase *objects)
@@ -448,30 +463,36 @@ void BKE_collection_override_datablock_add(LayerCollection *UNUSED(lc), const ch
 void BKE_selected_objects_Iterator_begin(Iterator *iter, void *data_in)
 {
 	SceneLayer *sl = data_in;
-	ObjectBase *ob_base = sl->object_bases.first;
+	ObjectBase *base = sl->object_bases.first;
+
+	/* when there are no objects */
+	if (base ==  NULL) {
+		iter->valid = false;
+		return;
+	}
 
 	iter->valid = true;
+	iter->data = base;
 
-	if ((ob_base->flag & BASE_SELECTED) == 0) {
+	if ((base->flag & BASE_SELECTED) == 0) {
 		BKE_selected_objects_Iterator_next(iter);
 	}
 	else {
-		iter->current = ob_base->object;
-		iter->data = ob_base;
+		iter->current = base->object;
 	}
 }
 
 void BKE_selected_objects_Iterator_next(Iterator *iter)
 {
-	ObjectBase *ob_base = ((ObjectBase *)iter->data)->next;
+	ObjectBase *base = ((ObjectBase *)iter->data)->next;
 
-	while (ob_base) {
-		if ((ob_base->flag & BASE_SELECTED) != 0) {
-			iter->current = ob_base->object;
-			iter->data = ob_base;
+	while (base) {
+		if ((base->flag & BASE_SELECTED) != 0) {
+			iter->current = base->object;
+			iter->data = base;
 			return;
 		}
-		ob_base = ob_base->next;
+		base = base->next;
 	};
 
 	iter->current = NULL;

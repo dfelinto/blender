@@ -74,6 +74,7 @@
 #include "BKE_group.h"
 #include "BKE_lamp.h"
 #include "BKE_lattice.h"
+#include "BKE_layer.h"
 #include "BKE_library.h"
 #include "BKE_library_query.h"
 #include "BKE_library_remap.h"
@@ -205,7 +206,7 @@ void ED_object_rotation_from_view(bContext *C, float rot[3], const char align_ax
 	}
 }
 
-void ED_object_base_init_transform(bContext *C, Base *base, const float loc[3], const float rot[3])
+void ED_object_base_init_transform(bContext *C, ObjectBase *base, const float loc[3], const float rot[3])
 {
 	Object *ob = base->object;
 	Scene *scene = CTX_data_scene(C);
@@ -406,10 +407,11 @@ Object *ED_object_add_type(
         bContext *C,
         int type, const char *name,
         const float loc[3], const float rot[3],
-        bool enter_editmode, unsigned int layer)
+        bool enter_editmode, unsigned int UNUSED(layer))
 {
 	Main *bmain = CTX_data_main(C);
 	Scene *scene = CTX_data_scene(C);
+	SceneLayer *sl = CTX_data_scene_layer(C);
 	Object *ob;
 
 	/* for as long scene has editmode... */
@@ -417,13 +419,12 @@ Object *ED_object_add_type(
 		ED_object_editmode_exit(C, EM_FREEDATA | EM_FREEUNDO | EM_WAITCURSOR | EM_DO_UNDO);  /* freedata, and undo */
 
 	/* deselects all, sets scene->basact */
-	ob = BKE_object_add(bmain, scene, type, name);
-	BASACT->lay = ob->lay = layer;
+	ob = BKE_object_add(bmain, scene, sl, type, name);
 	/* editor level activate, notifiers */
-	ED_base_object_activate(C, BASACT);
+	ED_object_base_activate(C, sl->basact);
 
 	/* more editor stuff */
-	ED_object_base_init_transform(C, BASACT, loc, rot);
+	ED_object_base_init_transform(C, sl->basact, loc, rot);
 
 	/* Ignore collisions by default for non-mesh objects */
 	if (type != OB_MESH) {
@@ -1112,7 +1113,9 @@ static void object_delete_check_glsl_update(Object *ob)
 /* note: now unlinks constraints as well */
 void ED_base_object_free_and_unlink(Main *bmain, Scene *scene, Base *base)
 {
-	if (BKE_library_ID_is_indirectly_used(bmain, base->object) && ID_REAL_USERS(base->object) <= 1) {
+	if (BKE_library_ID_is_indirectly_used(bmain, base->object) &&
+	    ID_REAL_USERS(base->object) <= 1 && ID_EXTRA_USERS(base->object) == 0)
+	{
 		/* We cannot delete indirectly used object... */
 		printf("WARNING, undeletable object '%s', should have been catched before reaching this function!",
 		       base->object->id.name + 2);
@@ -1147,7 +1150,7 @@ static int object_delete_exec(bContext *C, wmOperator *op)
 			BKE_reportf(op->reports, RPT_WARNING, "Cannot delete indirectly linked object '%s'", base->object->id.name + 2);
 			continue;
 		}
-		else if (is_indirectly_used && ID_REAL_USERS(base->object) <= 1) {
+		else if (is_indirectly_used && ID_REAL_USERS(base->object) <= 1 && ID_EXTRA_USERS(base->object) == 0) {
 			BKE_reportf(op->reports, RPT_WARNING,
 			        "Cannot delete object '%s' from scene '%s', indirectly used objects need at least one user",
 			        base->object->id.name + 2, scene->id.name + 2);
@@ -1181,7 +1184,7 @@ static int object_delete_exec(bContext *C, wmOperator *op)
 				if (scene_iter != scene && !ID_IS_LINKED_DATABLOCK(scene_iter)) {
 					base_other = BKE_scene_base_find(scene_iter, base->object);
 					if (base_other) {
-						if (is_indirectly_used && ID_REAL_USERS(base->object) <= 1) {
+						if (is_indirectly_used && ID_REAL_USERS(base->object) <= 1 && ID_EXTRA_USERS(base->object) == 0) {
 							BKE_reportf(op->reports, RPT_WARNING,
 							            "Cannot delete object '%s' from scene '%s', indirectly used objects need at least one user",
 							            base->object->id.name + 2, scene_iter->id.name + 2);
@@ -2209,7 +2212,8 @@ static Base *object_add_duplicate_internal(Main *bmain, Scene *scene, Base *base
  *       this is not done automatic since we may duplicate many objects in a batch */
 Base *ED_object_add_duplicate(Main *bmain, Scene *scene, Base *base, int dupflag)
 {
-	Base *basen;
+#if 0
+	ObjectBase *basen;
 	Object *ob;
 
 	clear_sca_new_poins();  /* BGE logic */
@@ -2234,6 +2238,15 @@ Base *ED_object_add_duplicate(Main *bmain, Scene *scene, Base *base, int dupflag
 	BKE_main_id_clear_newpoins(bmain);
 
 	return basen;
+#else
+	/* handle duplicate */
+	TODO_LAYER_BASE
+	(void)bmain;
+	(void)scene;
+	(void)base;
+	(void)dupflag;
+	return NULL;
+#endif
 }
 
 /* contextual operator dupli */

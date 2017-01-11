@@ -215,7 +215,7 @@ Scene *BKE_scene_copy(Main *bmain, Scene *sce, int type)
 	SceneRenderLayer *srl, *new_srl;
 	FreestyleLineSet *lineset;
 	ToolSettings *ts;
-	Base *base, *obase;
+	Base *legacy_base, *olegacy_base;
 	
 	if (type == SCE_COPY_EMPTY) {
 		ListBase rl, rv;
@@ -269,14 +269,14 @@ Scene *BKE_scene_copy(Main *bmain, Scene *sce, int type)
 			BKE_libblock_relink_ex(bmain, scen->nodetree, &sce->id, &scen->id, false);
 		}
 
-		obase = sce->base.first;
-		base = scen->base.first;
-		while (base) {
-			id_us_plus(&base->object->id);
-			if (obase == sce->basact) scen->basact = base;
+		olegacy_base = sce->base.first;
+		legacy_base = scen->base.first;
+		while (legacy_base) {
+			id_us_plus(&legacy_base->object->id);
+			if (olegacy_base == sce->basact) scen->basact = legacy_base;
 	
-			obase = obase->next;
-			base = base->next;
+			olegacy_base = olegacy_base->next;
+			legacy_base = legacy_base->next;
 		}
 
 		/* copy action and remove animation used by sequencer */
@@ -320,9 +320,9 @@ Scene *BKE_scene_copy(Main *bmain, Scene *sce, int type)
 
 			if (sl->basact) {
 				Object *active_ob = sl->basact->object;
-				for (ObjectBase *ob_base = new_sl->object_bases.first; ob_base; ob_base = ob_base->next) {
-					if (ob_base->object == active_ob) {
-						new_sl->basact = ob_base;
+				for (ObjectBase *base = new_sl->object_bases.first; base; base = base->next) {
+					if (base->object == active_ob) {
+						new_sl->basact = base;
 						break;
 					}
 				}

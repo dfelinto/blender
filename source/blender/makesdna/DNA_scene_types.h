@@ -1920,7 +1920,7 @@ extern const char *RE_engine_id_CYCLES;
 	((base)->object->id.lib == NULL) &&                                       \
 	(((base)->object->restrictflag & OB_RESTRICT_VIEW) == 0))
 #define BASE_SELECTABLE(v3d, base)  (                                         \
-	(base->lay & v3d->lay) &&                                                 \
+	(v3d != NULL) &&                                                          \
 	(base->object->restrictflag & (OB_RESTRICT_SELECT | OB_RESTRICT_VIEW)) == 0)
 #define BASE_VISIBLE(v3d, base)  (                                            \
 	(base->lay & v3d->lay) &&                                                 \

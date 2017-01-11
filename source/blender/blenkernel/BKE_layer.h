@@ -37,6 +37,7 @@ extern "C" {
 #define TODO_LAYER_SYNC_FILTER /* syncing of filter_objects across all trees */
 #define TODO_LAYER_OVERRIDE /* CollectionOverride */
 #define TODO_LAYER_CONTEXT /* get/set current (context) SceneLayer */
+#define TODO_LAYER_BASE /* Base to ObjectBase related TODO */
 #define TODO_LAYER /* generic todo */
 
 struct LayerCollection;
@@ -59,6 +60,8 @@ void BKE_scene_layer_engine_set(struct SceneLayer *sl, const char *engine);
 void BKE_scene_layer_selected_objects_tag(struct SceneLayer *sl, const int tag);
 
 struct ObjectBase *BKE_scene_layer_base_find(struct SceneLayer *sl, struct Object *ob);
+void BKE_scene_layer_base_deselect_all(struct SceneLayer *sl);
+void BKE_scene_layer_base_select(struct SceneLayer *sl, struct ObjectBase *selbase);
 
 void BKE_layer_collection_free(struct SceneLayer *sl, struct LayerCollection *lc);
 
@@ -99,9 +102,9 @@ void BKE_selected_objects_Iterator_end(Iterator *iter);
 
 #define FOREACH_OBJECT(sl, _ob)                                               \
 {                                                                             \
-	ObjectBase *ob_base;                                                      \
-	for (ob_base = sl->object_bases.first; ob_base; ob_base = ob_base->next) {\
-	    _ob = ob_base->object;
+	ObjectBase *base;                                                         \
+	for (base = sl->object_bases.first; base; base = base->next) {            \
+	    _ob = base->object;
 
 #define FOREACH_OBJECT_END                                                    \
     }                                                                         \

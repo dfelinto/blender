@@ -251,7 +251,7 @@ void GPU_viewport_free(GPUViewport *viewport)
 
 /****************** debug ********************/
 
-bool GPU_viewport_debug_depth_create(GPUViewport *viewport, int width, int height, int UNUSED(samples), char err_out[256])
+bool GPU_viewport_debug_depth_create(GPUViewport *viewport, int width, int height, char err_out[256])
 {
 	viewport->debug_depth = GPU_texture_create_2D_custom(width, height, 4, GPU_RGBA16F, NULL, err_out);
 	return (viewport->debug_depth != NULL);

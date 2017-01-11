@@ -333,6 +333,7 @@ static int make_proxy_exec(bContext *C, wmOperator *op)
 	Object *ob, *gob = ED_object_active_context(C);
 	GroupObject *go;
 	Scene *scene = CTX_data_scene(C);
+	SceneLayer *sl = CTX_data_scene_layer(C);
 
 	if (gob->dup_group != NULL) {
 		go = BLI_findlink(&gob->dup_group->gobject, RNA_enum_get(op->ptr, "object"));
@@ -351,7 +352,7 @@ static int make_proxy_exec(bContext *C, wmOperator *op)
 		BLI_snprintf(name, sizeof(name), "%s_proxy", ((ID *)(gob ? gob : ob))->name + 2);
 
 		/* Add new object for the proxy */
-		newob = BKE_object_add(bmain, scene, OB_EMPTY, name);
+		newob = BKE_object_add(bmain, scene, sl, OB_EMPTY, name);
 
 		/* set layers OK */
 		newbase = BASACT;    /* BKE_object_add sets active... */
@@ -1808,8 +1809,8 @@ static void single_object_users(Main *bmain, Scene *scene, View3D *v3d, const in
 
 	/* loop over SceneLayers and assign the pointers accordingly */
 	for (SceneLayer *sl = scene->render_layers.first; sl; sl = sl->next) {
-		for (ObjectBase *ob_base = sl->object_bases.first; ob_base; ob_base = ob_base->next) {
-			ID_NEW_REMAP(ob_base->object);
+		for (ObjectBase *base = sl->object_bases.first; base; base = base->next) {
+			ID_NEW_REMAP(base->object);
 		}
 	}
 

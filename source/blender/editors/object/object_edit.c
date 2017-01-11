@@ -464,31 +464,22 @@ void ED_object_editmode_exit(bContext *C, int flag)
 void ED_object_editmode_enter(bContext *C, int flag)
 {
 	Scene *scene = CTX_data_scene(C);
-	Base *base = NULL;
+	SceneLayer *sl = CTX_data_scene_layer(C);
 	Object *ob;
-	ScrArea *sa = CTX_wm_area(C);
-	View3D *v3d = NULL;
 	bool ok = false;
 
 	if (ID_IS_LINKED_DATABLOCK(scene)) return;
 
-	if (sa && sa->spacetype == SPACE_VIEW3D)
-		v3d = sa->spacedata.first;
-
 	if ((flag & EM_IGNORE_LAYER) == 0) {
-		base = CTX_data_active_base(C); /* active layer checked here for view3d */
+		ob = CTX_data_active_object(C); /* active layer checked here for view3d */
 
-		if (base == NULL) return;
-		else if (v3d && (base->lay & v3d->lay) == 0) return;
-		else if (!v3d && (base->lay & scene->lay) == 0) return;
+		if (ob == NULL) return;
 	}
 	else {
-		base = scene->basact;
+		ob = sl->basact->object;
 	}
 
-	if (ELEM(NULL, base, base->object, base->object->data)) return;
-
-	ob = base->object;
+	if (ELEM(NULL, ob, ob->data)) return;
 
 	/* this checks actual object->data, for cases when other scenes have it in editmode context */
 	if (BKE_object_is_in_editmode(ob))
@@ -651,7 +642,7 @@ void OBJECT_OT_editmode_toggle(wmOperatorType *ot)
 
 static int posemode_exec(bContext *C, wmOperator *op)
 {
-	Base *base = CTX_data_active_base(C);
+	ObjectBase *base = CTX_data_active_base(C);
 	Object *ob = base->object;
 	const int mode_flag = OB_MODE_POSE;
 	const bool is_mode_set = (ob->mode & mode_flag) != 0;

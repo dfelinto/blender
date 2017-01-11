@@ -47,6 +47,7 @@
 #include "BLI_rand.h"
 #include "BLI_sort_utils.h"
 
+#include "BKE_layer.h"
 #include "BKE_material.h"
 #include "BKE_context.h"
 #include "BKE_deform.h"
@@ -3258,6 +3259,7 @@ static bool mesh_separate_loose(Main *bmain, Scene *scene, Base *base_old, BMesh
 
 static int edbm_separate_exec(bContext *C, wmOperator *op)
 {
+#if 0
 	Main *bmain = CTX_data_main(C);
 	Scene *scene = CTX_data_scene(C);
 	const int type = RNA_enum_get(op->ptr, "type");
@@ -3356,6 +3358,16 @@ static int edbm_separate_exec(bContext *C, wmOperator *op)
 	}
 
 	return OPERATOR_CANCELLED;
+#else
+	/* need to refactor this to use ObjectBase and create a new object in the correct SceneCollection */
+	TODO_LAYER_BASE
+	(void)C;
+	(void)mesh_separate_loose;
+	(void)mesh_separate_material;
+	(void)mesh_separate_selected;
+	BKE_report(op->reports, RPT_ERROR, "MESH_OT_separate not supported at the moment");
+	return OPERATOR_CANCELLED;
+#endif
 }
 
 void MESH_OT_separate(wmOperatorType *ot)

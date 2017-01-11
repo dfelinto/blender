@@ -5645,7 +5645,7 @@ static void lib_link_scene_collection(FileData *fd, Library *lib, SceneCollectio
 static void lib_link_scene(FileData *fd, Main *main)
 {
 	Scene *sce;
-	Base *base, *next;
+	Base *base_legacy, *base_legacy_next;
 	Sequence *seq;
 	SceneLayer *sl;
 	SceneRenderLayer *srl;
@@ -5697,17 +5697,17 @@ static void lib_link_scene(FileData *fd, Main *main)
 			
 			sce->toolsettings->particle.shape_object = newlibadr(fd, sce->id.lib, sce->toolsettings->particle.shape_object);
 			
-			for (base = sce->base.first; base; base = next) {
-				next = base->next;
+			for (base_legacy = sce->base.first; base_legacy; base_legacy = base_legacy_next) {
+				base_legacy_next = base_legacy->next;
 				
-				base->object = newlibadr_us(fd, sce->id.lib, base->object);
+				base_legacy->object = newlibadr_us(fd, sce->id.lib, base_legacy->object);
 				
-				if (base->object == NULL) {
+				if (base_legacy->object == NULL) {
 					blo_reportf_wrap(fd->reports, RPT_WARNING, TIP_("LIB: object lost from scene: '%s'"),
 					                 sce->id.name + 2);
-					BLI_remlink(&sce->base, base);
-					if (base == sce->basact) sce->basact = NULL;
-					MEM_freeN(base);
+					BLI_remlink(&sce->base, base_legacy);
+					if (base_legacy == sce->basact) sce->basact = NULL;
+					MEM_freeN(base_legacy);
 				}
 			}
 			
@@ -5796,9 +5796,9 @@ static void lib_link_scene(FileData *fd, Main *main)
 			lib_link_scene_collection(fd, sce->id.lib, sce->collection);
 
 			for (sl = sce->render_layers.first; sl; sl = sl->next) {
-				for (ObjectBase *ob_base = sl->object_bases.first; ob_base; ob_base = ob_base->next) {
+				for (ObjectBase *base = sl->object_bases.first; base; base = base->next) {
 					/* we only bump the use count for the collection objects */
-					ob_base->object = newlibadr(fd, sce->id.lib, ob_base->object);
+					base->object = newlibadr(fd, sce->id.lib, base->object);
 				}
 			}
 

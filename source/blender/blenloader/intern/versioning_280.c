@@ -120,6 +120,22 @@ void blo_do_versions_after_linking_280(Main *main)
 					lc = lc->next;
 				}
 
+				/* convert active base */
+				if (scene->basact) {
+					sl->basact = BKE_scene_layer_base_find(sl, scene->basact->object);
+				}
+
+				/* convert selected bases */
+				for (Base *base = scene->base.first; base; base = base->next) {
+					ObjectBase *ob_base = BKE_scene_layer_base_find(sl, base->object);
+					if ((base->flag & BA_SELECT) != 0) {
+						ob_base->flag |= BASE_SELECTED;
+					}
+					else {
+						ob_base->flag &= ~BASE_SELECTED;
+					}
+				}
+
 				/* TODO: copy scene render data to layer */
 
 				/* Cleanup */

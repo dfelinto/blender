@@ -46,6 +46,7 @@
 #include "BKE_context.h"
 #include "BKE_depsgraph.h"
 #include "BKE_object.h"
+#include "BKE_layer.h"
 #include "BKE_scene.h"
 #include "BKE_sequencer.h"
 #include "BKE_armature.h"
@@ -655,8 +656,10 @@ static eOLDrawState tree_element_active_text(
 static eOLDrawState tree_element_active_pose(
         bContext *C, Scene *scene, TreeElement *UNUSED(te), TreeStoreElem *tselem, const eOLSetState set)
 {
+	TODO_LAYER_CONTEXT; /* we may need to pass SceneLayer instead of Scene here */
+	SceneLayer *sl = CTX_data_scene_layer(C);
 	Object *ob = (Object *)tselem->id;
-	Base *base = BKE_scene_base_find(scene, ob);
+	ObjectBase *base = BKE_scene_layer_base_find(sl, ob);
 	
 	if (set != OL_SETSEL_NONE) {
 		if (scene->obedit)
