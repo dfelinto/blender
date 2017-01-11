@@ -335,9 +335,6 @@ DRWBatch *DRW_batch_create(struct GPUShader *shader, DRWPass *pass)
 
 void DRW_batch_free(struct DRWBatch *batch)
 {
-	for (LinkData *link = batch->objects.first; link; link = link->next) {
-		MEM_freeN(link->data);
-	}
 	BLI_freelistN(&batch->objects);
 
 	BLI_freelistN(&batch->interface->uniforms);
@@ -352,9 +349,6 @@ void DRW_batch_surface_add(DRWBatch *batch, Object *ob)
 
 void DRW_batch_surface_clear(DRWBatch *batch)
 {
-	for (LinkData *link = batch->objects.first; link; link = link->next) {
-		MEM_freeN(link->data);
-	}
 	BLI_freelistN(&batch->objects);
 	//BLI_listbase_clear(&batch->objects);
 }
@@ -419,7 +413,7 @@ void DRW_batch_uniform_mat4(DRWBatch *batch, const char *name, const float *valu
 
 DRWPass *DRW_pass_create(const char *name, DRWState state)
 {
-	DRWPass *pass = (DRWPass *)MEM_callocN(sizeof(DRWPass), name);
+	DRWPass *pass = MEM_callocN(sizeof(DRWPass), name);
 	pass->state = state;
 
 	return pass;
