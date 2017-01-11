@@ -301,7 +301,7 @@ static DRWBatch *clay_batch_create(DRWPass *pass, CLAY_BatchStorage *storage)
 	const int depthloc = 0, matcaploc = 1, jitterloc = 2, sampleloc = 3;
 	const bool use_rot = (storage->matcap_rot[1] != 0.0f);
 	const bool use_ao = (storage->ssao_params_var[1] != 0.0f || storage->ssao_params_var[2] != 0.0f);
-	const bool use_hsv = (storage->matcap_hsv[0] != 0.0f);
+	const bool use_hsv = (storage->matcap_hsv[0] != 0.5f || storage->matcap_hsv[1] != 0.0f || storage->matcap_hsv[2] != 0.0f);
 	struct GPUShader *sh;
 
 	if (use_rot && use_ao && use_hsv) {
@@ -382,9 +382,9 @@ static void clay_populate_passes(CLAY_PassList *passes, const struct bContext *C
 		storage->matcap_rot[0] = cosf(settings->matcap_rot * 3.14159f * 2.0f);
 		storage->matcap_rot[1] = sinf(settings->matcap_rot * 3.14159f * 2.0f);
 
-		storage->matcap_hsv[0] = settings->matcap_hue;
-		storage->matcap_hsv[1] = 1.0f;
-		storage->matcap_hsv[2] = 1.0f;
+		storage->matcap_hsv[0] = settings->matcap_hue + 0.5f;
+		storage->matcap_hsv[1] = settings->matcap_sat * 2.0f;
+		storage->matcap_hsv[2] = settings->matcap_val * 2.0f;
 
 		storage->ssao_params_var[0] = settings->ssao_distance;
 		storage->ssao_params_var[1] = settings->ssao_factor_cavity;

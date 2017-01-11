@@ -1064,6 +1064,8 @@ class MATERIAL_PT_clay_settings(MaterialButtonsPanel, Panel):
         layout.prop(settings, "type")
         layout.prop(settings, "matcap_rotation")
         layout.prop(settings, "matcap_hue")
+        layout.prop(settings, "matcap_saturation")
+        layout.prop(settings, "matcap_value")
         layout.prop(settings, "ssao_factor_cavity")
         layout.prop(settings, "ssao_factor_edge")
         layout.prop(settings, "ssao_distance")

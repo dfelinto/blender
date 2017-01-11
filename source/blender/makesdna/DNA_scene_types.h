@@ -801,6 +801,8 @@ typedef struct EngineDataClay {
 	short matcap_icon; /* Icon ID */
 	float matcap_rot;
 	float matcap_hue;
+	float matcap_sat;
+	float matcap_val;
 	float ssao_distance;
 	float ssao_attenuation;
 	float ssao_factor_cavity;
