@@ -47,6 +47,8 @@
 #include "BKE_editmesh.h"
 #include "BKE_paint.h"
 
+#include "ED_object.h"
+
 #include "GPU_extensions.h"
 
 #include "RNA_define.h"
@@ -563,7 +565,7 @@ static int rna_Scene_object_bases_lookup_string(PointerRNA *ptr, const char *key
 
 	for (base = scene->base.first; base; base = base->next) {
 		if (STREQLEN(base->object->id.name + 2, key, sizeof(base->object->id.name) - 2)) {
-			*r_ptr = rna_pointer_inherit_refine(ptr, &RNA_ObjectBase, base);
+			*r_ptr = rna_pointer_inherit_refine(ptr, &RNA_ObjectBaseLegacy, base);
 			return true;
 		}
 	}
@@ -2482,6 +2484,13 @@ static void rna_SceneLayer_remove(
 
 	DAG_id_tag_update(&scene->id, 0);
 	WM_main_add_notifier(NC_SCENE | ND_LAYER, NULL);
+}
+
+static void rna_ObjectBase_select_update(Main *UNUSED(bmain), Scene *UNUSED(scene), PointerRNA *ptr)
+{
+	ObjectBase *base = (ObjectBase *)ptr->data;
+	short mode = (base->flag & BASE_SELECTED) ? BA_SELECT : BA_DESELECT;
+	ED_object_base_select(base, mode);
 }
 
 #else
@@ -5562,6 +5571,26 @@ static void rna_def_scene_layers(BlenderRNA *brna, PropertyRNA *cprop)
 	RNA_def_parameter_clear_flags(parm, PROP_THICK_WRAP, 0);
 }
 
+static void rna_def_object_base(BlenderRNA *brna)
+{
+	StructRNA *srna;
+	PropertyRNA *prop;
+
+	srna = RNA_def_struct(brna, "ObjectBase", NULL);
+	RNA_def_struct_sdna(srna, "ObjectBase");
+	RNA_def_struct_ui_text(srna, "Object Base", "An object instance in a scene layer");
+	RNA_def_struct_ui_icon(srna, ICON_OBJECT_DATA);
+
+	prop = RNA_def_property(srna, "object", PROP_POINTER, PROP_NONE);
+	RNA_def_property_pointer_sdna(prop, NULL, "object");
+	RNA_def_property_ui_text(prop, "Object", "Object this base links to");
+
+	prop = RNA_def_property(srna, "select", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "flag", BASE_SELECTED);
+	RNA_def_property_ui_text(prop, "Select", "Object base selection state");
+	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_ObjectBase_select_update");
+}
+
 /* TODO LAYERS: legacy SceneRenderLayers, to be removed */
 
 static void rna_def_scene_render_layer(BlenderRNA *brna)
@@ -7277,7 +7306,7 @@ static void rna_def_scene_objects(BlenderRNA *brna, PropertyRNA *cprop)
 	RNA_def_function_flag(func, FUNC_USE_CONTEXT | FUNC_USE_REPORTS);
 	parm = RNA_def_pointer(func, "object", "Object", "", "Object to add to scene");
 	RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED);
-	parm = RNA_def_pointer(func, "base", "ObjectBase", "", "The newly created base");
+	parm = RNA_def_pointer(func, "base", "ObjectBaseLegacy", "", "The newly created base");
 	RNA_def_function_return(func, parm);
 
 	func = RNA_def_function(srna, "unlink", "rna_Scene_object_unlink");
@@ -7312,7 +7341,7 @@ static void rna_def_scene_bases(BlenderRNA *brna, PropertyRNA *cprop)
 	RNA_def_struct_ui_text(srna, "Scene Bases", "Collection of scene bases");
 
 	prop = RNA_def_property(srna, "active", PROP_POINTER, PROP_NONE);
-	RNA_def_property_struct_type(prop, "ObjectBase");
+	RNA_def_property_struct_type(prop, "ObjectBaseLegacy");
 	RNA_def_property_pointer_sdna(prop, NULL, "basact");
 	RNA_def_property_flag(prop, PROP_EDITABLE);
 	RNA_def_property_ui_text(prop, "Active Base", "Active object base in the scene");
@@ -7556,7 +7585,7 @@ void RNA_def_scene(BlenderRNA *brna)
 	/* Bases/Objects */
 	prop = RNA_def_property(srna, "object_bases", PROP_COLLECTION, PROP_NONE);
 	RNA_def_property_collection_sdna(prop, NULL, "base", NULL);
-	RNA_def_property_struct_type(prop, "ObjectBase");
+	RNA_def_property_struct_type(prop, "ObjectBaseLegacy");
 	RNA_def_property_ui_text(prop, "Bases", "");
 	RNA_def_property_collection_funcs(prop, NULL, NULL, NULL, NULL, NULL, NULL,
 	                                  "rna_Scene_object_bases_lookup_string", NULL);
@@ -7932,6 +7961,7 @@ void RNA_def_scene(BlenderRNA *brna)
 	rna_def_scene_collection(brna);
 	rna_def_layer_collection(brna);
 	rna_def_scene_layer(brna);
+	rna_def_object_base(brna);
 	RNA_define_animate_sdna(true);
 	/* *** Animated *** */
 	rna_def_scene_render_data(brna);

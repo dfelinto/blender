@@ -2895,14 +2895,14 @@ static void rna_def_dupli_object(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Dupli Type", "Duplicator type that generated this dupli object");
 }
 
-static void rna_def_object_base(BlenderRNA *brna)
+static void rna_def_object_base_legacy(BlenderRNA *brna)
 {
 	StructRNA *srna;
 	PropertyRNA *prop;
 
-	srna = RNA_def_struct(brna, "ObjectBase", NULL);
+	srna = RNA_def_struct(brna, "ObjectBaseLegacy", NULL);
 	RNA_def_struct_sdna(srna, "Base");
-	RNA_def_struct_ui_text(srna, "Object Base", "An object instance in a scene");
+	RNA_def_struct_ui_text(srna, "Object Base Legacy", "An object instance in a scene (deprecated)");
 	RNA_def_struct_ui_icon(srna, ICON_OBJECT_DATA);
 
 	prop = RNA_def_property(srna, "object", PROP_POINTER, PROP_NONE);
@@ -2928,7 +2928,7 @@ static void rna_def_object_base(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Select", "Object base selection state");
 	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_Base_select_update");
 	
-	RNA_api_object_base(srna);
+	RNA_api_object_base_legacy(srna);
 }
 
 void RNA_def_object(BlenderRNA *brna)
@@ -2937,7 +2937,7 @@ void RNA_def_object(BlenderRNA *brna)
 
 	RNA_define_animate_sdna(false);
 	rna_def_object_game_settings(brna);
-	rna_def_object_base(brna);
+	rna_def_object_base_legacy(brna);
 	rna_def_vertex_group(brna);
 	rna_def_material_slot(brna);
 	rna_def_dupli_object(brna);

@@ -413,9 +413,9 @@ finally:
 	free_bvhtree_from_mesh(&treeData);
 }
 
-/* ObjectBase */
+/* ObjectBaseLegacy */
 
-static void rna_ObjectBase_layers_from_view(Base *base, View3D *v3d)
+static void rna_ObjectBaseLegacy_layers_from_view(Base *base, View3D *v3d)
 {
 	base->lay = base->object->lay = v3d->lay;
 }
@@ -707,12 +707,12 @@ void RNA_api_object(StructRNA *srna)
 }
 
 
-void RNA_api_object_base(StructRNA *srna)
+void RNA_api_object_base_legacy(StructRNA *srna)
 {
 	FunctionRNA *func;
 	PropertyRNA *parm;
 
-	func = RNA_def_function(srna, "layers_from_view", "rna_ObjectBase_layers_from_view");
+	func = RNA_def_function(srna, "layers_from_view", "rna_ObjectBaseLegacy_layers_from_view");
 	RNA_def_function_ui_description(func,
 	                                "Sets the object layers from a 3D View (use when adding an object in local view)");
 	parm = RNA_def_pointer(func, "view", "SpaceView3D", "", "");
