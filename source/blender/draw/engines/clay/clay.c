@@ -52,6 +52,7 @@ static struct CLAY_data {
 	struct GPUTexture *matcap_array;
 	float matcap_colors[24][3];
 	float matcap_rot[2];
+	float matcap_hsv[3];
 	int matcap_id;
 
 	/* Ssao */
@@ -254,6 +255,7 @@ static void clay_engine_init(void)
 	if (!data.clay_sh) {
 		const char *defines =
 		        "#define USE_AO;\n"
+		        "#define USE_HSV;\n"
 		        "#define USE_ROTATION;\n";
 
 		/* TODO Optimisation : Create shader combinations and bind the right 
@@ -304,6 +306,7 @@ static void clay_populate_passes(CLAY_PassList *passes, const struct bContext *C
 		DRW_batch_uniform_vec3(batch, "matcaps_color", (float *)data.matcap_colors, 24);
 		DRW_batch_uniform_vec2(batch, "matcap_rotation", (float *)data.matcap_rot, 1);
 		DRW_batch_uniform_int(batch, "matcap_index", &data.matcap_id, 1);
+		DRW_batch_uniform_vec3(batch, "matcap_hsv", (float *)data.matcap_hsv, 1);
 
 		/* SSAO */
 		DRW_batch_uniform_mat4(batch, "WinMatrix", (float *)data.winmat);
@@ -323,6 +326,10 @@ static void clay_populate_passes(CLAY_PassList *passes, const struct bContext *C
 
 		data.matcap_rot[0] = cosf(settings->matcap_rot * 3.14159f * 2.0f);
 		data.matcap_rot[1] = sinf(settings->matcap_rot * 3.14159f * 2.0f);
+
+		data.matcap_hsv[0] = settings->matcap_hue;
+		data.matcap_hsv[1] = 1.0f;
+		data.matcap_hsv[2] = 1.0f;
 
 		data.ssao_params_var[0] = settings->ssao_distance;
 		data.ssao_params_var[1] = settings->ssao_factor_cavity;

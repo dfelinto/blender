@@ -4,10 +4,10 @@ uniform mat4 WinMatrix;
 
 /* Matcap */
 uniform sampler2DArray matcaps;
+uniform vec3 matcaps_color[24];
 uniform int matcap_index;
 uniform vec2 matcap_rotation;
-uniform vec3 matcaps_color[24];
-uniform float matcap_hue;
+uniform vec3 matcap_hsv;
 
 /* Screen Space Occlusion */
 /* store the view space vectors for the corners of the view frustum here.
@@ -35,6 +35,95 @@ varying vec3 normal;
 #else
 in vec3 normal;
 out vec4 fragColor;
+#endif
+
+#ifdef USE_HSV
+void rgb_to_hsv(vec3 rgb, out vec3 outcol)
+{
+	float cmax, cmin, h, s, v, cdelta;
+	vec3 c;
+
+	cmax = max(rgb[0], max(rgb[1], rgb[2]));
+	cmin = min(rgb[0], min(rgb[1], rgb[2]));
+	cdelta = cmax - cmin;
+
+	v = cmax;
+	if (cmax != 0.0)
+		s = cdelta / cmax;
+	else {
+		s = 0.0;
+		h = 0.0;
+	}
+
+	if (s == 0.0) {
+		h = 0.0;
+	}
+	else {
+		c = (vec3(cmax, cmax, cmax) - rgb.xyz) / cdelta;
+
+		if (rgb.x == cmax) h = c[2] - c[1];
+		else if (rgb.y == cmax) h = 2.0 + c[0] -  c[2];
+		else h = 4.0 + c[1] - c[0];
+
+		h /= 6.0;
+
+		if (h < 0.0)
+			h += 1.0;
+	}
+
+	outcol = vec3(h, s, v);
+}
+
+void hsv_to_rgb(vec3 hsv, out vec3 outcol)
+{
+	float i, f, p, q, t, h, s, v;
+	vec3 rgb;
+
+	h = hsv[0];
+	s = hsv[1];
+	v = hsv[2];
+
+	if (s == 0.0) {
+		rgb = vec3(v, v, v);
+	}
+	else {
+		if (h == 1.0)
+			h = 0.0;
+
+		h *= 6.0;
+		i = floor(h);
+		f = h - i;
+		rgb = vec3(f, f, f);
+		p = v * (1.0 - s);
+		q = v * (1.0 - (s * f));
+		t = v * (1.0 - (s * (1.0 - f)));
+
+		if (i == 0.0) rgb = vec3(v, t, p);
+		else if (i == 1.0) rgb = vec3(q, v, p);
+		else if (i == 2.0) rgb = vec3(p, v, t);
+		else if (i == 3.0) rgb = vec3(p, q, v);
+		else if (i == 4.0) rgb = vec3(t, p, v);
+		else rgb = vec3(v, p, q);
+	}
+
+	outcol = rgb;
+}
+
+void hue_sat(float hue, float sat, float value, inout vec3 col)
+{
+	vec3 hsv;
+
+	rgb_to_hsv(col, hsv);
+
+	hsv.x += hue;
+	hsv.x -= floor(hsv.x);
+	hsv.y *= sat;
+	hsv.y = clamp(hsv.y, 0.0, 1.0);
+	hsv.z *= value;
+	hsv.z = clamp(hsv.z, 0.0, 1.0);
+
+	hsv_to_rgb(hsv, col);
+}
 #endif
 
 /* simple depth reconstruction, see http://www.derschmale.com/2014/01/26/reconstructing-positions-from-the-depth-buffer
@@ -149,6 +238,15 @@ void main() {
 	calculate_ssao_factor(depth, normal, position, cavity, edges);
 
 	col = mix(col, matcaps_color[int(matcap_index)], cavity);
+	col *= edges + 1.0;
+#endif
+
+#ifdef USE_HSV
+	hue_sat(matcap_hsv.x, matcap_hsv.y, matcap_hsv.z, col);
+#endif
+
+#ifdef USE_AO
+	/* Apply highlights after hue shift */
 	col *= edges + 1.0;
 #endif
 
