@@ -465,24 +465,21 @@ void ED_object_editmode_enter(bContext *C, int flag)
 {
 	Scene *scene = CTX_data_scene(C);
 	SceneLayer *sl = CTX_data_scene_layer(C);
-	ObjectBase *base = NULL;
 	Object *ob;
 	bool ok = false;
 
 	if (ID_IS_LINKED_DATABLOCK(scene)) return;
 
 	if ((flag & EM_IGNORE_LAYER) == 0) {
-		base = CTX_data_active_base(C); /* active layer checked here for view3d */
+		ob = CTX_data_active_object(C); /* active layer checked here for view3d */
 
-		if (base == NULL) return;
+		if (ob == NULL) return;
 	}
 	else {
-		base = sl->basact;
+		ob = sl->basact->object;
 	}
 
-	if (ELEM(NULL, base, base->object, base->object->data)) return;
-
-	ob = base->object;
+	if (ELEM(NULL, ob, ob->data)) return;
 
 	/* this checks actual object->data, for cases when other scenes have it in editmode context */
 	if (BKE_object_is_in_editmode(ob))
