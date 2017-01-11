@@ -129,7 +129,7 @@ struct GPUShader *DRW_shader_create_3D_depth_only(void);
 void DRW_shader_free(struct GPUShader *shader);
 
 /* Batches */
-DRWBatch *DRW_batch_create(struct GPUShader *shader, DRWPass *pass);
+DRWBatch *DRW_batch_create(struct GPUShader *shader, DRWPass *pass, void *storage);
 void DRW_batch_free(struct DRWBatch *batch);
 void DRW_batch_surface_add(DRWBatch *batch, struct Object *ob);
 void DRW_batch_surface_clear(DRWBatch *batch);

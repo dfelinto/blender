@@ -40,30 +40,45 @@ extern char datatoc_clay_vert_glsl[];
 
 /* Storage */
 
+typedef struct CLAY_BatchStorage {
+	float matcap_rot[2];
+	int matcap_id;
+	float matcap_hsv[3];
+	float ssao_params_var[4];
+} CLAY_BatchStorage;
+
 static struct CLAY_data {
 	/* Depth Pre Pass */
 	struct GPUShader *depth_sh;
 	struct DRWInterface *depth_itf;
 	/* Shading Pass */
-	struct GPUShader *clay_sh;
+	struct GPUShader *clay_sh[8];
 	struct DRWInterface *clay_itf;
 
 	/* Matcap textures */
 	struct GPUTexture *matcap_array;
 	float matcap_colors[24][3];
-	float matcap_rot[2];
-	float matcap_hsv[3];
-	int matcap_id;
 
 	/* Ssao */
 	float dfdyfac[2];
 	float winmat[4][4];
 	float viewvecs[3][4];
-	float ssao_params_var[4];
 	float ssao_params[4];
 	struct GPUTexture *jitter_tx;
 	struct GPUTexture *sampling_tx;
 } data = {NULL};
+
+/* Shaders */
+#define WITH_ALL 0
+#define WITH_HSV_ROT 1
+#define WITH_AO_ROT 2
+#define WITH_AO_HSV 3
+#define WITH_AO 4
+#define WITH_ROT 5
+#define WITH_HSV 6
+#define WITH_NONE 7
+
+/* for clarity follow the same layout as CLAY_TextureList */
 
 /* keep it under MAX_BUFFERS */
 typedef struct CLAY_FramebufferList{
@@ -252,118 +267,151 @@ static void clay_engine_init(void)
 	}
 
 	/* Shading pass */
-	if (!data.clay_sh) {
-		const char *defines =
+	if (!data.clay_sh[0]) {
+		const char *with_all =
 		        "#define USE_AO;\n"
 		        "#define USE_HSV;\n"
 		        "#define USE_ROTATION;\n";
+		const char *with_hsv_rot =
+		        "#define USE_HSV;\n"
+		        "#define USE_ROTATION;\n";
+		const char *with_ao_rot =
+		        "#define USE_AO;\n"
+		        "#define USE_ROTATION;\n";
+		const char *with_ao_hsv =
+		        "#define USE_AO;\n"
+		        "#define USE_HSV;\n";
+		const char *with_ao ="#define USE_AO;\n";
+		const char *with_rot ="#define USE_ROTATION;\n";
+		const char *with_hsv ="#define USE_HSV;\n";
 
-		/* TODO Optimisation : Create shader combinations and bind the right 
-		 * shader depending on the material settings */
-		data.clay_sh = DRW_shader_create(datatoc_clay_vert_glsl, NULL, datatoc_clay_frag_glsl, defines);
+		data.clay_sh[WITH_ALL] = DRW_shader_create(datatoc_clay_vert_glsl, NULL, datatoc_clay_frag_glsl, with_all);
+		data.clay_sh[WITH_HSV_ROT] = DRW_shader_create(datatoc_clay_vert_glsl, NULL, datatoc_clay_frag_glsl, with_hsv_rot);
+		data.clay_sh[WITH_AO_ROT] = DRW_shader_create(datatoc_clay_vert_glsl, NULL, datatoc_clay_frag_glsl, with_ao_rot);
+		data.clay_sh[WITH_AO_HSV] = DRW_shader_create(datatoc_clay_vert_glsl, NULL, datatoc_clay_frag_glsl, with_ao_hsv);
+		data.clay_sh[WITH_AO] = DRW_shader_create(datatoc_clay_vert_glsl, NULL, datatoc_clay_frag_glsl, with_ao);
+		data.clay_sh[WITH_ROT] = DRW_shader_create(datatoc_clay_vert_glsl, NULL, datatoc_clay_frag_glsl, with_rot);
+		data.clay_sh[WITH_HSV] = DRW_shader_create(datatoc_clay_vert_glsl, NULL, datatoc_clay_frag_glsl, with_hsv);
+		data.clay_sh[WITH_NONE] = DRW_shader_create(datatoc_clay_vert_glsl, NULL, datatoc_clay_frag_glsl, NULL);
 	}
 }
 
-#if 0
-static void clay_init_view(CLAY_FramebufferList *buffers, CLAY_TextureList *textures)
+static DRWBatch *clay_batch_create(DRWPass *pass, CLAY_BatchStorage *storage)
 {
-	int *viewsize = DRW_viewport_size_get();
+	const int depthloc = 0, matcaploc = 1, jitterloc = 2, sampleloc = 3;
+	const bool use_rot = (storage->matcap_rot[1] == 0);
+	const bool use_ao = (storage->ssao_params_var[1] == 0 && storage->ssao_params_var[2] == 0);
+	const bool use_hsv = (storage->matcap_hsv[0] == 0);
+	struct GPUShader *sh;
 
-	DRWFboTexture depth = {&textures->depth_low, DRW_BUF_R_16};
+	if (use_rot && use_ao && use_hsv) {
+		sh = data.clay_sh[WITH_ALL];
+	}
+	else if (use_hsv && use_rot) {
+		sh = data.clay_sh[WITH_HSV_ROT];
+	}
+	else if (use_ao && use_hsv) {
+		sh = data.clay_sh[WITH_AO_HSV];
+	}
+	else if (use_ao && use_rot) {
+		sh = data.clay_sh[WITH_AO_ROT];
+	}
+	else if (use_rot) {
+		sh = data.clay_sh[WITH_ROT];
+	}
+	else if (use_ao) {
+		sh = data.clay_sh[WITH_AO];
+	}
+	else if (use_hsv) {
+		sh = data.clay_sh[WITH_HSV];
+	}
+	else {
+		sh = data.clay_sh[WITH_NONE];
+	}
 
-	DRW_framebuffer_init(&buffers->downsample_depth, viewsize[0]/2, viewsize[1]/2, &depth, 1);
+	DRWBatch *batch = DRW_batch_create(sh, pass, storage);
+
+	DRW_batch_uniform_ivec2(batch, "screenres", DRW_viewport_size_get(), 1);
+	DRW_batch_uniform_buffer(batch, "depthtex", SCENE_DEPTH, depthloc);
+	DRW_batch_uniform_texture(batch, "matcaps", data.matcap_array, matcaploc);
+	DRW_batch_uniform_vec3(batch, "matcaps_color", (float *)data.matcap_colors, 24);
+	DRW_batch_uniform_vec2(batch, "matcap_rotation", (float *)storage->matcap_rot, 1);
+	DRW_batch_uniform_int(batch, "matcap_index", &storage->matcap_id, 1);
+	DRW_batch_uniform_vec3(batch, "matcap_hsv", (float *)storage->matcap_hsv, 1);
+
+	/* SSAO */
+	DRW_batch_uniform_mat4(batch, "WinMatrix", (float *)data.winmat);
+	DRW_batch_uniform_vec4(batch, "viewvecs", (float *)data.viewvecs, 3);
+	DRW_batch_uniform_vec4(batch, "ssao_params_var", storage->ssao_params_var, 1);
+	DRW_batch_uniform_vec4(batch, "ssao_params", data.ssao_params, 1);
+	DRW_batch_uniform_texture(batch, "ssao_jitter", data.jitter_tx, jitterloc);
+	DRW_batch_uniform_texture(batch, "ssao_samples", data.sampling_tx, sampleloc);
+
+	return batch;
 }
-#endif
 
 static void clay_populate_passes(CLAY_PassList *passes, const struct bContext *C)
 {
 	SceneLayer *sl = CTX_data_scene_layer(C);
-	DRWBatch *matcapbatch, *depthbatch;
-	bool pop_depth = false;
-	bool pop_clay = false;
+	DRWBatch *defaultbatch, *depthbatch;
+	Object *ob;
 
-	if (!passes->depth_pass) {
-		passes->depth_pass = DRW_pass_create("Clay Pass", DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS);
+	/* Depth Pass */
+	{
+		passes->depth_pass = DRW_pass_create("Depth Pass", DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS);
 
-		depthbatch = DRW_batch_create(data.depth_sh, passes->depth_pass);
-		pop_depth = true;
+		depthbatch = DRW_batch_create(data.depth_sh, passes->depth_pass, NULL);
 	}
 
-	if (!passes->clay_pass) {
-		DRWBatch *batch;
-		const int depthloc = 0;
-		const int matcaploc = 1;
-		const int jitterloc = 2;
-		const int sampleloc = 3;
-
+	/* Clay Pass */
+	{
 		passes->clay_pass = DRW_pass_create("Clay Pass", DRW_STATE_WRITE_COLOR);
 
-		batch = DRW_batch_create(data.clay_sh, passes->clay_pass);
-
-		DRW_batch_uniform_ivec2(batch, "screenres", DRW_viewport_size_get(), 1);
-		DRW_batch_uniform_buffer(batch, "depthtex", SCENE_DEPTH, depthloc);
-		DRW_batch_uniform_texture(batch, "matcaps", data.matcap_array, matcaploc);
-		DRW_batch_uniform_vec3(batch, "matcaps_color", (float *)data.matcap_colors, 24);
-		DRW_batch_uniform_vec2(batch, "matcap_rotation", (float *)data.matcap_rot, 1);
-		DRW_batch_uniform_int(batch, "matcap_index", &data.matcap_id, 1);
-		DRW_batch_uniform_vec3(batch, "matcap_hsv", (float *)data.matcap_hsv, 1);
-
-		/* SSAO */
-		DRW_batch_uniform_mat4(batch, "WinMatrix", (float *)data.winmat);
-		DRW_batch_uniform_vec4(batch, "viewvecs", (float *)data.viewvecs, 3);
-		DRW_batch_uniform_vec4(batch, "ssao_params_var", data.ssao_params_var, 1);
-		DRW_batch_uniform_vec4(batch, "ssao_params", data.ssao_params, 1);
-		DRW_batch_uniform_texture(batch, "ssao_jitter", data.jitter_tx, jitterloc);
-		DRW_batch_uniform_texture(batch, "ssao_samples", data.sampling_tx, sampleloc);
-
-		matcapbatch = batch;
-		pop_clay = true;
-	}
-
-	/* Update default material */
-	{
 		EngineDataClay *settings = DRW_render_settings();
+		CLAY_BatchStorage *storage = MEM_callocN(sizeof(CLAY_BatchStorage), "Clay BatchStorage");
 
-		data.matcap_rot[0] = cosf(settings->matcap_rot * 3.14159f * 2.0f);
-		data.matcap_rot[1] = sinf(settings->matcap_rot * 3.14159f * 2.0f);
+		/* Update default material */
+		storage->matcap_rot[0] = cosf(settings->matcap_rot * 3.14159f * 2.0f);
+		storage->matcap_rot[1] = sinf(settings->matcap_rot * 3.14159f * 2.0f);
 
-		data.matcap_hsv[0] = settings->matcap_hue;
-		data.matcap_hsv[1] = 1.0f;
-		data.matcap_hsv[2] = 1.0f;
+		storage->matcap_hsv[0] = settings->matcap_hue;
+		storage->matcap_hsv[1] = 1.0f;
+		storage->matcap_hsv[2] = 1.0f;
 
-		data.ssao_params_var[0] = settings->ssao_distance;
-		data.ssao_params_var[1] = settings->ssao_factor_cavity;
-		data.ssao_params_var[2] = settings->ssao_factor_edge;
-		data.ssao_params_var[3] = settings->ssao_attenuation;
-	}
+		storage->ssao_params_var[0] = settings->ssao_distance;
+		storage->ssao_params_var[1] = settings->ssao_factor_cavity;
+		storage->ssao_params_var[2] = settings->ssao_factor_edge;
+		storage->ssao_params_var[3] = settings->ssao_attenuation;
 
-	static bool first = true;
-	if (first) {
-		first = false;
-
-		/* TODO Why this is crashing? we want to start from an empty list
-		 * Seems like ob genericNode (see below) is freed two times */
-		// DRW_batch_surface_clear(matcapbatch);
-		// DRW_batch_surface_clear(depthbatch);
-
-		Object *ob;
-		FOREACH_OBJECT(sl, ob)
+		if (settings->matcap_icon < ICON_MATCAP_01 ||
+		    settings->matcap_icon > ICON_MATCAP_24)
 		{
-			/* Create hash table of batch based on material id*/
-
-			/* Add everything for now */
-			if (pop_clay) {
-				DRW_batch_surface_add(matcapbatch, ob);
-			}
-
-			if (pop_depth) {
-				DRW_batch_surface_add(depthbatch, ob);
-			}
-
-			/* Free hash table */
+			settings->matcap_icon = ICON_MATCAP_01;
 		}
-		FOREACH_OBJECT_END
+
+		storage->matcap_id = matcap_to_index(settings->matcap_icon);
+
+		defaultbatch = clay_batch_create(passes->clay_pass, storage);
 	}
+
+	/* TODO Create hash table of batch based on material id*/
+	FOREACH_OBJECT(sl, ob)
+	{
+		/* Add everything for now */
+		DRW_batch_surface_add(defaultbatch, ob);
+
+		/* When encountering a new material :
+		 * - Create new Batch
+		 * - Initialize Batch
+		 * - Push it to the hash table
+		 * - The pass takes care of inserting it
+		 * next to the same shader calls */
+
+		DRW_batch_surface_add(depthbatch, ob);
+
+		/* Free hash table */
+	}
+	FOREACH_OBJECT_END
 }
 
 static void clay_ssao_setup(void)
@@ -429,21 +477,12 @@ static void clay_view_draw(RenderEngine *UNUSED(engine), const struct bContext *
 
 	clay_engine_init();
 
-	/* Settings */
-	EngineDataClay *engine_data = &CTX_data_scene(context)->claydata;
-
-	if (engine_data->matcap_icon < ICON_MATCAP_01 ||
-	    engine_data->matcap_icon > ICON_MATCAP_24)
-	{
-		engine_data->matcap_icon = ICON_MATCAP_01;
-	}
-
-	data.matcap_id = matcap_to_index(engine_data->matcap_icon);
-
 	/* TODO : tag to refresh by the deps graph */
 	/* ideally only refresh when objects are added/removed */
 	/* or render properties / materials change */
-	clay_populate_passes(passes, context);
+	if (!passes->clay_pass) {
+		clay_populate_passes(passes, context);
+	}
 
 	DRW_draw_background();
 
@@ -464,7 +503,13 @@ void clay_engine_free(void)
 {
 	/* data.depth_sh Is builtin so it's automaticaly freed */
 	if (data.clay_sh) {
-		DRW_shader_free(data.clay_sh);
+		DRW_shader_free(data.clay_sh[WITH_ALL]);
+		DRW_shader_free(data.clay_sh[WITH_HSV_ROT]);
+		DRW_shader_free(data.clay_sh[WITH_AO_ROT]);
+		DRW_shader_free(data.clay_sh[WITH_AO_HSV]);
+		DRW_shader_free(data.clay_sh[WITH_AO]);
+		DRW_shader_free(data.clay_sh[WITH_ROT]);
+		DRW_shader_free(data.clay_sh[WITH_HSV]);
 	}
 
 	if (data.matcap_array) {

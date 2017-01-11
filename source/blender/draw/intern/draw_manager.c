@@ -101,8 +101,9 @@ struct DRWPass {
 struct DRWBatch {
 	struct DRWBatch *next, *prev;
 	struct GPUShader *shader;        /* Shader to bind */
-	struct DRWInterface *interface;  /* Uniforms values */
-	ListBase objects;               /* (Object *) LinkData->data - List with all objects and transform */
+	struct DRWInterface *interface;  /* Uniforms pointers */
+	void *storage;                   /* Uniforms values */
+	ListBase objects;                /* (Object *) LinkData->data - List with all objects and transform */
 };
 
 /* Render State */
@@ -321,12 +322,13 @@ void DRW_get_dfdy_factors(float dfdyfac[2])
 
 /* ***************************************** BATCH ******************************************/
 
-DRWBatch *DRW_batch_create(struct GPUShader *shader, DRWPass *pass)
+DRWBatch *DRW_batch_create(struct GPUShader *shader, DRWPass *pass, void *storage)
 {
 	DRWBatch *batch = MEM_callocN(sizeof(DRWBatch), "DRWBatch");
 
 	batch->shader = shader;
 	batch->interface = DRW_interface_create(shader);
+	batch->storage = storage;
 
 	BLI_addtail(&pass->batches, batch);
 
@@ -336,21 +338,16 @@ DRWBatch *DRW_batch_create(struct GPUShader *shader, DRWPass *pass)
 void DRW_batch_free(struct DRWBatch *batch)
 {
 	BLI_freelistN(&batch->objects);
-
 	BLI_freelistN(&batch->interface->uniforms);
 	MEM_freeN(batch->interface);
+	if (batch->storage)
+		MEM_freeN(batch->storage);
 }
 
 /* Later use VBO */
 void DRW_batch_surface_add(DRWBatch *batch, Object *ob)
 {
 	BLI_addtail(&batch->objects, BLI_genericNodeN(ob));
-}
-
-void DRW_batch_surface_clear(DRWBatch *batch)
-{
-	BLI_freelistN(&batch->objects);
-	//BLI_listbase_clear(&batch->objects);
 }
 
 void DRW_batch_uniform_texture(DRWBatch *batch, const char *name, const GPUTexture *tex, int loc)

@@ -62,6 +62,7 @@ struct GPUViewport {
 };
 
 static void GPU_viewport_buffers_free(GPUViewport *viewport);
+static void GPU_viewport_passes_free(GPUViewport *viewport);
 
 GPUViewport *GPU_viewport_create(void)
 {
@@ -88,6 +89,9 @@ void GPU_viewport_bind(GPUViewport *viewport, const rcti *rect)
 {
 	/* add one pixel because of scissor test */
 	int rect_w = BLI_rcti_size_x(rect) + 1, rect_h = BLI_rcti_size_y(rect) + 1;
+
+	/* TODO for testing only, we need proper cache invalidation */
+	GPU_viewport_passes_free(viewport);
 
 	if (viewport->fbl->default_fb) {
 		if (rect_w != viewport->size[0] || rect_h != viewport->size[1]) {
