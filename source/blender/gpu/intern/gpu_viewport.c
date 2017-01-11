@@ -89,47 +89,55 @@ void GPU_viewport_bind(GPUViewport *viewport, const rcti *rect)
 	/* add one pixel because of scissor test */
 	int rect_w = BLI_rcti_size_x(rect) + 1, rect_h = BLI_rcti_size_y(rect) + 1;
 
-	if (viewport->fbl->default_fb)
-		if (rect_w != viewport->size[0] || rect_h != viewport->size[1])
+	if (viewport->fbl->default_fb) {
+		if (rect_w != viewport->size[0] || rect_h != viewport->size[1]) {
 			GPU_viewport_buffers_free(viewport);
+		}
+	}
 
 	if (!viewport->fbl->default_fb) {
+		bool ok = true;
 		viewport->size[0] = rect_w;
 		viewport->size[1] = rect_h;
 
 		viewport->fbl->default_fb = GPU_framebuffer_create();
 		if (!viewport->fbl->default_fb) {
-			GPU_viewport_free(viewport);
-			return;
+			ok = false;
+			goto cleanup;
 		}
 
 		/* Color */
 		/* No multi samples for now */
 		viewport->txl->color = GPU_texture_create_2D(rect_w, rect_h, NULL, NULL);
 		if (!viewport->txl->color) {
-			GPU_viewport_free(viewport);
-			return;
+			ok = false;
+			goto cleanup;
 		}
 
 		if (!GPU_framebuffer_texture_attach(viewport->fbl->default_fb, viewport->txl->color, 0)) {
-			GPU_viewport_free(viewport);
-			return;
+			ok = false;
+			goto cleanup;
 		}
 
 		/* Depth */
 		viewport->txl->depth = GPU_texture_create_depth(rect_w, rect_h, NULL);
 		if (!viewport->txl->depth) {
-			GPU_viewport_free(viewport);
-			return;
+			ok = false;
+			goto cleanup;
+		}
+		else if (!GPU_framebuffer_texture_attach(viewport->fbl->default_fb, viewport->txl->depth, 0)) {
+			ok = false;
+			goto cleanup;
+		}
+		else if (!GPU_framebuffer_check_valid(viewport->fbl->default_fb, NULL)) {
+			ok = false;
+			goto cleanup;
 		}
 
-		if (!GPU_framebuffer_texture_attach(viewport->fbl->default_fb, viewport->txl->depth, 0)) {
+cleanup:
+		if (!ok) {
 			GPU_viewport_free(viewport);
-			return;
-		}
-
-		if (!GPU_framebuffer_check_valid(viewport->fbl->default_fb, NULL)) {
-			GPU_viewport_free(viewport);
+			MEM_freeN(viewport);
 			return;
 		}
 
@@ -220,7 +228,7 @@ static void GPU_viewport_passes_free(GPUViewport *viewport)
 		struct DRWPass *pass = psl->passes[i];
 		if (pass) {
 			DRW_pass_free(pass);
-			psl->passes[i] = NULL;
+			MEM_freeN(pass);
 		}
 	}
 }
@@ -234,8 +242,6 @@ void GPU_viewport_free(GPUViewport *viewport)
 	MEM_freeN(viewport->fbl);
 	MEM_freeN(viewport->txl);
 	MEM_freeN(viewport->psl);
-
-	MEM_freeN(viewport);
 }
 
 /****************** debug ********************/

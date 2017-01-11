@@ -431,7 +431,6 @@ void DRW_pass_free(DRWPass *pass)
 		DRW_batch_free(batch);
 	}
 	BLI_freelistN(&pass->batches);
-	MEM_freeN(pass);
 }
 
 /* ****************************************** DRAW ******************************************/
