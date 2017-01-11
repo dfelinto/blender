@@ -233,6 +233,7 @@ static void GPU_viewport_passes_free(GPUViewport *viewport)
 		if (pass) {
 			DRW_pass_free(pass);
 			MEM_freeN(pass);
+			psl->passes[i] = NULL;
 		}
 	}
 }

@@ -299,9 +299,9 @@ static void clay_engine_init(void)
 static DRWBatch *clay_batch_create(DRWPass *pass, CLAY_BatchStorage *storage)
 {
 	const int depthloc = 0, matcaploc = 1, jitterloc = 2, sampleloc = 3;
-	const bool use_rot = (storage->matcap_rot[1] == 0);
-	const bool use_ao = (storage->ssao_params_var[1] == 0 && storage->ssao_params_var[2] == 0);
-	const bool use_hsv = (storage->matcap_hsv[0] == 0);
+	const bool use_rot = (storage->matcap_rot[1] != 0.0f);
+	const bool use_ao = (storage->ssao_params_var[1] != 0.0f || storage->ssao_params_var[2] != 0.0f);
+	const bool use_hsv = (storage->matcap_hsv[0] != 0.0f);
 	struct GPUShader *sh;
 
 	if (use_rot && use_ao && use_hsv) {
@@ -334,18 +334,26 @@ static DRWBatch *clay_batch_create(DRWPass *pass, CLAY_BatchStorage *storage)
 	DRW_batch_uniform_ivec2(batch, "screenres", DRW_viewport_size_get(), 1);
 	DRW_batch_uniform_buffer(batch, "depthtex", SCENE_DEPTH, depthloc);
 	DRW_batch_uniform_texture(batch, "matcaps", data.matcap_array, matcaploc);
-	DRW_batch_uniform_vec3(batch, "matcaps_color", (float *)data.matcap_colors, 24);
-	DRW_batch_uniform_vec2(batch, "matcap_rotation", (float *)storage->matcap_rot, 1);
 	DRW_batch_uniform_int(batch, "matcap_index", &storage->matcap_id, 1);
-	DRW_batch_uniform_vec3(batch, "matcap_hsv", (float *)storage->matcap_hsv, 1);
-
-	/* SSAO */
 	DRW_batch_uniform_mat4(batch, "WinMatrix", (float *)data.winmat);
 	DRW_batch_uniform_vec4(batch, "viewvecs", (float *)data.viewvecs, 3);
-	DRW_batch_uniform_vec4(batch, "ssao_params_var", storage->ssao_params_var, 1);
 	DRW_batch_uniform_vec4(batch, "ssao_params", data.ssao_params, 1);
-	DRW_batch_uniform_texture(batch, "ssao_jitter", data.jitter_tx, jitterloc);
-	DRW_batch_uniform_texture(batch, "ssao_samples", data.sampling_tx, sampleloc);
+
+	if (use_rot) {
+		DRW_batch_uniform_vec2(batch, "matcap_rotation", (float *)storage->matcap_rot, 1);
+	}
+
+	if (use_hsv) {
+		DRW_batch_uniform_vec3(batch, "matcap_hsv", (float *)storage->matcap_hsv, 1);
+	}
+
+	if (use_ao) {
+		DRW_batch_uniform_vec3(batch, "matcaps_color", (float *)data.matcap_colors, 24);
+		DRW_batch_uniform_vec4(batch, "ssao_params_var", storage->ssao_params_var, 1);
+		DRW_batch_uniform_texture(batch, "ssao_jitter", data.jitter_tx, jitterloc);
+		DRW_batch_uniform_texture(batch, "ssao_samples", data.sampling_tx, sampleloc);
+	}
+
 
 	return batch;
 }
@@ -510,10 +518,19 @@ void clay_engine_free(void)
 		DRW_shader_free(data.clay_sh[WITH_AO]);
 		DRW_shader_free(data.clay_sh[WITH_ROT]);
 		DRW_shader_free(data.clay_sh[WITH_HSV]);
+		DRW_shader_free(data.clay_sh[WITH_NONE]);
 	}
 
 	if (data.matcap_array) {
 		DRW_texture_free(data.matcap_array);
+	}
+
+	if (data.jitter_tx) {
+		DRW_texture_free(data.jitter_tx);
+	}
+
+	if (data.sampling_tx) {
+		DRW_texture_free(data.sampling_tx);
 	}
 }
 
