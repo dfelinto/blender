@@ -297,15 +297,6 @@ static void rna_Object_dependency_update(Main *bmain, Scene *UNUSED(scene), Poin
 }
 
 /* when changing the selection flag the scene needs updating */
-static void rna_Object_select_update(Main *UNUSED(bmain), Scene *scene, PointerRNA *ptr)
-{
-	if (scene) {
-		Object *ob = (Object *)ptr->id.data;
-		short mode = (ob->flag & SELECT) ? BA_SELECT : BA_DESELECT;
-		ED_base_object_select(BKE_scene_base_find(scene, ob), mode);
-	}
-}
-
 static void rna_Base_select_update(Main *UNUSED(bmain), Scene *UNUSED(scene), PointerRNA *ptr)
 {
 	Base *base = (Base *)ptr->data;
@@ -2245,11 +2236,6 @@ static void rna_def_object(BlenderRNA *brna)
 	RNA_def_property_array(prop, 8);
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 	RNA_def_property_ui_text(prop, "Local View Layers", "3D local view layers the object is on");
-
-	prop = RNA_def_property(srna, "select", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_sdna(prop, NULL, "flag", SELECT);
-	RNA_def_property_ui_text(prop, "Select", "Object selection state");
-	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_Object_select_update");
 
 	/* for data access */
 	prop = RNA_def_property(srna, "bound_box", PROP_FLOAT, PROP_NONE);
