@@ -120,6 +120,10 @@ void blo_do_versions_after_linking_280(Main *main)
 					lc = lc->next;
 				}
 
+				if (scene->basact) {
+					sl->basact = BKE_scene_layer_base_find(sl, scene->basact->object);
+				}
+
 				/* TODO: copy scene render data to layer */
 
 				/* Cleanup */
