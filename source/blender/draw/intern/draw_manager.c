@@ -482,8 +482,8 @@ typedef struct DRWBoundTexture {
 
 static void draw_batch(DRWBatch *batch, const bool fullscreen)
 {
-	BLI_assert(!batch->shader);
-	BLI_assert(!batch->interface);
+	BLI_assert(batch->shader);
+	BLI_assert(batch->interface);
 
 	DRWInterface *interface = batch->interface;
 
