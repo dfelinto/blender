@@ -144,6 +144,13 @@ void blo_do_versions_after_linking_280(Main *main)
 						BKE_collection_remove(scene, collections[i]);
 					}
 				}
+
+				/* remove bases once and for all */
+				for (Base *base = scene->base.first; base; base = base->next) {
+					id_us_min(&base->object->id);
+				}
+				BLI_freelistN(&scene->base);
+				scene->basact = NULL;
 			}
 		}
 	}
