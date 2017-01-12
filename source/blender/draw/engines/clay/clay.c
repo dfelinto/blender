@@ -523,14 +523,28 @@ static void clay_view_draw(RenderEngine *UNUSED(engine), const struct bContext *
 void clay_engine_free(void)
 {
 	/* data.depth_sh Is builtin so it's automaticaly freed */
-	if (data.clay_sh) {
+	if (data.clay_sh[WITH_ALL]) {
 		DRW_shader_free(data.clay_sh[WITH_ALL]);
+	}
+	if (data.clay_sh[WITH_HSV_ROT]) {
 		DRW_shader_free(data.clay_sh[WITH_HSV_ROT]);
+	}
+	if (data.clay_sh[WITH_AO_ROT]) {
 		DRW_shader_free(data.clay_sh[WITH_AO_ROT]);
+	}
+	if (data.clay_sh[WITH_AO_HSV]) {
 		DRW_shader_free(data.clay_sh[WITH_AO_HSV]);
+	}
+	if (data.clay_sh[WITH_AO]) {
 		DRW_shader_free(data.clay_sh[WITH_AO]);
+	}
+	if (data.clay_sh[WITH_ROT]) {
 		DRW_shader_free(data.clay_sh[WITH_ROT]);
+	}
+	if (data.clay_sh[WITH_HSV]) {
 		DRW_shader_free(data.clay_sh[WITH_HSV]);
+	}
+	if (data.clay_sh[WITH_NONE]) {
 		DRW_shader_free(data.clay_sh[WITH_NONE]);
 	}
 
