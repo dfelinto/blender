@@ -697,7 +697,7 @@ class UnitsTesting(unittest.TestCase):
 
             elif del_mode == 'OPERATOR':
                 bpy.ops.object.select_all(action='DESELECT')
-                ob.select = True
+                ob.select_set(action='SELECT')
                 bpy.ops.object.delete()
 
             # save file
