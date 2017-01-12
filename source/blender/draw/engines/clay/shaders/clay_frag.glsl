@@ -37,6 +37,33 @@ in vec3 normal;
 out vec4 fragColor;
 #endif
 
+/* simple depth reconstruction, see http://www.derschmale.com/2014/01/26/reconstructing-positions-from-the-depth-buffer
+ * we change the factors from the article to fit the OpennGL model.  */
+vec3 get_view_space_from_depth(in vec2 uvcoords, in vec3 viewvec_origin, in vec3 viewvec_diff, in float depth)
+{
+	if (WinMatrix[3][3] == 0.0) {
+		/* Perspective */
+		float d = 2.0 * depth - 1.0;
+
+		float zview = -WinMatrix[3][2] / (d + WinMatrix[2][2]);
+
+		return zview * (viewvec_origin + vec3(uvcoords, 0.0) * viewvec_diff);
+	}
+	else {
+		/* Orthographic */
+		vec3 offset = vec3(uvcoords, depth);
+
+		return vec3(viewvec_origin + offset * viewvec_diff);
+	}
+}
+
+/* TODO remove this when switching to geometric normals */
+vec3 calculate_view_space_normal(in vec3 viewposition)
+{
+	vec3 normal = cross(normalize(dFdx(viewposition)), dfdy_sign * normalize(dFdy(viewposition)));
+	return normalize(normal);
+}
+
 #ifdef USE_HSV
 void rgb_to_hsv(vec3 rgb, out vec3 outcol)
 {
@@ -126,96 +153,16 @@ void hue_sat(float hue, float sat, float value, inout vec3 col)
 }
 #endif
 
-/* simple depth reconstruction, see http://www.derschmale.com/2014/01/26/reconstructing-positions-from-the-depth-buffer
- * we change the factors from the article to fit the OpenGL model.  */
-
-/* perspective camera code */
-
-vec3 get_view_space_from_depth(in vec2 uvcoords, in vec3 viewvec_origin, in vec3 viewvec_diff, in float depth)
-{
-	float d = 2.0 * depth - 1.0;
-
-	float zview = -WinMatrix[3][2] / (d + WinMatrix[2][2]);
-
-	return zview * (viewvec_origin + vec3(uvcoords, 0.0) * viewvec_diff);
-}
-
-/* TODO remove this when switching to geometric normals */
-vec3 calculate_view_space_normal(in vec3 viewposition)
-{
-	vec3 normal = cross(normalize(dFdx(viewposition)), dfdy_sign * normalize(dFdy(viewposition)));
-
-	return normalize(normal);
-}
-
 #ifdef USE_AO
-void calculate_ssao_factor(in float depth, in vec3 normal, in vec3 position, out float cavities, out float edges)
-{
-	vec2 uvs = vec2(gl_FragCoord.xy) / vec2(screenres);
-
-	/* take the normalized ray direction here */
-	vec2 rotX = texture2D(ssao_jitter, uvs.xy * jitter_tilling).rg;
-	vec2 rotY = vec2(-rotX.y, rotX.x);
-
-	/* find the offset in screen space by multiplying a point
-	 * in camera space at the depth of the point by the projection matrix. */
-	vec2 offset;
-	float homcoord = WinMatrix[2][3] * position.z + WinMatrix[3][3];
-	offset.x = WinMatrix[0][0] * ssao_distance / homcoord;
-	offset.y = WinMatrix[1][1] * ssao_distance / homcoord;
-	/* convert from -1.0...1.0 range to 0.0..1.0 for easy use with texture coordinates */
-	offset *= 0.5;
-
-	cavities = edges = 0.0;
-	int x;
-	int num_samples = int(ssao_samples_num);
-
-	for (x = 0; x < num_samples; x++) {
-		vec2 dir_sample = texture1D(ssao_samples, (float(x) + 0.5) / ssao_samples_num).rg;
-
-		/* rotate with random direction to get jittered result */
-		vec2 dir_jittered = vec2(dot(dir_sample, rotX), dot(dir_sample, rotY));
-
-		vec2 uvcoords = uvs.xy + dir_jittered * offset;
-
-		if (uvcoords.x > 1.0 || uvcoords.x < 0.0 || uvcoords.y > 1.0 || uvcoords.y < 0.0)
-			continue;
-
-		float depth_new = texture2D(depthtex, uvcoords).r;
-		/* Handle Background case */
-		if (depth_new != 1.0) {
-			vec3 pos_new = get_view_space_from_depth(uvcoords, viewvecs[0].xyz, viewvecs[1].xyz, depth_new);
-			vec3 dir = pos_new - position;
-			float len = length(dir);
-			float f_cavities = dot(dir, normal);
-			float f_edge = dot(dir, -normal);
-			float f_bias = 0.05 * len + 0.0001;
-
-			float attenuation = 1.0 / (len * (1.0 + len * len * ssao_attenuation));
-
-			/* use minor bias here to avoid self shadowing */
-			if (f_cavities > f_bias)
-				cavities += f_cavities * attenuation;
-
-			if (f_edge > f_bias)
-				edges += f_edge * attenuation;
-		}
-	}
-
-	cavities /= ssao_samples_num;
-	edges /= ssao_samples_num;
-
-	/* don't let cavity wash out the surface appearance */
-	cavities = clamp(cavities * ssao_factor_cavity, 0.0, 0.85);
-	edges = edges * ssao_factor_edge;
-}
+/* Prototype */
+void ssao_factors(in float depth, in vec3 normal, in vec3 position, in vec2 screenco, out float cavities, out float edges);
 #endif
 
 void main() {
-	vec2 uvs = vec2(gl_FragCoord.xy) / vec2(screenres);
-	float depth = texture(depthtex, uvs).r;
+	vec2 screenco = vec2(gl_FragCoord.xy) / vec2(screenres);
+	float depth = texture(depthtex, screenco).r;
 
-	vec3 position = get_view_space_from_depth(uvs, viewvecs[0].xyz, viewvecs[1].xyz, depth);
+	vec3 position = get_view_space_from_depth(screenco, viewvecs[0].xyz, viewvecs[1].xyz, depth);
 	vec3 normal = calculate_view_space_normal(position);
 
 	/* Manual Depth test */
@@ -235,7 +182,7 @@ void main() {
 
 #ifdef USE_AO
 	float cavity, edges;
-	calculate_ssao_factor(depth, normal, position, cavity, edges);
+	ssao_factors(depth, normal, position, screenco, cavity, edges);
 
 	col = mix(col, matcaps_color[int(matcap_index)], cavity);
 	col *= edges + 1.0;

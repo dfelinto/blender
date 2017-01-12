@@ -23,6 +23,7 @@
 
 #include "BKE_icons.h"
 
+#include "BLI_dynstr.h"
 #include "BLI_rand.h"
 
 #include "IMB_imbuf.h"
@@ -37,6 +38,8 @@
 
 extern char datatoc_clay_frag_glsl[];
 extern char datatoc_clay_vert_glsl[];
+extern char datatoc_ssao_alchemy_glsl[];
+extern char datatoc_ssao_groundtruth_glsl[];
 
 /* Storage */
 
@@ -268,6 +271,7 @@ static void clay_engine_init(void)
 
 	/* Shading pass */
 	if (!data.clay_sh[0]) {
+		DynStr *ds = BLI_dynstr_new();
 		const char *with_all =
 		        "#define USE_AO;\n"
 		        "#define USE_HSV;\n"
@@ -284,15 +288,24 @@ static void clay_engine_init(void)
 		const char *with_ao ="#define USE_AO;\n";
 		const char *with_rot ="#define USE_ROTATION;\n";
 		const char *with_hsv ="#define USE_HSV;\n";
+		char *matcap_with_ao;
 
-		data.clay_sh[WITH_ALL] = DRW_shader_create(datatoc_clay_vert_glsl, NULL, datatoc_clay_frag_glsl, with_all);
-		data.clay_sh[WITH_HSV_ROT] = DRW_shader_create(datatoc_clay_vert_glsl, NULL, datatoc_clay_frag_glsl, with_hsv_rot);
-		data.clay_sh[WITH_AO_ROT] = DRW_shader_create(datatoc_clay_vert_glsl, NULL, datatoc_clay_frag_glsl, with_ao_rot);
-		data.clay_sh[WITH_AO_HSV] = DRW_shader_create(datatoc_clay_vert_glsl, NULL, datatoc_clay_frag_glsl, with_ao_hsv);
-		data.clay_sh[WITH_AO] = DRW_shader_create(datatoc_clay_vert_glsl, NULL, datatoc_clay_frag_glsl, with_ao);
-		data.clay_sh[WITH_ROT] = DRW_shader_create(datatoc_clay_vert_glsl, NULL, datatoc_clay_frag_glsl, with_rot);
-		data.clay_sh[WITH_HSV] = DRW_shader_create(datatoc_clay_vert_glsl, NULL, datatoc_clay_frag_glsl, with_hsv);
-		data.clay_sh[WITH_NONE] = DRW_shader_create(datatoc_clay_vert_glsl, NULL, datatoc_clay_frag_glsl, NULL);
+		BLI_dynstr_append(ds, datatoc_clay_frag_glsl);
+		BLI_dynstr_append(ds, datatoc_ssao_alchemy_glsl);
+
+		matcap_with_ao = BLI_dynstr_get_cstring(ds);
+
+		data.clay_sh[WITH_ALL] = DRW_shader_create(datatoc_clay_vert_glsl, NULL, matcap_with_ao, with_all);
+		data.clay_sh[WITH_HSV_ROT] = DRW_shader_create(datatoc_clay_vert_glsl, NULL, matcap_with_ao, with_hsv_rot);
+		data.clay_sh[WITH_AO_ROT] = DRW_shader_create(datatoc_clay_vert_glsl, NULL, matcap_with_ao, with_ao_rot);
+		data.clay_sh[WITH_AO_HSV] = DRW_shader_create(datatoc_clay_vert_glsl, NULL, matcap_with_ao, with_ao_hsv);
+		data.clay_sh[WITH_AO] = DRW_shader_create(datatoc_clay_vert_glsl, NULL, matcap_with_ao, with_ao);
+		data.clay_sh[WITH_ROT] = DRW_shader_create(datatoc_clay_vert_glsl, NULL, matcap_with_ao, with_rot);
+		data.clay_sh[WITH_HSV] = DRW_shader_create(datatoc_clay_vert_glsl, NULL, matcap_with_ao, with_hsv);
+		data.clay_sh[WITH_NONE] = DRW_shader_create(datatoc_clay_vert_glsl, NULL, matcap_with_ao, NULL);
+
+		BLI_dynstr_free(ds);
+		MEM_freeN(matcap_with_ao);
 	}
 }
 
