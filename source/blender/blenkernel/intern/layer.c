@@ -500,6 +500,7 @@ void BKE_collection_override_datablock_add(LayerCollection *UNUSED(lc), const ch
 	TODO_LAYER_OVERRIDE;
 }
 
+/* ---------------------------------------------------------------------- */
 /* Iterators */
 
 void BKE_selected_objects_Iterator_begin(Iterator *iter, void *data_in)
@@ -542,6 +543,50 @@ void BKE_selected_objects_Iterator_next(Iterator *iter)
 }
 
 void BKE_selected_objects_Iterator_end(Iterator *UNUSED(iter))
+{
+	/* do nothing */
+}
+
+void BKE_visible_objects_Iterator_begin(Iterator *iter, void *data_in)
+{
+	SceneLayer *sl = data_in;
+	ObjectBase *base = sl->object_bases.first;
+
+	/* when there are no objects */
+	if (base ==  NULL) {
+		iter->valid = false;
+		return;
+	}
+
+	iter->valid = true;
+	iter->data = base;
+
+	if ((base->flag & BASE_VISIBLE) == 0) {
+		BKE_selected_objects_Iterator_next(iter);
+	}
+	else {
+		iter->current = base->object;
+	}
+}
+
+void BKE_visible_objects_Iterator_next(Iterator *iter)
+{
+	ObjectBase *base = ((ObjectBase *)iter->data)->next;
+
+	while (base) {
+		if ((base->flag & BASE_VISIBLE) != 0) {
+			iter->current = base->object;
+			iter->data = base;
+			return;
+		}
+		base = base->next;
+	};
+
+	iter->current = NULL;
+	iter->valid = false;
+}
+
+void BKE_visible_objects_Iterator_end(Iterator *UNUSED(iter))
 {
 	/* do nothing */
 }

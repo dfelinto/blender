@@ -94,6 +94,10 @@ void BKE_selected_objects_Iterator_begin(Iterator *iter, void *data_in);
 void BKE_selected_objects_Iterator_next(Iterator *iter);
 void BKE_selected_objects_Iterator_end(Iterator *iter);
 
+void BKE_visible_objects_Iterator_begin(Iterator *iter, void *data_in);
+void BKE_visible_objects_Iterator_next(Iterator *iter);
+void BKE_visible_objects_Iterator_end(Iterator *iter);
+
 #define FOREACH_SELECTED_OBJECT(sl, _ob)                                      \
 	ITER_BEGIN(BKE_selected_objects_Iterator_begin,                           \
 	           BKE_selected_objects_Iterator_next,                            \
@@ -101,6 +105,15 @@ void BKE_selected_objects_Iterator_end(Iterator *iter);
 	           sl, _ob)
 
 #define FOREACH_SELECTED_OBJECT_END                                           \
+	ITER_END
+
+#define FOREACH_VISIBLE_OBJECT(sl, _ob)                                       \
+	ITER_BEGIN(BKE_visible_objects_Iterator_begin,                            \
+	           BKE_visible_objects_Iterator_next,                             \
+	           BKE_visible_objects_Iterator_end,                              \
+	           sl, _ob)
+
+#define FOREACH_VISIBLE_OBJECT_END                                            \
 	ITER_END
 
 #define FOREACH_OBJECT(sl, _ob)                                               \
