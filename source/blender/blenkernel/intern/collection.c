@@ -33,6 +33,7 @@
 #include "BKE_collection.h"
 #include "BKE_layer.h"
 #include "BKE_library.h"
+#include "BKE_main.h"
 #include "BKE_scene.h"
 
 #include "DNA_ID.h"
@@ -195,7 +196,7 @@ void BKE_collection_object_add(struct Scene *scene, struct SceneCollection *sc, 
 /**
  * Remove object from collection
  */
-void BKE_collection_object_remove(struct Scene *scene, struct SceneCollection *sc, struct Object *ob)
+void BKE_collection_object_remove(Main *bmain, Scene *scene, SceneCollection *sc, Object *ob, const bool free_us)
 {
 
 	LinkData *link = BLI_findptr(&sc->objects, ob, offsetof(LinkData, data));
@@ -207,23 +208,28 @@ void BKE_collection_object_remove(struct Scene *scene, struct SceneCollection *s
 	BLI_remlink(&sc->objects, link);
 	MEM_freeN(link);
 
-	id_us_min((ID *)ob);
-
 	TODO_LAYER_SYNC_FILTER; /* need to remove all instances of ob in scene collections -> filter_objects */
 	BKE_layer_sync_object_unlink(scene, sc, ob);
+
+	if (free_us) {
+		BKE_libblock_free_us(bmain, ob);
+	}
+	else {
+		id_us_min(&ob->id);
+	}
 }
 
 /**
  * Remove object from all collections of scene
  */
-void BKE_collections_object_remove(Scene *scene, Object *ob)
+void BKE_collections_object_remove(Main *bmain, Scene *scene, Object *ob, const bool free_us)
 {
 	BKE_scene_remove_rigidbody_object(scene, ob);
 
 	SceneCollection *sc;
 	FOREACH_SCENE_COLLECTION(scene, sc)
 	{
-		BKE_collection_object_remove(scene, sc, ob);
+		BKE_collection_object_remove(bmain, scene, sc, ob, free_us);
 	}
 	FOREACH_SCENE_COLLECTION_END
 }

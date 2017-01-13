@@ -255,7 +255,7 @@ static void libblock_remap_data_preprocess_scene_base_unlink(
 	}
 }
 
-/* Some reamapping unfortunately require extra and/or specific handling, tackle those here. */
+/* Some remapping unfortunately require extra and/or specific handling, tackle those here. */
 static void libblock_remap_data_preprocess_scene_object_unlink(
         IDRemap *r_id_remap_data, Scene *sce, Object *ob, const bool skip_indirect, const bool is_indirect)
 {
@@ -264,7 +264,7 @@ static void libblock_remap_data_preprocess_scene_object_unlink(
 		r_id_remap_data->skipped_refcounted++;
 	}
 	else {
-		BKE_collections_object_remove(sce, ob);
+		BKE_collections_object_remove(r_id_remap_data->bmain, sce, ob, false);
 		if (!is_indirect) {
 			r_id_remap_data->status |= ID_REMAP_IS_LINKED_DIRECT;
 		}

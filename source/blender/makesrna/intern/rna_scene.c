@@ -2233,7 +2233,7 @@ static void rna_SceneCollection_object_unlink(
 		return;
 	}
 
-	BKE_collection_object_remove(scene, sc, ob);
+	BKE_collection_object_remove(bmain, scene, sc, ob, false);
 
 	/* needed otherwise the depgraph will contain freed objects which can crash, see [#20958] */
 	DAG_relations_tag_update(bmain);

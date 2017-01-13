@@ -1111,22 +1111,19 @@ static void object_delete_check_glsl_update(Object *ob)
 
 /* remove base from a specific scene */
 /* note: now unlinks constraints as well */
-void ED_base_object_free_and_unlink(Main *bmain, Scene *scene, Base *base)
+void ED_base_object_free_and_unlink(Main *bmain, Scene *scene, Object *ob)
 {
-	if (BKE_library_ID_is_indirectly_used(bmain, base->object) &&
-	    ID_REAL_USERS(base->object) <= 1 && ID_EXTRA_USERS(base->object) == 0)
+	if (BKE_library_ID_is_indirectly_used(bmain, ob) &&
+	    ID_REAL_USERS(ob) <= 1 && ID_EXTRA_USERS(ob) == 0)
 	{
 		/* We cannot delete indirectly used object... */
 		printf("WARNING, undeletable object '%s', should have been catched before reaching this function!",
-		       base->object->id.name + 2);
+		       ob->id.name + 2);
 		return;
 	}
 
-	BKE_scene_base_unlink(scene, base);
-	BKE_collections_object_remove(scene, base->object);
-	object_delete_check_glsl_update(base->object);
-	BKE_libblock_free_us(bmain, base->object);
-	MEM_freeN(base);
+	object_delete_check_glsl_update(ob);
+	BKE_collections_object_remove(bmain, scene, ob, true);
 	DAG_id_type_tag(bmain, ID_OB);
 }
 
@@ -1142,56 +1139,46 @@ static int object_delete_exec(bContext *C, wmOperator *op)
 	if (CTX_data_edit_object(C)) 
 		return OPERATOR_CANCELLED;
 
-	CTX_DATA_BEGIN (C, Base *, base, selected_bases)
+	CTX_DATA_BEGIN (C, Object *, ob, selected_objects)
 	{
-		const bool is_indirectly_used = BKE_library_ID_is_indirectly_used(bmain, base->object);
-		if (base->object->id.tag & LIB_TAG_INDIRECT) {
+		const bool is_indirectly_used = BKE_library_ID_is_indirectly_used(bmain, ob);
+		if (ob->id.tag & LIB_TAG_INDIRECT) {
 			/* Can this case ever happen? */
-			BKE_reportf(op->reports, RPT_WARNING, "Cannot delete indirectly linked object '%s'", base->object->id.name + 2);
+			BKE_reportf(op->reports, RPT_WARNING, "Cannot delete indirectly linked object '%s'", ob->id.name + 2);
 			continue;
 		}
-		else if (is_indirectly_used && ID_REAL_USERS(base->object) <= 1 && ID_EXTRA_USERS(base->object) == 0) {
+		else if (is_indirectly_used && ID_REAL_USERS(ob) <= 1 && ID_EXTRA_USERS(ob) == 0) {
 			BKE_reportf(op->reports, RPT_WARNING,
 			        "Cannot delete object '%s' from scene '%s', indirectly used objects need at least one user",
-			        base->object->id.name + 2, scene->id.name + 2);
+			        ob->id.name + 2, scene->id.name + 2);
 			continue;
 		}
 		/* remove from Grease Pencil parent */
 		for (bGPdata *gpd = bmain->gpencil.first; gpd; gpd = gpd->id.next) {
 			for (bGPDlayer *gpl = gpd->layers.first; gpl; gpl = gpl->next) {
 				if (gpl->parent != NULL) {
-					Object *ob = gpl->parent;
-					Object *curob = base->object;
-					if (ob == curob) {
+					if (gpl->parent == ob) {
 						gpl->parent = NULL;
 					}
 				}
 			}
 		}
 
-		/* deselect object -- it could be used in other scenes */
-		base->object->flag &= ~SELECT;
-
 		/* remove from current scene only */
-		ED_base_object_free_and_unlink(bmain, scene, base);
+		ED_base_object_free_and_unlink(bmain, scene, ob);
 		changed = true;
 
 		if (use_global) {
 			Scene *scene_iter;
-			Base *base_other;
-
 			for (scene_iter = bmain->scene.first; scene_iter; scene_iter = scene_iter->id.next) {
 				if (scene_iter != scene && !ID_IS_LINKED_DATABLOCK(scene_iter)) {
-					base_other = BKE_scene_base_find(scene_iter, base->object);
-					if (base_other) {
-						if (is_indirectly_used && ID_REAL_USERS(base->object) <= 1 && ID_EXTRA_USERS(base->object) == 0) {
-							BKE_reportf(op->reports, RPT_WARNING,
-							            "Cannot delete object '%s' from scene '%s', indirectly used objects need at least one user",
-							            base->object->id.name + 2, scene_iter->id.name + 2);
-							break;
-						}
-						ED_base_object_free_and_unlink(bmain, scene_iter, base_other);
+					if (is_indirectly_used && ID_REAL_USERS(ob) <= 1 && ID_EXTRA_USERS(ob) == 0) {
+						BKE_reportf(op->reports, RPT_WARNING,
+						            "Cannot delete object '%s' from scene '%s', indirectly used objects need at least one user",
+						            ob->id.name + 2, scene_iter->id.name + 2);
+						break;
 					}
+					ED_base_object_free_and_unlink(bmain, scene_iter, ob);
 				}
 			}
 		}
@@ -1907,7 +1894,7 @@ static int convert_exec(bContext *C, wmOperator *op)
 						if (BKE_mball_is_basis(ob) ||
 						    ((ob_basis = BKE_mball_basis_find(scene, ob)) && (ob_basis->flag & OB_DONE)))
 						{
-							ED_base_object_free_and_unlink(bmain, scene, base);
+							ED_base_object_free_and_unlink(bmain, scene, base->object);
 						}
 					}
 				}
