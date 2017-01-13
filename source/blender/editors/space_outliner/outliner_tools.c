@@ -56,6 +56,7 @@
 #include "BKE_depsgraph.h"
 #include "BKE_fcurve.h"
 #include "BKE_group.h"
+#include "BKE_layer.h"
 #include "BKE_library.h"
 #include "BKE_library_query.h"
 #include "BKE_library_remap.h"
@@ -360,15 +361,15 @@ void OUTLINER_OT_scene_operation(wmOperatorType *ot)
 /* ******************************************** */
 
 static void object_select_cb(
-        bContext *UNUSED(C), ReportList *UNUSED(reports), Scene *scene, TreeElement *te,
+        bContext *C, ReportList *UNUSED(reports), Scene *UNUSED(scene), TreeElement *UNUSED(te),
         TreeStoreElem *UNUSED(tsep), TreeStoreElem *tselem, void *UNUSED(user_data))
 {
-	Base *base = (Base *)te->directdata;
-	
-	if (base == NULL) base = BKE_scene_base_find(scene, (Object *)tselem->id);
-	if (base && ((base->object->restrictflag & OB_RESTRICT_VIEW) == 0)) {
-		base->flag |= SELECT;
-		base->object->flag |= SELECT;
+	SceneLayer *sl = CTX_data_scene_layer(C);
+	Object *ob = (Object *)tselem->id;
+	ObjectBase *base = BKE_scene_layer_base_find(sl, ob);
+
+	if (base && ((base->flag & BASE_VISIBLE) != 0)) {
+		base->flag |= BASE_SELECTED;
 	}
 }
 
@@ -385,46 +386,43 @@ static void object_select_hierarchy_cb(
 
 
 static void object_deselect_cb(
-        bContext *UNUSED(C), ReportList *UNUSED(reports), Scene *scene, TreeElement *te,
+        bContext *C, ReportList *UNUSED(reports), Scene *UNUSED(scene), TreeElement *UNUSED(te),
         TreeStoreElem *UNUSED(tsep), TreeStoreElem *tselem, void *UNUSED(user_data))
 {
-	Base *base = (Base *)te->directdata;
-	
-	if (base == NULL) base = BKE_scene_base_find(scene, (Object *)tselem->id);
+	SceneLayer *sl = CTX_data_scene_layer(C);
+	Object *ob = (Object *)tselem->id;
+	ObjectBase *base = BKE_scene_layer_base_find(sl, ob);
+
 	if (base) {
-		base->flag &= ~SELECT;
-		base->object->flag &= ~SELECT;
+		base->flag &= ~BASE_SELECTED;
 	}
 }
 
 static void object_delete_cb(
-        bContext *C, ReportList *reports, Scene *scene, TreeElement *te,
+        bContext *C, ReportList *reports, Scene *scene, TreeElement *UNUSED(te),
         TreeStoreElem *UNUSED(tsep), TreeStoreElem *tselem, void *UNUSED(user_data))
 {
-	Base *base = (Base *)te->directdata;
-	
-	if (base == NULL)
-		base = BKE_scene_base_find(scene, (Object *)tselem->id);
-	if (base) {
+	Object *ob = (Object *)tselem->id;
+	if (ob) {
 		Main *bmain = CTX_data_main(C);
-		if (base->object->id.tag & LIB_TAG_INDIRECT) {
-			BKE_reportf(reports, RPT_WARNING, "Cannot delete indirectly linked object '%s'", base->object->id.name + 2);
+		if (ob->id.tag & LIB_TAG_INDIRECT) {
+			BKE_reportf(reports, RPT_WARNING, "Cannot delete indirectly linked object '%s'", ob->id.name + 2);
 			return;
 		}
-		else if (BKE_library_ID_is_indirectly_used(bmain, base->object) &&
-		         ID_REAL_USERS(base->object) <= 1 && ID_EXTRA_USERS(base->object) == 0)
+		else if (BKE_library_ID_is_indirectly_used(bmain, ob) &&
+		         ID_REAL_USERS(ob) <= 1 && ID_EXTRA_USERS(ob) == 0)
 		{
 			BKE_reportf(reports, RPT_WARNING,
 			            "Cannot delete object '%s' from scene '%s', indirectly used objects need at least one user",
-			            base->object->id.name + 2, scene->id.name + 2);
+			            ob->id.name + 2, scene->id.name + 2);
 			return;
 		}
 
 		// check also library later
-		if (scene->obedit == base->object)
+		if (scene->obedit == ob)
 			ED_object_editmode_exit(C, EM_FREEDATA | EM_FREEUNDO | EM_WAITCURSOR | EM_DO_UNDO);
 		
-		ED_base_object_free_and_unlink(CTX_data_main(C), scene, base->object);
+		ED_base_object_free_and_unlink(CTX_data_main(C), scene, ob);
 		/* leave for ED_outliner_id_unref to handle */
 #if 0
 		te->directdata = NULL;
@@ -860,6 +858,7 @@ static void object_delete_hierarchy_cb(
         bContext *C, ReportList *reports, Scene *scene,
         TreeElement *te, TreeStoreElem *UNUSED(tsep), TreeStoreElem *tselem, void *UNUSED(user_data))
 {
+#if 0
 	Base *base = (Base *)te->directdata;
 	Object *obedit = scene->obedit;
 
@@ -882,6 +881,15 @@ static void object_delete_hierarchy_cb(
 	}
 
 	WM_event_add_notifier(C, NC_SCENE | ND_OB_ACTIVE, scene);
+#else
+	(void) C;
+	(void) scene;
+	(void) te;
+	(void) tselem;
+	(void) outline_delete_hierarchy;
+	BKE_reportf(reports, RPT_ERROR, "Delete from outliner not supported at the moment");
+	TODO_LAYER_BASE
+#endif
 }
 
 /* **************************************** */

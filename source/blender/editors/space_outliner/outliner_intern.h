@@ -40,6 +40,7 @@ struct wmOperatorType;
 struct TreeStoreElem;
 struct bContext;
 struct Scene;
+struct SceneLayer;
 struct ID;
 struct Object;
 struct bPoseChannel;
@@ -141,7 +142,7 @@ TreeElement *outliner_find_posechannel(ListBase *lb, const struct bPoseChannel *
 TreeElement *outliner_find_editbone(ListBase *lb, const struct EditBone *ebone);
 struct ID *outliner_search_back(SpaceOops *soops, TreeElement *te, short idcode);
 
-void outliner_build_tree(struct Main *mainvar, struct Scene *scene, struct SpaceOops *soops);
+void outliner_build_tree(struct Main *mainvar, struct Scene *scene, struct SceneLayer *sl, struct SpaceOops *soops);
 
 /* outliner_draw.c ---------------------------------------------- */
 
