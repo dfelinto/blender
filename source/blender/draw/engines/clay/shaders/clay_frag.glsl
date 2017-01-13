@@ -37,6 +37,7 @@ in vec3 normal;
 out vec4 fragColor;
 #endif
 
+/* TODO Move this to SSAO modules */
 /* simple depth reconstruction, see http://www.derschmale.com/2014/01/26/reconstructing-positions-from-the-depth-buffer
  * we change the factors from the article to fit the OpennGL model.  */
 vec3 get_view_space_from_depth(in vec2 uvcoords, in vec3 viewvec_origin, in vec3 viewvec_diff, in float depth)

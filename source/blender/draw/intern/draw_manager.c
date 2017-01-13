@@ -19,7 +19,7 @@
  *
  */
 
-/** \file blender/draw/viewport_engine.c
+/** \file blender/draw/draw_manager.c
  *  \ingroup draw
  */
 
@@ -41,6 +41,9 @@
 #include "DNA_view3d_types.h" /* hacky */
 #include "DNA_object_types.h" /* hacky */
 #include "view3d_intern.h" /* hacky */
+#include "BKE_DerivedMesh.h" /* hacky */
+
+#include "DNA_mesh_types.h"
 
 #include "GPU_basic_shader.h"
 #include "GPU_batch.h"
@@ -49,7 +52,6 @@
 #include "GPU_framebuffer.h"
 #include "GPU_immediate.h"
 #include "GPU_matrix.h"
-#include "GPU_select.h"
 #include "GPU_shader.h"
 #include "GPU_texture.h"
 #include "GPU_viewport.h"
@@ -66,6 +68,7 @@ extern char datatoc_gpu_shader_basic_vert_glsl[];
 
 /* Structures */
 typedef enum {
+	DRW_UNIFORM_BOOL,
 	DRW_UNIFORM_INT,
 	DRW_UNIFORM_FLOAT,
 	DRW_UNIFORM_TEXTURE,
@@ -91,19 +94,28 @@ struct DRWInterface {
 	int projection;
 	int modelviewprojection;
 	int normal;
+	int eye;
 };
 
 struct DRWPass {
 	ListBase batches;
 	DRWState state;
+	float state_param; /* Line / Point width */
 };
+
+typedef struct DRWCall {
+	struct DRWCall *next, *prev;
+	struct Batch *geometry;
+	float **obmat;
+} DRWCall;
 
 struct DRWBatch {
 	struct DRWBatch *next, *prev;
 	struct GPUShader *shader;        /* Shader to bind */
 	struct DRWInterface *interface;  /* Uniforms pointers */
 	void *storage;                   /* Uniforms values */
-	ListBase objects;                /* (Object *) LinkData->data - List with all objects and transform */
+	ListBase call;                   /* List with all geometry and transforms */
+	int state;                       /* State changes for this batch only */
 };
 
 /* Render State */
@@ -219,33 +231,6 @@ void DRW_texture_free(GPUTexture *tex)
 	GPU_texture_free(tex);
 }
 
-/* ***************************************** BUFFERS ******************************************/
-
-static void draw_fullscreen(void)
-{
-	if (!fs_quad_init) {
-		glGenBuffers(1, &fs_quad);
-		glBindBuffer(GL_ARRAY_BUFFER, fs_quad);
-		glBufferData(GL_ARRAY_BUFFER, 16 * sizeof(float), NULL, GL_STATIC_DRAW);
-		glBufferSubData(GL_ARRAY_BUFFER, 0, 8 * sizeof(float), fs_cos);
-		glBufferSubData(GL_ARRAY_BUFFER, 8 * sizeof(float), 8 * sizeof(float), fs_uvs);
-	}
-
-	/* set up quad buffer */
-	glBindBuffer(GL_ARRAY_BUFFER, fs_quad);
-	glVertexPointer(2, GL_FLOAT, 0, NULL);
-	glTexCoordPointer(2, GL_FLOAT, 0, ((GLubyte *)NULL + 8 * sizeof(float)));
-	glEnableClientState(GL_VERTEX_ARRAY);
-	glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-
-	/* Draw */
-	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-
-	/* Restore */
-	glDisableClientState(GL_VERTEX_ARRAY);
-	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-}
 
 /* ****************************************** SHADERS ******************************************/
 
@@ -286,6 +271,7 @@ static DRWInterface *DRW_interface_create(struct GPUShader *shader)
 	interface->projection = glGetUniformLocation(program, "ProjectionMatrix");
 	interface->modelviewprojection = glGetUniformLocation(program, "ModelViewProjectionMatrix");
 	interface->normal = glGetUniformLocation(program, "NormalMatrix");
+	interface->eye = glGetUniformLocation(program, "eye");
 
 	return interface;
 }
@@ -329,6 +315,7 @@ DRWBatch *DRW_batch_create(struct GPUShader *shader, DRWPass *pass, void *storag
 	batch->shader = shader;
 	batch->interface = DRW_interface_create(shader);
 	batch->storage = storage;
+	batch->state = 0;
 
 	BLI_addtail(&pass->batches, batch);
 
@@ -337,7 +324,7 @@ DRWBatch *DRW_batch_create(struct GPUShader *shader, DRWPass *pass, void *storag
 
 void DRW_batch_free(struct DRWBatch *batch)
 {
-	BLI_freelistN(&batch->objects);
+	BLI_freelistN(&batch->call);
 	BLI_freelistN(&batch->interface->uniforms);
 	MEM_freeN(batch->interface);
 	if (batch->storage)
@@ -345,9 +332,23 @@ void DRW_batch_free(struct DRWBatch *batch)
 }
 
 /* Later use VBO */
-void DRW_batch_surface_add(DRWBatch *batch, Object *ob)
+void DRW_batch_call_add(DRWBatch *batch, struct Batch *geom, const float **obmat)
 {
-	BLI_addtail(&batch->objects, BLI_genericNodeN(ob));
+	if (geom) {
+		DRWCall *call = MEM_callocN(sizeof(DRWCall), "DRWCall");
+
+		call->obmat = obmat;
+		call->geometry = geom;
+
+		BLI_addtail(&batch->call, call);
+	}
+}
+
+/* Make sure you know what you do when using this,
+ * State is not revert back at the end of the batch */
+void DRW_batch_state_set(DRWBatch *batch, DRWState state)
+{
+	batch->state = state;
 }
 
 void DRW_batch_uniform_texture(DRWBatch *batch, const char *name, const GPUTexture *tex, int loc)
@@ -359,6 +360,11 @@ void DRW_batch_uniform_buffer(DRWBatch *batch, const char *name, const int value
 {
 	/* we abuse the lenght attrib to store the buffer index */
 	DRW_interface_uniform(batch, name, DRW_UNIFORM_BUFFER, NULL, value, 0, loc);
+}
+
+void DRW_batch_uniform_bool(DRWBatch *batch, const char *name, const bool *value, int arraysize)
+{
+	DRW_interface_uniform(batch, name, DRW_UNIFORM_BOOL, value, 1, arraysize, 0);
 }
 
 void DRW_batch_uniform_float(DRWBatch *batch, const char *name, const float *value, int arraysize)
@@ -405,6 +411,80 @@ void DRW_batch_uniform_mat4(DRWBatch *batch, const char *name, const float *valu
 {
 	DRW_interface_uniform(batch, name, DRW_UNIFORM_MAT4, value, 16, 1, 0);
 }
+
+/* ************************************* GEOMETRY CACHE **************************************/
+
+struct Batch *DRW_cache_wire_get(Object *ob) {
+	Mesh *me = ob->data;
+	DerivedMesh *dm = NULL;
+	struct Batch *fancy_wire = NULL;
+	Scene *scene = CTX_data_scene(DST.context);
+	Object *obedit = scene->obedit;
+
+	/* we won't use any function that doesn't comply to the new API, this is a short-lived exception TODO */
+	if (ob == obedit) {
+#if 0 /* Doesn't work */
+		struct BMEditMesh *em = me->edit_btmesh;
+		dm = editbmesh_get_derived_base(ob, em, CD_MASK_BAREMESH);
+
+		MBC_cache_get_fancy_edges(dm, &fancy_wire);
+
+		dm->release(dm);
+#endif
+	}
+	else {
+#if 0 /* Doesn't work */
+		dm = mesh_get_derived_final(scene, ob, CD_MASK_BAREMESH);
+
+		MBC_cache_get_fancy_edges(dm, &fancy_wire);
+
+		dm->release(dm);
+#endif
+	}
+
+	return fancy_wire;
+}
+
+struct Batch *DRW_cache_surface_get(Object *ob) {
+	Mesh *me = ob->data;
+	DerivedMesh *dm = NULL;
+	struct Batch *surface = NULL;
+	Scene *scene = CTX_data_scene(DST.context);
+	Object *obedit = scene->obedit;
+
+	/* we won't use any function that doesn't comply to the new API, this is a short-lived exception TODO */
+	if (ob == obedit) {
+		DerivedMesh *finalDM;
+		struct BMEditMesh *em = me->edit_btmesh;
+		dm = editbmesh_get_derived_cage_and_final(
+			        scene, ob, em, CD_MASK_BAREMESH,
+			        &finalDM);
+
+		MBC_cache_get_all_triangles(dm, &surface);
+
+		finalDM->release(finalDM);
+	}
+	else {
+#if 0 /* Doesn't work */
+		dm = mesh_get_derived_final(scene, ob, CD_MASK_BAREMESH);
+		DM_ensure_tessface(dm);
+
+		MBC_cache_get_all_triangles(dm, &surface);
+
+		dm->release(dm);
+#endif
+	}
+
+
+	return surface;
+}
+
+#if 0 /* TODO */
+struct Batch *DRW_cache_surface_material_get(Object *ob, int nr) {
+	/* TODO */
+	return NULL;
+}
+#endif
 
 /* ***************************************** PASSES ******************************************/
 
@@ -465,6 +545,44 @@ void DRW_draw_background(void)
 	}
 }
 
+static void DRW_draw_fullscreen(void)
+{
+	if (!fs_quad_init) {
+		glGenBuffers(1, &fs_quad);
+		glBindBuffer(GL_ARRAY_BUFFER, fs_quad);
+		glBufferData(GL_ARRAY_BUFFER, 16 * sizeof(float), NULL, GL_STATIC_DRAW);
+		glBufferSubData(GL_ARRAY_BUFFER, 0, 8 * sizeof(float), fs_cos);
+		glBufferSubData(GL_ARRAY_BUFFER, 8 * sizeof(float), 8 * sizeof(float), fs_uvs);
+	}
+
+	/* set up quad buffer */
+	glBindBuffer(GL_ARRAY_BUFFER, fs_quad);
+	glVertexPointer(2, GL_FLOAT, 0, NULL);
+	glTexCoordPointer(2, GL_FLOAT, 0, ((GLubyte *)NULL + 8 * sizeof(float)));
+	glEnableClientState(GL_VERTEX_ARRAY);
+	glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+
+	/* Draw */
+	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+	/* Restore */
+	glDisableClientState(GL_VERTEX_ARRAY);
+	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+}
+
+static void batch_set_state(DRWBatch *batch)
+{
+	if (batch->state) {
+		if (batch->state & DRW_STATE_WIRE) {
+			glLineWidth(1.0f);
+		}
+		else if (batch->state & DRW_STATE_WIRE_LARGE) {
+			glLineWidth(UI_GetThemeValuef(TH_OUTLINE_WIDTH) * 2.0f);
+		}
+	}
+}
+
 typedef struct DRWBoundTexture {
 	struct DRWBoundTexture *next, *prev;
 	GPUTexture *tex;
@@ -483,11 +601,14 @@ static void draw_batch(DRWBatch *batch, const bool fullscreen)
 		DST.shader = batch->shader;
 	}
 
+	batch_set_state(batch);
+
 	/* Don't check anything, Interface should already contain the least uniform as possible */
 	for (DRWUniform *uni = interface->uniforms.first; uni; uni = uni->next) {
 		DRWBoundTexture *bound_tex;
 
 		switch (uni->type) {
+			case DRW_UNIFORM_BOOL:
 			case DRW_UNIFORM_INT:
 				GPU_shader_uniform_vector_int(batch->shader, uni->location, uni->length, uni->arraysize, (int *)uni->value);
 				break;
@@ -529,39 +650,54 @@ static void draw_batch(DRWBatch *batch, const bool fullscreen)
 		}
 
 		/* step 2 : bind vertex array & draw */
-		draw_fullscreen();
+		DRW_draw_fullscreen();
 	}
+	//else if (DRW_STATE_POINT) {
+		/* TODO */
+	//}
 	else {
 		RegionView3D *rv3d = CTX_wm_region_view3d(DST.context);
 
-		for (LinkData *link = batch->objects.first; link; link = link->next) {
-			Object *ob = link->data;
-
+		for (DRWCall *call = batch->call.first; call; call = call->next) {
 			/* Should be really simple */
 			/* step 1 : bind object dependent matrices */
 			if (interface->modelviewprojection != -1) {
 				float mvp[4][4];
-				mul_m4_m4m4(mvp, rv3d->persmat, ob->obmat);
+				mul_m4_m4m4(mvp, rv3d->persmat, call->obmat);
 				GPU_shader_uniform_vector(batch->shader, interface->modelviewprojection, 16, 1, (float *)mvp);
 			}
 			if (interface->modelview != -1) {
 				float mv[4][4];
-				mul_m4_m4m4(mv, rv3d->viewmat, ob->obmat);
+				mul_m4_m4m4(mv, rv3d->viewmat, call->obmat);
 				GPU_shader_uniform_vector(batch->shader, interface->modelview, 16, 1, (float *)mv);
 			}
 			if (interface->normal != -1) {
 				float mv[4][4];
 				float n[3][3];
-				mul_m4_m4m4(mv, rv3d->viewmat, ob->obmat);
+				mul_m4_m4m4(mv, rv3d->viewmat, call->obmat);
 				copy_m3_m4(n, mv);
 				invert_m3(n);
 				transpose_m3(n);
 				GPU_shader_uniform_vector(batch->shader, interface->normal, 9, 1, (float *)n);
 			}
+			if (interface->eye != -1) {
+				/* Used by orthographic wires */
+				float mv[4][4];
+				float n[3][3];
+				mul_m4_m4m4(mv, rv3d->viewmat, call->obmat);
+				copy_m3_m4(n, mv);
+				invert_m3(n);
+				transpose_m3(n);
+				invert_m3(n);
+				/* set eye vector, transformed to object coords */
+				float eye[3] = { 0.0f, 0.0f, 1.0f }; /* looking into the screen */
+				mul_m3_v3(n, eye);
+				GPU_shader_uniform_vector(batch->shader, interface->eye, 3, 1, (float *)eye);
+			}
 
 			/* step 2 : bind vertex array & draw */
-			/* we won't use any function that doesn't comply to the new API, this is a short-lived exception TODO */
-			draw_mesh(ob, DST.context, GPU_shader_get_program(batch->shader));
+			Batch_set_program(call->geometry, GPU_shader_get_program(batch->shader));
+			Batch_draw_stupid(call->geometry);
 		}
 	}
 }
@@ -609,6 +745,13 @@ static void set_state(short flag)
 	else {
 		glDisable(GL_DEPTH_TEST);
 	}
+
+	if (flag & DRW_STATE_WIRE) {
+		glLineWidth(1.0f);
+	}
+	else if (flag & DRW_STATE_WIRE_LARGE) {
+		glLineWidth(UI_GetThemeValuef(TH_OUTLINE_WIDTH) * 2.0f);
+	}
 }
 
 void DRW_draw_pass(DRWPass *pass)
@@ -616,7 +759,7 @@ void DRW_draw_pass(DRWPass *pass)
 	/* Start fresh */
 	DST.shader = NULL;
 	DST.tex_bind_id = 0;
-	
+
 	set_state(pass->state);
 	BLI_listbase_clear(&DST.bound_texs);
 
@@ -788,7 +931,7 @@ void DRW_viewport_matrix_get(float mat[4][4], DRWViewportMatrixType type)
 		copy_m4_m4(mat, rv3d->winmat);
 }
 
-bool DRW_viewport_is_persp(void)
+bool DRW_viewport_is_persp_get(void)
 {
 	RegionView3D *rv3d = CTX_wm_region_view3d(DST.context);
 	return rv3d->is_persp;

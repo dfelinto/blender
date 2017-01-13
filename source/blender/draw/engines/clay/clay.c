@@ -109,6 +109,8 @@ typedef struct CLAY_TextureList{
 typedef struct CLAY_PassList{
 	struct DRWPass *depth_pass;
 	struct DRWPass *clay_pass;
+	struct DRWPass *mode_ob_wire_pass;
+	struct DRWPass *mode_ob_center_pass;
 } CLAY_PassList;
 
 /* Functions */
@@ -415,22 +417,33 @@ static void clay_populate_passes(CLAY_PassList *passes, const struct bContext *C
 		defaultbatch = clay_batch_create(passes->clay_pass, storage);
 	}
 
+	/* Object Mode */
+	{
+		DRW_mode_object_setup(&passes->mode_ob_wire_pass, &passes->mode_ob_center_pass);
+	}
+
 	/* TODO Create hash table of batch based on material id*/
 	FOREACH_OBJECT(sl, ob)
 	{
-		/* Add everything for now */
-		DRW_batch_surface_add(defaultbatch, ob);
+		if (ob->type == OB_MESH) {
+			struct Batch *geom = DRW_cache_surface_get(ob);
 
-		/* When encountering a new material :
-		 * - Create new Batch
-		 * - Initialize Batch
-		 * - Push it to the hash table
-		 * - The pass takes care of inserting it
-		 * next to the same shader calls */
+			/* Add everything for now */
+			DRW_batch_call_add(defaultbatch, geom, &ob->obmat);
 
-		DRW_batch_surface_add(depthbatch, ob);
+			/* When encountering a new material :
+			 * - Create new Batch
+			 * - Initialize Batch
+			 * - Push it to the hash table
+			 * - The pass takes care of inserting it
+			 * next to the same shader calls */
 
-		/* Free hash table */
+			DRW_batch_call_add(depthbatch, geom, &ob->obmat);
+
+			/* Free hash table */
+
+			DRW_mode_object_add(passes->mode_ob_wire_pass, passes->mode_ob_center_pass, ob);
+		}
 	}
 	FOREACH_OBJECT_END
 }
@@ -439,7 +452,7 @@ static void clay_ssao_setup(void)
 {
 	float invproj[4][4];
 	float dfdyfacs[2];
-	bool is_persp = DRW_viewport_is_persp();
+	bool is_persp = DRW_viewport_is_persp_get();
 	/* view vectors for the corners of the view frustum. Can be used to recreate the world space position easily */
 	float viewvecs[3][4] = {
 	    {-1.0f, -1.0f, -1.0f, 1.0f},
@@ -510,11 +523,17 @@ static void clay_view_draw(RenderEngine *UNUSED(engine), const struct bContext *
 	/* Pass 1 : Depth pre-pass */
 	DRW_draw_pass(passes->depth_pass);
 
-	/* Pass 2 : Shading */
-	clay_ssao_setup();
+	/* Pass 2 : Downsample Depth */
 	DRW_framebuffer_texture_detach(textures->depth);
+	/* TODO */
+
+	/* Pass 3 : Shading */
+	clay_ssao_setup();
 	DRW_draw_pass(passes->clay_pass);
+
+	/* Pass 4 : Overlays */
 	DRW_framebuffer_texture_attach(buffers->default_fb, textures->depth, 0);
+	DRW_draw_pass(passes->mode_ob_wire_pass);
 
 	/* Always finish by this */
 	DRW_state_reset();

@@ -51,9 +51,11 @@ set(INC_SYS
 
 set(SRC
 	intern/draw_manager.c
+	intern/draw_mode_pass.c
 	engines/clay/clay.c
 
 	intern/DRW_render.h
+	intern/draw_mode_pass.h
 	engines/clay/clay.h
 
 	./DRW_engine.h

@@ -78,8 +78,6 @@
 #include "BKE_unit.h"
 #include "BKE_tracking.h"
 
-#include "BKE_context.h" /* Clement : to remove */
-
 #include "BKE_editmesh.h"
 
 #include "IMB_imbuf.h"
@@ -314,6 +312,12 @@ static Batch *MBC_get_all_verts(DerivedMesh *dm)
 	return cache->all_verts;
 }
 
+/* Short term function TODO */
+void MBC_cache_get_all_verts(struct DerivedMesh *dm, struct Batch **batch)
+{
+	*batch = MBC_get_all_verts(dm);
+}
+
 static ElementList *MBC_get_edges_in_order(DerivedMesh *dm)
 {
 	MeshBatchCache *cache = MBC_get(dm);
@@ -380,6 +384,12 @@ static Batch *MBC_get_all_triangles(DerivedMesh *dm)
 	}
 
 	return cache->all_triangles;
+}
+
+/* Short term function TODO */
+void MBC_cache_get_all_triangles(struct DerivedMesh *dm, struct Batch **batch)
+{
+	*batch = MBC_get_all_triangles(dm);
 }
 
 static Batch *MBC_get_fancy_edges(DerivedMesh *dm)
@@ -474,6 +484,12 @@ static Batch *MBC_get_fancy_edges(DerivedMesh *dm)
 	}
 
 	return cache->fancy_edges;
+}
+
+/* Short term function TODO */
+void MBC_cache_get_fancy_edges(struct DerivedMesh *dm, struct Batch **batch)
+{
+	*batch = MBC_get_fancy_edges(dm);
 }
 
 static bool edge_is_real(const MEdge *edges, int edge_ct, int v1, int v2)
@@ -4371,30 +4387,6 @@ static void draw_em_fancy(Scene *scene, ARegion *ar, View3D *v3d,
 #endif
 }
 
-/* Clement : temp solution to draw something simply */
-void draw_mesh(Object *ob, const struct bContext *C, unsigned int program)
-{
-	Scene *scene = CTX_data_scene(C);
-
-	if (ob->type == OB_MESH) {
-		Mesh *me = ob->data;
-		DerivedMesh *dm = NULL;
-
-		if (ob->mode & OB_MODE_EDIT) {
-			dm = editbmesh_get_derived_base(ob, me->edit_btmesh, CD_MASK_BAREMESH);
-		}
-		else {
-			dm = mesh_get_derived_final(scene, ob, CD_MASK_BAREMESH);
-		}
-
-		Batch *surface = MBC_get_all_triangles(dm);
-		Batch_set_program(surface, program);
-		Batch_draw_stupid(surface);
-
-		dm->release(dm);
-	}
-}
-
 static void draw_em_fancy_new(Scene *UNUSED(scene), ARegion *ar, View3D *UNUSED(v3d),
                               Object *UNUSED(ob), BMEditMesh *UNUSED(em), DerivedMesh *cageDM, DerivedMesh *UNUSED(finalDM), const char UNUSED(dt))
 {
@@ -5070,6 +5062,7 @@ static void draw_mesh_fancy_new(Scene *scene, ARegion *ar, View3D *v3d, RegionVi
 		Batch_Uniform4fv(fancy_edges, "silhouetteColor", outlineColor);
 
 		Batch_draw(fancy_edges);
+		
 
 #else /* simple wireframes */
 

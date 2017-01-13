@@ -43,6 +43,8 @@
 #include "DNA_material_types.h"
 #include "DNA_scene_types.h"
 
+#include "draw_mode_pass.h"
+
 #include "MEM_guardedalloc.h"
 
 #include "RE_engine.h"
@@ -51,6 +53,7 @@ struct GPUFrameBuffer;
 struct GPUShader;
 struct GPUTexture;
 struct Object;
+struct Batch;
 
 typedef struct DRWUniform DRWUniform;
 typedef struct DRWInterface DRWInterface;
@@ -129,13 +132,28 @@ struct GPUShader *DRW_shader_create_3D_depth_only(void);
 void DRW_shader_free(struct GPUShader *shader);
 
 /* Batches */
+
+typedef enum {
+	DRW_STATE_WRITE_DEPTH = (1 << 0),
+	DRW_STATE_WRITE_COLOR = (1 << 1),
+	DRW_STATE_DEPTH_LESS  = (1 << 2),
+	DRW_STATE_DEPTH_EQUAL = (1 << 3),
+	DRW_STATE_CULL_BACK   = (1 << 4),
+	DRW_STATE_CULL_FRONT  = (1 << 5),
+	DRW_STATE_WIRE        = (1 << 6),
+	DRW_STATE_WIRE_LARGE  = (1 << 7),
+	DRW_STATE_POINT       = (1 << 8)
+	/* TODO GL_BLEND */
+} DRWState;
+
 DRWBatch *DRW_batch_create(struct GPUShader *shader, DRWPass *pass, void *storage);
 void DRW_batch_free(struct DRWBatch *batch);
-void DRW_batch_surface_add(DRWBatch *batch, struct Object *ob);
-void DRW_batch_surface_clear(DRWBatch *batch);
+void DRW_batch_call_add(DRWBatch *batch, struct Batch *geom, const float **obmat);
+void DRW_batch_state_set(DRWBatch *batch, DRWState state);
 
 void DRW_batch_uniform_texture(DRWBatch *batch, const char *name, const struct GPUTexture *tex, int loc);
 void DRW_batch_uniform_buffer(DRWBatch *batch, const char *name, const int value, int loc);
+void DRW_batch_uniform_bool(DRWBatch *batch, const char *name, const bool *value, int arraysize);
 void DRW_batch_uniform_float(DRWBatch *batch, const char *name, const float *value, int arraysize);
 void DRW_batch_uniform_vec2(DRWBatch *batch, const char *name, const float *value, int arraysize);
 void DRW_batch_uniform_vec3(DRWBatch *batch, const char *name, const float *value, int arraysize);
@@ -146,17 +164,12 @@ void DRW_batch_uniform_ivec3(DRWBatch *batch, const char *name, const int *value
 void DRW_batch_uniform_mat3(DRWBatch *batch, const char *name, const float *value);
 void DRW_batch_uniform_mat4(DRWBatch *batch, const char *name, const float *value);
 
-/* Passes */
-typedef enum {
-	DRW_STATE_WRITE_DEPTH = (1 << 0),
-	DRW_STATE_WRITE_COLOR = (1 << 1),
-	DRW_STATE_DEPTH_LESS  = (1 << 2),
-	DRW_STATE_DEPTH_EQUAL = (1 << 3),
-	DRW_STATE_CULL_BACK   = (1 << 4),
-	DRW_STATE_CULL_FRONT  = (1 << 5)
-	/* TODO GL_BLEND */
-} DRWState;
+/* Geometry Cache */
+struct Batch *DRW_cache_wire_get(Object *ob);
+struct Batch *DRW_cache_surface_get(Object *ob);
+struct Batch *DRW_cache_surface_material_get(Object *ob, int nr);
 
+/* Passes */
 DRWPass *DRW_pass_create(const char *name, DRWState state);
 
 /* Viewport */
@@ -169,7 +182,7 @@ typedef enum {
 void DRW_viewport_init(const bContext *C, void **buffers, void **textures, void **passes);
 void DRW_viewport_matrix_get(float mat[4][4], DRWViewportMatrixType type);
 int *DRW_viewport_size_get(void);
-bool DRW_viewport_is_persp(void);
+bool DRW_viewport_is_persp_get(void);
 
 /* Settings */
 void *DRW_material_settings(Material *ma);
