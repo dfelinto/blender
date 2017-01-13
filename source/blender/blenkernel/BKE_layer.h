@@ -38,6 +38,7 @@ extern "C" {
 #define TODO_LAYER_OVERRIDE /* CollectionOverride */
 #define TODO_LAYER_CONTEXT /* get/set current (context) SceneLayer */
 #define TODO_LAYER_BASE /* Base to ObjectBase related TODO */
+#define TODO_LAYER_TREE /* evaluation of scene layer tree */
 #define TODO_LAYER /* generic todo */
 
 struct LayerCollection;
@@ -59,9 +60,11 @@ void BKE_scene_layer_engine_set(struct SceneLayer *sl, const char *engine);
 
 void BKE_scene_layer_selected_objects_tag(struct SceneLayer *sl, const int tag);
 
+struct SceneLayer *BKE_scene_layer_find_from_collection(struct Scene *scene, struct LayerCollection *lc);
 struct ObjectBase *BKE_scene_layer_base_find(struct SceneLayer *sl, struct Object *ob);
 void BKE_scene_layer_base_deselect_all(struct SceneLayer *sl);
 void BKE_scene_layer_base_select(struct SceneLayer *sl, struct ObjectBase *selbase);
+void BKE_scene_layer_base_flag_recalculate(struct SceneLayer *sl);
 
 void BKE_layer_collection_free(struct SceneLayer *sl, struct LayerCollection *lc);
 

@@ -134,6 +134,32 @@ void BKE_scene_layer_selected_objects_tag(SceneLayer *sl, const int tag)
 	}
 }
 
+static bool find_scene_collection_in_scene_collections(ListBase *lb, const LayerCollection *lc)
+{
+	for (LayerCollection *lcn = lb->first; lcn; lcn = lcn->next) {
+		if (lcn == lc) {
+			return true;
+		}
+		if (find_scene_collection_in_scene_collections(&lcn->layer_collections, lc)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+/**
+ * Find the SceneLayer a LayerCollection belongs to
+ */
+SceneLayer *BKE_scene_layer_find_from_collection(Scene *scene, LayerCollection *lc)
+{
+	for (SceneLayer *sl = scene->render_layers.first; sl; sl = sl->next) {
+		if (find_scene_collection_in_scene_collections(&sl->layer_collections, lc)) {
+			return sl;
+		}
+	}
+	return false;
+}
+
 /* ObjectBase */
 
 ObjectBase *BKE_scene_layer_base_find(SceneLayer *sl, Object *ob)
@@ -169,6 +195,18 @@ static void scene_layer_object_base_unref(SceneLayer* sl, ObjectBase *base)
 		BLI_remlink(&sl->object_bases, base);
 		MEM_freeN(base);
 	}
+}
+
+/**
+ * Re-evaluate the ObjectBase flags for SceneLayer
+ */
+void BKE_scene_layer_base_flag_recalculate(SceneLayer *sl)
+{
+	/* tranverse the entire tree and update ObjectBase flags */
+	for (ObjectBase *base = sl->object_bases.first; base; base = base->next) {
+		base->flag = 0;
+	}
+	TODO_LAYER_TREE
 }
 
 /**
@@ -321,6 +359,7 @@ LayerCollection *BKE_collection_link(SceneLayer *sl, SceneCollection *sc)
 void BKE_collection_unlink(SceneLayer *sl, LayerCollection *lc)
 {
 	BKE_layer_collection_free(sl, lc);
+	BKE_scene_layer_base_flag_recalculate(sl);
 
 	BLI_remlink(&sl->layer_collections, lc);
 	MEM_freeN(lc);
@@ -337,6 +376,8 @@ static void layer_collection_object_add(SceneLayer *sl, LayerCollection *lc, Obj
 	if (BLI_findptr(&lc->object_bases, base, offsetof(LinkData, data))) {
 		return;
 	}
+
+	BKE_scene_layer_base_flag_recalculate(sl);
 
 	BLI_addtail(&lc->object_bases, BLI_genericNodeN(base));
 }
@@ -444,6 +485,7 @@ void BKE_layer_sync_object_unlink(Scene *scene, SceneCollection *sc, Object *ob)
 				layer_collection_object_remove(sl, found, ob);
 			}
 		}
+		BKE_scene_layer_base_flag_recalculate(sl);
 	}
 }
 
