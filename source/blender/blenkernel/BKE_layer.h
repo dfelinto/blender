@@ -38,7 +38,6 @@ extern "C" {
 #define TODO_LAYER_OVERRIDE /* CollectionOverride */
 #define TODO_LAYER_CONTEXT /* get/set current (context) SceneLayer */
 #define TODO_LAYER_BASE /* Base to ObjectBase related TODO */
-#define TODO_LAYER_TREE /* evaluation of scene layer tree */
 #define TODO_LAYER /* generic todo */
 
 struct LayerCollection;

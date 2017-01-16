@@ -197,6 +197,29 @@ static void scene_layer_object_base_unref(SceneLayer* sl, ObjectBase *base)
 	}
 }
 
+static void layer_collection_base_flag_recalculate(LayerCollection *lc, bool *is_visible, bool *is_selectable)
+{
+	*is_visible &= (lc->flag & COLLECTION_VISIBLE) != 0;
+	/* an object can only be selected if it's visible */
+	*is_selectable &= *is_visible && ((lc->flag & COLLECTION_SELECTABLE) != 0);
+
+	for (LinkData *link = lc->object_bases.first; link; link = link->next) {
+		ObjectBase *base = link->data;
+
+		if (!*is_visible) {
+			base->flag &= ~BASE_VISIBLE;
+		}
+
+		if (!*is_selectable) {
+			base->flag &= ~BASE_SELECTED;
+		}
+	}
+
+	for (LayerCollection *lcn = lc->layer_collections.first; lcn; lcn = lcn->next) {
+		layer_collection_base_flag_recalculate(lcn, is_visible, is_selectable);
+	}
+}
+
 /**
  * Re-evaluate the ObjectBase flags for SceneLayer
  */
@@ -204,9 +227,13 @@ void BKE_scene_layer_base_flag_recalculate(SceneLayer *sl)
 {
 	/* tranverse the entire tree and update ObjectBase flags */
 	for (ObjectBase *base = sl->object_bases.first; base; base = base->next) {
-		base->flag = 0;
+		base->flag |= BASE_VISIBLE;
 	}
-	TODO_LAYER_TREE
+
+	for (LayerCollection *lc = sl->layer_collections.first; lc; lc = lc->next) {
+		bool is_visible = true, is_selectable = true;
+		layer_collection_base_flag_recalculate(lc, &is_visible, &is_selectable);
+	}
 }
 
 /**
