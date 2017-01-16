@@ -993,21 +993,6 @@ static int outliner_object_operation_exec(bContext *C, wmOperator *op)
 		outliner_do_object_operation(C, op->reports, scene, soops, &soops->tree, id_local_cb);
 		str = "Localized Objects";
 	}
-	else if (event == OL_OP_TOGVIS) {
-		outliner_do_object_operation(C, op->reports, scene, soops, &soops->tree, object_toggle_visibility_cb);
-		str = "Toggle Visibility";
-		WM_event_add_notifier(C, NC_SCENE | ND_OB_VISIBLE, scene);
-	}
-	else if (event == OL_OP_TOGSEL) {
-		outliner_do_object_operation(C, op->reports, scene, soops, &soops->tree, object_toggle_selectability_cb);
-		str = "Toggle Selectability";
-		WM_event_add_notifier(C, NC_SCENE | ND_OB_SELECT, scene);
-	}
-	else if (event == OL_OP_TOGREN) {
-		outliner_do_object_operation(C, op->reports, scene, soops, &soops->tree, object_toggle_renderability_cb);
-		str = "Toggle Renderability";
-		WM_event_add_notifier(C, NC_SCENE | ND_OB_RENDER, scene);
-	}
 	else if (event == OL_OP_RENAME) {
 		outliner_do_object_operation(C, op->reports, scene, soops, &soops->tree, item_rename_cb);
 		str = "Rename Object";
@@ -1102,15 +1087,6 @@ static int outliner_group_operation_exec(bContext *C, wmOperator *op)
 			break;
 		case OL_GROUPOP_REMAP:
 			outliner_do_libdata_operation(C, op->reports, scene, soops, &soops->tree, id_remap_cb, NULL);
-			break;
-		case OL_GROUPOP_TOGVIS:
-			outliner_do_libdata_operation(C, op->reports, scene, soops, &soops->tree, group_toggle_visibility_cb, NULL);
-			break;
-		case OL_GROUPOP_TOGSEL:
-			outliner_do_libdata_operation(C, op->reports, scene, soops, &soops->tree, group_toggle_selectability_cb, NULL);
-			break;
-		case OL_GROUPOP_TOGREN:
-			outliner_do_libdata_operation(C, op->reports, scene, soops, &soops->tree, group_toggle_renderability_cb, NULL);
 			break;
 		case OL_GROUPOP_RENAME:
 			outliner_do_libdata_operation(C, op->reports, scene, soops, &soops->tree, item_rename_cb, NULL);
