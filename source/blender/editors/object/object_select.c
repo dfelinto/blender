@@ -172,17 +172,17 @@ static int object_select_by_type_exec(bContext *C, wmOperator *op)
 	extend = RNA_boolean_get(op->ptr, "extend");
 		
 	if (extend == 0) {
-		CTX_DATA_BEGIN (C, Base *, base, visible_bases)
+		CTX_DATA_BEGIN (C, ObjectBase *, base, visible_bases)
 		{
-			ED_base_object_select(base, BA_DESELECT);
+			ED_object_base_select(base, BA_DESELECT);
 		}
 		CTX_DATA_END;
 	}
 	
-	CTX_DATA_BEGIN (C, Base *, base, visible_bases)
+	CTX_DATA_BEGIN (C, ObjectBase *, base, visible_bases)
 	{
 		if (base->object->type == obtype) {
-			ED_base_object_select(base, BA_SELECT);
+			ED_object_base_select(base, BA_SELECT);
 		}
 	}
 	CTX_DATA_END;
@@ -237,38 +237,15 @@ static EnumPropertyItem prop_select_linked_types[] = {
 	{0, NULL, 0, NULL, NULL}
 };
 
-// XXX old animation system
-#if 0
-static int object_select_all_by_ipo(bContext *C, Ipo *ipo)
-{
-	bool changed = false;
-
-	CTX_DATA_BEGIN (C, Base *, base, visible_bases)
-	{
-		if (base->object->ipo == ipo) {
-			base->flag |= SELECT;
-			base->object->flag = base->flag;
-
-			changed = true;
-		}
-	}
-	CTX_DATA_END;
-
-	return changed;
-}
-#endif
-
 static bool object_select_all_by_obdata(bContext *C, void *obdata)
 {
 	bool changed = false;
 
-	CTX_DATA_BEGIN (C, Base *, base, visible_bases)
+	CTX_DATA_BEGIN (C, ObjectBase *, base, visible_bases)
 	{
-		if ((base->flag & SELECT) == 0) {
+		if (((base->flag & BASE_SELECTED) == 0) && ((base->flag & BASE_SELECTABLED) != 0)) {
 			if (base->object->data == obdata) {
-				base->flag |= SELECT;
-				base->object->flag = base->flag;
-
+				ED_object_base_select(base, BA_SELECT);
 				changed = true;
 			}
 		}
@@ -282,9 +259,9 @@ static bool object_select_all_by_material_texture(bContext *C, int use_texture, 
 {
 	bool changed = false;
 
-	CTX_DATA_BEGIN (C, Base *, base, visible_bases)
+	CTX_DATA_BEGIN (C, ObjectBase *, base, visible_bases)
 	{
-		if ((base->flag & SELECT) == 0) {
+		if (((base->flag & BASE_SELECTED) == 0) && ((base->flag & BASE_SELECTABLED) != 0)) {
 			Object *ob = base->object;
 			Material *mat1;
 			int a, b;
@@ -294,7 +271,7 @@ static bool object_select_all_by_material_texture(bContext *C, int use_texture, 
 
 				if (!use_texture) {
 					if (mat1 == mat) {
-						base->flag |= SELECT;
+						ED_object_base_select(base, BA_SELECT);
 						changed = true;
 					}
 				}
@@ -302,7 +279,7 @@ static bool object_select_all_by_material_texture(bContext *C, int use_texture, 
 					for (b = 0; b < MAX_MTEX; b++) {
 						if (mat1->mtex[b]) {
 							if (tex == mat1->mtex[b]->tex) {
-								base->flag |= SELECT;
+								ED_object_base_select(base, BA_SELECT);
 								changed = true;
 								break;
 							}
@@ -310,8 +287,6 @@ static bool object_select_all_by_material_texture(bContext *C, int use_texture, 
 					}
 				}
 			}
-
-			base->object->flag = base->flag;
 		}
 	}
 	CTX_DATA_END;
@@ -324,14 +299,12 @@ static bool object_select_all_by_dup_group(bContext *C, Object *ob)
 	bool changed = false;
 	Group *dup_group = (ob->transflag & OB_DUPLIGROUP) ? ob->dup_group : NULL;
 
-	CTX_DATA_BEGIN (C, Base *, base, visible_bases)
+	CTX_DATA_BEGIN (C, ObjectBase *, base, visible_bases)
 	{
-		if ((base->flag & SELECT) == 0) {
+		if (((base->flag & BASE_SELECTED) == 0) && ((base->flag & BASE_SELECTABLED) != 0)) {
 			Group *dup_group_other = (base->object->transflag & OB_DUPLIGROUP) ? base->object->dup_group : NULL;
 			if (dup_group == dup_group_other) {
-				base->flag |= SELECT;
-				base->object->flag = base->flag;
-
+				ED_object_base_select(base, BA_SELECT);
 				changed = true;
 			}
 		}
@@ -346,25 +319,23 @@ static bool object_select_all_by_particle(bContext *C, Object *ob)
 	ParticleSystem *psys_act = psys_get_current(ob);
 	bool changed = false;
 
-	CTX_DATA_BEGIN (C, Base *, base, visible_bases)
+	CTX_DATA_BEGIN (C, ObjectBase *, base, visible_bases)
 	{
-		if ((base->flag & SELECT) == 0) {
+		if (((base->flag & BASE_SELECTED) == 0) && ((base->flag & BASE_SELECTABLED) != 0)) {
 			/* loop through other particles*/
 			ParticleSystem *psys;
 			
 			for (psys = base->object->particlesystem.first; psys; psys = psys->next) {
 				if (psys->part == psys_act->part) {
-					base->flag |= SELECT;
+					ED_object_base_select(base, BA_SELECT);
 					changed = true;
 					break;
 				}
 
-				if (base->flag & SELECT) {
+				if (base->flag & BASE_SELECTED) {
 					break;
 				}
 			}
-
-			base->object->flag = base->flag;
 		}
 	}
 	CTX_DATA_END;
@@ -376,13 +347,11 @@ static bool object_select_all_by_library(bContext *C, Library *lib)
 {
 	bool changed = false;
 
-	CTX_DATA_BEGIN (C, Base *, base, visible_bases)
+	CTX_DATA_BEGIN (C, ObjectBase *, base, visible_bases)
 	{
-		if ((base->flag & SELECT) == 0) {
+		if (((base->flag & BASE_SELECTED) == 0) && ((base->flag & BASE_SELECTABLED) != 0)) {
 			if (lib == base->object->id.lib) {
-				base->flag |= SELECT;
-				base->object->flag = base->flag;
-
+				ED_object_base_select(base, BA_SELECT);
 				changed = true;
 			}
 		}
@@ -396,13 +365,11 @@ static bool object_select_all_by_library_obdata(bContext *C, Library *lib)
 {
 	bool changed = false;
 
-	CTX_DATA_BEGIN (C, Base *, base, visible_bases)
+	CTX_DATA_BEGIN (C, ObjectBase *, base, visible_bases)
 	{
-		if ((base->flag & SELECT) == 0) {
+		if (((base->flag & BASE_SELECTED) == 0) && ((base->flag & BASE_SELECTABLED) != 0)) {
 			if (base->object->data && lib == ((ID *)base->object->data)->lib) {
-				base->flag |= SELECT;
-				base->object->flag = base->flag;
-
+				ED_object_base_select(base, BA_SELECT);
 				changed = true;
 			}
 		}
@@ -442,9 +409,9 @@ static int object_select_linked_exec(bContext *C, wmOperator *op)
 	extend = RNA_boolean_get(op->ptr, "extend");
 	
 	if (extend == 0) {
-		CTX_DATA_BEGIN (C, Base *, base, visible_bases)
+		CTX_DATA_BEGIN (C, ObjectBase *, base, visible_bases)
 		{
-			ED_base_object_select(base, BA_DESELECT);
+			ED_object_base_select(base, BA_DESELECT);
 		}
 		CTX_DATA_END;
 	}
@@ -634,11 +601,13 @@ static bool select_grouped_group(bContext *C, Object *ob)  /* Select objects in 
 		return 0;
 	else if (group_count == 1) {
 		group = ob_groups[0];
-		CTX_DATA_BEGIN (C, Base *, base, visible_bases)
+		CTX_DATA_BEGIN (C, ObjectBase *, base, visible_bases)
 		{
-			if (!(base->flag & SELECT) && BKE_group_object_exists(group, base->object)) {
-				ED_base_object_select(base, BA_SELECT);
-				changed = true;
+			if (((base->flag & BASE_SELECTED) == 0) && ((base->flag & BASE_SELECTABLED) != 0)) {
+				if (BKE_group_object_exists(group, base->object)) {
+					ED_object_base_select(base, BA_SELECT);
+					changed = true;
+				}
 			}
 		}
 		CTX_DATA_END;
@@ -866,9 +835,9 @@ static int object_select_grouped_exec(bContext *C, wmOperator *op)
 	extend = RNA_boolean_get(op->ptr, "extend");
 
 	if (extend == 0) {
-		CTX_DATA_BEGIN (C, Base *, base, visible_bases)
+		CTX_DATA_BEGIN (C, ObjectBase *, base, visible_bases)
 		{
-			ED_base_object_select(base, BA_DESELECT);
+			ED_object_base_select(base, BA_DESELECT);
 			changed = true;
 		}
 		CTX_DATA_END;
@@ -967,9 +936,9 @@ static int object_select_all_exec(bContext *C, wmOperator *op)
 
 	if (action == SEL_TOGGLE) {
 		action = SEL_SELECT;
-		CTX_DATA_BEGIN (C, Base *, base, visible_bases)
+		CTX_DATA_BEGIN (C, ObjectBase *, base, visible_bases)
 		{
-			if (base->flag & SELECT) {
+			if ((base->flag & BASE_SELECTED) != 0) {
 				action = SEL_DESELECT;
 				break;
 			}
@@ -977,21 +946,21 @@ static int object_select_all_exec(bContext *C, wmOperator *op)
 		CTX_DATA_END;
 	}
 
-	CTX_DATA_BEGIN (C, Base *, base, visible_bases)
+	CTX_DATA_BEGIN (C, ObjectBase *, base, visible_bases)
 	{
 		switch (action) {
 			case SEL_SELECT:
-				ED_base_object_select(base, BA_SELECT);
+			    ED_object_base_select(base, BA_SELECT);
 				break;
 			case SEL_DESELECT:
-				ED_base_object_select(base, BA_DESELECT);
+			    ED_object_base_select(base, BA_DESELECT);
 				break;
 			case SEL_INVERT:
-				if (base->flag & SELECT) {
-					ED_base_object_select(base, BA_DESELECT);
+			    if ((base->flag & BASE_SELECTED) != 0) {
+					ED_object_base_select(base, BA_DESELECT);
 				}
 				else {
-					ED_base_object_select(base, BA_SELECT);
+					ED_object_base_select(base, BA_SELECT);
 				}
 				break;
 		}
@@ -1039,10 +1008,13 @@ static int object_select_same_group_exec(bContext *C, wmOperator *op)
 		return OPERATOR_PASS_THROUGH;
 	}
 
-	CTX_DATA_BEGIN (C, Base *, base, visible_bases)
+	CTX_DATA_BEGIN (C, ObjectBase *, base, visible_bases)
 	{
-		if (!(base->flag & SELECT) && BKE_group_object_exists(group, base->object))
-			ED_base_object_select(base, BA_SELECT);
+		if (((base->flag & BASE_SELECTED) == 0) && ((base->flag & BASE_SELECTABLED) != 0)) {
+			if (BKE_group_object_exists(group, base->object)) {
+				ED_object_base_select(base, BA_SELECT);
+			}
+		}
 	}
 	CTX_DATA_END;
 

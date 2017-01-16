@@ -603,10 +603,14 @@ static int separate_armature_exec(bContext *C, wmOperator *op)
 
 	/* 1) only edit-base selected */
 	/* TODO: use context iterators for this? */
-	CTX_DATA_BEGIN(C, Base *, base, visible_bases)
+	CTX_DATA_BEGIN(C, ObjectBase *, base, visible_bases)
 	{
-		if (base->object == obedit) base->flag |= SELECT;
-		else base->flag &= ~SELECT;
+		if (base->object == obedit) {
+			ED_object_base_select(base, BA_SELECT);
+		}
+		else {
+			ED_object_base_select(base, BA_DESELECT);
+		}
 	}
 	CTX_DATA_END;
 	

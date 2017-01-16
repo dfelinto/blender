@@ -558,10 +558,12 @@ static int select_grouped_exec(bContext *C, wmOperator *UNUSED(op))  /* Select o
 	if (!group)
 		return OPERATOR_CANCELLED;
 
-	CTX_DATA_BEGIN (C, Base *, base, visible_bases)
+	CTX_DATA_BEGIN (C, ObjectBase *, base, visible_bases)
 	{
-		if (!(base->flag & SELECT) && BKE_group_object_exists(group, base->object)) {
-			ED_base_object_select(base, BA_SELECT);
+		if (((base->flag & BASE_SELECTED) == 0) && ((base->flag & BASE_SELECTABLED) != 0)) {
+			if (BKE_group_object_exists(group, base->object)) {
+				ED_object_base_select(base, BA_SELECT);
+			}
 		}
 	}
 	CTX_DATA_END;
