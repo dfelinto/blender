@@ -64,6 +64,7 @@
 #include "BKE_context.h"
 #include "BKE_curve.h"
 #include "BKE_depsgraph.h"
+#include "BKE_layer.h"
 #include "BKE_mball.h"
 #include "BKE_mesh.h"
 #include "BKE_object.h"
@@ -1015,22 +1016,22 @@ static int object_select_menu_exec(bContext *C, wmOperator *op)
 	const char *name = object_mouse_select_menu_data[name_index].idname;
 
 	if (!toggle) {
-		CTX_DATA_BEGIN (C, Base *, base, selectable_bases)
+		CTX_DATA_BEGIN (C, ObjectBase *, base, selectable_bases)
 		{
-			if (base->flag & SELECT) {
-				ED_base_object_select(base, BA_DESELECT);
+			if ((base->flag & BASE_SELECTED) != 0) {
+				ED_object_base_select(base, BA_DESELECT);
 				changed = true;
 			}
 		}
 		CTX_DATA_END;
 	}
 
-	CTX_DATA_BEGIN (C, Base *, base, selectable_bases)
+	CTX_DATA_BEGIN (C, ObjectBase *, base, selectable_bases)
 	{
 		/* this is a bit dodjy, there should only be ONE object with this name, but library objects can mess this up */
 		if (STREQ(name, base->object->id.name + 2)) {
-			ED_base_object_activate(C, base);
-			ED_base_object_select(base, BA_SELECT);
+			ED_object_base_activate(C, base);
+			ED_object_base_select(base, BA_SELECT);
 			changed = true;
 		}
 	}
@@ -1092,7 +1093,11 @@ static Base *object_mouse_select_menu(bContext *C, ViewContext *vc, unsigned int
 	short baseCount = 0;
 	bool ok;
 	LinkNode *linklist = NULL;
-	
+
+	/* handle base->selcol */
+	TODO_LAYER_BASE;
+#if 0
+
 	CTX_DATA_BEGIN (C, Base *, base, selectable_bases)
 	{
 		ok = false;
@@ -1164,6 +1169,19 @@ static Base *object_mouse_select_menu(bContext *C, ViewContext *vc, unsigned int
 		BLI_linklist_free(linklist, NULL);
 		return NULL;
 	}
+#else
+
+	(void)C;
+	(void)vc,
+	(void)buffer;
+	(void)hits;
+	(void)mval;
+	(void)toggle;
+	(void)baseCount;
+	(void)ok;
+	(void)linklist;
+	return NULL;
+#endif
 }
 
 static bool selectbuffer_has_bones(const unsigned int *buffer, const unsigned int hits)

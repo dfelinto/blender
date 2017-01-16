@@ -511,7 +511,7 @@ enum {
 	OBJECT_GRPSEL_PARENT             =  2,
 	OBJECT_GRPSEL_SIBLINGS           =  3,
 	OBJECT_GRPSEL_TYPE               =  4,
-	OBJECT_GRPSEL_LAYER              =  5,
+	/*OBJECT_GRPSEL_LAYER              =  5,*/
 	OBJECT_GRPSEL_GROUP              =  6,
 	OBJECT_GRPSEL_HOOK               =  7,
 	OBJECT_GRPSEL_PASS               =  8,
@@ -527,7 +527,6 @@ static EnumPropertyItem prop_select_grouped_types[] = {
 	{OBJECT_GRPSEL_PARENT, "PARENT", 0, "Parent", ""},
 	{OBJECT_GRPSEL_SIBLINGS, "SIBLINGS", 0, "Siblings", "Shared Parent"},
 	{OBJECT_GRPSEL_TYPE, "TYPE", 0, "Type", "Shared object type"},
-	{OBJECT_GRPSEL_LAYER, "LAYER", 0, "Layer", "Shared layers"},
 	{OBJECT_GRPSEL_GROUP, "GROUP", 0, "Group", "Shared group"},
 	{OBJECT_GRPSEL_HOOK, "HOOK", 0, "Hook", ""},
 	{OBJECT_GRPSEL_PASS, "PASS", 0, "Pass", "Render pass Index"},
@@ -542,16 +541,17 @@ static bool select_grouped_children(bContext *C, Object *ob, const bool recursiv
 {
 	bool changed = false;
 
-	CTX_DATA_BEGIN (C, Base *, base, selectable_bases)
+	CTX_DATA_BEGIN (C, ObjectBase *, base, selectable_bases)
 	{
 		if (ob == base->object->parent) {
-			if (!(base->flag & SELECT)) {
-				ED_base_object_select(base, BA_SELECT);
+			if ((base->flag & BASE_SELECTED) == 0) {
+				ED_object_base_select(base, BA_SELECT);
 				changed = true;
 			}
 
-			if (recursive)
+			if (recursive) {
 				changed |= select_grouped_children(C, base->object, 1);
+			}
 		}
 	}
 	CTX_DATA_END;
@@ -658,10 +658,10 @@ static bool select_grouped_siblings(bContext *C, Object *ob)
 {
 	bool changed = false;
 
-	CTX_DATA_BEGIN (C, Base *, base, selectable_bases)
+	CTX_DATA_BEGIN (C, ObjectBase *, base, selectable_bases)
 	{
-		if ((base->object->parent == ob->parent) && !(base->flag & SELECT)) {
-			ED_base_object_select(base, BA_SELECT);
+		if ((base->object->parent == ob->parent) && ((base->flag & BASE_SELECTED) == 0)) {
+			ED_object_base_select(base, BA_SELECT);
 			changed = true;
 		}
 	}
@@ -674,12 +674,12 @@ static bool select_grouped_lamptype(bContext *C, Object *ob)
 
 	bool changed = false;
 
-	CTX_DATA_BEGIN (C, Base *, base, selectable_bases)
+	CTX_DATA_BEGIN (C, ObjectBase *, base, selectable_bases)
 	{
 		if (base->object->type == OB_LAMP) {
 			Lamp *la_test = base->object->data;
-			if ((la->type == la_test->type) && !(base->flag & SELECT)) {
-				ED_base_object_select(base, BA_SELECT);
+			if ((la->type == la_test->type) && ((base->flag & BASE_SELECTED) == 0)) {
+				ED_object_base_select(base, BA_SELECT);
 				changed = true;
 			}
 		}
@@ -691,25 +691,10 @@ static bool select_grouped_type(bContext *C, Object *ob)
 {
 	bool changed = false;
 
-	CTX_DATA_BEGIN (C, Base *, base, selectable_bases)
+	CTX_DATA_BEGIN (C, ObjectBase *, base, selectable_bases)
 	{
-		if ((base->object->type == ob->type) && !(base->flag & SELECT)) {
-			ED_base_object_select(base, BA_SELECT);
-			changed = true;
-		}
-	}
-	CTX_DATA_END;
-	return changed;
-}
-
-static bool select_grouped_layer(bContext *C, Object *ob)
-{
-	bool changed = false;
-
-	CTX_DATA_BEGIN (C, Base *, base, selectable_bases)
-	{
-		if ((base->lay & ob->lay) && !(base->flag & SELECT)) {
-			ED_base_object_select(base, BA_SELECT);
+		if ((base->object->type == ob->type) && ((base->flag & BASE_SELECTED) == 0)) {
+			ED_object_base_select(base, BA_SELECT);
 			changed = true;
 		}
 	}
@@ -721,10 +706,10 @@ static bool select_grouped_index_object(bContext *C, Object *ob)
 {
 	bool changed = false;
 
-	CTX_DATA_BEGIN (C, Base *, base, selectable_bases)
+	CTX_DATA_BEGIN (C, ObjectBase *, base, selectable_bases)
 	{
-		if ((base->object->index == ob->index) && !(base->flag & SELECT)) {
-			ED_base_object_select(base, BA_SELECT);
+		if ((base->object->index == ob->index) && ((base->flag & BASE_SELECTED) == 0)) {
+			ED_object_base_select(base, BA_SELECT);
 			changed = true;
 		}
 	}
@@ -736,10 +721,10 @@ static bool select_grouped_color(bContext *C, Object *ob)
 {
 	bool changed = false;
 
-	CTX_DATA_BEGIN (C, Base *, base, selectable_bases)
+	CTX_DATA_BEGIN (C, ObjectBase *, base, selectable_bases)
 	{
-		if (!(base->flag & SELECT) && (compare_v3v3(base->object->col, ob->col, 0.005f))) {
-			ED_base_object_select(base, BA_SELECT);
+		if (((base->flag & BASE_SELECTED) == 0) && (compare_v3v3(base->object->col, ob->col, 0.005f))) {
+			ED_object_base_select(base, BA_SELECT);
 			changed = true;
 		}
 	}
@@ -763,10 +748,10 @@ static bool select_grouped_gameprops(bContext *C, Object *ob)
 {
 	bool changed = false;
 
-	CTX_DATA_BEGIN (C, Base *, base, selectable_bases)
+	CTX_DATA_BEGIN (C, ObjectBase *, base, selectable_bases)
 	{
-		if (!(base->flag & SELECT) && (objects_share_gameprop(base->object, ob))) {
-			ED_base_object_select(base, BA_SELECT);
+		if (((base->flag & BASE_SELECTED) == 0) && (objects_share_gameprop(base->object, ob))) {
+			ED_object_base_select(base, BA_SELECT);
 			changed = true;
 		}
 	}
@@ -801,10 +786,10 @@ static bool select_grouped_keyingset(bContext *C, Object *UNUSED(ob), ReportList
 	/* select each object that Keying Set refers to */
 	/* TODO: perhaps to be more in line with the rest of these, we should only take objects
 	 * if the passed in object is included in this too */
-	CTX_DATA_BEGIN (C, Base *, base, selectable_bases)
+	CTX_DATA_BEGIN (C, ObjectBase *, base, selectable_bases)
 	{
 		/* only check for this object if it isn't selected already, to limit time wasted */
-		if ((base->flag & SELECT) == 0) {
+		if ((base->flag & BASE_SELECTED) == 0) {
 			KS_Path *ksp;
 			
 			/* this is the slow way... we could end up with > 500 items here, 
@@ -813,7 +798,7 @@ static bool select_grouped_keyingset(bContext *C, Object *UNUSED(ob), ReportList
 			for (ksp = ks->paths.first; ksp; ksp = ksp->next) {
 				/* if id matches, select then stop looping (match found) */
 				if (ksp->id == (ID *)base->object) {
-					ED_base_object_select(base, BA_SELECT);
+					ED_object_base_select(base, BA_SELECT);
 					changed = true;
 					break;
 				}
@@ -864,9 +849,6 @@ static int object_select_grouped_exec(bContext *C, wmOperator *op)
 			break;
 		case OBJECT_GRPSEL_TYPE:
 			changed |= select_grouped_type(C, ob);
-			break;
-		case OBJECT_GRPSEL_LAYER:
-			changed |= select_grouped_layer(C, ob);
 			break;
 		case OBJECT_GRPSEL_GROUP:
 			changed |= select_grouped_group(C, ob);
@@ -1101,9 +1083,9 @@ void OBJECT_OT_select_mirror(wmOperatorType *ot)
 
 static bool object_select_more_less(bContext *C, const bool select)
 {
-	Scene *scene = CTX_data_scene(C);
+	SceneLayer *sl = CTX_data_scene_layer(C);
 
-	for (Base *base = scene->base.first; base; base = base->next) {
+	for (Base *base = sl->object_bases.first; base; base = base->next) {
 		Object *ob = base->object;
 		ob->flag &= ~OB_DONE;
 		ob->id.tag &= ~LIB_TAG_DOIT;
@@ -1127,7 +1109,7 @@ static bool object_select_more_less(bContext *C, const bool select)
 
 
 	for (ctx_base = ctx_base_list.first; ctx_base; ctx_base = ctx_base->next) {
-		Object *ob = ((Base *)ctx_base->ptr.data)->object;
+		Object *ob = ((ObjectBase *)ctx_base->ptr.data)->object;
 		if (ob->parent) {
 			if ((ob->flag & OB_DONE) != (ob->parent->flag & OB_DONE)) {
 				ob->id.tag         |= LIB_TAG_DOIT;
@@ -1141,10 +1123,10 @@ static bool object_select_more_less(bContext *C, const bool select)
 	const short select_flag = select ? SELECT : 0;
 
 	for (ctx_base = ctx_base_list.first; ctx_base; ctx_base = ctx_base->next) {
-		Base *base = ctx_base->ptr.data;
+		ObjectBase *base = ctx_base->ptr.data;
 		Object *ob = base->object;
 		if ((ob->id.tag & LIB_TAG_DOIT) && ((ob->flag & SELECT) != select_flag)) {
-			ED_base_object_select(base, select_mode);
+			ED_object_base_select(base, select_mode);
 			changed = true;
 		}
 	}
@@ -1223,10 +1205,10 @@ static int object_select_random_exec(bContext *C, wmOperator *op)
 
 	RNG *rng = BLI_rng_new_srandom(seed);
 
-	CTX_DATA_BEGIN (C, Base *, base, selectable_bases)
+	CTX_DATA_BEGIN (C, ObjectBase *, base, selectable_bases)
 	{
 		if (BLI_rng_get_float(rng) < randfac) {
-			ED_base_object_select(base, select);
+			ED_object_base_select(base, select);
 		}
 	}
 	CTX_DATA_END;
