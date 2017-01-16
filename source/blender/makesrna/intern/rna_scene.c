@@ -2270,24 +2270,28 @@ static PointerRNA rna_LayerCollection_objects_get(CollectionPropertyIterator *it
 	return rna_pointer_inherit_refine(&iter->parent, &RNA_Object, base->object);
 }
 
-static void rna_LayerCollection_hide_update(Main *UNUSED(bmain), Scene *scene, PointerRNA *ptr)
+static void rna_LayerCollection_hide_update(bContext *C, PointerRNA *ptr)
 {
+	Scene *scene = CTX_data_scene(C);
 	LayerCollection *lc = ptr->data;
-	if ((lc->flag & COLLECTION_VISIBLE) == 0) {
-		SceneLayer *sl = BKE_scene_layer_find_from_collection(scene, lc);
-		/* hide and deselect bases that are directly influenced by this LayerCollection */
-		BKE_scene_layer_base_flag_recalculate(sl);
-	}
+	SceneLayer *sl = BKE_scene_layer_find_from_collection(scene, lc);
+
+	/* hide and deselect bases that are directly influenced by this LayerCollection */
+	BKE_scene_layer_base_flag_recalculate(sl);
+	WM_event_add_notifier(C, NC_SCENE | ND_OB_SELECT, scene);
 }
 
-static void rna_LayerCollection_hide_select_update(Main *UNUSED(bmain), Scene *scene, PointerRNA *ptr)
+static void rna_LayerCollection_hide_select_update(bContext *C, PointerRNA *ptr)
 {
 	LayerCollection *lc = ptr->data;
 
 	if ((lc->flag & COLLECTION_SELECTABLE) == 0) {
+		Scene *scene = CTX_data_scene(C);
 		SceneLayer *sl = BKE_scene_layer_find_from_collection(scene, lc);
+
 		/* deselect bases that are directly influenced by this LayerCollection */
 		BKE_scene_layer_base_flag_recalculate(sl);
+		WM_event_add_notifier(C, NC_SCENE | ND_OB_SELECT, CTX_data_scene(C));
 	}
 }
 
@@ -5427,12 +5431,14 @@ static void rna_def_layer_collection(BlenderRNA *brna)
 	/* Flags */
 	prop = RNA_def_property(srna, "hide", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_negative_sdna(prop, NULL, "flag", COLLECTION_VISIBLE);
+	RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
 	RNA_def_property_ui_icon(prop, ICON_RESTRICT_VIEW_OFF, 1);
 	RNA_def_property_ui_text(prop, "Hide", "Restrict visiblity");
 	RNA_def_property_update(prop, NC_SCENE | ND_LAYER_CONTENT, "rna_LayerCollection_hide_update");
 
 	prop = RNA_def_property(srna, "hide_select", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_negative_sdna(prop, NULL, "flag", COLLECTION_SELECTABLE);
+	RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
 	RNA_def_property_ui_icon(prop, ICON_RESTRICT_SELECT_OFF, 1);
 	RNA_def_property_ui_text(prop, "Hide Selectable", "Restrict selection");
 	RNA_def_property_update(prop, NC_SCENE | ND_LAYER_CONTENT, "rna_LayerCollection_hide_select_update");

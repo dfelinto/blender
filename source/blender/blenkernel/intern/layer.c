@@ -199,21 +199,26 @@ static void scene_layer_object_base_unref(SceneLayer* sl, ObjectBase *base)
 	}
 }
 
-static void layer_collection_base_flag_recalculate(LayerCollection *lc, bool *is_visible, bool *is_selectable)
+static void layer_collection_base_flag_recalculate(LayerCollection *lc, const bool tree_is_visible, const bool tree_is_selectable)
 {
-	*is_visible &= (lc->flag & COLLECTION_VISIBLE) != 0;
+	bool is_visible = tree_is_visible && ((lc->flag & COLLECTION_VISIBLE) != 0);
 	/* an object can only be selected if it's visible */
-	*is_selectable &= *is_visible && ((lc->flag & COLLECTION_SELECTABLE) != 0);
+	bool is_selectable = tree_is_selectable && is_visible && ((lc->flag & COLLECTION_SELECTABLE) != 0);
 
 	for (LinkData *link = lc->object_bases.first; link; link = link->next) {
 		ObjectBase *base = link->data;
 
-		if (!(*is_visible)) {
+		if (is_visible) {
+			base->flag |= BASE_VISIBLED;
+		}
+		else {
 			base->flag &= ~BASE_VISIBLED;
 		}
 
-		if (!(*is_selectable)) {
-			base->flag &= ~BASE_SELECTED;
+		if (is_selectable) {
+			base->flag |= BASE_SELECTABLED;
+		}
+		else {
 			base->flag &= ~BASE_SELECTABLED;
 		}
 	}
@@ -228,14 +233,15 @@ static void layer_collection_base_flag_recalculate(LayerCollection *lc, bool *is
  */
 void BKE_scene_layer_base_flag_recalculate(SceneLayer *sl)
 {
-	/* tranverse the entire tree and update ObjectBase flags */
-	for (ObjectBase *base = sl->object_bases.first; base; base = base->next) {
-		base->flag |= BASE_VISIBLED + BASE_SELECTABLED;
+	for (LayerCollection *lc = sl->layer_collections.first; lc; lc = lc->next) {
+		layer_collection_base_flag_recalculate(lc, true, true);
 	}
 
-	for (LayerCollection *lc = sl->layer_collections.first; lc; lc = lc->next) {
-		bool is_visible = true, is_selectable = true;
-		layer_collection_base_flag_recalculate(lc, &is_visible, &is_selectable);
+	/* if base is not selectabled, clear select */
+	for (ObjectBase *base = sl->object_bases.first; base; base = base->next) {
+		if ((base->flag & BASE_SELECTABLED) == 0) {
+			base->flag &= ~BASE_SELECTED;
+		}
 	}
 }
 
