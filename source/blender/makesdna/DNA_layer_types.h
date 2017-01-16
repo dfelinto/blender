@@ -80,7 +80,7 @@ typedef struct SceneCollection {
 /* ObjectBase->flag */
 enum {
 	BASE_SELECTED         = (1 << 0),
-	BASE_VISIBLE          = (1 << 1),
+	BASE_VISIBLED         = (1 << 1),
 };
 
 /* LayerCollection->flag */

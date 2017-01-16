@@ -368,7 +368,7 @@ static void object_select_cb(
 	Object *ob = (Object *)tselem->id;
 	ObjectBase *base = BKE_scene_layer_base_find(sl, ob);
 
-	if (base && ((base->flag & BASE_VISIBLE) != 0)) {
+	if (base && ((base->flag & BASE_VISIBLED) != 0)) {
 		base->flag |= BASE_SELECTED;
 	}
 }

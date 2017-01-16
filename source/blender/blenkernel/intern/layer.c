@@ -207,7 +207,7 @@ static void layer_collection_base_flag_recalculate(LayerCollection *lc, bool *is
 		ObjectBase *base = link->data;
 
 		if (!*is_visible) {
-			base->flag &= ~BASE_VISIBLE;
+			base->flag &= ~BASE_VISIBLED;
 		}
 
 		if (!*is_selectable) {
@@ -227,7 +227,7 @@ void BKE_scene_layer_base_flag_recalculate(SceneLayer *sl)
 {
 	/* tranverse the entire tree and update ObjectBase flags */
 	for (ObjectBase *base = sl->object_bases.first; base; base = base->next) {
-		base->flag |= BASE_VISIBLE;
+		base->flag |= BASE_VISIBLED;
 	}
 
 	for (LayerCollection *lc = sl->layer_collections.first; lc; lc = lc->next) {
@@ -588,7 +588,7 @@ void BKE_visible_objects_Iterator_begin(Iterator *iter, void *data_in)
 	iter->valid = true;
 	iter->data = base;
 
-	if ((base->flag & BASE_VISIBLE) == 0) {
+	if ((base->flag & BASE_VISIBLED) == 0) {
 		BKE_selected_objects_Iterator_next(iter);
 	}
 	else {
@@ -601,7 +601,7 @@ void BKE_visible_objects_Iterator_next(Iterator *iter)
 	ObjectBase *base = ((ObjectBase *)iter->data)->next;
 
 	while (base) {
-		if ((base->flag & BASE_VISIBLE) != 0) {
+		if ((base->flag & BASE_VISIBLED) != 0) {
 			iter->current = base->object;
 			iter->data = base;
 			return;
