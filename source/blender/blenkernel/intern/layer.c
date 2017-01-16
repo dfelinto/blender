@@ -178,8 +178,10 @@ void BKE_scene_layer_base_deselect_all(SceneLayer *sl)
 
 void BKE_scene_layer_base_select(struct SceneLayer *sl, ObjectBase *selbase)
 {
-	selbase->flag |= BASE_SELECTED;
 	sl->basact = selbase;
+	if ((selbase->flag & BASE_SELECTABLED) != 0) {
+		selbase->flag |= BASE_SELECTED;
+	}
 }
 
 static void scene_layer_object_base_unref(SceneLayer* sl, ObjectBase *base)
@@ -206,12 +208,13 @@ static void layer_collection_base_flag_recalculate(LayerCollection *lc, bool *is
 	for (LinkData *link = lc->object_bases.first; link; link = link->next) {
 		ObjectBase *base = link->data;
 
-		if (!*is_visible) {
+		if (!(*is_visible)) {
 			base->flag &= ~BASE_VISIBLED;
 		}
 
-		if (!*is_selectable) {
+		if (!(*is_selectable)) {
 			base->flag &= ~BASE_SELECTED;
+			base->flag &= ~BASE_SELECTABLED;
 		}
 	}
 
@@ -227,7 +230,7 @@ void BKE_scene_layer_base_flag_recalculate(SceneLayer *sl)
 {
 	/* tranverse the entire tree and update ObjectBase flags */
 	for (ObjectBase *base = sl->object_bases.first; base; base = base->next) {
-		base->flag |= BASE_VISIBLED;
+		base->flag |= BASE_VISIBLED + BASE_SELECTABLED;
 	}
 
 	for (LayerCollection *lc = sl->layer_collections.first; lc; lc = lc->next) {
