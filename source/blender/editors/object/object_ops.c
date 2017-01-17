@@ -375,8 +375,6 @@ void ED_keymap_object(wmKeyConfig *keyconf)
 	RNA_boolean_set(kmi->ptr, "clear_delta", true);
 	
 	WM_keymap_verify_item(keymap, "OBJECT_OT_origin_clear", OKEY, KM_PRESS, KM_ALT, 0);
-
-	WM_keymap_add_item(keymap, "OBJECT_OT_move_to_layer", MKEY, KM_PRESS, 0, 0);
 	
 	kmi = WM_keymap_add_item(keymap, "OBJECT_OT_delete", XKEY, KM_PRESS, 0, 0);
 	RNA_boolean_set(kmi->ptr, "use_global", false);
