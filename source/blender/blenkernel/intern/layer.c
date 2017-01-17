@@ -461,6 +461,23 @@ LayerCollection *layer_collection_add(SceneLayer *sl, ListBase *lb, SceneCollect
 
 
 /* ---------------------------------------------------------------------- */
+
+/**
+ * See if the object is in any of the scene layers of the scene
+ */
+bool BKE_scene_has_object(Scene *scene, Object *ob)
+{
+	for (SceneLayer *sl = scene->render_layers.first; sl; sl = sl->next) {
+		ObjectBase *base = BKE_scene_layer_base_find(sl, ob);
+		if (base) {
+			return true;
+		}
+	}
+	return false;
+}
+
+
+/* ---------------------------------------------------------------------- */
 /* Syncing */
 
 static LayerCollection *find_layer_collection_by_scene_collection(LayerCollection *lc, const SceneCollection *sc)

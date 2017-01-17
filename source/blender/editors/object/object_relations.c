@@ -1443,20 +1443,6 @@ static void link_to_scene(Main *UNUSED(bmain), unsigned short UNUSED(nr))
 }
 #endif
 
-Base *ED_object_scene_link(Scene *scene, Object *ob)
-{
-	Base *base;
-
-	if (BKE_scene_base_find(scene, ob)) {
-		return NULL;
-	}
-
-	base = BKE_scene_base_add(scene, ob);
-	id_us_plus(&ob->id);
-
-	return base;
-}
-
 static int make_links_scene_exec(bContext *C, wmOperator *op)
 {
 	Scene *scene_to = BLI_findlink(&CTX_data_main(C)->scene, RNA_enum_get(op->ptr, "scene"));
@@ -1476,9 +1462,10 @@ static int make_links_scene_exec(bContext *C, wmOperator *op)
 		return OPERATOR_CANCELLED;
 	}
 
-	CTX_DATA_BEGIN (C, Base *, base, selected_bases)
+	SceneCollection *sc_to = BKE_collection_master(scene_to);
+	CTX_DATA_BEGIN (C, ObjectBase *, base, selected_bases)
 	{
-		ED_object_scene_link(scene_to, base->object);
+		BKE_collection_object_add(scene_to, sc_to, base->object);
 	}
 	CTX_DATA_END;
 

@@ -91,7 +91,6 @@ bool ED_object_parent_set(struct ReportList *reports, struct Main *bmain, struct
                           struct Object *par, int partype, const bool xmirror, const bool keep_transform,
                           const int vert_par[3]);
 void ED_object_parent_clear(struct Object *ob, const int type);
-struct Base *ED_object_scene_link(struct Scene *scene, struct Object *ob);
 
 void ED_keymap_proportional_cycle(struct wmKeyConfig *keyconf, struct wmKeyMap *keymap);
 void ED_keymap_proportional_obmode(struct wmKeyConfig *keyconf, struct wmKeyMap *keymap);

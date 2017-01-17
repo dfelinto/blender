@@ -54,6 +54,7 @@
 #include "BKE_depsgraph.h"
 #include "BKE_global.h"
 #include "BKE_idcode.h"
+#include "BKE_layer.h"
 #include "BKE_library.h"
 #include "BKE_library_query.h"
 #include "BKE_library_remap.h"
@@ -2170,8 +2171,6 @@ static int scene_drop_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 	te = outliner_dropzone_find(soops, fmval, false);
 
 	if (te) {
-		Base *base;
-
 		RNA_string_set(op->ptr, "scene", te->name);
 		scene = (Scene *)BKE_libblock_find_name(ID_SCE, te->name);
 
@@ -2182,16 +2181,26 @@ static int scene_drop_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 			return OPERATOR_CANCELLED;
 		}
 
-		base = ED_object_scene_link(scene, ob);
-
-		if (base == NULL) {
+		if (BKE_scene_has_object(scene, ob)) {
 			return OPERATOR_CANCELLED;
 		}
 
-		if (scene == CTX_data_scene(C)) {
-			/* when linking to an inactive scene don't touch the layer */
-			ob->lay = base->lay;
-			ED_base_object_select(base, BA_SELECT);
+		SceneCollection *sc;
+		if (scene != CTX_data_scene(C)) {
+			/* when linking to an inactive scene link to the master collection */
+			sc = BKE_collection_master(scene);
+		}
+		else {
+			sc = CTX_data_scene_collection(C);
+		}
+
+		BKE_collection_object_add(scene, sc, ob);
+
+		for (SceneLayer *sl = scene->render_layers.first; sl; sl = sl->next) {
+			ObjectBase *base = BKE_scene_layer_base_find(sl, ob);
+			if (base) {
+				ED_object_base_select(base, BA_SELECT);
+			}
 		}
 
 		DAG_relations_tag_update(bmain);
