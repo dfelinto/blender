@@ -144,7 +144,7 @@ static int objects_add_active_exec(bContext *C, wmOperator *op)
 		if (!BKE_group_object_exists(group, ob))
 			continue;
 
-		CTX_DATA_BEGIN (C, Base *, base, selected_editable_bases)
+		CTX_DATA_BEGIN (C, ObjectBase *, base, selected_editable_bases)
 		{
 			if (BKE_group_object_exists(group, base->object))
 				continue;
@@ -218,7 +218,7 @@ static int objects_remove_active_exec(bContext *C, wmOperator *op)
 
 		if (BKE_group_object_exists(group, ob)) {
 			/* Remove groups from selected objects */
-			CTX_DATA_BEGIN (C, Base *, base, selected_editable_bases)
+			CTX_DATA_BEGIN (C, ObjectBase *, base, selected_editable_bases)
 			{
 				BKE_group_object_unlink(group, base->object);
 				ok = 1;
@@ -310,7 +310,7 @@ static int group_objects_remove_exec(bContext *C, wmOperator *op)
 			continue;
 
 		/* now remove all selected objects from the group */
-		CTX_DATA_BEGIN (C, Base *, base, selected_editable_bases)
+		CTX_DATA_BEGIN (C, ObjectBase *, base, selected_editable_bases)
 		{
 			BKE_group_object_unlink(group, base->object);
 			updated = true;
@@ -361,7 +361,7 @@ static int group_create_exec(bContext *C, wmOperator *op)
 	
 	group = BKE_group_add(bmain, name);
 		
-	CTX_DATA_BEGIN (C, Base *, base, selected_bases)
+	CTX_DATA_BEGIN (C, ObjectBase *, base, selected_bases)
 	{
 		BKE_group_object_add(group, base->object);
 	}

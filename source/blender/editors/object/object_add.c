@@ -1490,6 +1490,7 @@ static void make_object_duplilist_real(bContext *C, Scene *scene, Base *base,
 
 static int object_duplicates_make_real_exec(bContext *C, wmOperator *op)
 {
+#if 0
 	Main *bmain = CTX_data_main(C);
 	Scene *scene = CTX_data_scene(C);
 
@@ -1512,6 +1513,14 @@ static int object_duplicates_make_real_exec(bContext *C, wmOperator *op)
 	WM_main_add_notifier(NC_OBJECT | ND_DRAW, NULL);
 
 	return OPERATOR_FINISHED;
+#else
+	(void)C;
+	(void)op;
+	(void)make_object_duplilist_real;
+	TODO_LAYER_COPY;
+	BKE_reportf(op->reports, RPT_ERROR, "OBJECT_OT_duplicates_make_real not supported at the moment");
+	return OPERATOR_CANCELLED;
+#endif
 }
 
 void OBJECT_OT_duplicates_make_real(wmOperatorType *ot)
@@ -1606,6 +1615,7 @@ static Base *duplibase_for_convert(Main *bmain, Scene *scene, Base *base, Object
 
 static int convert_exec(bContext *C, wmOperator *op)
 {
+#if 0
 	Main *bmain = CTX_data_main(C);
 	Scene *scene = CTX_data_scene(C);
 	Base *basen = NULL, *basact = NULL;
@@ -1924,6 +1934,17 @@ static int convert_exec(bContext *C, wmOperator *op)
 	WM_event_add_notifier(C, NC_SCENE | ND_OB_SELECT, scene);
 
 	return OPERATOR_FINISHED;
+#else
+	(void)C;
+	(void)op;
+	(void)curvetomesh;
+	(void)duplibase_for_convert;
+
+	TODO_LAYER_COPY;
+
+	BKE_report(op->reports, RPT_ERROR, "OBJECT_OT_convert not supported at the moment");
+	return OPERATOR_CANCELLED;
+#endif
 }
 
 
@@ -2227,12 +2248,12 @@ Base *ED_object_add_duplicate(Main *bmain, Scene *scene, Base *base, int dupflag
 
 	return basen;
 #else
-	/* handle duplicate */
-	TODO_LAYER_BASE
 	(void)bmain;
 	(void)scene;
 	(void)base;
 	(void)dupflag;
+	/* handle duplicate */
+	TODO_LAYER_COPY;
 	return NULL;
 #endif
 }
@@ -2240,6 +2261,7 @@ Base *ED_object_add_duplicate(Main *bmain, Scene *scene, Base *base, int dupflag
 /* contextual operator dupli */
 static int duplicate_exec(bContext *C, wmOperator *op)
 {
+#if 0
 	Main *bmain = CTX_data_main(C);
 	Scene *scene = CTX_data_scene(C);
 	const bool linked = RNA_boolean_get(op->ptr, "linked");
@@ -2278,6 +2300,14 @@ static int duplicate_exec(bContext *C, wmOperator *op)
 	WM_event_add_notifier(C, NC_SCENE | ND_OB_SELECT, scene);
 
 	return OPERATOR_FINISHED;
+#else
+	(void)C;
+	(void)op;
+	/* still need to handle copy (object_add_duplicate_internal) */
+	TODO_LAYER_COPY;
+	BKE_reportf(op->reports, RPT_ERROR, "Duplication of objects not working at the moment");
+	return OPERATOR_CANCELLED;
+#endif
 }
 
 void OBJECT_OT_duplicate(wmOperatorType *ot)

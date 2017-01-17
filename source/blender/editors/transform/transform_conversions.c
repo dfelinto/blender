@@ -6418,7 +6418,7 @@ static void createTransObject(bContext *C, TransInfo *t)
 	td = t->data = MEM_callocN(t->total * sizeof(TransData), "TransOb");
 	tx = t->ext = MEM_callocN(t->total * sizeof(TransDataExtension), "TransObExtension");
 
-	CTX_DATA_BEGIN(C, Base *, base, selected_bases)
+	CTX_DATA_BEGIN(C, ObjectBase *, base, selected_bases)
 	{
 		Object *ob = base->object;
 		

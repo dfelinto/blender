@@ -1551,7 +1551,7 @@ static int make_links_data_exec(bContext *C, wmOperator *op)
 		ob_groups = BKE_object_groups(ob_src);
 	}
 
-	CTX_DATA_BEGIN (C, Base *, base_dst, selected_editable_bases)
+	CTX_DATA_BEGIN (C, ObjectBase *, base_dst, selected_editable_bases)
 	{
 		Object *ob_dst = base_dst->object;
 

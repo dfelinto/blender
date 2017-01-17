@@ -1027,11 +1027,12 @@ void OBJECT_OT_select_same_group(wmOperatorType *ot)
 static int object_select_mirror_exec(bContext *C, wmOperator *op)
 {
 	Scene *scene = CTX_data_scene(C);
+	SceneLayer *sl = CTX_data_scene_layer(C);
 	bool extend;
 	
 	extend = RNA_boolean_get(op->ptr, "extend");
 	
-	CTX_DATA_BEGIN (C, Base *, primbase, selected_bases)
+	CTX_DATA_BEGIN (C, ObjectBase *, primbase, selected_bases)
 	{
 		char name_flip[MAXBONENAME];
 
@@ -1040,15 +1041,15 @@ static int object_select_mirror_exec(bContext *C, wmOperator *op)
 		if (!STREQ(name_flip, primbase->object->id.name + 2)) {
 			Object *ob = (Object *)BKE_libblock_find_name(ID_OB, name_flip);
 			if (ob) {
-				Base *secbase = BKE_scene_base_find(scene, ob);
+				ObjectBase *secbase = BKE_scene_layer_base_find(sl, ob);
 
 				if (secbase) {
-					ED_base_object_select(secbase, BA_SELECT);
+					ED_object_base_select(secbase, BA_SELECT);
 				}
 			}
 		}
 		
-		if (extend == false) ED_base_object_select(primbase, BA_DESELECT);
+		if (extend == false) ED_object_base_select(primbase, BA_DESELECT);
 		
 	}
 	CTX_DATA_END;

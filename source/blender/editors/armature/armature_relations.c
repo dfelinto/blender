@@ -269,7 +269,7 @@ int join_armature_exec(bContext *C, wmOperator *op)
 	if (!arm || arm->edbo)
 		return OPERATOR_CANCELLED;
 	
-	CTX_DATA_BEGIN(C, Base *, base, selected_editable_bases)
+	CTX_DATA_BEGIN(C, ObjectBase *, base, selected_editable_bases)
 	{
 		if (base->object == ob) {
 			ok = true;
@@ -291,7 +291,7 @@ int join_armature_exec(bContext *C, wmOperator *op)
 	pose = ob->pose;
 	ob->mode &= ~OB_MODE_POSE;
 
-	CTX_DATA_BEGIN(C, Base *, base, selected_editable_bases)
+	CTX_DATA_BEGIN(C, ObjectBase *, base, selected_editable_bases)
 	{
 		if ((base->object->type == OB_ARMATURE) && (base->object != ob)) {
 			tJoinArmature_AdtFixData afd = {NULL};

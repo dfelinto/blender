@@ -34,6 +34,7 @@
  */
 
 struct Base;
+struct ObjectBase;
 struct EvaluationContext;
 struct Group;
 struct Main;
