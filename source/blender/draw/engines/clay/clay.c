@@ -53,10 +53,8 @@ typedef struct CLAY_BatchStorage {
 static struct CLAY_data {
 	/* Depth Pre Pass */
 	struct GPUShader *depth_sh;
-	struct DRWInterface *depth_itf;
 	/* Shading Pass */
 	struct GPUShader *clay_sh[8];
-	struct DRWInterface *clay_itf;
 
 	/* Matcap textures */
 	struct GPUTexture *matcap_array;

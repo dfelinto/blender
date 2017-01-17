@@ -21,6 +21,7 @@ void ssao_factors(in float depth, in vec3 normal, in vec3 position, in vec2 scre
 	int num_samples = int(ssao_samples_num);
 
 	for (x = 0; x < num_samples; x++) {
+		/* TODO : optimisation replace by constant */
 		vec2 dir_sample = texture1D(ssao_samples, (float(x) + 0.5) / ssao_samples_num).rg;
 
 		/* rotate with random direction to get jittered result */
@@ -32,24 +33,30 @@ void ssao_factors(in float depth, in vec3 normal, in vec3 position, in vec2 scre
 			continue;
 
 		float depth_new = texture2D(depthtex, uvcoords).r;
+
 		/* Handle Background case */
-		if (depth_new != 1.0) {
-			vec3 pos_new = get_view_space_from_depth(uvcoords, viewvecs[0].xyz, viewvecs[1].xyz, depth_new);
-			vec3 dir = pos_new - position;
-			float len = length(dir);
-			float f_cavities = dot(dir, normal);
-			float f_edge = dot(dir, -normal);
-			float f_bias = 0.05 * len + 0.0001;
+		bool is_background = (depth_new == 1.0);
 
-			float attenuation = 1.0 / (len * (1.0 + len * len * ssao_attenuation));
+		/* This trick provide good edge effect even if no neighboor is found. */
+		vec3 pos_new = get_view_space_from_depth(uvcoords, viewvecs[0].xyz, viewvecs[1].xyz, (is_background) ? depth : depth_new);
 
-			/* use minor bias here to avoid self shadowing */
-			if (f_cavities > f_bias)
-				cavities += f_cavities * attenuation;
+		if (is_background)
+			pos_new.z -= ssao_distance;
 
-			if (f_edge > f_bias)
-				edges += f_edge * attenuation;
-		}
+		vec3 dir = pos_new - position;
+		float len = length(dir);
+		float f_cavities = dot(dir, normal);
+		float f_edge = -f_cavities;
+		float f_bias = 0.05 * len + 0.0001;
+
+		float attenuation = 1.0 / (len * (1.0 + len * len * ssao_attenuation));
+
+		/* use minor bias here to avoid self shadowing */
+		if (f_cavities > -f_bias)
+			cavities += f_cavities * attenuation;
+
+		if (f_edge > f_bias)
+			edges += f_edge * attenuation;
 	}
 
 	cavities /= ssao_samples_num;
