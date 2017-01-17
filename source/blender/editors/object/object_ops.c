@@ -86,7 +86,6 @@ void ED_operatortypes_object(void)
 	WM_operatortype_append(OBJECT_OT_make_single_user);
 	WM_operatortype_append(OBJECT_OT_make_links_scene);
 	WM_operatortype_append(OBJECT_OT_make_links_data);
-	WM_operatortype_append(OBJECT_OT_move_to_layer);
 
 	WM_operatortype_append(OBJECT_OT_select_random);
 	WM_operatortype_append(OBJECT_OT_select_all);
