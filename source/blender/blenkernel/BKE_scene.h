@@ -96,6 +96,8 @@ int BKE_scene_base_iter_next(struct EvaluationContext *eval_ctx, struct SceneBas
 
 void BKE_scene_base_flag_to_objects(struct Scene *scene);
 void BKE_scene_base_flag_from_objects(struct Scene *scene);
+void BKE_scene_base_flag_sync_from_base(struct Base *base);
+void BKE_scene_base_flag_sync_from_object(struct Base *base);
 
 void BKE_scene_set_background(struct Main *bmain, struct Scene *sce);
 struct Scene *BKE_scene_set_name(struct Main *bmain, const char *name);

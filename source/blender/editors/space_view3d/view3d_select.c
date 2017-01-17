@@ -70,6 +70,7 @@
 #include "BKE_object.h"
 #include "BKE_paint.h"
 #include "BKE_editmesh.h"
+#include "BKE_scene.h"
 #include "BKE_tracking.h"
 #include "BKE_utildefines.h"
 
@@ -425,7 +426,6 @@ static void do_lasso_select_objects(ViewContext *vc, const int mcords[][2], cons
 				if (BLI_lasso_is_point_inside(mcords, moves, base->sx, base->sy, IS_CLIPPED)) {
 
 					ED_base_object_select(base, select ? BA_SELECT : BA_DESELECT);
-					base->object->flag = base->flag;
 				}
 			}
 			if (vc->obact == base->object && (base->object->mode & OB_MODE_POSE)) {

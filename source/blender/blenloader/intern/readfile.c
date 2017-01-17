@@ -7515,7 +7515,7 @@ static void lib_link_group(FileData *fd, Main *main)
 			if (add_us) {
 				id_us_ensure_real(&group->id);
 			}
-			BKE_group_object_unlink(group, NULL, NULL, NULL);	/* removes NULL entries */
+			BKE_group_object_unlink(group, NULL);	/* removes NULL entries */
 		}
 	}
 }
@@ -9911,7 +9911,7 @@ static void give_base_to_objects(Main *mainvar, Scene *scene, View3D *v3d, Libra
 
 				base->object = ob;
 				base->lay = ob->lay;
-				base->flag = ob->flag;
+				BKE_scene_base_flag_sync_from_object(base);
 
 				CLAMP_MIN(ob->id.us, 0);
 				id_us_plus_no_lib((ID *)ob);
@@ -9945,7 +9945,7 @@ static void give_base_to_groups(
 			/* assign the base */
 			base = BKE_scene_base_add(scene, ob);
 			base->flag |= SELECT;
-			base->object->flag = base->flag;
+			BKE_scene_base_flag_sync_from_base(base);
 			DAG_id_tag_update(&ob->id, OB_RECALC_OB | OB_RECALC_DATA | OB_RECALC_TIME);
 			scene->basact = base;
 
@@ -10048,7 +10048,7 @@ static void link_object_postprocess(ID *id, Scene *scene, View3D *v3d, const sho
 
 		if (flag & FILE_AUTOSELECT) {
 			base->flag |= SELECT;
-			base->object->flag = base->flag;
+			BKE_scene_base_flag_sync_from_base(base);
 			/* do NOT make base active here! screws up GUI stuff, if you want it do it on src/ level */
 		}
 	}

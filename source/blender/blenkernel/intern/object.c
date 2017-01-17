@@ -3506,7 +3506,7 @@ void BKE_object_groups_clear(Scene *scene, Base *base, Object *object)
 	}
 
 	while ((group = BKE_group_object_find(group, base->object))) {
-		BKE_group_object_unlink(group, object, scene, base);
+		BKE_group_object_unlink(group, object);
 	}
 }
 

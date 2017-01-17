@@ -2286,7 +2286,6 @@ static int group_link_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 	Main *bmain = CTX_data_main(C);
 	Group *group = NULL;
 	Object *ob = NULL;
-	Scene *scene = CTX_data_scene(C);
 	SpaceOops *soops = CTX_wm_space_outliner(C);
 	ARegion *ar = CTX_wm_region(C);
 	TreeElement *te = NULL;
@@ -2316,7 +2315,7 @@ static int group_link_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 			return OPERATOR_CANCELLED;
 		}
 
-		BKE_group_object_add(group, ob, scene, NULL);
+		BKE_group_object_add(group, ob);
 		WM_event_add_notifier(C, NC_OBJECT | ND_DRAW, ob);
 
 		return OPERATOR_FINISHED;

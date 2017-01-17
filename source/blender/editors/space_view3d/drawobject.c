@@ -6102,7 +6102,7 @@ static void draw_new_particle_system(Scene *scene, View3D *v3d, RegionView3D *rv
 
 	timestep = psys_get_timestep(&sim);
 
-	if ((base->flag & OB_FROMDUPLI) && (ob->flag & OB_FROMGROUP)) {
+	if ((ob->flag & OB_FROMGROUP) != 0) {
 		float mat[4][4];
 		mul_m4_m4m4(mat, ob->obmat, psys->imat);
 		glMultMatrixf(mat);
@@ -6733,7 +6733,7 @@ static void draw_new_particle_system(Scene *scene, View3D *v3d, RegionView3D *rv
 		pdd->ma_col = NULL;
 	}
 
-	if ((base->flag & OB_FROMDUPLI) && (ob->flag & OB_FROMGROUP)) {
+	if ((ob->flag & OB_FROMGROUP) != 0) {
 		glLoadMatrixf(rv3d->viewmat);
 	}
 }
@@ -8454,7 +8454,7 @@ void draw_object_wire_color(Scene *scene, Base *base, unsigned char r_ob_wire_co
 		}
 		/* Sets the 'theme_id' or fallback to wire */
 		else {
-			if (ob->flag & OB_FROMGROUP) {
+			if ((ob->flag & OB_FROMGROUP) != 0) {
 				if (base->flag & (SELECT + BA_WAS_SEL)) {
 					/* uses darker active color for non-active + selected */
 					theme_id = TH_GROUP_ACTIVE;

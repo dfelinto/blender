@@ -957,7 +957,6 @@ void BKE_scene_set_background(Main *bmain, Scene *scene)
 	Object *ob;
 	Group *group;
 	GroupObject *go;
-	int flag;
 	
 	/* check for cyclic sets, for reading old files but also for definite security (py?) */
 	BKE_scene_validate_setscene(bmain, scene);
@@ -989,13 +988,7 @@ void BKE_scene_set_background(Main *bmain, Scene *scene)
 		ob->lay = base->lay;
 		
 		/* group patch... */
-		base->flag &= ~(OB_FROMGROUP);
-		flag = ob->flag & (OB_FROMGROUP);
-		base->flag |= flag;
-		
-		/* not too nice... for recovering objects with lost data */
-		//if (ob->pose == NULL) base->flag &= ~OB_POSEMODE;
-		ob->flag = base->flag;
+		BKE_scene_base_flag_sync_from_base(base);
 	}
 	/* no full animation update, this to enable render code to work (render code calls own animation updates) */
 }
@@ -1283,7 +1276,9 @@ void BKE_scene_base_deselect_all(Scene *sce)
 
 	for (b = sce->base.first; b; b = b->next) {
 		b->flag &= ~SELECT;
+		int flag = b->object->flag & (OB_FROMGROUP);
 		b->object->flag = b->flag;
+		b->object->flag |= flag;
 	}
 }
 
@@ -2306,7 +2301,7 @@ void BKE_scene_base_flag_to_objects(struct Scene *scene)
 	Base *base = scene->base.first;
 
 	while (base) {
-		base->object->flag = base->flag;
+		BKE_scene_base_flag_sync_from_base(base);
 		base = base->next;
 	}
 }
@@ -2316,9 +2311,25 @@ void BKE_scene_base_flag_from_objects(struct Scene *scene)
 	Base *base = scene->base.first;
 
 	while (base) {
-		base->flag = base->object->flag;
+		BKE_scene_base_flag_sync_from_object(base);
 		base = base->next;
 	}
+}
+
+void BKE_scene_base_flag_sync_from_base(Base *base)
+{
+	Object *ob = base->object;
+
+	/* keep the object only flags untouched */
+	int flag = ob->flag & OB_FROMGROUP;
+
+	ob->flag = base->flag;
+	ob->flag |= flag;
+}
+
+void BKE_scene_base_flag_sync_from_object(Base *base)
+{
+	base->flag = base->object->flag;
 }
 
 void BKE_scene_disable_color_management(Scene *scene)

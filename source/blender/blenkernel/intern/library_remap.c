@@ -354,7 +354,7 @@ static void libblock_remap_data_postprocess_object_fromgroup_update(Main *bmain,
 		}
 		if (new_ob == NULL) {  /* We need to remove NULL-ified groupobjects... */
 			for (Group *group = bmain->group.first; group; group = group->id.next) {
-				BKE_group_object_unlink(group, NULL, NULL, NULL);
+				BKE_group_object_unlink(group, NULL);
 			}
 		}
 		else {
@@ -368,22 +368,16 @@ static void libblock_remap_data_postprocess_group_scene_unlink(Main *UNUSED(bmai
 	/* Note that here we assume no object has no base (i.e. all objects are assumed instanced
 	 * in one scene...). */
 	for (Base *base = sce->base.first; base; base = base->next) {
-		if (base->flag & OB_FROMGROUP) {
-			Object *ob = base->object;
+		Object *ob = base->object;
+		if (ob->flag & OB_FROMGROUP) {
+			Group *grp = BKE_group_object_find(NULL, ob);
 
-			if (ob->flag & OB_FROMGROUP) {
-				Group *grp = BKE_group_object_find(NULL, ob);
-
-				/* Unlinked group (old_id) is still in bmain... */
-				if (grp && (&grp->id == old_id || grp->id.us == 0)) {
-					grp = BKE_group_object_find(grp, ob);
-				}
-				if (!grp) {
-					ob->flag &= ~OB_FROMGROUP;
-				}
+			/* Unlinked group (old_id) is still in bmain... */
+			if (grp && (&grp->id == old_id || grp->id.us == 0)) {
+				grp = BKE_group_object_find(grp, ob);
 			}
-			if (!(ob->flag & OB_FROMGROUP)) {
-				base->flag &= ~OB_FROMGROUP;
+			if (!grp) {
+				ob->flag &= ~OB_FROMGROUP;
 			}
 		}
 	}

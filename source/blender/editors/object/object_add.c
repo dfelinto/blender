@@ -1351,11 +1351,12 @@ static void make_object_duplilist_real(bContext *C, Scene *scene, Base *base,
 		if (ob->mat == NULL) ob->totcol = 0;
 
 		basen = MEM_dupallocN(base);
-		basen->flag &= ~(OB_FROMDUPLI | OB_FROMGROUP);
-		ob->flag = basen->flag;
+
 		basen->lay = base->lay;
 		BLI_addhead(&scene->base, basen);   /* addhead: othwise eternal loop */
 		basen->object = ob;
+		basen->flag &= ~OB_FROMDUPLI;
+		BKE_scene_base_flag_sync_from_base(basen);
 
 		/* make sure apply works */
 		BKE_animdata_free(&ob->id, true);
@@ -1985,11 +1986,11 @@ static Base *object_add_duplicate_internal(Main *bmain, Scene *scene, Base *base
 		 * 2) Rigid Body sim participants MUST always be part of a group...
 		 */
 		// XXX: is 2) really a good measure here?
-		if ((basen->flag & OB_FROMGROUP) || ob->rigidbody_object || ob->rigidbody_constraint) {
+		if ((ob->flag & OB_FROMGROUP) != 0 || ob->rigidbody_object || ob->rigidbody_constraint) {
 			Group *group;
 			for (group = bmain->group.first; group; group = group->id.next) {
 				if (BKE_group_object_exists(group, ob))
-					BKE_group_object_add(group, obn, scene, basen);
+					BKE_group_object_add(group, obn);
 			}
 		}
 
@@ -2327,7 +2328,7 @@ static int add_named_exec(bContext *C, wmOperator *op)
 
 	base = MEM_callocN(sizeof(Base), "duplibase");
 	base->object = ob;
-	base->flag = ob->flag;
+	BKE_scene_base_flag_sync_from_object(base);
 
 	/* prepare dupli */
 	clear_sca_new_poins();  /* BGE logic */

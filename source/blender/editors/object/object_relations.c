@@ -1602,7 +1602,7 @@ static int make_links_data_exec(bContext *C, wmOperator *op)
 						/* now add in the groups from the link nodes */
 						for (group_node = ob_groups; group_node; group_node = group_node->next) {
 							if (ob_dst->dup_group != group_node->link) {
-								BKE_group_object_add(group_node->link, ob_dst, scene, base_dst);
+								BKE_group_object_add(group_node->link, ob_dst);
 							}
 							else {
 								is_cycle = true;
@@ -2237,7 +2237,7 @@ static bool make_local_all__instance_indirect_unused(Main *bmain, Scene *scene)
 
 			base = BKE_scene_base_add(scene, ob);
 			base->flag |= SELECT;
-			base->object->flag = base->flag;
+			BKE_scene_base_flag_sync_from_base(base);
 			DAG_id_tag_update(&ob->id, OB_RECALC_OB | OB_RECALC_DATA | OB_RECALC_TIME);
 
 			changed = true;

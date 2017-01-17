@@ -96,7 +96,7 @@ void ED_base_object_select(Base *base, short mode)
 		else if (mode == BA_DESELECT) {
 			base->flag &= ~SELECT;
 		}
-		base->object->flag = base->flag;
+		BKE_scene_base_flag_sync_from_base(base);
 	}
 }
 

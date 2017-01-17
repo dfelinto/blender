@@ -109,6 +109,9 @@ void ED_object_base_activate(struct bContext *C, struct ObjectBase *base);
 
 void ED_base_object_free_and_unlink(struct Main *bmain, struct Scene *scene, struct Object *ob);
 
+void ED_base_object_sync_from_base(struct Base *base, struct Object *ob);
+void ED_base_object_sync_from_object(struct Base *base, struct Object *ob);
+
 /* single object duplicate, if (dupflag == 0), fully linked, else it uses the flags given */
 struct Base *ED_object_add_duplicate(struct Main *bmain, struct Scene *scene, struct Base *base, int dupflag);
 
