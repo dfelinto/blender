@@ -1534,7 +1534,6 @@ static bool allow_make_links_data(const int type, Object *ob_src, Object *ob_dst
 static int make_links_data_exec(bContext *C, wmOperator *op)
 {
 	Main *bmain = CTX_data_main(C);
-	Scene *scene = CTX_data_scene(C);
 	const int type = RNA_enum_get(op->ptr, "type");
 	Object *ob_src;
 	ID *obdata_id;
@@ -1597,7 +1596,7 @@ static int make_links_data_exec(bContext *C, wmOperator *op)
 						LinkNode *group_node;
 
 						/* first clear groups */
-						BKE_object_groups_clear(scene, base_dst, ob_dst);
+						BKE_object_groups_clear(ob_dst);
 
 						/* now add in the groups from the link nodes */
 						for (group_node = ob_groups; group_node; group_node = group_node->next) {

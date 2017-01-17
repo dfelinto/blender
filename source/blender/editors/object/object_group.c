@@ -263,11 +263,10 @@ void GROUP_OT_objects_remove_active(wmOperatorType *ot)
 static int group_objects_remove_all_exec(bContext *C, wmOperator *UNUSED(op))
 {
 	Main *bmain = CTX_data_main(C);
-	Scene *scene = CTX_data_scene(C);
 
-	CTX_DATA_BEGIN (C, Base *, base, selected_editable_bases)
+	CTX_DATA_BEGIN (C, ObjectBase *, base, selected_editable_bases)
 	{
-		BKE_object_groups_clear(scene, base, base->object);
+		BKE_object_groups_clear(base->object);
 	}
 	CTX_DATA_END;
 

@@ -3495,18 +3495,11 @@ struct LinkNode *BKE_object_groups(Object *ob)
 	return group_linknode;
 }
 
-void BKE_object_groups_clear(Scene *scene, Base *base, Object *object)
+void BKE_object_groups_clear(Object *ob)
 {
 	Group *group = NULL;
-
-	BLI_assert((base == NULL) || (base->object == object));
-
-	if (scene && base == NULL) {
-		base = BKE_scene_base_find(scene, object);
-	}
-
-	while ((group = BKE_group_object_find(group, base->object))) {
-		BKE_group_object_unlink(group, object);
+	while ((group = BKE_group_object_find(group, ob))) {
+		BKE_group_object_unlink(group, ob);
 	}
 }
 
