@@ -128,7 +128,7 @@ void blo_do_versions_after_linking_280(Main *main)
 				/* convert selected bases */
 				for (Base *base = scene->base.first; base; base = base->next) {
 					ObjectBase *ob_base = BKE_scene_layer_base_find(sl, base->object);
-					if ((base->flag & BA_SELECT) != 0) {
+					if ((base->flag & SELECT) != 0) {
 						ob_base->flag |= BASE_SELECTED;
 					}
 					else {
