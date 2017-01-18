@@ -29,6 +29,7 @@
 #include "BLI_iterator.h"
 #include "BLI_listbase.h"
 #include "BLT_translation.h"
+#include "BLI_string_utils.h"
 
 #include "BKE_collection.h"
 #include "BKE_layer.h"
