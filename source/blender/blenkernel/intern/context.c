@@ -912,12 +912,27 @@ SceneLayer *CTX_data_scene_layer(const bContext *C)
 	}
 }
 
+/**
+ * This is tricky. Sometimes the user overrides the render_layer
+ * but not the scene_collection. In this case what to do?
+ *
+ * If the scene_collection is linked to the SceneLayer we use it.
+ * Otherwise we fallback to the active one of the SceneLayer.
+ */
 SceneCollection *CTX_data_scene_collection(const bContext *C)
 {
+	SceneLayer *sl = CTX_data_scene_layer(C);
 	SceneCollection *sc;
 
 	if (ctx_data_pointer_verify(C, "scene_collection", (void *)&sc)) {
-		return sc;
+		if (BKE_scene_layer_has_collection(sl, sc)) {
+			return sc;
+		}
+		else {
+			/* fallback */
+			LayerCollection *lc = BKE_layer_collection_active(sl);
+			return lc->scene_collection;
+		}
 	}
 	else {
 		return C->data.scene_collection;
