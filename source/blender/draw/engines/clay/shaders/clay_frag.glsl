@@ -40,7 +40,7 @@ out vec4 fragColor;
 /* TODO Move this to SSAO modules */
 /* simple depth reconstruction, see http://www.derschmale.com/2014/01/26/reconstructing-positions-from-the-depth-buffer
  * we change the factors from the article to fit the OpennGL model.  */
-vec3 get_view_space_from_depth(in vec2 uvcoords, in vec3 viewvec_origin, in vec3 viewvec_diff, in float depth)
+vec3 get_view_space_from_depth(in vec2 uvcoords, in float depth)
 {
 	if (WinMatrix[3][3] == 0.0) {
 		/* Perspective */
@@ -48,13 +48,13 @@ vec3 get_view_space_from_depth(in vec2 uvcoords, in vec3 viewvec_origin, in vec3
 
 		float zview = -WinMatrix[3][2] / (d + WinMatrix[2][2]);
 
-		return zview * (viewvec_origin + vec3(uvcoords, 0.0) * viewvec_diff);
+		return zview * (viewvecs[0].xyz + vec3(uvcoords, 0.0) * viewvecs[1].xyz);
 	}
 	else {
 		/* Orthographic */
 		vec3 offset = vec3(uvcoords, depth);
 
-		return vec3(viewvec_origin + offset * viewvec_diff);
+		return viewvecs[0].xyz + offset * viewvecs[1].xyz;
 	}
 }
 
@@ -163,7 +163,7 @@ void main() {
 	vec2 screenco = vec2(gl_FragCoord.xy) / vec2(screenres);
 	float depth = texture(depthtex, screenco).r;
 
-	vec3 position = get_view_space_from_depth(screenco, viewvecs[0].xyz, viewvecs[1].xyz, depth);
+	vec3 position = get_view_space_from_depth(screenco, depth);
 	vec3 normal = calculate_view_space_normal(position);
 
 	/* Manual Depth test */

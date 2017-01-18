@@ -111,6 +111,8 @@ typedef struct CLAY_PassList{
 	struct DRWPass *mode_ob_center_pass;
 } CLAY_PassList;
 
+// #define GTAO
+
 /* Functions */
 
 static void add_icon_to_rect(PreviewImage *prv, float *final_rect, int layer)
@@ -210,9 +212,14 @@ static struct GPUTexture *create_jitter_texture(void)
 
 	/* TODO replace by something more evenly distributed like blue noise */
 	for (i = 0; i < 64 * 64; i++) {
+#ifdef GTAO
+		jitter[i][0] = BLI_frand();
+		jitter[i][1] = BLI_frand();
+#else
 		jitter[i][0] = 2.0f * BLI_frand() - 1.0f;
 		jitter[i][1] = 2.0f * BLI_frand() - 1.0f;
 		normalize_v2(jitter[i]);
+#endif
 	}
 
 	return DRW_texture_create_2D(64, 64, DRW_TEX_RG_16, DRW_TEX_FILTER | DRW_TEX_WRAP, &jitter[0][0]);
@@ -291,7 +298,11 @@ static void clay_engine_init(void)
 		char *matcap_with_ao;
 
 		BLI_dynstr_append(ds, datatoc_clay_frag_glsl);
+#ifdef GTAO
+		BLI_dynstr_append(ds, datatoc_ssao_groundtruth_glsl);
+#else
 		BLI_dynstr_append(ds, datatoc_ssao_alchemy_glsl);
+#endif
 
 		matcap_with_ao = BLI_dynstr_get_cstring(ds);
 

@@ -38,7 +38,7 @@ void ssao_factors(in float depth, in vec3 normal, in vec3 position, in vec2 scre
 		bool is_background = (depth_new == 1.0);
 
 		/* This trick provide good edge effect even if no neighboor is found. */
-		vec3 pos_new = get_view_space_from_depth(uvcoords, viewvecs[0].xyz, viewvecs[1].xyz, (is_background) ? depth : depth_new);
+		vec3 pos_new = get_view_space_from_depth(uvcoords, (is_background) ? depth : depth_new);
 
 		if (is_background)
 			pos_new.z -= ssao_distance;
