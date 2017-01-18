@@ -578,7 +578,7 @@ static void separate_armature_bones(Object *ob, short sel)
 /* separate selected bones into their armature */
 static int separate_armature_exec(bContext *C, wmOperator *op)
 {
-#if 0 /* TODO_LAYER */
+#if 0
 	Main *bmain = CTX_data_main(C);
 	Scene *scene = CTX_data_scene(C);
 	SceneLayer *sl = CTX_data_scene_layer(C);
@@ -661,10 +661,13 @@ static int separate_armature_exec(bContext *C, wmOperator *op)
 	
 	return OPERATOR_FINISHED;
 #else
+	TODO_LAYER_COPY;
+
 	(void)C;
 	(void)op;
 	(void)separate_armature_bones;
 	(void)separated_armature_fix_links;
+	BKE_report(op->reports, RPT_ERROR, "ARMATURE_OT_separate not supported at the moment");
 	return OPERATOR_CANCELLED;
 #endif
 }

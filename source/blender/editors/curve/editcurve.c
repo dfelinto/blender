@@ -1331,7 +1331,8 @@ static int separate_exec(bContext *C, wmOperator *op)
 	return OPERATOR_FINISHED;
 #else
 	/* need to refactor this to use ObjectBase and create a new object in the correct SceneCollection */
-	TODO_LAYER_BASE
+	TODO_LAYER_COPY;
+	TODO_LAYER_BASE;
 	(void)C;
 	BKE_report(op->reports, RPT_ERROR, "CURVE_OT_separate not supported at the moment");
 	return OPERATOR_CANCELLED;

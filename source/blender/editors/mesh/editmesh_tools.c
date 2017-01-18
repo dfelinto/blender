@@ -3360,7 +3360,8 @@ static int edbm_separate_exec(bContext *C, wmOperator *op)
 	return OPERATOR_CANCELLED;
 #else
 	/* need to refactor this to use ObjectBase and create a new object in the correct SceneCollection */
-	TODO_LAYER_BASE
+	TODO_LAYER_BASE;
+	TODO_LAYER_COPY;
 	(void)C;
 	(void)mesh_separate_loose;
 	(void)mesh_separate_material;
