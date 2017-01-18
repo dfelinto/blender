@@ -44,8 +44,9 @@
 #include "MEM_guardedalloc.h"
 
 /* prototype */
-LayerCollection *layer_collection_add(SceneLayer *sl, ListBase *lb, SceneCollection *sc);
 void layer_collection_free(SceneLayer *sl, LayerCollection *lc);
+LayerCollection *layer_collection_add(SceneLayer *sl, ListBase *lb, SceneCollection *sc);
+LayerCollection *find_layer_collection_by_scene_collection(LayerCollection *lc, const SceneCollection *sc);
 
 /* RenderLayer */
 
@@ -463,6 +464,19 @@ LayerCollection *layer_collection_add(SceneLayer *sl, ListBase *lb, SceneCollect
 /* ---------------------------------------------------------------------- */
 
 /**
+ * See if render layer has the scene collection linked directly, or indirectly (nested)
+ */
+bool BKE_scene_layer_has_collection(struct SceneLayer *sl, struct SceneCollection *sc)
+{
+	for (LayerCollection *lc = sl->layer_collections.first; lc; lc = lc->next) {
+		if (find_layer_collection_by_scene_collection(lc, sc) != NULL) {
+			return true;
+		}
+	}
+	return false;
+}
+
+/**
  * See if the object is in any of the scene layers of the scene
  */
 bool BKE_scene_has_object(Scene *scene, Object *ob)
@@ -480,7 +494,7 @@ bool BKE_scene_has_object(Scene *scene, Object *ob)
 /* ---------------------------------------------------------------------- */
 /* Syncing */
 
-static LayerCollection *find_layer_collection_by_scene_collection(LayerCollection *lc, const SceneCollection *sc)
+LayerCollection *find_layer_collection_by_scene_collection(LayerCollection *lc, const SceneCollection *sc)
 {
 	if (lc->scene_collection == sc) {
 		return lc;
