@@ -823,6 +823,7 @@ class UnitsTesting(unittest.TestCase):
         subzero.objects.link(three_b)
         scorpion.objects.link(three_c)
         layer = scene.render_layers.new('Fresh new Layer')
+        layer.collections.unlink(layer.collections.active)
         layer.collections.link(subzero)
         layer.collections.active_index = 3
         self.assertEqual(layer.collections.active.name, 'scorpion')
@@ -883,6 +884,7 @@ class UnitsTesting(unittest.TestCase):
             # change active layer
             override = bpy.context.copy()
             override["render_layer"] = layer
+            override["scene_collection"] = layer.collections.active.collection
 
             # add new objects
             if add_mode == 'EMPTY':
