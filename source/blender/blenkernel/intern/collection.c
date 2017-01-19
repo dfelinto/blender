@@ -180,19 +180,39 @@ void BKE_collection_master_free(Scene *scene){
 	collection_free(BKE_collection_master(scene));
 }
 
+static void collection_object_add(Scene *scene, SceneCollection *sc, Object *ob)
+{
+	BLI_addtail(&sc->objects, BLI_genericNodeN(ob));
+	id_us_plus((ID *)ob);
+	BKE_layer_sync_object_link(scene, sc, ob);
+}
+
 /**
  * Add object to collection
  */
-void BKE_collection_object_add(struct Scene *scene, struct SceneCollection *sc, struct Object *ob)
+void BKE_collection_object_add(Scene *scene, SceneCollection *sc, Object *ob)
 {
 	if (BLI_findptr(&sc->objects, ob, offsetof(LinkData, data))) {
 		/* don't add the same object twice */
 		return;
 	}
+	collection_object_add(scene, sc, ob);
+}
 
-	BLI_addtail(&sc->objects, BLI_genericNodeN(ob));
-	id_us_plus((ID *)ob);
-	BKE_layer_sync_object_link(scene, sc, ob);
+/**
+ * Add object to all collections that reference objects is in
+ * (used to copy objects)
+ */
+void BKE_collection_object_add_from(Scene *scene, Object *ob_src, Object *ob_dst)
+{
+	SceneCollection *sc;
+	FOREACH_SCENE_COLLECTION(scene, sc)
+	{
+		if (BLI_findptr(&sc->objects, ob_src, offsetof(LinkData, data))) {
+			collection_object_add(scene, sc, ob_dst);
+		}
+	}
+	FOREACH_SCENE_COLLECTION_END
 }
 
 /**

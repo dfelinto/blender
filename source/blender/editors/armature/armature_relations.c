@@ -578,7 +578,6 @@ static void separate_armature_bones(Object *ob, short sel)
 /* separate selected bones into their armature */
 static int separate_armature_exec(bContext *C, wmOperator *op)
 {
-#if 0
 	Main *bmain = CTX_data_main(C);
 	Scene *scene = CTX_data_scene(C);
 	SceneLayer *sl = CTX_data_scene_layer(C);
@@ -624,7 +623,7 @@ static int separate_armature_exec(bContext *C, wmOperator *op)
 	ED_armature_edit_free(obedit->data);
 	
 	/* 2) duplicate base */
-	newbase = ED_object_add_duplicate(bmain, scene, oldbase, USER_DUP_ARM); /* only duplicate linked armature */
+	newbase = ED_object_add_duplicate(bmain, scene, sl, oldbase, USER_DUP_ARM); /* only duplicate linked armature */
 	DAG_relations_tag_update(bmain);
 
 	newob = newbase->object;
@@ -660,16 +659,6 @@ static int separate_armature_exec(bContext *C, wmOperator *op)
 	WM_cursor_wait(0);
 	
 	return OPERATOR_FINISHED;
-#else
-	TODO_LAYER_COPY;
-
-	(void)C;
-	(void)op;
-	(void)separate_armature_bones;
-	(void)separated_armature_fix_links;
-	BKE_report(op->reports, RPT_ERROR, "ARMATURE_OT_separate not supported at the moment");
-	return OPERATOR_CANCELLED;
-#endif
 }
 
 void ARMATURE_OT_separate(wmOperatorType *ot)

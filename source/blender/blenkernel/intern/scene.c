@@ -2333,6 +2333,22 @@ void BKE_scene_base_flag_sync_from_object(Base *base)
 	base->flag = base->object->flag;
 }
 
+void BKE_scene_object_base_flag_sync_from_base(ObjectBase *base)
+{
+	Object *ob = base->object;
+
+	/* keep the object only flags untouched */
+	int flag = ob->flag & OB_FROMGROUP;
+
+	ob->flag = base->flag;
+	ob->flag |= flag;
+}
+
+void BKE_scene_object_base_flag_sync_from_object(ObjectBase *base)
+{
+	base->flag = base->object->flag;
+}
+
 void BKE_scene_disable_color_management(Scene *scene)
 {
 	ColorManagedDisplaySettings *display_settings = &scene->display_settings;
