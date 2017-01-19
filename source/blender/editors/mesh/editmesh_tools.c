@@ -3259,9 +3259,9 @@ static bool mesh_separate_loose(Main *bmain, Scene *scene, SceneLayer *sl, Objec
 
 static int edbm_separate_exec(bContext *C, wmOperator *op)
 {
-#if 0
 	Main *bmain = CTX_data_main(C);
 	Scene *scene = CTX_data_scene(C);
+	SceneLayer *sl = CTX_data_scene_layer(C);
 	const int type = RNA_enum_get(op->ptr, "type");
 	int retval = 0;
 	
@@ -3282,13 +3282,13 @@ static int edbm_separate_exec(bContext *C, wmOperator *op)
 		/* editmode separate */
 		switch (type) {
 			case MESH_SEPARATE_SELECTED:
-				retval = mesh_separate_selected(bmain, scene, base, em->bm);
+			    retval = mesh_separate_selected(bmain, scene, sl, base, em->bm);
 				break;
 			case MESH_SEPARATE_MATERIAL:
-				retval = mesh_separate_material(bmain, scene, base, em->bm);
+			    retval = mesh_separate_material(bmain, scene, sl, base, em->bm);
 				break;
 			case MESH_SEPARATE_LOOSE:
-				retval = mesh_separate_loose(bmain, scene, base, em->bm);
+			    retval = mesh_separate_loose(bmain, scene, sl, base, em->bm);
 				break;
 			default:
 				BLI_assert(0);
@@ -3306,7 +3306,7 @@ static int edbm_separate_exec(bContext *C, wmOperator *op)
 		}
 
 		/* object mode separate */
-		CTX_DATA_BEGIN(C, Base *, base_iter, selected_editable_bases)
+		CTX_DATA_BEGIN(C, ObjectBase *, base_iter, selected_editable_bases)
 		{
 			Object *ob = base_iter->object;
 			if (ob->type == OB_MESH) {
@@ -3323,10 +3323,10 @@ static int edbm_separate_exec(bContext *C, wmOperator *op)
 
 					switch (type) {
 						case MESH_SEPARATE_MATERIAL:
-							retval_iter = mesh_separate_material(bmain, scene, base_iter, bm_old);
+						    retval_iter = mesh_separate_material(bmain, scene, sl, base_iter, bm_old);
 							break;
 						case MESH_SEPARATE_LOOSE:
-							retval_iter = mesh_separate_loose(bmain, scene, base_iter, bm_old);
+						    retval_iter = mesh_separate_loose(bmain, scene, sl, base_iter, bm_old);
 							break;
 						default:
 							BLI_assert(0);
@@ -3358,17 +3358,6 @@ static int edbm_separate_exec(bContext *C, wmOperator *op)
 	}
 
 	return OPERATOR_CANCELLED;
-#else
-	/* need to refactor this to use ObjectBase and create a new object in the correct SceneCollection */
-	TODO_LAYER_BASE;
-	TODO_LAYER_COPY;
-	(void)C;
-	(void)mesh_separate_loose;
-	(void)mesh_separate_material;
-	(void)mesh_separate_selected;
-	BKE_report(op->reports, RPT_ERROR, "MESH_OT_separate not supported at the moment");
-	return OPERATOR_CANCELLED;
-#endif
 }
 
 void MESH_OT_separate(wmOperatorType *ot)

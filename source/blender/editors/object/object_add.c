@@ -1577,10 +1577,10 @@ static int convert_poll(bContext *C)
 }
 
 /* Helper for convert_exec */
-static Base *duplibase_for_convert(Main *bmain, Scene *scene, Base *base, Object *ob)
+static ObjectBase *duplibase_for_convert(Main *bmain, Scene *scene, SceneLayer *sl, ObjectBase *base, Object *ob)
 {
 	Object *obn;
-	Base *basen;
+	ObjectBase *basen;
 
 	if (ob == NULL) {
 		ob = base->object;
@@ -1588,25 +1588,20 @@ static Base *duplibase_for_convert(Main *bmain, Scene *scene, Base *base, Object
 
 	obn = BKE_object_copy(bmain, ob);
 	DAG_id_tag_update(&ob->id, OB_RECALC_OB | OB_RECALC_DATA | OB_RECALC_TIME);
+	BKE_collection_object_add_from(scene, ob, obn);
 
-	basen = MEM_mallocN(sizeof(Base), "duplibase");
-	*basen = *base;
-	BLI_addhead(&scene->base, basen);   /* addhead: otherwise eternal loop */
-	basen->object = obn;
-	basen->flag |= SELECT;
-	obn->flag |= SELECT;
-	base->flag &= ~SELECT;
-	ob->flag &= ~SELECT;
-
+	basen = BKE_scene_layer_base_find(sl, obn);
+	ED_object_base_select(basen, BA_SELECT);
+	ED_object_base_select(basen, BA_DESELECT);
 	return basen;
 }
 
 static int convert_exec(bContext *C, wmOperator *op)
 {
-#if 0
 	Main *bmain = CTX_data_main(C);
 	Scene *scene = CTX_data_scene(C);
-	Base *basen = NULL, *basact = NULL;
+	SceneLayer *sl = CTX_data_scene_layer(C);
+	ObjectBase *basen = NULL, *basact = NULL;
 	Object *ob, *ob1, *newob, *obact = CTX_data_active_object(C);
 	DerivedMesh *dm;
 	Curve *cu;
@@ -1644,7 +1639,7 @@ static int convert_exec(bContext *C, wmOperator *op)
 		}
 	}
 
-	CTX_DATA_BEGIN (C, Base *, base, selected_editable_bases)
+	CTX_DATA_BEGIN (C, ObjectBase *, base, selected_editable_bases)
 	{
 		ob = base->object;
 
@@ -1667,7 +1662,7 @@ static int convert_exec(bContext *C, wmOperator *op)
 			ob->flag |= OB_DONE;
 
 			if (keep_original) {
-				basen = duplibase_for_convert(bmain, scene, base, NULL);
+				basen = duplibase_for_convert(bmain, scene, sl, base, NULL);
 				newob = basen->object;
 
 				/* decrement original mesh's usage count  */
@@ -1692,7 +1687,7 @@ static int convert_exec(bContext *C, wmOperator *op)
 			ob->flag |= OB_DONE;
 
 			if (keep_original) {
-				basen = duplibase_for_convert(bmain, scene, base, NULL);
+				basen = duplibase_for_convert(bmain, scene, sl, base, NULL);
 				newob = basen->object;
 
 				/* decrement original mesh's usage count  */
@@ -1724,7 +1719,7 @@ static int convert_exec(bContext *C, wmOperator *op)
 			ob->flag |= OB_DONE;
 
 			if (keep_original) {
-				basen = duplibase_for_convert(bmain, scene, base, NULL);
+				basen = duplibase_for_convert(bmain, scene, sl, base, NULL);
 				newob = basen->object;
 
 				/* decrement original curve's usage count  */
@@ -1795,7 +1790,7 @@ static int convert_exec(bContext *C, wmOperator *op)
 
 			if (target == OB_MESH) {
 				if (keep_original) {
-					basen = duplibase_for_convert(bmain, scene, base, NULL);
+					basen = duplibase_for_convert(bmain, scene, sl, base, NULL);
 					newob = basen->object;
 
 					/* decrement original curve's usage count  */
@@ -1830,7 +1825,7 @@ static int convert_exec(bContext *C, wmOperator *op)
 			if (!(baseob->flag & OB_DONE)) {
 				baseob->flag |= OB_DONE;
 
-				basen = duplibase_for_convert(bmain, scene, base, baseob);
+				basen = duplibase_for_convert(bmain, scene, sl, base, baseob);
 				newob = basen->object;
 
 				mb = newob->data;
@@ -1881,23 +1876,21 @@ static int convert_exec(bContext *C, wmOperator *op)
 
 	if (!keep_original) {
 		if (mballConverted) {
-			Base *base, *base_next;
-
-			for (base = scene->base.first; base; base = base_next) {
-				base_next = base->next;
-
-				ob = base->object;
+			Object *ob_mball;
+			FOREACH_SCENE_OBJECT(scene, ob_mball)
+			{
 				if (ob->type == OB_MBALL) {
 					if (ob->flag & OB_DONE) {
 						Object *ob_basis = NULL;
-						if (BKE_mball_is_basis(ob) ||
-						    ((ob_basis = BKE_mball_basis_find(scene, ob)) && (ob_basis->flag & OB_DONE)))
+						if (BKE_mball_is_basis(ob_mball) ||
+						    ((ob_basis = BKE_mball_basis_find(scene, ob_mball)) && (ob_basis->flag & OB_DONE)))
 						{
-							ED_base_object_free_and_unlink(bmain, scene, base->object);
+							ED_base_object_free_and_unlink(bmain, scene, ob_mball);
 						}
 					}
 				}
 			}
+			FOREACH_SCENE_OBJECT_END
 		}
 
 		/* delete object should renew depsgraph */
@@ -1909,12 +1902,12 @@ static int convert_exec(bContext *C, wmOperator *op)
 
 	if (basact) {
 		/* active base was changed */
-		ED_base_object_activate(C, basact);
-		BASACT = basact;
+		ED_object_base_activate(C, basact);
+		BASACT_NEW = basact;
 	}
-	else if (BASACT->object->flag & OB_DONE) {
-		WM_event_add_notifier(C, NC_OBJECT | ND_MODIFIER, BASACT->object);
-		WM_event_add_notifier(C, NC_OBJECT | ND_DATA, BASACT->object);
+	else if (BASACT_NEW->object->flag & OB_DONE) {
+		WM_event_add_notifier(C, NC_OBJECT | ND_MODIFIER, BASACT_NEW->object);
+		WM_event_add_notifier(C, NC_OBJECT | ND_DATA, BASACT_NEW->object);
 	}
 
 	DAG_relations_tag_update(bmain);
@@ -1922,17 +1915,6 @@ static int convert_exec(bContext *C, wmOperator *op)
 	WM_event_add_notifier(C, NC_SCENE | ND_OB_SELECT, scene);
 
 	return OPERATOR_FINISHED;
-#else
-	(void)C;
-	(void)op;
-	(void)curvetomesh;
-	(void)duplibase_for_convert;
-
-	TODO_LAYER_COPY;
-
-	BKE_report(op->reports, RPT_ERROR, "OBJECT_OT_convert not supported at the moment");
-	return OPERATOR_CANCELLED;
-#endif
 }
 
 
