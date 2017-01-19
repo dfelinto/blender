@@ -47,6 +47,7 @@
 static void layer_collection_free(SceneLayer *sl, LayerCollection *lc);
 static LayerCollection *layer_collection_add(SceneLayer *sl, ListBase *lb, SceneCollection *sc);
 static LayerCollection *find_layer_collection_by_scene_collection(LayerCollection *lc, const SceneCollection *sc);
+static void object_bases_Iterator_next(Iterator *iter, const int flag);
 
 /* RenderLayer */
 
@@ -570,7 +571,7 @@ void BKE_collection_override_datablock_add(LayerCollection *UNUSED(lc), const ch
 /* ---------------------------------------------------------------------- */
 /* Iterators */
 
-void BKE_selected_objects_Iterator_begin(Iterator *iter, void *data_in)
+static void object_bases_Iterator_begin(Iterator *iter, void *data_in, const int flag)
 {
 	SceneLayer *sl = data_in;
 	ObjectBase *base = sl->object_bases.first;
@@ -584,29 +585,57 @@ void BKE_selected_objects_Iterator_begin(Iterator *iter, void *data_in)
 	iter->valid = true;
 	iter->data = base;
 
-	if ((base->flag & BASE_SELECTED) == 0) {
-		BKE_selected_objects_Iterator_next(iter);
+	if ((base->flag & flag) == 0) {
+		object_bases_Iterator_next(iter, flag);
 	}
 	else {
-		iter->current = base->object;
+		iter->current = base;
 	}
 }
 
-void BKE_selected_objects_Iterator_next(Iterator *iter)
+static void object_bases_Iterator_next(Iterator *iter, const int flag)
 {
 	ObjectBase *base = ((ObjectBase *)iter->data)->next;
 
 	while (base) {
-		if ((base->flag & BASE_SELECTED) != 0) {
-			iter->current = base->object;
+		if ((base->flag & flag) != 0) {
+			iter->current = base;
 			iter->data = base;
 			return;
 		}
 		base = base->next;
-	};
+	}
 
 	iter->current = NULL;
 	iter->valid = false;
+}
+
+static void objects_Iterator_begin(Iterator *iter, void *data_in, const int flag)
+{
+	object_bases_Iterator_begin(iter, data_in, flag);
+
+	if (iter->valid) {
+		iter->current = ((ObjectBase *)iter->current)->object;
+	}
+}
+
+static void objects_Iterator_next(Iterator *iter, const int flag)
+{
+	object_bases_Iterator_next(iter, flag);
+
+	if (iter->valid) {
+		iter->current = ((ObjectBase *)iter->current)->object;
+	}
+}
+
+void BKE_selected_objects_Iterator_begin(Iterator *iter, void *data_in)
+{
+	objects_Iterator_begin(iter, data_in, BASE_SELECTED);
+}
+
+void BKE_selected_objects_Iterator_next(Iterator *iter)
+{
+	object_bases_Iterator_next(iter, BASE_SELECTED);
 }
 
 void BKE_selected_objects_Iterator_end(Iterator *UNUSED(iter))
@@ -616,44 +645,30 @@ void BKE_selected_objects_Iterator_end(Iterator *UNUSED(iter))
 
 void BKE_visible_objects_Iterator_begin(Iterator *iter, void *data_in)
 {
-	SceneLayer *sl = data_in;
-	ObjectBase *base = sl->object_bases.first;
-
-	/* when there are no objects */
-	if (base ==  NULL) {
-		iter->valid = false;
-		return;
-	}
-
-	iter->valid = true;
-	iter->data = base;
-
-	if ((base->flag & BASE_VISIBLED) == 0) {
-		BKE_selected_objects_Iterator_next(iter);
-	}
-	else {
-		iter->current = base->object;
-	}
+	objects_Iterator_begin(iter, data_in, BASE_VISIBLED);
 }
 
 void BKE_visible_objects_Iterator_next(Iterator *iter)
 {
-	ObjectBase *base = ((ObjectBase *)iter->data)->next;
-
-	while (base) {
-		if ((base->flag & BASE_VISIBLED) != 0) {
-			iter->current = base->object;
-			iter->data = base;
-			return;
-		}
-		base = base->next;
-	};
-
-	iter->current = NULL;
-	iter->valid = false;
+	objects_Iterator_next(iter, BASE_VISIBLED);
 }
 
 void BKE_visible_objects_Iterator_end(Iterator *UNUSED(iter))
+{
+	/* do nothing */
+}
+
+void BKE_visible_bases_Iterator_begin(Iterator *iter, void *data_in)
+{
+	object_bases_Iterator_begin(iter, data_in, BASE_VISIBLED);
+}
+
+void BKE_visible_bases_Iterator_next(Iterator *iter)
+{
+	object_bases_Iterator_next(iter, BASE_VISIBLED);
+}
+
+void BKE_visible_bases_Iterator_end(Iterator *UNUSED(iter))
 {
 	/* do nothing */
 }
