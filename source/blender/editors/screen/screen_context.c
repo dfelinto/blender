@@ -97,11 +97,12 @@ int ed_screen_context(const bContext *C, const char *member, bContextDataResult 
 		return 1;
 	}
 	else if (CTX_data_equals(member, "visible_objects")) {
-		for (ObjectBase *base = sl->object_bases.first; base; base = base->next) {
-			if ((base->flag & BASE_VISIBLED) != 0) {
-				CTX_data_id_list_add(result, &base->object->id);
-			}
+		Object *ob;
+		FOREACH_VISIBLE_OBJECT(sl, ob)
+		{
+			CTX_data_id_list_add(result, &ob->id);
 		}
+		FOREACH_VISIBLE_BASE_END
 		CTX_data_type_set(result, CTX_DATA_TYPE_COLLECTION);
 		return 1;
 	}
@@ -138,22 +139,24 @@ int ed_screen_context(const bContext *C, const char *member, bContextDataResult 
 	}
 	else if (CTX_data_equals(member, "editable_objects")) {
 		/* Visible + Editable, but not necessarily selected */
-		for (ObjectBase *base = sl->object_bases.first; base; base = base->next) {
-			if ((base->flag & BASE_VISIBLED) != 0) {
-				if (0 == BKE_object_is_libdata(base->object)) {
-					CTX_data_id_list_add(result, &base->object->id);
-				}
+		Object *ob;
+		FOREACH_VISIBLE_OBJECT(sl, ob)
+		{
+			if (0 == BKE_object_is_libdata(ob)) {
+				CTX_data_id_list_add(result, &ob->id);
 			}
 		}
+		FOREACH_VISIBLE_OBJECT_END
 		CTX_data_type_set(result, CTX_DATA_TYPE_COLLECTION);
 		return 1;
 	}
 	else if ( CTX_data_equals(member, "visible_bases")) {
-		for (ObjectBase *base = sl->object_bases.first; base; base = base->next) {
-			if ((base->flag & BASE_VISIBLED) != 0) {
-				CTX_data_list_add(result, &scene->id, &RNA_ObjectBase, base);
-			}
+		ObjectBase *base;
+		FOREACH_VISIBLE_BASE(sl, base)
+		{
+			CTX_data_list_add(result, &scene->id, &RNA_ObjectBase, base);
 		}
+		FOREACH_VISIBLE_BASE_END
 		CTX_data_type_set(result, CTX_DATA_TYPE_COLLECTION);
 		return 1;
 	}
