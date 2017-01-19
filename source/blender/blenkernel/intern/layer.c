@@ -44,9 +44,9 @@
 #include "MEM_guardedalloc.h"
 
 /* prototype */
-void layer_collection_free(SceneLayer *sl, LayerCollection *lc);
-LayerCollection *layer_collection_add(SceneLayer *sl, ListBase *lb, SceneCollection *sc);
-LayerCollection *find_layer_collection_by_scene_collection(LayerCollection *lc, const SceneCollection *sc);
+static void layer_collection_free(SceneLayer *sl, LayerCollection *lc);
+static LayerCollection *layer_collection_add(SceneLayer *sl, ListBase *lb, SceneCollection *sc);
+static LayerCollection *find_layer_collection_by_scene_collection(LayerCollection *lc, const SceneCollection *sc);
 
 /* RenderLayer */
 
@@ -272,7 +272,7 @@ static ObjectBase *object_base_add(SceneLayer *sl, Object *ob)
  * When freeing the entire SceneLayer at once we don't bother with unref
  * otherwise SceneLayer is passed to keep the syncing of the LayerCollection tree
  */
-void layer_collection_free(SceneLayer *sl, LayerCollection *lc)
+static void layer_collection_free(SceneLayer *sl, LayerCollection *lc)
 {
 	if (sl) {
 		for (LinkData *link = lc->object_bases.first; link; link = link->next) {
@@ -448,7 +448,7 @@ static void layer_collection_populate(SceneLayer *sl, LayerCollection *lc, Scene
 	}
 }
 
-LayerCollection *layer_collection_add(SceneLayer *sl, ListBase *lb, SceneCollection *sc)
+static LayerCollection *layer_collection_add(SceneLayer *sl, ListBase *lb, SceneCollection *sc)
 {
 	LayerCollection *lc = MEM_callocN(sizeof(LayerCollection), "Collection Base");
 	BLI_addtail(lb, lc);
@@ -494,7 +494,7 @@ bool BKE_scene_has_object(Scene *scene, Object *ob)
 /* ---------------------------------------------------------------------- */
 /* Syncing */
 
-LayerCollection *find_layer_collection_by_scene_collection(LayerCollection *lc, const SceneCollection *sc)
+static LayerCollection *find_layer_collection_by_scene_collection(LayerCollection *lc, const SceneCollection *sc)
 {
 	if (lc->scene_collection == sc) {
 		return lc;
