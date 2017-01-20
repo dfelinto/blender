@@ -58,7 +58,7 @@ struct Batch;
 typedef struct DRWUniform DRWUniform;
 typedef struct DRWInterface DRWInterface;
 typedef struct DRWPass DRWPass;
-typedef struct DRWBatch DRWBatch;
+typedef struct DRWShadingGroup DRWShadingGroup;
 
 /* Textures */
 
@@ -146,23 +146,23 @@ typedef enum {
 	/* TODO GL_BLEND */
 } DRWState;
 
-DRWBatch *DRW_batch_create(struct GPUShader *shader, DRWPass *pass, void *storage);
-void DRW_batch_free(struct DRWBatch *batch);
-void DRW_batch_call_add(DRWBatch *batch, struct Batch *geom, const float **obmat);
-void DRW_batch_state_set(DRWBatch *batch, DRWState state);
+DRWShadingGroup *DRW_shgroup_create(struct GPUShader *shader, DRWPass *pass);
+void DRW_shgroup_free(struct DRWShadingGroup *batch);
+void DRW_shgroup_call_add(DRWShadingGroup *batch, struct Batch *geom, const float **obmat);
+void DRW_shgroup_state_set(DRWShadingGroup *batch, DRWState state);
 
-void DRW_batch_uniform_texture(DRWBatch *batch, const char *name, const struct GPUTexture *tex, int loc);
-void DRW_batch_uniform_buffer(DRWBatch *batch, const char *name, const int value, int loc);
-void DRW_batch_uniform_bool(DRWBatch *batch, const char *name, const bool *value, int arraysize);
-void DRW_batch_uniform_float(DRWBatch *batch, const char *name, const float *value, int arraysize);
-void DRW_batch_uniform_vec2(DRWBatch *batch, const char *name, const float *value, int arraysize);
-void DRW_batch_uniform_vec3(DRWBatch *batch, const char *name, const float *value, int arraysize);
-void DRW_batch_uniform_vec4(DRWBatch *batch, const char *name, const float *value, int arraysize);
-void DRW_batch_uniform_int(DRWBatch *batch, const char *name, const int *value, int arraysize);
-void DRW_batch_uniform_ivec2(DRWBatch *batch, const char *name, const int *value, int arraysize);
-void DRW_batch_uniform_ivec3(DRWBatch *batch, const char *name, const int *value, int arraysize);
-void DRW_batch_uniform_mat3(DRWBatch *batch, const char *name, const float *value);
-void DRW_batch_uniform_mat4(DRWBatch *batch, const char *name, const float *value);
+void DRW_shgroup_uniform_texture(DRWShadingGroup *batch, const char *name, const struct GPUTexture *tex, int loc);
+void DRW_shgroup_uniform_buffer(DRWShadingGroup *batch, const char *name, const int value, int loc);
+void DRW_shgroup_uniform_bool(DRWShadingGroup *batch, const char *name, const bool *value, int arraysize);
+void DRW_shgroup_uniform_float(DRWShadingGroup *batch, const char *name, const float *value, int arraysize);
+void DRW_shgroup_uniform_vec2(DRWShadingGroup *batch, const char *name, const float *value, int arraysize);
+void DRW_shgroup_uniform_vec3(DRWShadingGroup *batch, const char *name, const float *value, int arraysize);
+void DRW_shgroup_uniform_vec4(DRWShadingGroup *batch, const char *name, const float *value, int arraysize);
+void DRW_shgroup_uniform_int(DRWShadingGroup *batch, const char *name, const int *value, int arraysize);
+void DRW_shgroup_uniform_ivec2(DRWShadingGroup *batch, const char *name, const int *value, int arraysize);
+void DRW_shgroup_uniform_ivec3(DRWShadingGroup *batch, const char *name, const int *value, int arraysize);
+void DRW_shgroup_uniform_mat3(DRWShadingGroup *batch, const char *name, const float *value);
+void DRW_shgroup_uniform_mat4(DRWShadingGroup *batch, const char *name, const float *value);
 
 /* Geometry Cache */
 struct Batch *DRW_cache_wire_get(Object *ob);
@@ -183,6 +183,7 @@ void DRW_viewport_init(const bContext *C, void **buffers, void **textures, void 
 void DRW_viewport_matrix_get(float mat[4][4], DRWViewportMatrixType type);
 int *DRW_viewport_size_get(void);
 bool DRW_viewport_is_persp_get(void);
+bool DRW_viewport_cache_is_dirty(void);
 
 /* Settings */
 void *DRW_material_settings(Material *ma);

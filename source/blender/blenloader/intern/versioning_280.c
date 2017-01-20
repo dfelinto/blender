@@ -30,6 +30,7 @@
 
 #include "DNA_object_types.h"
 #include "DNA_layer_types.h"
+#include "DNA_material_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_genfile.h"
 
@@ -165,14 +166,14 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *main)
 			for (Scene *scene = main->scene.first; scene; scene = scene->id.next) {
 				EngineDataClay *settings = &scene->claydata;
 
-				settings->matcap_rot = 0.0f;
-				settings->matcap_hue = 0.5f;
-				settings->matcap_sat = 0.5f;
-				settings->matcap_val = 0.5f;
-				settings->ssao_distance = 0.2;
-				settings->ssao_attenuation = 1.0f;
-				settings->ssao_factor_cavity = 1.0f;
-				settings->ssao_factor_edge = 1.0f;
+				settings->defsettings.matcap_rot = 0.0f;
+				settings->defsettings.matcap_hue = 0.5f;
+				settings->defsettings.matcap_sat = 0.5f;
+				settings->defsettings.matcap_val = 0.5f;
+				settings->defsettings.ssao_distance = 0.2;
+				settings->defsettings.ssao_attenuation = 1.0f;
+				settings->defsettings.ssao_factor_cavity = 1.0f;
+				settings->defsettings.ssao_factor_edge = 1.0f;
 				settings->ssao_samples = 32;
 			}
 		}

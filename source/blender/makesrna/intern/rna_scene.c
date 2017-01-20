@@ -712,6 +712,11 @@ static void rna_Scene_layer_update(Main *bmain, Scene *scene, PointerRNA *ptr)
 	DAG_on_visible_update(bmain, false);
 }
 
+static void rna_CLAY_renderdata_update(Main *bmain, Scene *scene, PointerRNA *ptr)
+{
+
+}
+
 static void rna_Scene_fps_update(Main *UNUSED(bmain), Scene *scene, PointerRNA *UNUSED(ptr))
 {
 	BKE_sound_update_fps(scene);
@@ -6320,7 +6325,7 @@ static void rna_def_scene_quicktime_settings(BlenderRNA *brna)
 }
 #endif
 
-static void rna_def_clay_data(BlenderRNA *brna)
+static void rna_def_material_settings_clay(BlenderRNA *brna)
 {
 	StructRNA *srna;
 	PropertyRNA *prop;
@@ -6353,15 +6358,26 @@ static void rna_def_clay_data(BlenderRNA *brna)
 		{0, NULL, 0, NULL, NULL}
 	};
 
-	srna = RNA_def_struct(brna, "ClayRenderSettings", NULL);
-	RNA_def_struct_sdna(srna, "EngineDataClay");
-	RNA_def_struct_nested(brna, srna, "Scene");
-	RNA_def_struct_ui_text(srna, "Render Clay Settings", "Clay Engine settings for a Scene data-block");
+	static EnumPropertyItem clay_matcap_type[] = {
+		{CLAY_MATCAP_NONE, "NONE", 0, "Scene", "Use default scene matcap"},
+		{CLAY_MATCAP_SIMPLE, "SIMPLE", 0, "Simple", "Let you choose the texture to use with the default settings"},
+		{CLAY_MATCAP_COMPLETE, "COMPLETE", 0, "Complete", "Expose all settings"},
+		{0, NULL, 0, NULL, NULL}
+	};
+
+	srna = RNA_def_struct(brna, "ClayRenderMaterialSettings", NULL);
+	RNA_def_struct_sdna(srna, "MaterialSettingsClay");
+	RNA_def_struct_nested(brna, srna, "ClayRenderSettings");
+	RNA_def_struct_ui_text(srna, "Material Clay Settings", "Clay Engine settings for a Material data-block");
+
+	prop = RNA_def_property(srna, "type", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_items(prop, clay_matcap_type);
+	RNA_def_property_ui_text(prop, "Settings Type", "What settings to use for this material");
+	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
 
 	prop = RNA_def_property(srna, "matcap_icon", PROP_ENUM, PROP_NONE);
-	RNA_def_property_enum_sdna(prop, NULL, "matcap_icon");
 	RNA_def_property_enum_items(prop, clay_matcap_items);
-	RNA_def_property_ui_text(prop, "Matcap", "Image to use for Material Capture, this affect default material");
+	RNA_def_property_ui_text(prop, "Matcap", "Image to use for Material Capture by this material");
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
 
 	prop = RNA_def_property(srna, "matcap_rotation", PROP_FLOAT, PROP_FACTOR);
@@ -6371,9 +6387,8 @@ static void rna_def_clay_data(BlenderRNA *brna)
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
 
 	prop = RNA_def_property(srna, "matcap_hue", PROP_FLOAT, PROP_FACTOR);
-	RNA_def_property_float_sdna(prop, NULL, "matcap_hue");
 	RNA_def_property_range(prop, 0.0f, 1.0f);
-	RNA_def_property_ui_text(prop, "Matcap Hue shift", "Hue correction to the matcap");
+	RNA_def_property_ui_text(prop, "Matcap Hue shift", "Hue correction of the matcap");
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
 
 	prop = RNA_def_property(srna, "matcap_saturation", PROP_FLOAT, PROP_FACTOR);
@@ -6409,11 +6424,31 @@ static void rna_def_clay_data(BlenderRNA *brna)
 	RNA_def_property_range(prop, 1.0f, 100000.0f);
 	RNA_def_property_ui_range(prop, 1.0f, 100.0f, 1, 3);
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
+}
+
+static void rna_def_clay_data(BlenderRNA *brna)
+{
+	StructRNA *srna;
+	PropertyRNA *prop;
+
+	srna = RNA_def_struct(brna, "ClayRenderSettings", NULL);
+	RNA_def_struct_sdna(srna, "EngineDataClay");
+	RNA_def_struct_nested(brna, srna, "Scene");
+	RNA_def_struct_ui_text(srna, "Render Clay Settings", "Clay Engine settings for a Scene data-block");
+
+	/* Clay settings */
+	prop = RNA_def_property(srna, "mat_settings", PROP_POINTER, PROP_NONE);
+	RNA_def_property_flag(prop, PROP_NEVER_NULL);
+	RNA_def_property_pointer_sdna(prop, NULL, "defsettings");
+	RNA_def_property_struct_type(prop, "ClayMaterialSettings");
+	RNA_def_property_ui_text(prop, "Clay Settings", "Clay default material settings");
 
 	prop = RNA_def_property(srna, "ssao_samples", PROP_INT, PROP_NONE);
 	RNA_def_property_ui_text(prop, "Samples", "Number of samples");
 	RNA_def_property_range(prop, 1, 500);
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
+
+	rna_def_material_settings_clay(brna);
 }
 
 static void rna_def_scene_render_data(BlenderRNA *brna)

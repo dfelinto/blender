@@ -6197,6 +6197,8 @@ static void direct_link_scene(FileData *fd, Scene *sce)
 		sl->basact = newdataadr(fd, sl->basact);
 		direct_link_layer_collections(fd, &sl->layer_collections);
 	}
+
+	sce->claydata.defsettings.runtime = NULL;
 }
 
 /* ************ READ WM ***************** */

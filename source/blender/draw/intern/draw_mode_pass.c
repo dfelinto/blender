@@ -31,23 +31,8 @@
 
 #include "draw_mode_pass.h"
 
-/* ************************** OBJECT MODE ********************************/
+/* ************************** OBJECT MODE ******************************* */
 
-typedef struct WireBatchStorage {
-	bool drawFront;
-	bool drawBack;
-	bool drawSilhouette;
-	float frontColor[4];
-	float backColor[4];
-	float silhouetteColor[4];
-} WireBatchStorage;
-
-typedef struct ObjCenterBatchStorage {
-	float size;
-	float color[4];
-	float outlineWidth;
-	float outlineColor[4];
-} ObjCenterBatchStorage;
 
 void DRW_mode_object_setup(DRWPass **wire_pass, DRWPass **center_pass)
 {
@@ -58,47 +43,49 @@ void DRW_mode_object_setup(DRWPass **wire_pass, DRWPass **center_pass)
 
 	{
 		/* Object Center */
-		const float outlineWidth = 1.0f * U.pixelsize;
-		const float size = U.obcenter_dia * U.pixelsize + outlineWidth;
-		DRWBatch *batch;
-		ObjCenterBatchStorage *storage;
-		GPUShader *sh = GPU_shader_get_builtin_shader(GPU_SHADER_3D_POINT_UNIFORM_SIZE_UNIFORM_COLOR_OUTLINE_SMOOTH);
+		DRWShadingGroup *grp;
 
+		/* Static variables so they stay in memory */
+		static float colorActive[4], colorSelect[4], colorDeselect[4];
+		static float outlineColor[4];
+		static float outlineWidth;
+		static float size;
+
+		outlineWidth = 1.0f * U.pixelsize;
+		size = U.obcenter_dia * U.pixelsize + outlineWidth;
+		UI_GetThemeColorShadeAlpha4fv(TH_ACTIVE, 0, -80, colorActive);
+		UI_GetThemeColorShadeAlpha4fv(TH_SELECT, 0, -80, colorSelect);
+		UI_GetThemeColorShadeAlpha4fv(TH_TRANSFORM, 0, -80, colorDeselect);
+		UI_GetThemeColorShadeAlpha4fv(TH_WIRE, 0, -30, outlineColor);
+
+		GPUShader *sh = GPU_shader_get_builtin_shader(GPU_SHADER_3D_POINT_UNIFORM_SIZE_UNIFORM_COLOR_OUTLINE_SMOOTH);
 		*center_pass = DRW_pass_create("Obj Center Pass", DRW_STATE_WRITE_COLOR | DRW_STATE_POINT);
 
 		/* Active */
-		storage = MEM_callocN(sizeof(ObjCenterBatchStorage), "ObjCenterBatchStorage");
-		storage->size = size;
-		storage->outlineWidth = outlineWidth;
-		UI_GetThemeColorShadeAlpha4fv(TH_ACTIVE, 0, -80, storage->color);
-		UI_GetThemeColorShadeAlpha4fv(TH_WIRE, 0, -30, storage->outlineColor);
+		grp = DRW_shgroup_create(sh, *center_pass);
+		DRW_shgroup_uniform_float(grp, "size", &size, 1);
+		DRW_shgroup_uniform_float(grp, "outlineWidth", &outlineWidth, 1);
+		DRW_shgroup_uniform_vec4(grp, "color", colorActive, 1);
+		DRW_shgroup_uniform_vec4(grp, "outlineColor", outlineColor, 1);
 
-		batch = DRW_batch_create(sh, *center_pass, storage);
-		DRW_batch_uniform_float(batch, "size", &storage->size, 1);
-		DRW_batch_uniform_float(batch, "outlineWidth", &storage->outlineWidth, 1);
-		DRW_batch_uniform_vec4(batch, "color", storage->outlineColor, 1);
-		DRW_batch_uniform_vec4(batch, "outlineColor", storage->outlineColor, 1);
+		/* Select */
+		grp = DRW_shgroup_create(sh, *center_pass);
+		DRW_shgroup_uniform_vec4(grp, "color", colorSelect, 1);
 
-		/* Select (size depends on previous batch) */
-		storage = MEM_callocN(sizeof(ObjCenterBatchStorage), "ObjCenterBatchStorage");
-		UI_GetThemeColorShadeAlpha4fv(TH_SELECT, 0, -80, storage->color);
-
-		batch = DRW_batch_create(sh, *center_pass, storage);
-		DRW_batch_uniform_vec4(batch, "color", storage->outlineColor, 1);
-
-		/* Deselect (size depends on previous batch) */
-		storage = MEM_callocN(sizeof(ObjCenterBatchStorage), "ObjCenterBatchStorage");
-		UI_GetThemeColorShadeAlpha4fv(TH_TRANSFORM, 0, -80, storage->color);
-
-		batch = DRW_batch_create(sh, *center_pass, storage);
-		DRW_batch_uniform_vec4(batch, "color", storage->outlineColor, 1);
+		/* Deselect */
+		grp = DRW_shgroup_create(sh, *center_pass);
+		DRW_shgroup_uniform_vec4(grp, "color", colorDeselect, 1);
 	}
 }
 
-void DRW_batch_wire(struct DRWPass *pass, float frontcol[4], float backcol[4], struct Batch *geom, const float **obmat)
+/* ******************************************** WIRES *********************************************** */
+
+void DRW_shgroup_wire(struct DRWPass *pass, float frontcol[4], float backcol[4], struct Batch *geom, const float **obmat)
 {
 	bool is_perps = DRW_viewport_is_persp_get();
 	GPUShader *sh;
+	static bool bTrue = true;
+	static bool bFalse = false;
 
 	if (is_perps) {
 		sh = GPU_shader_get_builtin_shader(GPU_SHADER_EDGES_FRONT_BACK_PERSP);
@@ -107,29 +94,23 @@ void DRW_batch_wire(struct DRWPass *pass, float frontcol[4], float backcol[4], s
 		sh = GPU_shader_get_builtin_shader(GPU_SHADER_EDGES_FRONT_BACK_ORTHO);
 	}
 
-	WireBatchStorage *storage = MEM_callocN(sizeof(WireBatchStorage), "WireBatchStorage");
-	storage->drawBack = true;
-	storage->drawFront = true;
-	storage->drawSilhouette = false;
+	DRWShadingGroup *batch = DRW_shgroup_create(sh, pass);
+	DRW_shgroup_state_set(batch, DRW_STATE_WIRE);
+	DRW_shgroup_uniform_vec4(batch, "frontColor", frontcol, 1);
+	DRW_shgroup_uniform_vec4(batch, "backColor", backcol, 1);
+	DRW_shgroup_uniform_bool(batch, "drawFront", &bTrue, 1);
+	DRW_shgroup_uniform_bool(batch, "drawBack", &bTrue, 1);
+	DRW_shgroup_uniform_bool(batch, "drawSilhouette", &bFalse, 1);
 
-	copy_v3_v3(storage->backColor, backcol);
-	copy_v3_v3(storage->frontColor, frontcol);
-
-	DRWBatch *batch = DRW_batch_create(sh, pass, storage);
-	DRW_batch_state_set(batch, DRW_STATE_WIRE);
-	DRW_batch_uniform_vec4(batch, "frontColor", storage->frontColor, 1);
-	DRW_batch_uniform_vec4(batch, "backColor", storage->backColor, 1);
-	DRW_batch_uniform_bool(batch, "drawFront", &storage->drawFront, 1);
-	DRW_batch_uniform_bool(batch, "drawBack", &storage->drawBack, 1);
-	DRW_batch_uniform_bool(batch, "drawSilhouette", &storage->drawSilhouette, 1);
-
-	DRW_batch_call_add(batch, geom, obmat);
+	DRW_shgroup_call_add(batch, geom, obmat);
 }
 
-void DRW_batch_outline(struct DRWPass *pass, float color[4], struct Batch *geom, const float **obmat)
+void DRW_shgroup_outline(struct DRWPass *pass, float color[4], struct Batch *geom, const float **obmat)
 {
 	bool is_perps = DRW_viewport_is_persp_get();
 	GPUShader *sh;
+	static bool bTrue = true;
+	static bool bFalse = false;
 
 	if (is_perps) {
 		sh = GPU_shader_get_builtin_shader(GPU_SHADER_EDGES_FRONT_BACK_PERSP);
@@ -138,21 +119,17 @@ void DRW_batch_outline(struct DRWPass *pass, float color[4], struct Batch *geom,
 		sh = GPU_shader_get_builtin_shader(GPU_SHADER_EDGES_FRONT_BACK_ORTHO);
 	}
 
-	WireBatchStorage *storage = MEM_callocN(sizeof(WireBatchStorage), "WireBatchStorage");
+	DRWShadingGroup *grp = DRW_shgroup_create(sh, pass);
+	DRW_shgroup_state_set(grp, DRW_STATE_WIRE_LARGE);
+	DRW_shgroup_uniform_vec4(grp, "silhouetteColor", color, 1);
+	DRW_shgroup_uniform_bool(grp, "drawFront", &bFalse, 1);
+	DRW_shgroup_uniform_bool(grp, "drawBack", &bFalse, 1);
+	DRW_shgroup_uniform_bool(grp, "drawSilhouette", &bTrue, 1);
 
-	storage->drawBack = storage->drawFront = false;
-	storage->drawSilhouette = true;
-	copy_v3_v3(storage->silhouetteColor, color);
-
-	DRWBatch *batch = DRW_batch_create(sh, pass, storage);
-	DRW_batch_state_set(batch, DRW_STATE_WIRE_LARGE);
-	DRW_batch_uniform_vec4(batch, "silhouetteColor", storage->silhouetteColor, 1);
-	DRW_batch_uniform_bool(batch, "drawFront", &storage->drawFront, 1);
-	DRW_batch_uniform_bool(batch, "drawBack", &storage->drawBack, 1);
-	DRW_batch_uniform_bool(batch, "drawSilhouette", &storage->drawSilhouette, 1);
-
-	DRW_batch_call_add(batch, geom, obmat);
+	DRW_shgroup_call_add(grp, geom, obmat);
 }
+
+/* ******************************************** OBJECT MODE *********************************** */
 
 void DRW_mode_object_add(struct DRWPass *wire_pass, struct DRWPass *UNUSED(center_pass), Object *ob)
 {
@@ -160,7 +137,7 @@ void DRW_mode_object_add(struct DRWPass *wire_pass, struct DRWPass *UNUSED(cente
 	bool draw_outline = true;
 
 	/* Get color */
-	float bg[3], low[4], med[4], base[4];
+	static float bg[3], low[4], med[4], base[4];
 	UI_GetThemeColor3fv(TH_BACK, bg);
 	//UI_GetThemeColor4fv(TH_WIRE, base);
 	UI_GetThemeColor4fv(TH_ACTIVE, base);
@@ -172,18 +149,18 @@ void DRW_mode_object_add(struct DRWPass *wire_pass, struct DRWPass *UNUSED(cente
 
 	if (draw_wire) {
 		struct Batch *geom = DRW_cache_wire_get(ob);
-		DRW_batch_wire(wire_pass, med, low, geom, (float **)&ob->obmat);
+		DRW_shgroup_wire(wire_pass, med, low, geom, (float **)&ob->obmat);
 	}
 
 	if (draw_outline) {
 		struct Batch *geom = DRW_cache_wire_get(ob);
-		DRW_batch_outline(wire_pass, base, geom, (float **)&ob->obmat);
+		DRW_shgroup_outline(wire_pass, base, geom, (float **)&ob->obmat);
 	}
 
 	/* We need a way to populate a Batch with theses */
 	// if (true) {
-	// 	DRW_batch_point_add(center_active, ob->obmat[3]);
-	// 	DRW_batch_point_add(center_select, ob->obmat[3]);
-	// 	DRW_batch_point_add(center_deselect, ob->obmat[3]);
+	// 	DRW_shgroup_point_add(center_active, ob->obmat[3]);
+	// 	DRW_shgroup_point_add(center_select, ob->obmat[3]);
+	// 	DRW_shgroup_point_add(center_deselect, ob->obmat[3]);
 	// }
 }

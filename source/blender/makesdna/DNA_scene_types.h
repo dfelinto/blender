@@ -48,6 +48,7 @@ extern "C" {
 #include "DNA_freestyle_types.h"
 #include "DNA_gpu_types.h"
 #include "DNA_layer_types.h"
+#include "DNA_material_types.h"
 #include "DNA_userdef_types.h"
 
 struct CurveMapping;
@@ -67,6 +68,7 @@ struct bGPDbrush;
 struct MovieClip;
 struct ColorSpace;
 struct SceneCollection;
+struct MaterialSettingsClay;
 
 /* ************************************************************* */
 /* Scene Data */
@@ -797,23 +799,17 @@ typedef struct RenderProfile {
 /* Render Data */
 typedef struct EngineDataClay {
 	/* Default Matcap settings */
+	struct MaterialSettingsClay defsettings;
 	short options;
-	short matcap_icon; /* Icon ID */
-	float matcap_rot;
-	float matcap_hue;
-	float matcap_sat;
-	float matcap_val;
-	float ssao_distance;
-	float ssao_attenuation;
-	float ssao_factor_cavity;
-	float ssao_factor_edge;
+	short pad;
 	/* Global Settings */
 	int ssao_samples;
-	int pad;
+	int pad2[2];
 } EngineDataClay;
 
 /* EngineDataClay.options */
 #define CLAY_USE_AO				1
+#define CLAY_USE_HSV			2
 
 /* *************************************************************** */
 /* Game Engine - Dome */
@@ -1696,7 +1692,7 @@ typedef struct Scene {
 
 	/* Engine Settings */
 	struct EngineDataClay claydata;
-	short pad10[2];
+	short pad10[4];
 } Scene;
 
 /* **************** RENDERDATA ********************* */

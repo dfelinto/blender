@@ -43,13 +43,6 @@ extern char datatoc_ssao_groundtruth_glsl[];
 
 /* Storage */
 
-typedef struct CLAY_BatchStorage {
-	float matcap_rot[2];
-	int matcap_id;
-	float matcap_hsv[3];
-	float ssao_params_var[4];
-} CLAY_BatchStorage;
-
 static struct CLAY_data {
 	/* Depth Pre Pass */
 	struct GPUShader *depth_sh;
@@ -61,7 +54,6 @@ static struct CLAY_data {
 	float matcap_colors[24][3];
 
 	/* Ssao */
-	float dfdyfac[2];
 	float winmat[4][4];
 	float viewvecs[3][4];
 	float ssao_params[4];
@@ -111,7 +103,7 @@ typedef struct CLAY_PassList{
 	struct DRWPass *mode_ob_center_pass;
 } CLAY_PassList;
 
-// #define GTAO
+//#define GTAO
 
 /* Functions */
 
@@ -225,7 +217,7 @@ static struct GPUTexture *create_jitter_texture(void)
 	return DRW_texture_create_2D(64, 64, DRW_TEX_RG_16, DRW_TEX_FILTER | DRW_TEX_WRAP, &jitter[0][0]);
 }
 
-static void clay_engine_init(void)
+static void CLAY_engine_init(void)
 {
 	/* Create Texture Array */
 	if (!data.matcap_array) {
@@ -320,12 +312,12 @@ static void clay_engine_init(void)
 	}
 }
 
-static DRWBatch *clay_batch_create(DRWPass *pass, CLAY_BatchStorage *storage)
+static DRWShadingGroup *CLAY_shgroup_create(DRWPass *pass, int *matcap_id, float *matcap_rot, float *matcap_hsv, float *ssao_params_var)
 {
 	const int depthloc = 0, matcaploc = 1, jitterloc = 2, sampleloc = 3;
-	const bool use_rot = (storage->matcap_rot[1] != 0.0f);
-	const bool use_ao = (storage->ssao_params_var[1] != 0.0f || storage->ssao_params_var[2] != 0.0f);
-	const bool use_hsv = (storage->matcap_hsv[0] != 0.5f || storage->matcap_hsv[1] != 0.0f || storage->matcap_hsv[2] != 0.0f);
+	const bool use_rot = (matcap_rot[1] != 0.0f);
+	const bool use_ao = (ssao_params_var[1] != 0.0f || ssao_params_var[2] != 0.0f);
+	const bool use_hsv = (matcap_hsv[0] != 0.5f || matcap_hsv[1] != 0.5f || matcap_hsv[2] != 0.5f);
 	struct GPUShader *sh;
 
 	if (use_rot && use_ao && use_hsv) {
@@ -353,77 +345,94 @@ static DRWBatch *clay_batch_create(DRWPass *pass, CLAY_BatchStorage *storage)
 		sh = data.clay_sh[WITH_NONE];
 	}
 
-	DRWBatch *batch = DRW_batch_create(sh, pass, storage);
+	DRWShadingGroup *grp = DRW_shgroup_create(sh, pass);
 
-	DRW_batch_uniform_ivec2(batch, "screenres", DRW_viewport_size_get(), 1);
-	DRW_batch_uniform_buffer(batch, "depthtex", SCENE_DEPTH, depthloc);
-	DRW_batch_uniform_texture(batch, "matcaps", data.matcap_array, matcaploc);
-	DRW_batch_uniform_int(batch, "matcap_index", &storage->matcap_id, 1);
-	DRW_batch_uniform_mat4(batch, "WinMatrix", (float *)data.winmat);
-	DRW_batch_uniform_vec4(batch, "viewvecs", (float *)data.viewvecs, 3);
-	DRW_batch_uniform_vec4(batch, "ssao_params", data.ssao_params, 1);
+	DRW_shgroup_uniform_ivec2(grp, "screenres", DRW_viewport_size_get(), 1);
+	DRW_shgroup_uniform_buffer(grp, "depthtex", SCENE_DEPTH, depthloc);
+	DRW_shgroup_uniform_texture(grp, "matcaps", data.matcap_array, matcaploc);
+	DRW_shgroup_uniform_int(grp, "matcap_index", matcap_id, 1);
+	DRW_shgroup_uniform_mat4(grp, "WinMatrix", (float *)data.winmat);
+	DRW_shgroup_uniform_vec4(grp, "viewvecs", (float *)data.viewvecs, 3);
+	DRW_shgroup_uniform_vec4(grp, "ssao_params", data.ssao_params, 1);
 
 	if (use_rot) {
-		DRW_batch_uniform_vec2(batch, "matcap_rotation", (float *)storage->matcap_rot, 1);
+		DRW_shgroup_uniform_vec2(grp, "matcap_rotation", matcap_rot, 1);
 	}
 
 	if (use_hsv) {
-		DRW_batch_uniform_vec3(batch, "matcap_hsv", (float *)storage->matcap_hsv, 1);
+		DRW_shgroup_uniform_vec3(grp, "matcap_hsv", matcap_hsv, 1);
 	}
 
 	if (use_ao) {
-		DRW_batch_uniform_vec3(batch, "matcaps_color", (float *)data.matcap_colors, 24);
-		DRW_batch_uniform_vec4(batch, "ssao_params_var", storage->ssao_params_var, 1);
-		DRW_batch_uniform_texture(batch, "ssao_jitter", data.jitter_tx, jitterloc);
-		DRW_batch_uniform_texture(batch, "ssao_samples", data.sampling_tx, sampleloc);
+		DRW_shgroup_uniform_vec3(grp, "matcaps_color", (float *)data.matcap_colors, 24);
+		DRW_shgroup_uniform_vec4(grp, "ssao_params_var", ssao_params_var, 1);
+#ifndef GTAO
+		DRW_shgroup_uniform_texture(grp, "ssao_jitter", data.jitter_tx, jitterloc);
+		DRW_shgroup_uniform_texture(grp, "ssao_samples", data.sampling_tx, sampleloc);
+#endif
 	}
 
 
-	return batch;
+	return grp;
 }
 
-static void clay_populate_passes(CLAY_PassList *passes, const struct bContext *C)
+static void CLAY_update_materials_runtime(MaterialSettingsClay *settings)
+{
+	MaterialDataClayRuntime *runtime_data;
+
+	if (!settings->runtime) {
+		settings->runtime = MEM_mallocN(sizeof(MaterialDataClayRuntime), "MaterialDataClayRuntime");
+	}
+
+	runtime_data = settings->runtime;
+
+	/* Update default material */
+	runtime_data->matcap_rot[0] = cosf(settings->matcap_rot * 3.14159f * 2.0f);
+	runtime_data->matcap_rot[1] = sinf(settings->matcap_rot * 3.14159f * 2.0f);
+
+	runtime_data->matcap_hsv[0] = settings->matcap_hue + 0.5f;
+	runtime_data->matcap_hsv[1] = settings->matcap_sat * 2.0f;
+	runtime_data->matcap_hsv[2] = settings->matcap_val * 2.0f;
+
+	runtime_data->ssao_params_var[0] = settings->ssao_distance;
+	runtime_data->ssao_params_var[1] = settings->ssao_factor_cavity;
+	runtime_data->ssao_params_var[2] = settings->ssao_factor_edge;
+	runtime_data->ssao_params_var[3] = settings->ssao_attenuation;
+
+	if (settings->matcap_icon < ICON_MATCAP_01 ||
+	    settings->matcap_icon > ICON_MATCAP_24)
+	{
+		settings->matcap_icon = ICON_MATCAP_01;
+	}
+
+	runtime_data->matcap_id = matcap_to_index(settings->matcap_icon);
+}
+
+static void CLAY_create_cache(CLAY_PassList *passes, const struct bContext *C)
 {
 	SceneLayer *sl = CTX_data_scene_layer(C);
-	DRWBatch *defaultbatch, *depthbatch;
+	DRWShadingGroup *defaultbatch, *depthbatch;
 	Object *ob;
 
 	/* Depth Pass */
 	{
 		passes->depth_pass = DRW_pass_create("Depth Pass", DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS);
 
-		depthbatch = DRW_batch_create(data.depth_sh, passes->depth_pass, NULL);
+		depthbatch = DRW_shgroup_create(data.depth_sh, passes->depth_pass);
 	}
 
 	/* Clay Pass */
 	{
+		MaterialDataClayRuntime *runtime;
+		EngineDataClay *settings = DRW_render_settings();
+
 		passes->clay_pass = DRW_pass_create("Clay Pass", DRW_STATE_WRITE_COLOR);
 
-		EngineDataClay *settings = DRW_render_settings();
-		CLAY_BatchStorage *storage = MEM_callocN(sizeof(CLAY_BatchStorage), "Clay BatchStorage");
+		/* Update default material and ensure runtime data */
+		CLAY_update_materials_runtime(&settings->defsettings);
+		runtime = settings->defsettings.runtime;
 
-		/* Update default material */
-		storage->matcap_rot[0] = cosf(settings->matcap_rot * 3.14159f * 2.0f);
-		storage->matcap_rot[1] = sinf(settings->matcap_rot * 3.14159f * 2.0f);
-
-		storage->matcap_hsv[0] = settings->matcap_hue + 0.5f;
-		storage->matcap_hsv[1] = settings->matcap_sat * 2.0f;
-		storage->matcap_hsv[2] = settings->matcap_val * 2.0f;
-
-		storage->ssao_params_var[0] = settings->ssao_distance;
-		storage->ssao_params_var[1] = settings->ssao_factor_cavity;
-		storage->ssao_params_var[2] = settings->ssao_factor_edge;
-		storage->ssao_params_var[3] = settings->ssao_attenuation;
-
-		if (settings->matcap_icon < ICON_MATCAP_01 ||
-		    settings->matcap_icon > ICON_MATCAP_24)
-		{
-			settings->matcap_icon = ICON_MATCAP_01;
-		}
-
-		storage->matcap_id = matcap_to_index(settings->matcap_icon);
-
-		defaultbatch = clay_batch_create(passes->clay_pass, storage);
+		defaultbatch = CLAY_shgroup_create(passes->clay_pass, &runtime->matcap_id, runtime->matcap_rot, runtime->matcap_hsv, runtime->ssao_params_var);
 	}
 
 	/* Object Mode */
@@ -438,7 +447,7 @@ static void clay_populate_passes(CLAY_PassList *passes, const struct bContext *C
 			struct Batch *geom = DRW_cache_surface_get(ob);
 
 			/* Add everything for now */
-			DRW_batch_call_add(defaultbatch, geom, &ob->obmat);
+			DRW_shgroup_call_add(defaultbatch, geom, &ob->obmat);
 
 			/* When encountering a new material :
 			 * - Create new Batch
@@ -447,7 +456,7 @@ static void clay_populate_passes(CLAY_PassList *passes, const struct bContext *C
 			 * - The pass takes care of inserting it
 			 * next to the same shader calls */
 
-			DRW_batch_call_add(depthbatch, geom, &ob->obmat);
+			DRW_shgroup_call_add(depthbatch, geom, &ob->obmat);
 
 			/* Free hash table */
 
@@ -457,7 +466,7 @@ static void clay_populate_passes(CLAY_PassList *passes, const struct bContext *C
 	FOREACH_OBJECT_END
 }
 
-static void clay_ssao_setup(void)
+static void CLAY_ssao_setup(void)
 {
 	float invproj[4][4];
 	float dfdyfacs[2];
@@ -508,7 +517,7 @@ static void clay_ssao_setup(void)
 	}
 }
 
-static void clay_view_draw(RenderEngine *UNUSED(engine), const struct bContext *context)
+static void CLAY_view_draw(RenderEngine *UNUSED(engine), const struct bContext *context)
 {
 	/* This function may run for multiple viewports
 	 * so get the current viewport buffers */
@@ -518,13 +527,13 @@ static void clay_view_draw(RenderEngine *UNUSED(engine), const struct bContext *
 
 	DRW_viewport_init(context, (void **)&buffers, (void **)&textures, (void **)&passes);
 
-	clay_engine_init();
+	CLAY_engine_init();
 
 	/* TODO : tag to refresh by the deps graph */
 	/* ideally only refresh when objects are added/removed */
 	/* or render properties / materials change */
-	if (!passes->clay_pass) {
-		clay_populate_passes(passes, context);
+	if (DRW_viewport_cache_is_dirty()) {
+		CLAY_create_cache(passes, context);
 	}
 
 	DRW_draw_background();
@@ -537,7 +546,7 @@ static void clay_view_draw(RenderEngine *UNUSED(engine), const struct bContext *
 	/* TODO */
 
 	/* Pass 3 : Shading */
-	clay_ssao_setup();
+	CLAY_ssao_setup();
 	DRW_draw_pass(passes->clay_pass);
 
 	/* Pass 4 : Overlays */
@@ -592,6 +601,6 @@ void clay_engine_free(void)
 RenderEngineType viewport_clay_type = {
 	NULL, NULL,
 	"BLENDER_CLAY", N_("Clay"), RE_INTERNAL | RE_USE_OGL_PIPELINE,
-	NULL, NULL, NULL, NULL, &clay_view_draw, NULL,
+	NULL, NULL, NULL, NULL, &CLAY_view_draw, NULL,
 	{NULL, NULL, NULL}
 };

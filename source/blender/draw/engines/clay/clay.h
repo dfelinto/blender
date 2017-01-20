@@ -18,6 +18,11 @@
  * Contributor(s): Blender Institute
  *
  */
+
+/** \file clay.h
+ *  \ingroup DNA
+ */
+
 #ifndef __ENGINE_CLAY_H__
 #define __ENGINE_CLAY_H__
 

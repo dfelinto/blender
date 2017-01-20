@@ -185,8 +185,7 @@ void main() {
 	float cavity, edges;
 	ssao_factors(depth, normal, position, screenco, cavity, edges);
 
-	col = mix(col, matcaps_color[int(matcap_index)], cavity);
-	col *= edges + 1.0;
+	col *= mix(vec3(1.0), matcaps_color[int(matcap_index)], cavity);
 #endif
 
 #ifdef USE_HSV

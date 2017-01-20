@@ -98,7 +98,7 @@ struct DRWInterface {
 };
 
 struct DRWPass {
-	ListBase batches;
+	ListBase shgroups;
 	DRWState state;
 	float state_param; /* Line / Point width */
 };
@@ -109,8 +109,8 @@ typedef struct DRWCall {
 	float **obmat;
 } DRWCall;
 
-struct DRWBatch {
-	struct DRWBatch *next, *prev;
+struct DRWShadingGroup {
+	struct DRWShadingGroup *next, *prev;
 	struct GPUShader *shader;        /* Shader to bind */
 	struct DRWInterface *interface;  /* Uniforms pointers */
 	void *storage;                   /* Uniforms values */
@@ -124,6 +124,7 @@ static struct DRWGlobalState{
 	struct GPUFrameBuffer *default_framebuffer;
 	FramebufferList *current_fbl;
 	TextureList *current_txl;
+	PassList *current_psl;
 	ListBase bound_texs;
 	int tex_bind_id;
 	int size[2];
@@ -263,7 +264,7 @@ void DRW_shader_free(GPUShader *shader)
 
 static DRWInterface *DRW_interface_create(struct GPUShader *shader)
 {
-	DRWInterface *interface = MEM_callocN(sizeof(DRWInterface), "DRWInterface");
+	DRWInterface *interface = MEM_mallocN(sizeof(DRWInterface), "DRWInterface");
 
 	int program = GPU_shader_get_program(shader);
 
@@ -273,13 +274,15 @@ static DRWInterface *DRW_interface_create(struct GPUShader *shader)
 	interface->normal = glGetUniformLocation(program, "NormalMatrix");
 	interface->eye = glGetUniformLocation(program, "eye");
 
+	BLI_listbase_clear(&interface->uniforms);
+
 	return interface;
 }
 
-static void DRW_interface_uniform(DRWBatch *batch, const char *name,
+static void DRW_interface_uniform(DRWShadingGroup *batch, const char *name,
                                   DRWUniformType type, const void *value, int length, int arraysize, int bindloc)
 {
-	DRWUniform *uni = MEM_callocN(sizeof(DRWUniform), "DRWUniform");
+	DRWUniform *uni = MEM_mallocN(sizeof(DRWUniform), "DRWUniform");
 
 	int loc = GPU_shader_get_uniform(batch->shader, name);
 
@@ -306,23 +309,24 @@ void DRW_get_dfdy_factors(float dfdyfac[2])
 	GPU_get_dfdy_factors(dfdyfac);
 }
 
-/* ***************************************** BATCH ******************************************/
+/* ***************************************** SHADING GROUP ******************************************/
 
-DRWBatch *DRW_batch_create(struct GPUShader *shader, DRWPass *pass, void *storage)
+DRWShadingGroup *DRW_shgroup_create(struct GPUShader *shader, DRWPass *pass)
 {
-	DRWBatch *batch = MEM_callocN(sizeof(DRWBatch), "DRWBatch");
+	DRWShadingGroup *batch = MEM_callocN(sizeof(DRWShadingGroup), "DRWShadingGroup");
 
 	batch->shader = shader;
 	batch->interface = DRW_interface_create(shader);
-	batch->storage = storage;
 	batch->state = 0;
 
-	BLI_addtail(&pass->batches, batch);
+	BLI_listbase_clear(&batch->interface->uniforms);
+
+	BLI_addtail(&pass->shgroups, batch);
 
 	return batch;
 }
 
-void DRW_batch_free(struct DRWBatch *batch)
+void DRW_shgroup_free(struct DRWShadingGroup *batch)
 {
 	BLI_freelistN(&batch->call);
 	BLI_freelistN(&batch->interface->uniforms);
@@ -332,7 +336,7 @@ void DRW_batch_free(struct DRWBatch *batch)
 }
 
 /* Later use VBO */
-void DRW_batch_call_add(DRWBatch *batch, struct Batch *geom, const float **obmat)
+void DRW_shgroup_call_add(DRWShadingGroup *batch, struct Batch *geom, const float **obmat)
 {
 	if (geom) {
 		DRWCall *call = MEM_callocN(sizeof(DRWCall), "DRWCall");
@@ -346,68 +350,68 @@ void DRW_batch_call_add(DRWBatch *batch, struct Batch *geom, const float **obmat
 
 /* Make sure you know what you do when using this,
  * State is not revert back at the end of the batch */
-void DRW_batch_state_set(DRWBatch *batch, DRWState state)
+void DRW_shgroup_state_set(DRWShadingGroup *batch, DRWState state)
 {
 	batch->state = state;
 }
 
-void DRW_batch_uniform_texture(DRWBatch *batch, const char *name, const GPUTexture *tex, int loc)
+void DRW_shgroup_uniform_texture(DRWShadingGroup *batch, const char *name, const GPUTexture *tex, int loc)
 {
 	DRW_interface_uniform(batch, name, DRW_UNIFORM_TEXTURE, tex, 0, 0, loc);
 }
 
-void DRW_batch_uniform_buffer(DRWBatch *batch, const char *name, const int value, int loc)
+void DRW_shgroup_uniform_buffer(DRWShadingGroup *batch, const char *name, const int value, int loc)
 {
 	/* we abuse the lenght attrib to store the buffer index */
 	DRW_interface_uniform(batch, name, DRW_UNIFORM_BUFFER, NULL, value, 0, loc);
 }
 
-void DRW_batch_uniform_bool(DRWBatch *batch, const char *name, const bool *value, int arraysize)
+void DRW_shgroup_uniform_bool(DRWShadingGroup *batch, const char *name, const bool *value, int arraysize)
 {
 	DRW_interface_uniform(batch, name, DRW_UNIFORM_BOOL, value, 1, arraysize, 0);
 }
 
-void DRW_batch_uniform_float(DRWBatch *batch, const char *name, const float *value, int arraysize)
+void DRW_shgroup_uniform_float(DRWShadingGroup *batch, const char *name, const float *value, int arraysize)
 {
 	DRW_interface_uniform(batch, name, DRW_UNIFORM_FLOAT, value, 1, arraysize, 0);
 }
 
-void DRW_batch_uniform_vec2(DRWBatch *batch, const char *name, const float *value, int arraysize)
+void DRW_shgroup_uniform_vec2(DRWShadingGroup *batch, const char *name, const float *value, int arraysize)
 {
 	DRW_interface_uniform(batch, name, DRW_UNIFORM_FLOAT, value, 2, arraysize, 0);
 }
 
-void DRW_batch_uniform_vec3(DRWBatch *batch, const char *name, const float *value, int arraysize)
+void DRW_shgroup_uniform_vec3(DRWShadingGroup *batch, const char *name, const float *value, int arraysize)
 {
 	DRW_interface_uniform(batch, name, DRW_UNIFORM_FLOAT, value, 3, arraysize, 0);
 }
 
-void DRW_batch_uniform_vec4(DRWBatch *batch, const char *name, const float *value, int arraysize)
+void DRW_shgroup_uniform_vec4(DRWShadingGroup *batch, const char *name, const float *value, int arraysize)
 {
 	DRW_interface_uniform(batch, name, DRW_UNIFORM_FLOAT, value, 4, arraysize, 0);
 }
 
-void DRW_batch_uniform_int(DRWBatch *batch, const char *name, const int *value, int arraysize)
+void DRW_shgroup_uniform_int(DRWShadingGroup *batch, const char *name, const int *value, int arraysize)
 {
 	DRW_interface_uniform(batch, name, DRW_UNIFORM_INT, value, 1, arraysize, 0);
 }
 
-void DRW_batch_uniform_ivec2(DRWBatch *batch, const char *name, const int *value, int arraysize)
+void DRW_shgroup_uniform_ivec2(DRWShadingGroup *batch, const char *name, const int *value, int arraysize)
 {
 	DRW_interface_uniform(batch, name, DRW_UNIFORM_INT, value, 2, arraysize, 0);
 }
 
-void DRW_batch_uniform_ivec3(DRWBatch *batch, const char *name, const int *value, int arraysize)
+void DRW_shgroup_uniform_ivec3(DRWShadingGroup *batch, const char *name, const int *value, int arraysize)
 {
 	DRW_interface_uniform(batch, name, DRW_UNIFORM_INT, value, 3, arraysize, 0);
 }
 
-void DRW_batch_uniform_mat3(DRWBatch *batch, const char *name, const float *value)
+void DRW_shgroup_uniform_mat3(DRWShadingGroup *batch, const char *name, const float *value)
 {
 	DRW_interface_uniform(batch, name, DRW_UNIFORM_MAT3, value, 9, 1, 0);
 }
 
-void DRW_batch_uniform_mat4(DRWBatch *batch, const char *name, const float *value)
+void DRW_shgroup_uniform_mat4(DRWShadingGroup *batch, const char *name, const float *value)
 {
 	DRW_interface_uniform(batch, name, DRW_UNIFORM_MAT4, value, 16, 1, 0);
 }
@@ -498,10 +502,10 @@ DRWPass *DRW_pass_create(const char *name, DRWState state)
 
 void DRW_pass_free(DRWPass *pass)
 {
-	for (DRWBatch *batch = pass->batches.first; batch; batch = batch->next) {
-		DRW_batch_free(batch);
+	for (DRWShadingGroup *batch = pass->shgroups.first; batch; batch = batch->next) {
+		DRW_shgroup_free(batch);
 	}
-	BLI_freelistN(&pass->batches);
+	BLI_freelistN(&pass->shgroups);
 }
 
 /* ****************************************** DRAW ******************************************/
@@ -571,7 +575,7 @@ static void DRW_draw_fullscreen(void)
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
-static void batch_set_state(DRWBatch *batch)
+static void batch_set_state(DRWShadingGroup *batch)
 {
 	if (batch->state) {
 		if (batch->state & DRW_STATE_WIRE) {
@@ -588,7 +592,7 @@ typedef struct DRWBoundTexture {
 	GPUTexture *tex;
 } DRWBoundTexture;
 
-static void draw_batch(DRWBatch *batch, const bool fullscreen)
+static void draw_shgroup(DRWShadingGroup *batch, const bool fullscreen)
 {
 	BLI_assert(batch->shader);
 	BLI_assert(batch->interface);
@@ -763,8 +767,8 @@ void DRW_draw_pass(DRWPass *pass)
 	set_state(pass->state);
 	BLI_listbase_clear(&DST.bound_texs);
 
-	for (DRWBatch *batch = pass->batches.first; batch; batch = batch->next) {
-		draw_batch(batch, false);
+	for (DRWShadingGroup *batch = pass->shgroups.first; batch; batch = batch->next) {
+		draw_shgroup(batch, false);
 	}
 
 	/* Clear Bound textures */
@@ -789,8 +793,8 @@ void DRW_draw_pass_fullscreen(DRWPass *pass)
 	set_state(pass->state);
 	BLI_listbase_clear(&DST.bound_texs);
 
-	DRWBatch *batch = pass->batches.first;
-	draw_batch(batch, true);
+	DRWShadingGroup *batch = pass->shgroups.first;
+	draw_shgroup(batch, true);
 
 	/* Clear Bound textures */
 	for (DRWBoundTexture *bound_tex = DST.bound_texs.first; bound_tex; bound_tex = bound_tex->next) {
@@ -904,19 +908,22 @@ void DRW_viewport_init(const bContext *C, void **buffers, void **textures, void 
 	RegionView3D *rv3d = CTX_wm_region_view3d(C);
 	GPUViewport *viewport = rv3d->viewport;
 
-	/* Save context for all later needs */
-	DST.context = C;
 	GPU_viewport_get_engine_data(viewport, buffers, textures, passes);
 
 	/* Refresh DST.size */
 	DefaultTextureList *txl = (DefaultTextureList *)*textures;
 	DST.size[0] = GPU_texture_width(txl->color);
 	DST.size[1] = GPU_texture_height(txl->color);
-	DST.current_txl = (TextureList *)*textures;
 
 	DefaultFramebufferList *fbl = (DefaultFramebufferList *)*buffers;
 	DST.default_framebuffer = fbl->default_fb;
+
+	DST.current_txl = (TextureList *)*textures;
 	DST.current_fbl = (FramebufferList *)*buffers;
+	DST.current_psl = (PassList *)*passes;
+
+	/* Save context for all later needs */
+	DST.context = C;
 }
 
 void DRW_viewport_matrix_get(float mat[4][4], DRWViewportMatrixType type)
@@ -935,6 +942,12 @@ bool DRW_viewport_is_persp_get(void)
 {
 	RegionView3D *rv3d = CTX_wm_region_view3d(DST.context);
 	return rv3d->is_persp;
+}
+
+bool DRW_viewport_cache_is_dirty(void)
+{
+	/* TODO Use a dirty flag */
+	return (DST.current_psl->passes[0] == NULL);
 }
 
 /* ****************************************** INIT ******************************************/

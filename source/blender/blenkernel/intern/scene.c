@@ -558,6 +558,10 @@ void BKE_scene_free(Scene *sce)
 	BKE_collection_master_free(sce);
 	MEM_freeN(sce->collection);
 	sce->collection = NULL;
+
+	/* Runtime Engine Data */
+	if (sce->claydata.defsettings.runtime)
+		MEM_freeN(sce->claydata.defsettings.runtime);
 }
 
 void BKE_scene_init(Scene *sce)
