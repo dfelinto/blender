@@ -228,6 +228,7 @@ void BKE_workspace_active_screen_set(WorkSpace *ws, bScreen *screen)
 	ws->act_layout = BKE_workspace_layout_find(ws, screen);
 }
 
+#ifdef USE_WORKSPACE_MODE
 ObjectMode BKE_workspace_object_mode_get(const WorkSpace *workspace)
 {
 	return workspace->object_mode;
@@ -236,6 +237,7 @@ void BKE_workspace_object_mode_set(WorkSpace *workspace, const ObjectMode mode)
 {
 	workspace->object_mode = mode;
 }
+#endif
 
 ListBase *BKE_workspace_layouts_get(WorkSpace *workspace)
 {

@@ -26,24 +26,37 @@
 #define __BKE_WORKSPACE_H__
 
 #include "BLI_compiler_attrs.h"
+#include "BLI_utildefines.h"
 
 struct bScreen;
+struct ListBase;
+struct Main;
 struct TransformOrientation;
 struct WorkSpace;
 
 typedef struct WorkSpace WorkSpace;
 typedef struct WorkSpaceLayout WorkSpaceLayout;
 
+/**
+ * Plan is to store the object-mode per workspace, not per object anymore.
+ * However, there's quite some work to be done for that, so for now, there is just a basic
+ * implementation of an object <-> workspace object-mode syncing for testing, with some known
+ * problems. Main problem being that the modes can get out of sync when changing object selection.
+ * Would require a pile of temporary changes to always sync modes when changing selection. So just
+ * leaving this here for some testing until object-mode is really a workspace level setting.
+ */
+#define USE_WORKSPACE_MODE
+
 
 /* -------------------------------------------------------------------- */
 /* Create, delete, init */
 
-WorkSpace *BKE_workspace_add(Main *bmain, const char *name);
+WorkSpace *BKE_workspace_add(struct Main *bmain, const char *name);
 void BKE_workspace_free(WorkSpace *ws);
-void BKE_workspace_remove(WorkSpace *workspace, Main *bmain);
+void BKE_workspace_remove(WorkSpace *workspace, struct Main *bmain);
 
 struct WorkSpaceLayout *BKE_workspace_layout_add(WorkSpace *workspace, struct bScreen *screen) ATTR_NONNULL();
-void BKE_workspace_layout_remove(WorkSpace *workspace, WorkSpaceLayout *layout, Main *bmain) ATTR_NONNULL();
+void BKE_workspace_layout_remove(WorkSpace *workspace, WorkSpaceLayout *layout, struct Main *bmain) ATTR_NONNULL();
 
 
 /* -------------------------------------------------------------------- */
@@ -54,7 +67,7 @@ void BKE_workspace_layout_remove(WorkSpace *workspace, WorkSpaceLayout *layout, 
 		_workspace##_next = BKE_workspace_next_get(_workspace); /* support removing workspace from list */
 #define BKE_workspace_iter_end } (void)0
 
-void BKE_workspaces_transform_orientation_remove(const ListBase *workspaces,
+void BKE_workspaces_transform_orientation_remove(const struct ListBase *workspaces,
                                                  const struct TransformOrientation *orientation) ATTR_NONNULL();
 
 WorkSpaceLayout *BKE_workspace_layout_find(const WorkSpace *ws, const struct bScreen *screen) ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
@@ -83,8 +96,10 @@ void             BKE_workspace_active_layout_set(WorkSpace *ws, WorkSpaceLayout 
 struct bScreen *BKE_workspace_active_screen_get(const WorkSpace *ws) ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
 void            BKE_workspace_active_screen_set(WorkSpace *ws, struct bScreen *screen) ATTR_NONNULL(1);
 enum ObjectMode BKE_workspace_object_mode_get(const WorkSpace *workspace) ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
+#ifdef USE_WORKSPACE_MODE
 void            BKE_workspace_object_mode_set(WorkSpace *workspace, const enum ObjectMode mode) ATTR_NONNULL();
-ListBase *BKE_workspace_layouts_get(WorkSpace *workspace) ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
+#endif
+struct ListBase *BKE_workspace_layouts_get(WorkSpace *workspace) ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
 WorkSpaceLayout *BKE_workspace_new_layout_get(const WorkSpace *workspace) ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
 void             BKE_workspace_new_layout_set(WorkSpace *workspace, WorkSpaceLayout *layout) ATTR_NONNULL(1);
 

@@ -1694,7 +1694,11 @@ bool ED_object_mode_compat_set(bContext *C, Object *ob, int mode, ReportList *re
 		const char *opstring = object_mode_op_string(ob->mode);
 
 		WM_operator_name_call(C, opstring, WM_OP_EXEC_REGION_WIN, NULL);
+#ifdef USE_WORKSPACE_MODE
 		BKE_workspace_object_mode_set(workspace, ob->mode);
+#else
+		UNUSED_VARS(workspace);
+#endif
 		ok = ELEM(ob->mode, mode, OB_MODE_OBJECT);
 		if (!ok) {
 			wmOperatorType *ot = WM_operatortype_find(opstring, false);
@@ -1807,12 +1811,15 @@ void OBJECT_OT_mode_set(wmOperatorType *ot)
 void ED_object_toggle_modes(bContext *C, int mode)
 {
 	if (mode != OB_MODE_OBJECT) {
-		WorkSpace *workspace = CTX_wm_workspace(C);
 		const char *opstring = object_mode_op_string(mode);
 
 		if (opstring) {
-			WM_operator_name_call(C, opstring, WM_OP_EXEC_REGION_WIN, NULL);
+#ifdef USE_WORKSPACE_MODE
+			WorkSpace *workspace = CTX_wm_workspace(C);
+
 			BKE_workspace_object_mode_set(workspace, mode);
+#endif
+			WM_operator_name_call(C, opstring, WM_OP_EXEC_REGION_WIN, NULL);
 		}
 	}
 }

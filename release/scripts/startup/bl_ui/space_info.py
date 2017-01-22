@@ -47,8 +47,9 @@ class INFO_HT_header(Header):
             layout.template_ID(window, "workspace", new="workspace.workspace_new", unlink="workspace.workspace_delete")
             layout.template_ID_preview(workspace, "screen", workspace, "screens", new="screen.new", unlink="screen.delete", rows=2, cols=6)
 
-        act_mode_item = bpy.types.Object.bl_rna.properties['mode'].enum_items[workspace.object_mode]
-        layout.operator_menu_enum("object.mode_set", "mode", text=act_mode_item.name, icon=act_mode_item.icon)
+        if hasattr(workspace, 'object_mode'):
+            act_mode_item = bpy.types.Object.bl_rna.properties['mode'].enum_items[workspace.object_mode]
+            layout.operator_menu_enum("object.mode_set", "mode", text=act_mode_item.name, icon=act_mode_item.icon)
 
         layout.separator()
 

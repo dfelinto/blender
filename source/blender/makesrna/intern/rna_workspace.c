@@ -22,6 +22,8 @@
  *  \ingroup RNA
  */
 
+#include "BKE_workspace.h"
+
 #include "RNA_define.h"
 #include "RNA_enum_types.h"
 #include "RNA_types.h"
@@ -30,8 +32,6 @@
 
 
 #ifdef RNA_RUNTIME
-
-#include "BKE_workspace.h"
 
 #include "DNA_object_types.h"
 #include "DNA_screen_types.h"
@@ -100,6 +100,8 @@ static PointerRNA rna_workspace_screens_item_get(CollectionPropertyIterator *ite
 	return rna_pointer_inherit_refine(&iter->parent, &RNA_Screen, screen);
 }
 
+#ifdef USE_WORKSPACE_MODE
+
 static int rna_workspace_object_mode_get(PointerRNA *ptr)
 {
 	WorkSpace *workspace = ptr->data;
@@ -111,6 +113,8 @@ static void rna_workspace_object_mode_set(PointerRNA *ptr, int value)
 	WorkSpace *workspace = ptr->data;
 	BKE_workspace_object_mode_set(workspace, value);
 }
+
+#endif /* USE_WORKSPACE_MODE */
 
 #else /* RNA_RUNTIME */
 
@@ -140,10 +144,12 @@ static void rna_def_workspace(BlenderRNA *brna)
 	                                  "rna_workspace_screens_item_get", NULL, NULL, NULL, NULL);
 	RNA_def_property_ui_text(prop, "Screens", "Screen layouts of a workspace");
 
+#ifdef USE_WORKSPACE_MODE
 	prop = RNA_def_property(srna, "object_mode", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_items(prop, rna_enum_object_mode_items);
 	RNA_def_property_enum_funcs(prop, "rna_workspace_object_mode_get", "rna_workspace_object_mode_set", NULL);
 	RNA_def_property_ui_text(prop, "Mode", "Object interaction mode");
+#endif
 }
 
 void RNA_def_workspace(BlenderRNA *brna)

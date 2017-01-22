@@ -48,6 +48,8 @@
  * \brief API for managing workspaces and their data.
  * \{ */
 
+#ifdef USE_WORKSPACE_MODE
+
 /**
  * Changes the object mode (if needed) to the one set in \a workspace_new.
  * Object mode is still stored on object level. In future it should all be workspace level instead.
@@ -63,6 +65,8 @@ static void workspace_change_update_mode(const WorkSpace *workspace_old, const W
 		ED_object_toggle_modes(C, mode_new);
 	}
 }
+
+#endif
 
 /**
  * \brief Change the active workspace.
@@ -88,7 +92,11 @@ bool ED_workspace_change(bContext *C, wmWindowManager *wm, wmWindow *win, WorkSp
 		/* update screen *after* changing workspace - which also causes the actual screen change */
 		screen_changed_update(C, win, screen_new);
 
+#ifdef USE_WORKSPACE_MODE
 		workspace_change_update_mode(workspace_old, workspace_new, C, CTX_data_active_object(C), &wm->reports);
+#else
+		UNUSED_VARS(wm);
+#endif
 
 		BLI_assert(CTX_wm_workspace(C) == workspace_new);
 
