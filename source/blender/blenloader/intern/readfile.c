@@ -5999,6 +5999,7 @@ static void direct_link_scene(FileData *fd, Scene *sce, Main *bmain)
 			sce->toolsettings->wpaint->wpaint_prev = NULL;
 			sce->toolsettings->wpaint->tot = 0;
 		}
+		
 		/* relink grease pencil drawing brushes */
 		link_list(fd, &sce->toolsettings->gp_brushes);
 		for (bGPDbrush *brush = sce->toolsettings->gp_brushes.first; brush; brush = brush->next) {
@@ -6014,6 +6015,12 @@ static void direct_link_scene(FileData *fd, Scene *sce, Main *bmain)
 			if (brush->cur_jitter) {
 				direct_link_curvemapping(fd, brush->cur_jitter);
 			}
+		}
+		
+		/* relink grease pencil interpolation curves */
+		sce->toolsettings->gp_interpolate.custom_ipo = newdataadr(fd, sce->toolsettings->gp_interpolate.custom_ipo);
+		if (sce->toolsettings->gp_interpolate.custom_ipo) {
+			direct_link_curvemapping(fd, sce->toolsettings->gp_interpolate.custom_ipo);
 		}
 	}
 

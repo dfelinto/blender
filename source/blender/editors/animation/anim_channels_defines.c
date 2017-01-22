@@ -68,6 +68,8 @@
 #include "BKE_nla.h"
 #include "BKE_context.h"
 
+#include "GPU_immediate.h"
+
 #include "UI_interface.h"
 #include "UI_interface_icons.h"
 #include "UI_resources.h"
@@ -140,13 +142,20 @@ static void acf_generic_dataexpand_backdrop(bAnimContext *ac, bAnimListElem *ale
 	View2D *v2d = &ac->ar->v2d;
 	short offset = (acf->get_offset) ? acf->get_offset(ac, ale) : 0;
 	float color[3];
+
+	VertexFormat *format = immVertexFormat();
+	unsigned pos = add_attrib(format, "pos", GL_FLOAT, 2, KEEP_FLOAT);
 	
 	/* set backdrop drawing color */
 	acf->get_backdrop_color(ac, ale, color);
-	glColor3fv(color);
+
+	immBindBuiltinProgram(GPU_SHADER_2D_UNIFORM_COLOR);
+	immUniformColor3fv(color);
 	
 	/* no rounded corner - just rectangular box */
-	glRectf(offset, yminc,  v2d->cur.xmax + EXTRA_SCROLL_PAD, ymaxc);
+	immRectf(pos, offset, yminc,  v2d->cur.xmax + EXTRA_SCROLL_PAD, ymaxc);
+
+	immUnbindProgram();
 }
 
 /* helper method to test if group colors should be drawn */
@@ -223,13 +232,20 @@ static void acf_generic_channel_backdrop(bAnimContext *ac, bAnimListElem *ale, f
 	View2D *v2d = &ac->ar->v2d;
 	short offset = (acf->get_offset) ? acf->get_offset(ac, ale) : 0;
 	float color[3];
+
+	VertexFormat *format = immVertexFormat();
+	unsigned pos = add_attrib(format, "pos", GL_FLOAT, 2, KEEP_FLOAT);
 	
 	/* set backdrop drawing color */
 	acf->get_backdrop_color(ac, ale, color);
-	glColor3fv(color);
+
+	immBindBuiltinProgram(GPU_SHADER_2D_UNIFORM_COLOR);
+	immUniformColor3fv(color);
 	
 	/* no rounded corners - just rectangular box */
-	glRectf(offset, yminc,  v2d->cur.xmax + EXTRA_SCROLL_PAD, ymaxc);
+	immRectf(pos, offset, yminc,  v2d->cur.xmax + EXTRA_SCROLL_PAD, ymaxc);
+
+	immUnbindProgram();
 }
 
 /* Indention + Offset ------------------------------------------- */
@@ -1998,6 +2014,79 @@ static bAnimChannelType ACF_DSWOR =
 	acf_dswor_setting_ptr                   /* pointer for setting */
 };
 
+/* Particle Expander  ------------------------------------------- */
+
+// TODO: just get this from RNA?
+static int acf_dspart_icon(bAnimListElem *UNUSED(ale))
+{
+	return ICON_PARTICLE_DATA;
+}
+
+/* get the appropriate flag(s) for the setting when it is valid  */
+static int acf_dspart_setting_flag(bAnimContext *UNUSED(ac), eAnimChannel_Settings setting, bool *neg)
+{
+	/* clear extra return data first */
+	*neg = false;
+	
+	switch (setting) {
+		case ACHANNEL_SETTING_EXPAND: /* expanded */
+			return 0;
+			
+		case ACHANNEL_SETTING_MUTE: /* mute (only in NLA) */
+			return ADT_NLA_EVAL_OFF;
+			
+		case ACHANNEL_SETTING_VISIBLE: /* visible (only in Graph Editor) */
+			*neg = true;
+			return ADT_CURVES_NOT_VISIBLE;
+			
+		case ACHANNEL_SETTING_SELECT: /* selected */
+			return ADT_UI_SELECTED;
+		
+		default: /* unsupported */
+			return 0;
+	}
+}
+
+/* get pointer to the setting */
+static void *acf_dspart_setting_ptr(bAnimListElem *UNUSED(ale), eAnimChannel_Settings setting, short *type)
+{
+	/* clear extra return data first */
+	*type = 0;
+	
+	switch (setting) {
+		case ACHANNEL_SETTING_EXPAND: /* expanded */
+			return NULL;
+			
+		case ACHANNEL_SETTING_SELECT: /* selected */
+		case ACHANNEL_SETTING_MUTE: /* muted (for NLA only) */
+		case ACHANNEL_SETTING_VISIBLE: /* visible (for Graph Editor only) */
+			return NULL;
+		
+		default: /* unsupported */
+			return NULL;
+	}
+}
+
+/* particle expander type define */
+static bAnimChannelType ACF_DSPART =
+{
+	"Particle Data Expander",       /* type name */
+	ACHANNEL_ROLE_EXPANDER,         /* role */
+	
+	acf_generic_dataexpand_color,   /* backdrop color */
+	acf_generic_dataexpand_backdrop, /* backdrop */
+	acf_generic_indention_1,        /* indent level */
+	acf_generic_basic_offset,       /* offset */
+
+	acf_generic_idblock_name,       /* name */
+	acf_generic_idblock_name_prop,   /* name prop */
+	acf_dspart_icon,                /* icon */
+
+	acf_generic_dataexpand_setting_valid,   /* has setting */
+	acf_dspart_setting_flag,                /* flag for setting */
+	acf_dspart_setting_ptr                  /* pointer for setting */
+};
+
 /* MetaBall Expander  ------------------------------------------- */
 
 // TODO: just get this from RNA?
@@ -3495,6 +3584,7 @@ static void ANIM_init_channel_typeinfo_data(void)
 		animchannelTypeInfo[type++] = &ACF_DSSKEY;       /* ShapeKey Channel */
 		animchannelTypeInfo[type++] = &ACF_DSWOR;        /* World Channel */
 		animchannelTypeInfo[type++] = &ACF_DSNTREE;      /* NodeTree Channel */
+		animchannelTypeInfo[type++] = &ACF_DSPART;       /* Particle Channel */
 		animchannelTypeInfo[type++] = &ACF_DSMBALL;      /* MetaBall Channel */
 		animchannelTypeInfo[type++] = &ACF_DSARM;        /* Armature Channel */
 		animchannelTypeInfo[type++] = &ACF_DSMESH;       /* Mesh Channel */
@@ -3774,15 +3864,21 @@ void ANIM_channel_draw(bAnimContext *ac, bAnimListElem *ale, float yminc, float 
 			/* for F-Curves, draw color-preview of curve behind checkbox */
 			if (ELEM(ale->type, ANIMTYPE_FCURVE, ANIMTYPE_NLACURVE)) {
 				FCurve *fcu = (FCurve *)ale->data;
+				VertexFormat *format = immVertexFormat();
+				unsigned pos = add_attrib(format, "pos", GL_FLOAT, 2, KEEP_FLOAT);
+
+				immBindBuiltinProgram(GPU_SHADER_2D_UNIFORM_COLOR);
 				
 				/* F-Curve channels need to have a special 'color code' box drawn, which is colored with whatever 
 				 * color the curve has stored 
 				 */
-				glColor3fv(fcu->color);
+				immUniformColor3fv(fcu->color);
 				
 				/* just a solid color rect
 				 */
-				glRectf(offset, yminc, offset + ICON_WIDTH, ymaxc);
+				immRectf(pos, offset, yminc, offset + ICON_WIDTH, ymaxc);
+
+				immUnbindProgram();
 			}
 			/* icon is drawn as widget now... */
 			if (acf->has_setting(ac, ale, ACHANNEL_SETTING_VISIBLE)) {
@@ -3823,11 +3919,22 @@ void ANIM_channel_draw(bAnimContext *ac, bAnimListElem *ale, float yminc, float 
 		
 		/* draw red underline if channel is disabled */
 		if (ELEM(ale->type, ANIMTYPE_FCURVE, ANIMTYPE_NLACURVE) && (ale->flag & FCURVE_DISABLED)) {
+			VertexFormat *format = immVertexFormat();
+			unsigned pos = add_attrib(format, "pos", GL_FLOAT, 2, KEEP_FLOAT);
+
+			immBindBuiltinProgram(GPU_SHADER_2D_UNIFORM_COLOR);
+
 			/* FIXME: replace hardcoded color here, and check on extents! */
-			glColor3f(1.0f, 0.0f, 0.0f);
+			immUniformColor3f(1.0f, 0.0f, 0.0f);
+
 			glLineWidth(2.0);
-			fdrawline((float)(offset), yminc,
-			          (float)(v2d->cur.xmax), yminc);
+
+			immBegin(GL_LINES, 2);
+			immVertex2f(pos, (float)offset, yminc);
+			immVertex2f(pos, (float)v2d->cur.xmax, yminc);
+			immEnd();
+
+			immUnbindProgram();
 		}
 	}
 
@@ -3841,10 +3948,14 @@ void ANIM_channel_draw(bAnimContext *ac, bAnimListElem *ale, float yminc, float 
 		short draw_sliders = 0;
 		float ymin_ofs = 0.0f;
 		float color[3];
+		VertexFormat *format = immVertexFormat();
+		unsigned pos = add_attrib(format, "pos", GL_FLOAT, 2, KEEP_FLOAT);
+
+		immBindBuiltinProgram(GPU_SHADER_2D_UNIFORM_COLOR);
 		
 		/* get and set backdrop color */
 		acf->get_backdrop_color(ac, ale, color);
-		glColor3fv(color);
+		immUniformColor3fv(color);
 		
 		/* check if we need to show the sliders */
 		if ((ac->sl) && ELEM(ac->spacetype, SPACE_ACTION, SPACE_IPO)) {
@@ -3902,7 +4013,9 @@ void ANIM_channel_draw(bAnimContext *ac, bAnimListElem *ale, float yminc, float 
 		 *	- starts from the point where the first toggle/slider starts, 
 		 *	- ends past the space that might be reserved for a scroller
 		 */
-		glRectf(v2d->cur.xmax - (float)offset, yminc + ymin_ofs, v2d->cur.xmax + EXTRA_SCROLL_PAD, ymaxc);
+		immRectf(pos, v2d->cur.xmax - (float)offset, yminc + ymin_ofs, v2d->cur.xmax + EXTRA_SCROLL_PAD, ymaxc);
+
+		immUnbindProgram();
 	}
 }
 
