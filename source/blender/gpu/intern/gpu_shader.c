@@ -37,6 +37,7 @@
 #include "GPU_debug.h"
 #include "GPU_extensions.h"
 #include "GPU_shader.h"
+#include "GPU_uniformbuffer.h"
 #include "GPU_texture.h"
 
 #include "gpu_shader_private.h"
@@ -511,6 +512,13 @@ int GPU_shader_get_uniform(GPUShader *shader, const char *name)
 	return glGetUniformLocation(shader->program, name);
 }
 
+int GPU_shader_get_uniform_block(GPUShader *shader, const char *name)
+{
+	BLI_assert(shader && shader->program);
+
+	return glGetUniformBlockIndex(shader->program, name);
+}
+
 void *GPU_shader_get_interface(GPUShader *shader)
 {
 	return shader->uniform_interface;
@@ -567,6 +575,17 @@ void GPU_shader_geometry_stage_primitive_io(GPUShader *shader, int input, int ou
 		glProgramParameteriEXT(shader->program, GL_GEOMETRY_OUTPUT_TYPE_EXT, output);
 		glProgramParameteriEXT(shader->program, GL_GEOMETRY_VERTICES_OUT_EXT, number);
 	}
+}
+
+void GPU_shader_uniform_buffer(GPUShader *shader, int location, GPUUniformBuffer *ubo)
+{
+	int bindpoint = GPU_uniformbuffer_bindpoint(ubo);
+
+	if (location == -1) {
+		return;
+	}
+
+	glUniformBlockBinding(shader->program, location, bindpoint);
 }
 
 void GPU_shader_uniform_texture(GPUShader *UNUSED(shader), int location, GPUTexture *tex)

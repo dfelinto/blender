@@ -52,6 +52,7 @@
 struct GPUFrameBuffer;
 struct GPUShader;
 struct GPUTexture;
+struct GPUUniformBuffer;
 struct Object;
 struct Batch;
 
@@ -94,6 +95,11 @@ struct GPUTexture *DRW_texture_create_2D_array(
 		int w, int h, int d, DRWTextureFormat UNUSED(format), DRWTextureFlag flags, const float *fpixels);
 void DRW_texture_free(struct GPUTexture *tex);
 
+/* UBOs */
+struct GPUUniformBuffer *DRW_uniformbuffer_create(int size, const void *data);
+void DRW_uniformbuffer_update(struct GPUUniformBuffer *ubo, const void *data);
+void DRW_uniformbuffer_free(struct GPUUniformBuffer *ubo);
+
 /* Buffers */
 
 /* DRWFboTexture->format */
@@ -123,7 +129,6 @@ void DRW_framebuffer_init(struct GPUFrameBuffer **fb, int width, int height, DRW
 void DRW_framebuffer_bind(struct GPUFrameBuffer *fb);
 void DRW_framebuffer_texture_attach(struct GPUFrameBuffer *fb, struct GPUTexture *tex, int slot);
 void DRW_framebuffer_texture_detach(struct GPUTexture *tex);
-
 /* Shaders */
 struct GPUShader *DRW_shader_create(const char *vert, const char *geom, const char *frag, const char *defines);
 struct GPUShader *DRW_shader_create_2D(const char *frag, const char *defines);
@@ -152,6 +157,7 @@ void DRW_shgroup_call_add(DRWShadingGroup *batch, struct Batch *geom, const floa
 void DRW_shgroup_state_set(DRWShadingGroup *batch, DRWState state);
 
 void DRW_shgroup_uniform_texture(DRWShadingGroup *batch, const char *name, const struct GPUTexture *tex, int loc);
+void DRW_shgroup_uniform_block(DRWShadingGroup *shgroup, const char *name, const struct GPUUniformBuffer *ubo, int loc);
 void DRW_shgroup_uniform_buffer(DRWShadingGroup *batch, const char *name, const int value, int loc);
 void DRW_shgroup_uniform_bool(DRWShadingGroup *batch, const char *name, const bool *value, int arraysize);
 void DRW_shgroup_uniform_float(DRWShadingGroup *batch, const char *name, const float *value, int arraysize);

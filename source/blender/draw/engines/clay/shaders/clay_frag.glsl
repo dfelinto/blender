@@ -5,37 +5,41 @@ uniform mat4 WinMatrix;
 /* Matcap */
 uniform sampler2DArray matcaps;
 uniform vec3 matcaps_color[24];
-uniform int matcap_index;
-uniform vec2 matcap_rotation;
-uniform vec3 matcap_hsv;
 
 /* Screen Space Occlusion */
 /* store the view space vectors for the corners of the view frustum here.
  * It helps to quickly reconstruct view space vectors by using uv coordinates,
  * see http://www.derschmale.com/2014/01/26/reconstructing-positions-from-the-depth-buffer */
 uniform vec4 viewvecs[3];
-uniform vec4 ssao_params_var;
 uniform vec4 ssao_params;
 
 uniform sampler2D ssao_jitter;
 uniform sampler1D ssao_samples;
 
+/* Material Parameters packed in an UBO */
+struct Material {
+	vec4 ssao_params_var;
+	vec4 matcap_hsv_id;
+	vec4 matcap_rot; /* vec4 to ensure 16 bytes alignement (don't trust compiler) */
+};
+
+layout(std140) uniform material_block {
+	Material matcaps_param[MAX_MATERIAL];
+};
+
+int mat_id;
+
 /* Aliases */
-#define ssao_distance		ssao_params_var.x
-#define ssao_factor_cavity	ssao_params_var.y
-#define ssao_factor_edge	ssao_params_var.z
-#define ssao_attenuation	ssao_params_var.w
 #define ssao_samples_num	ssao_params.x
 #define jitter_tilling		ssao_params.yz
 #define dfdy_sign			ssao_params.w
 
-#if __VERSION__ == 120
-varying vec3 normal;
-#define fragColor gl_FragColor
-#else
+#define matcap_hsv			matcaps_param[mat_id].matcap_hsv_id.xyz
+#define matcap_index		matcaps_param[mat_id].matcap_hsv_id.w
+#define matcap_rotation		matcaps_param[mat_id].matcap_rot.xy
+
 in vec3 normal;
 out vec4 fragColor;
-#endif
 
 /* TODO Move this to SSAO modules */
 /* simple depth reconstruction, see http://www.derschmale.com/2014/01/26/reconstructing-positions-from-the-depth-buffer
@@ -166,6 +170,8 @@ void main() {
 	vec3 position = get_view_space_from_depth(screenco, depth);
 	vec3 normal = calculate_view_space_normal(position);
 
+	mat_id = int(screenco.x*3.0);
+
 	/* Manual Depth test */
 	/* Doing this test earlier gives problem with dfdx calculations
 	 * TODO move this before when we have proper geometric normals */
@@ -179,7 +185,7 @@ void main() {
 #else
 	vec2 texco = abs(normal.xy * .49 + 0.5);
 #endif
-	vec3 col = texture(matcaps, vec3(texco, float(matcap_index))).rgb;
+	vec3 col = texture(matcaps, vec3(texco, matcap_index)).rgb;
 
 #ifdef USE_AO
 	float cavity, edges;

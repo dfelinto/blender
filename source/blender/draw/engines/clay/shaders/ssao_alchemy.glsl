@@ -1,3 +1,8 @@
+#define ssao_distance		matcaps_param[mat_id].ssao_params_var.x
+#define ssao_factor_cavity	matcaps_param[mat_id].ssao_params_var.y
+#define ssao_factor_edge	matcaps_param[mat_id].ssao_params_var.z
+#define ssao_attenuation	matcaps_param[mat_id].ssao_params_var.w
+
 /*  from The Alchemy screen-space ambient obscurance algorithm
  * http://graphics.cs.williams.edu/papers/AlchemyHPG11/VV11AlchemyAO.pdf */
 
@@ -63,6 +68,6 @@ void ssao_factors(in float depth, in vec3 normal, in vec3 position, in vec2 scre
 	edges /= ssao_samples_num;
 
 	/* don't let cavity wash out the surface appearance */
-	cavities = clamp(cavities * ssao_factor_cavity, 0.0, 0.85);
+	cavities = clamp(cavities * ssao_factor_cavity, 0.0, 1.0);
 	edges = edges * ssao_factor_edge;
 }

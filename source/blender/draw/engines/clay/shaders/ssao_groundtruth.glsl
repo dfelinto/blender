@@ -1,3 +1,8 @@
+#define ssao_distance		matcaps_param[mat_id].ssao_params_var.x
+#define ssao_factor_cavity	matcaps_param[mat_id].ssao_params_var.y
+#define ssao_factor_edge	matcaps_param[mat_id].ssao_params_var.z
+#define ssao_attenuation	matcaps_param[mat_id].ssao_params_var.w
+
 /* Based on Practical Realtime Strategies for Accurate Indirect Occlusion
  * http://blog.selfshadow.com/publications/s2016-shading-course/activision/s2016_pbs_activision_occlusion.pdf
  * http://blog.selfshadow.com/publications/s2016-shading-course/activision/s2016_pbs_activision_occlusion.pptx */

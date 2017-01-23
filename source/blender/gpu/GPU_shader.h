@@ -38,6 +38,7 @@ extern "C" {
 
 typedef struct GPUShader GPUShader;
 struct GPUTexture;
+struct GPUUniformBuffer;
 
 /* GPU Shader
  * - only for fragment shaders now
@@ -73,11 +74,13 @@ int GPU_shader_get_program(GPUShader *shader);
 void *GPU_shader_get_interface(GPUShader *shader);
 void GPU_shader_set_interface(GPUShader *shader, void *interface);
 int GPU_shader_get_uniform(GPUShader *shader, const char *name);
+int GPU_shader_get_uniform_block(GPUShader *shader, const char *name);
 void GPU_shader_uniform_vector(GPUShader *shader, int location, int length,
 	int arraysize, const float *value);
 void GPU_shader_uniform_vector_int(GPUShader *shader, int location, int length,
 	int arraysize, const int *value);
 
+void GPU_shader_uniform_buffer(GPUShader *shader, int location, struct GPUUniformBuffer *ubo);
 void GPU_shader_uniform_texture(GPUShader *shader, int location, struct GPUTexture *tex);
 void GPU_shader_uniform_int(GPUShader *shader, int location, int value);
 void GPU_shader_geometry_stage_primitive_io(GPUShader *shader, int input, int output, int number);
