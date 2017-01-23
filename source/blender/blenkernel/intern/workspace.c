@@ -54,7 +54,7 @@ bool workspaces_is_screen_used(const Main *bmain, bScreen *screen);
  */
 WorkSpace *workspace_alloc(void)
 {
-	return MEM_callocN(sizeof(WorkSpace), "Workspace");
+	return MEM_callocN(sizeof(WorkSpace), __func__);
 }
 
 WorkSpace *BKE_workspace_add(Main *bmain, const char *name)
