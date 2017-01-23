@@ -22,12 +22,15 @@
  *  \ingroup edworkspace
  */
 
+#include <stdlib.h>
+
 #include "BKE_context.h"
 #include "BKE_main.h"
 #include "BKE_library.h"
 #include "BKE_screen.h"
 #include "BKE_workspace.h"
 
+#include "BLI_utildefines.h"
 #include "BLI_listbase.h"
 
 #include "DNA_object_types.h"

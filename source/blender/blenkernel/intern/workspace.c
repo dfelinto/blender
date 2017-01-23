@@ -24,11 +24,13 @@
 
 #define NAMESPACE_WORKSPACE /* allow including specially guarded dna_workspace_types.h */
 
+#include <stdlib.h>
+
 #include "BLI_utildefines.h"
+#include "BLI_listbase.h"
 
 #include "BKE_global.h"
 #include "BKE_library.h"
-#include "BLI_listbase.h"
 #include "BKE_main.h"
 #include "BKE_screen.h"
 #include "BKE_workspace.h"
