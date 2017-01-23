@@ -92,12 +92,19 @@ typedef struct TexPaintSlot {
 
 /* Runtime Render Data Not saved in file */
 typedef struct MaterialDataClayRuntime {
-	int matcap_id;
+	short type;
+	short flag;
+	int material_id;   /* Index in materials UBO */
+	int matcap_id;     /* Icon ID */
 	float matcap_rot[2];
 	float matcap_hsv[3];
 	float ssao_params_var[4];
 } MaterialDataClayRuntime;
 
+/* MaterialDataClayRuntime.flag */
+#define CLAY_OUTDATED		1
+
+/* Duplicated in DNA_scene_types.h under SceneSettingsClay */
 typedef struct MaterialSettingsClay {
 	struct MaterialDataClayRuntime *runtime;
 
@@ -117,6 +124,7 @@ typedef struct MaterialSettingsClay {
 	float pad;
 } MaterialSettingsClay;
 
+/* MaterialSettingsClay.type */
 #define CLAY_MATCAP_NONE		0
 #define CLAY_MATCAP_SIMPLE		1
 #define CLAY_MATCAP_COMPLETE	2

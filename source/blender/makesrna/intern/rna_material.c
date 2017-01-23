@@ -127,7 +127,10 @@ static void rna_Material_update_engine_data(Main *UNUSED(bmain), Scene *UNUSED(s
 {
 	Material *ma = ptr->id.data;
 
-	DAG_id_tag_update(&ma->id, 0);
+	if (ma->clay.runtime) {
+		ma->clay.runtime->flag |= CLAY_OUTDATED;
+	}
+
 	WM_main_add_notifier(NC_MATERIAL | ND_SHADING_DRAW, ma);
 }
 

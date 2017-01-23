@@ -3983,6 +3983,8 @@ static void direct_link_material(FileData *fd, Material *ma)
 	
 	ma->preview = direct_link_preview_image(fd, ma->preview);
 	BLI_listbase_clear(&ma->gpumaterial);
+
+	ma->clay.runtime = NULL;
 }
 
 /* ************ READ PARTICLE SETTINGS ***************** */

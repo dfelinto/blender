@@ -22,6 +22,7 @@
 #include "DRW_render.h"
 
 #include "BKE_icons.h"
+#include "BKE_main.h"
 
 #include "BLI_dynstr.h"
 #include "BLI_rand.h"
@@ -68,6 +69,7 @@ static struct CLAY_data {
 	/* Materials Parameter UBO */
 	struct GPUUniformBuffer *mat_ubo;
 	CLAY_UBO_Storage mat_storage;
+	short ubo_flag;
 
 	/* Matcap textures */
 	struct GPUTexture *matcap_array;
@@ -80,6 +82,10 @@ static struct CLAY_data {
 	struct GPUTexture *jitter_tx;
 	struct GPUTexture *sampling_tx;
 } data = {NULL};
+
+/* CLAY_data.ubo_flag */
+#define CLAY_UBO_CLEAR     (1 << 0)
+#define CLAY_UBO_REFRESH   (1 << 1)
 
 /* keep it under MAX_BUFFERS */
 typedef struct CLAY_FramebufferList{
@@ -306,7 +312,7 @@ static void CLAY_engine_init(void)
 	}
 }
 
-static DRWShadingGroup *CLAY_shgroup_create(DRWPass *pass, int matcap_id, float matcap_rot[2], float matcap_hsv[3], float ssao_params_var[4])
+static DRWShadingGroup *CLAY_shgroup_create(DRWPass *pass, int *material_id)
 {
 	const int depthloc = 0, matcaploc = 1, jitterloc = 2, sampleloc = 3;
 
@@ -321,22 +327,7 @@ static DRWShadingGroup *CLAY_shgroup_create(DRWPass *pass, int matcap_id, float 
 	DRW_shgroup_uniform_vec4(grp, "ssao_params", data.ssao_params, 1);
 	DRW_shgroup_uniform_vec3(grp, "matcaps_color", (float *)data.matcap_colors, 24);
 
-	mat->matcap_id = matcap_id;
-	copy_v3_v3(mat->matcap_hsv, matcap_hsv);
-	copy_v2_v2(mat->matcap_rot, matcap_rot);
-	copy_v4_v4(mat->ssao_params_var, ssao_params_var);
-
-	mat = &data.mat_storage.materials[1];
-	mat->matcap_id = matcap_id + 1;
-	copy_v3_v3(mat->matcap_hsv, matcap_hsv);
-	copy_v2_v2(mat->matcap_rot, matcap_rot);
-	copy_v4_v4(mat->ssao_params_var, ssao_params_var);
-
-	mat = &data.mat_storage.materials[2];
-	mat->matcap_id = matcap_id + 2;
-	copy_v3_v3(mat->matcap_hsv, matcap_hsv);
-	copy_v2_v2(mat->matcap_rot, matcap_rot);
-	copy_v4_v4(mat->ssao_params_var, ssao_params_var);
+	//DRW_shgroup_uniform_int(grp, "material_id", material_id, 1);
 
 #ifndef GTAO
 	DRW_shgroup_uniform_texture(grp, "ssao_jitter", data.jitter_tx, jitterloc);
@@ -346,36 +337,102 @@ static DRWShadingGroup *CLAY_shgroup_create(DRWPass *pass, int matcap_id, float 
 	return grp;
 }
 
-static void CLAY_update_materials_runtime(MaterialSettingsClay *settings)
+static void CLAY_update_material_runtime(MaterialSettingsClay *settings)
 {
 	MaterialDataClayRuntime *runtime_data;
 
 	if (!settings->runtime) {
 		settings->runtime = MEM_mallocN(sizeof(MaterialDataClayRuntime), "MaterialDataClayRuntime");
+		settings->runtime->flag = CLAY_OUTDATED;
+		data.ubo_flag |= CLAY_UBO_CLEAR;
 	}
 
 	runtime_data = settings->runtime;
 
-	/* Update default material */
-	runtime_data->matcap_rot[0] = cosf(settings->matcap_rot * 3.14159f * 2.0f);
-	runtime_data->matcap_rot[1] = sinf(settings->matcap_rot * 3.14159f * 2.0f);
+	if (runtime_data->flag & CLAY_OUTDATED) {
 
-	runtime_data->matcap_hsv[0] = settings->matcap_hue + 0.5f;
-	runtime_data->matcap_hsv[1] = settings->matcap_sat * 2.0f;
-	runtime_data->matcap_hsv[2] = settings->matcap_val * 2.0f;
+		/* Update default material */
+		runtime_data->matcap_rot[0] = cosf(settings->matcap_rot * 3.14159f * 2.0f);
+		runtime_data->matcap_rot[1] = sinf(settings->matcap_rot * 3.14159f * 2.0f);
 
-	runtime_data->ssao_params_var[0] = settings->ssao_distance;
-	runtime_data->ssao_params_var[1] = settings->ssao_factor_cavity;
-	runtime_data->ssao_params_var[2] = settings->ssao_factor_edge;
-	runtime_data->ssao_params_var[3] = settings->ssao_attenuation;
+		runtime_data->matcap_hsv[0] = settings->matcap_hue + 0.5f;
+		runtime_data->matcap_hsv[1] = settings->matcap_sat * 2.0f;
+		runtime_data->matcap_hsv[2] = settings->matcap_val * 2.0f;
 
-	if (settings->matcap_icon < ICON_MATCAP_01 ||
-	    settings->matcap_icon > ICON_MATCAP_24)
-	{
-		settings->matcap_icon = ICON_MATCAP_01;
+		runtime_data->ssao_params_var[0] = settings->ssao_distance;
+		runtime_data->ssao_params_var[1] = settings->ssao_factor_cavity;
+		runtime_data->ssao_params_var[2] = settings->ssao_factor_edge;
+		runtime_data->ssao_params_var[3] = settings->ssao_attenuation;
+
+		if (settings->matcap_icon < ICON_MATCAP_01 ||
+		    settings->matcap_icon > ICON_MATCAP_24)
+		{
+			settings->matcap_icon = ICON_MATCAP_01;
+		}
+
+		runtime_data->matcap_id = matcap_to_index(settings->matcap_icon);
+
+		if ((runtime_data->type != settings->type)) {
+			data.ubo_flag |= CLAY_UBO_CLEAR;
+		}
+
+		runtime_data->type = settings->type;
+
+		data.ubo_flag |= CLAY_UBO_REFRESH;
+		runtime_data->flag &= ~CLAY_OUTDATED;
+	}
+}
+
+static void update_ubo_storage(MaterialDataClayRuntime *runtime_data, unsigned int current_id)
+{
+	CLAY_UBO_Material *ubo = &data.mat_storage.materials[current_id];
+
+	ubo->matcap_id = runtime_data->matcap_id;
+	copy_v3_v3(ubo->matcap_hsv, runtime_data->matcap_hsv);
+	copy_v2_v2(ubo->matcap_rot, runtime_data->matcap_rot);
+	copy_v4_v4(ubo->ssao_params_var, runtime_data->ssao_params_var);
+
+	runtime_data->material_id = current_id;
+}
+
+static void CLAY_update_material_ubo(const struct bContext *C)
+{
+	Main *bmain = CTX_data_main(C);
+
+	/* Update Default materials */
+	for (Scene *sce = bmain->scene.first; sce; sce = sce->id.next) {
+		EngineDataClay *ed = &sce->claydata;
+		CLAY_update_material_runtime((MaterialSettingsClay *)&ed->defsettings);
 	}
 
-	runtime_data->matcap_id = matcap_to_index(settings->matcap_icon);
+	/* Update Scene Materials */
+	for (Material *mat = bmain->mat.first; mat; mat = mat->id.next) {
+		CLAY_update_material_runtime(&mat->clay);
+	}
+
+	if (data.ubo_flag & CLAY_UBO_REFRESH) {
+		MaterialDataClayRuntime *runtime_data;
+		int current_id = 0;
+
+		/* Default materials */
+		for (Scene *sce = bmain->scene.first; sce; sce = sce->id.next) {
+			EngineDataClay *ed = &sce->claydata;
+			runtime_data = ed->defsettings.runtime;
+			update_ubo_storage(runtime_data, current_id);
+			current_id++;
+		}
+
+		/* TODO only add materials linked to geometry */
+		for (Material *mat = bmain->mat.first; mat; mat = mat->id.next) {
+			runtime_data = mat->clay.runtime;
+			update_ubo_storage(runtime_data, current_id);
+			current_id++;
+		}
+
+		DRW_uniformbuffer_update(data.mat_ubo, &data.mat_storage);
+	}
+
+	data.ubo_flag = 0;
 }
 
 static void CLAY_create_cache(CLAY_PassList *passes, const struct bContext *C)
@@ -398,13 +455,10 @@ static void CLAY_create_cache(CLAY_PassList *passes, const struct bContext *C)
 
 		passes->clay_pass = DRW_pass_create("Clay Pass", DRW_STATE_WRITE_COLOR);
 
-		/* Update default material and ensure runtime data */
-		CLAY_update_materials_runtime(&settings->defsettings);
 		runtime = settings->defsettings.runtime;
 
-		default_shgrp = CLAY_shgroup_create(passes->clay_pass, runtime->matcap_id, runtime->matcap_rot, runtime->matcap_hsv, runtime->ssao_params_var);
+		default_shgrp = CLAY_shgroup_create(passes->clay_pass, &runtime->material_id);
 		DRW_shgroup_uniform_block(default_shgrp, "material_block", data.mat_ubo, 0);
-		DRW_uniformbuffer_update(data.mat_ubo, &data.mat_storage);
 	}
 
 	/* Object Mode */
@@ -501,6 +555,8 @@ static void CLAY_view_draw(RenderEngine *UNUSED(engine), const struct bContext *
 
 	CLAY_engine_init();
 
+	CLAY_update_material_ubo(context);
+
 	/* TODO : tag to refresh by the deps graph */
 	/* ideally only refresh when objects are added/removed */
 	/* or render properties / materials change */
@@ -508,6 +564,7 @@ static void CLAY_view_draw(RenderEngine *UNUSED(engine), const struct bContext *
 		CLAY_create_cache(passes, context);
 	}
 
+	/* Start Drawing */
 	DRW_draw_background();
 
 	/* Pass 1 : Depth pre-pass */

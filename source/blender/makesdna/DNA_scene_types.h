@@ -796,10 +796,30 @@ typedef struct RenderProfile {
 /* *************************************************************** */
 /* Clay Engine */
 
+/* Duplicated in DNA_material_types.h under MaterialSettingsClay */
+typedef struct SceneSettingsClay {
+	struct MaterialDataClayRuntime *runtime;
+
+	short type;
+	short matcap_icon; /* Icon ID */
+
+	float matcap_rot;
+	float matcap_hue;
+	float matcap_sat;
+	float matcap_val;
+
+	float ssao_distance;
+	float ssao_attenuation;
+	float ssao_factor_cavity;
+	float ssao_factor_edge;
+
+	float pad;
+} SceneSettingsClay;
+
 /* Render Data */
 typedef struct EngineDataClay {
 	/* Default Matcap settings */
-	struct MaterialSettingsClay defsettings;
+	struct SceneSettingsClay defsettings;
 	short options;
 	short pad;
 	/* Global Settings */

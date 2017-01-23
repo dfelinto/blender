@@ -170,7 +170,7 @@ void main() {
 	vec3 position = get_view_space_from_depth(screenco, depth);
 	vec3 normal = calculate_view_space_normal(position);
 
-	mat_id = int(screenco.x*3.0);
+	//mat_id = int(screenco.x*3.0);
 
 	/* Manual Depth test */
 	/* Doing this test earlier gives problem with dfdx calculations
