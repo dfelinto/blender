@@ -15,37 +15,28 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  *
- * The Original Code is Copyright (C) 2014 Blender Foundation.
+ * The Original Code is Copyright (C) 2017 by Blender Foundation.
  * All rights reserved.
  *
- * Original Author: Lukas Toenne
- * Contributor(s): 
+ * Contributor(s): Blender Foundation, Mike Erwin, Dalai Felinto
  *
  * ***** END GPL LICENSE BLOCK *****
  */
+#ifndef __BKE_MESH_RENDER_H__
+#define __BKE_MESH_RENDER_H__
 
-/** \file blender/depsgraph/util/deg_util_function.h
- *  \ingroup depsgraph
+/** \file BKE_mesh_render.h
+ *  \ingroup bke
  */
 
-#pragma once
+struct Batch;
+struct Mesh;
 
-#if (__cplusplus > 199711L)
+void BKE_mesh_batch_cache_free(struct Mesh *me);
+struct Batch *BKE_mesh_batch_cache_get_all_edges(struct Mesh *me);
+struct Batch *BKE_mesh_batch_cache_get_all_triangles(struct Mesh *me);
+struct Batch *BKE_mesh_batch_cache_get_all_verts(struct Mesh *me);
+struct Batch *BKE_mesh_batch_cache_get_fancy_edges(struct Mesh *me);
+struct Batch *BKE_mesh_batch_cache_get_overlay_edges(struct Mesh *me);
 
-#include <functional>
-
-using std::function;
-using namespace std::placeholders;
-#define function_bind std::bind
-
-#elif defined(HAVE_BOOST_FUNCTION_BINDINGS)
-
-#include <boost/bind.hpp>
-#include <boost/function.hpp>
-
-using boost::function;
-#define function_bind boost::bind
-
-#else
-#  error "Depsgraph requires either Boost or C++11 for function bindings."
-#endif
+#endif /* __BKE_MESH_RENDER_H__ */
