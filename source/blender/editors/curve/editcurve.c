@@ -1269,9 +1269,9 @@ void ED_curve_editnurb_free(Object *obedit)
 
 static int separate_exec(bContext *C, wmOperator *op)
 {
-#if 0
 	Main *bmain = CTX_data_main(C);
 	Scene *scene = CTX_data_scene(C);
+	SceneLayer *sl = CTX_data_scene_layer(C);
 	Object *oldob, *newob;
 	ObjectBase *oldbase, *newbase;
 	Curve *oldcu, *newcu;
@@ -1299,7 +1299,7 @@ static int separate_exec(bContext *C, wmOperator *op)
 	}
 
 	/* 2. duplicate the object and data */
-	newbase = ED_object_add_duplicate(bmain, scene, oldbase, 0); /* 0 = fully linked */
+	newbase = ED_object_add_duplicate(bmain, scene, sl, oldbase, 0); /* 0 = fully linked */
 	DAG_relations_tag_update(bmain);
 
 	newob = newbase->object;
@@ -1329,13 +1329,6 @@ static int separate_exec(bContext *C, wmOperator *op)
 	WM_cursor_wait(0);
 
 	return OPERATOR_FINISHED;
-#else
-	/* need to refactor this to use ObjectBase and create a new object in the correct SceneCollection */
-	TODO_LAYER_BASE
-	(void)C;
-	BKE_report(op->reports, RPT_ERROR, "CURVE_OT_separate not supported at the moment");
-	return OPERATOR_CANCELLED;
-#endif
 }
 
 void CURVE_OT_separate(wmOperatorType *ot)
@@ -5970,7 +5963,7 @@ int join_curve_exec(bContext *C, wmOperator *op)
 	int a;
 	bool ok = false;
 
-	CTX_DATA_BEGIN(C, Base *, base, selected_editable_bases)
+	CTX_DATA_BEGIN(C, ObjectBase *, base, selected_editable_bases)
 	{
 		if (base->object == ob) {
 			ok = true;
@@ -5990,7 +5983,7 @@ int join_curve_exec(bContext *C, wmOperator *op)
 	/* trasnform all selected curves inverse in obact */
 	invert_m4_m4(imat, ob->obmat);
 	
-	CTX_DATA_BEGIN(C, Base *, base, selected_editable_bases)
+	CTX_DATA_BEGIN(C, ObjectBase *, base, selected_editable_bases)
 	{
 		if (base->object->type == ob->type) {
 			if (base->object != ob) {
@@ -6033,7 +6026,7 @@ int join_curve_exec(bContext *C, wmOperator *op)
 					}
 				}
 			
-				ED_base_object_free_and_unlink(bmain, scene, base);
+				ED_base_object_free_and_unlink(bmain, scene, base->object);
 			}
 		}
 	}

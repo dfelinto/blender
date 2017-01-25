@@ -34,6 +34,7 @@
  */
 
 struct Base;
+struct ObjectBase;
 struct EvaluationContext;
 struct Group;
 struct Main;
@@ -44,8 +45,8 @@ void          BKE_group_free(struct Group *group);
 struct Group *BKE_group_add(struct Main *bmain, const char *name);
 struct Group *BKE_group_copy(struct Main *bmain, struct Group *group);
 void          BKE_group_make_local(struct Main *bmain, struct Group *group, const bool lib_local);
-bool          BKE_group_object_add(struct Group *group, struct Object *ob, struct Scene *scene, struct Base *base);
-bool          BKE_group_object_unlink(struct Group *group, struct Object *ob, struct Scene *scene, struct Base *base);
+bool          BKE_group_object_add(struct Group *group, struct Object *ob);
+bool          BKE_group_object_unlink(struct Group *group, struct Object *ob);
 struct Group *BKE_group_object_find(struct Group *group, struct Object *ob);
 bool          BKE_group_object_exists(struct Group *group, struct Object *ob);
 bool          BKE_group_object_cyclic_check(struct Main *bmain, struct Object *object, struct Group *group);

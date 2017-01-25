@@ -116,7 +116,7 @@ static bool multiresbake_check(bContext *C, wmOperator *op)
 	bool ok = true;
 	int a;
 
-	CTX_DATA_BEGIN (C, Base *, base, selected_editable_bases)
+	CTX_DATA_BEGIN (C, ObjectBase *, base, selected_editable_bases)
 	{
 		ob = base->object;
 
@@ -310,7 +310,7 @@ static int multiresbake_image_exec_locked(bContext *C, wmOperator *op)
 		return OPERATOR_CANCELLED;
 
 	if (scene->r.bake_flag & R_BAKE_CLEAR) {  /* clear images */
-		CTX_DATA_BEGIN (C, Base *, base, selected_editable_bases)
+		CTX_DATA_BEGIN (C, ObjectBase *, base, selected_editable_bases)
 		{
 			Mesh *me;
 			ClearFlag clear_flag = 0;
@@ -330,7 +330,7 @@ static int multiresbake_image_exec_locked(bContext *C, wmOperator *op)
 		CTX_DATA_END;
 	}
 
-	CTX_DATA_BEGIN (C, Base *, base, selected_editable_bases)
+	CTX_DATA_BEGIN (C, ObjectBase *, base, selected_editable_bases)
 	{
 		MultiresBakeRender bkr = {NULL};
 
@@ -390,7 +390,7 @@ static void init_multiresbake_job(bContext *C, MultiresBakeJob *bkj)
 	bkj->user_scale = (scene->r.bake_flag & R_BAKE_USERSCALE) ? scene->r.bake_user_scale : -1.0f;
 	//bkj->reports = op->reports;
 
-	CTX_DATA_BEGIN (C, Base *, base, selected_editable_bases)
+	CTX_DATA_BEGIN (C, ObjectBase *, base, selected_editable_bases)
 	{
 		MultiresBakerJobData *data;
 		int lvl;

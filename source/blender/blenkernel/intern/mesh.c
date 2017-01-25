@@ -48,6 +48,7 @@
 #include "BKE_DerivedMesh.h"
 #include "BKE_global.h"
 #include "BKE_mesh.h"
+#include "BKE_mesh_render.h"
 #include "BKE_displist.h"
 #include "BKE_library.h"
 #include "BKE_library_query.h"
@@ -435,6 +436,8 @@ void BKE_mesh_free(Mesh *me)
 {
 	BKE_animdata_free(&me->id, false);
 
+	BKE_mesh_batch_cache_free(me);
+
 	CustomData_free(&me->vdata, me->totvert);
 	CustomData_free(&me->edata, me->totedge);
 	CustomData_free(&me->fdata, me->totface);
@@ -522,6 +525,7 @@ Mesh *BKE_mesh_copy(Main *bmain, Mesh *me)
 	BKE_mesh_update_customdata_pointers(men, do_tessface);
 
 	men->edit_btmesh = NULL;
+	men->batch_cache = NULL;
 
 	men->mselect = MEM_dupallocN(men->mselect);
 	men->bb = MEM_dupallocN(men->bb);
@@ -2346,6 +2350,11 @@ Mesh *BKE_mesh_new_from_object(
 
 				tmpmesh = BKE_mesh_add(bmain, "Mesh");
 				DM_to_mesh(dm, tmpmesh, ob, mask, true);
+
+				/* Copy autosmooth settings from original mesh. */
+				Mesh *me = (Mesh *)ob->data;
+				tmpmesh->flag |= (me->flag & ME_AUTOSMOOTH);
+				tmpmesh->smoothresh = me->smoothresh;
 			}
 
 			/* BKE_mesh_add/copy gives us a user count we don't need */

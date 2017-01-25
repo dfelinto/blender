@@ -29,10 +29,12 @@
 #include "BLI_iterator.h"
 #include "BLI_listbase.h"
 #include "BLT_translation.h"
+#include "BLI_string_utils.h"
 
 #include "BKE_collection.h"
 #include "BKE_layer.h"
 #include "BKE_library.h"
+#include "BKE_main.h"
 #include "BKE_scene.h"
 
 #include "DNA_ID.h"
@@ -154,6 +156,7 @@ bool BKE_collection_remove(Scene *scene, SceneCollection *sc)
 	/* check all layers that use this collection and clear them */
 	for (SceneLayer *sl = scene->render_layers.first; sl; sl = sl->next) {
 		layer_collection_remove(sl, &sl->layer_collections, sc);
+		BKE_scene_layer_base_flag_recalculate(sl);
 		sl->active_collection = 0;
 	}
 
@@ -177,25 +180,45 @@ void BKE_collection_master_free(Scene *scene){
 	collection_free(BKE_collection_master(scene));
 }
 
-/**
- * Add object to collection
- */
-void BKE_collection_object_add(struct Scene *scene, struct SceneCollection *sc, struct Object *ob)
+static void collection_object_add(Scene *scene, SceneCollection *sc, Object *ob)
 {
-	if (BLI_findptr(&sc->objects, ob, offsetof(LinkData, data))) {
-		/* don't add the same object twice */
-		return;
-	}
-
 	BLI_addtail(&sc->objects, BLI_genericNodeN(ob));
 	id_us_plus((ID *)ob);
 	BKE_layer_sync_object_link(scene, sc, ob);
 }
 
 /**
+ * Add object to collection
+ */
+void BKE_collection_object_add(Scene *scene, SceneCollection *sc, Object *ob)
+{
+	if (BLI_findptr(&sc->objects, ob, offsetof(LinkData, data))) {
+		/* don't add the same object twice */
+		return;
+	}
+	collection_object_add(scene, sc, ob);
+}
+
+/**
+ * Add object to all collections that reference objects is in
+ * (used to copy objects)
+ */
+void BKE_collection_object_add_from(Scene *scene, Object *ob_src, Object *ob_dst)
+{
+	SceneCollection *sc;
+	FOREACH_SCENE_COLLECTION(scene, sc)
+	{
+		if (BLI_findptr(&sc->objects, ob_src, offsetof(LinkData, data))) {
+			collection_object_add(scene, sc, ob_dst);
+		}
+	}
+	FOREACH_SCENE_COLLECTION_END
+}
+
+/**
  * Remove object from collection
  */
-void BKE_collection_object_remove(struct Scene *scene, struct SceneCollection *sc, struct Object *ob)
+void BKE_collection_object_remove(Main *bmain, Scene *scene, SceneCollection *sc, Object *ob, const bool free_us)
 {
 
 	LinkData *link = BLI_findptr(&sc->objects, ob, offsetof(LinkData, data));
@@ -207,23 +230,28 @@ void BKE_collection_object_remove(struct Scene *scene, struct SceneCollection *s
 	BLI_remlink(&sc->objects, link);
 	MEM_freeN(link);
 
-	id_us_min((ID *)ob);
-
 	TODO_LAYER_SYNC_FILTER; /* need to remove all instances of ob in scene collections -> filter_objects */
 	BKE_layer_sync_object_unlink(scene, sc, ob);
+
+	if (free_us) {
+		BKE_libblock_free_us(bmain, ob);
+	}
+	else {
+		id_us_min(&ob->id);
+	}
 }
 
 /**
  * Remove object from all collections of scene
  */
-void BKE_collections_object_remove(Scene *scene, Object *ob)
+void BKE_collections_object_remove(Main *bmain, Scene *scene, Object *ob, const bool free_us)
 {
 	BKE_scene_remove_rigidbody_object(scene, ob);
 
 	SceneCollection *sc;
 	FOREACH_SCENE_COLLECTION(scene, sc)
 	{
-		BKE_collection_object_remove(scene, sc, ob);
+		BKE_collection_object_remove(bmain, scene, sc, ob, free_us);
 	}
 	FOREACH_SCENE_COLLECTION_END
 }

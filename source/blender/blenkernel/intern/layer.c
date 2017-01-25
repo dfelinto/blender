@@ -25,9 +25,9 @@
  */
 
 #include "BLI_listbase.h"
-#include "BLI_path_util.h"
 #include "BLI_string.h"
 #include "BLI_string_utf8.h"
+#include "BLI_string_utils.h"
 #include "BLT_translation.h"
 
 #include "BKE_collection.h"
@@ -44,8 +44,10 @@
 #include "MEM_guardedalloc.h"
 
 /* prototype */
-LayerCollection *layer_collection_add(SceneLayer *sl, ListBase *lb, SceneCollection *sc);
-void layer_collection_free(SceneLayer *sl, LayerCollection *lc);
+static void layer_collection_free(SceneLayer *sl, LayerCollection *lc);
+static LayerCollection *layer_collection_add(SceneLayer *sl, ListBase *lb, SceneCollection *sc);
+static LayerCollection *find_layer_collection_by_scene_collection(LayerCollection *lc, const SceneCollection *sc);
+static void object_bases_Iterator_next(Iterator *iter, const int flag);
 
 /* RenderLayer */
 
@@ -134,6 +136,32 @@ void BKE_scene_layer_selected_objects_tag(SceneLayer *sl, const int tag)
 	}
 }
 
+static bool find_scene_collection_in_scene_collections(ListBase *lb, const LayerCollection *lc)
+{
+	for (LayerCollection *lcn = lb->first; lcn; lcn = lcn->next) {
+		if (lcn == lc) {
+			return true;
+		}
+		if (find_scene_collection_in_scene_collections(&lcn->layer_collections, lc)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+/**
+ * Find the SceneLayer a LayerCollection belongs to
+ */
+SceneLayer *BKE_scene_layer_find_from_collection(Scene *scene, LayerCollection *lc)
+{
+	for (SceneLayer *sl = scene->render_layers.first; sl; sl = sl->next) {
+		if (find_scene_collection_in_scene_collections(&sl->layer_collections, lc)) {
+			return sl;
+		}
+	}
+	return false;
+}
+
 /* ObjectBase */
 
 ObjectBase *BKE_scene_layer_base_find(SceneLayer *sl, Object *ob)
@@ -152,8 +180,10 @@ void BKE_scene_layer_base_deselect_all(SceneLayer *sl)
 
 void BKE_scene_layer_base_select(struct SceneLayer *sl, ObjectBase *selbase)
 {
-	selbase->flag |= BASE_SELECTED;
 	sl->basact = selbase;
+	if ((selbase->flag & BASE_SELECTABLED) != 0) {
+		selbase->flag |= BASE_SELECTED;
+	}
 }
 
 static void scene_layer_object_base_unref(SceneLayer* sl, ObjectBase *base)
@@ -168,6 +198,52 @@ static void scene_layer_object_base_unref(SceneLayer* sl, ObjectBase *base)
 
 		BLI_remlink(&sl->object_bases, base);
 		MEM_freeN(base);
+	}
+}
+
+static void layer_collection_base_flag_recalculate(LayerCollection *lc, const bool tree_is_visible, const bool tree_is_selectable)
+{
+	bool is_visible = tree_is_visible && ((lc->flag & COLLECTION_VISIBLE) != 0);
+	/* an object can only be selected if it's visible */
+	bool is_selectable = tree_is_selectable && is_visible && ((lc->flag & COLLECTION_SELECTABLE) != 0);
+
+	for (LinkData *link = lc->object_bases.first; link; link = link->next) {
+		ObjectBase *base = link->data;
+
+		if (is_visible) {
+			base->flag |= BASE_VISIBLED;
+		}
+		else {
+			base->flag &= ~BASE_VISIBLED;
+		}
+
+		if (is_selectable) {
+			base->flag |= BASE_SELECTABLED;
+		}
+		else {
+			base->flag &= ~BASE_SELECTABLED;
+		}
+	}
+
+	for (LayerCollection *lcn = lc->layer_collections.first; lcn; lcn = lcn->next) {
+		layer_collection_base_flag_recalculate(lcn, is_visible, is_selectable);
+	}
+}
+
+/**
+ * Re-evaluate the ObjectBase flags for SceneLayer
+ */
+void BKE_scene_layer_base_flag_recalculate(SceneLayer *sl)
+{
+	for (LayerCollection *lc = sl->layer_collections.first; lc; lc = lc->next) {
+		layer_collection_base_flag_recalculate(lc, true, true);
+	}
+
+	/* if base is not selectabled, clear select */
+	for (ObjectBase *base = sl->object_bases.first; base; base = base->next) {
+		if ((base->flag & BASE_SELECTABLED) == 0) {
+			base->flag &= ~BASE_SELECTED;
+		}
 	}
 }
 
@@ -197,7 +273,7 @@ static ObjectBase *object_base_add(SceneLayer *sl, Object *ob)
  * When freeing the entire SceneLayer at once we don't bother with unref
  * otherwise SceneLayer is passed to keep the syncing of the LayerCollection tree
  */
-void layer_collection_free(SceneLayer *sl, LayerCollection *lc)
+static void layer_collection_free(SceneLayer *sl, LayerCollection *lc)
 {
 	if (sl) {
 		for (LinkData *link = lc->object_bases.first; link; link = link->next) {
@@ -321,6 +397,7 @@ LayerCollection *BKE_collection_link(SceneLayer *sl, SceneCollection *sc)
 void BKE_collection_unlink(SceneLayer *sl, LayerCollection *lc)
 {
 	BKE_layer_collection_free(sl, lc);
+	BKE_scene_layer_base_flag_recalculate(sl);
 
 	BLI_remlink(&sl->layer_collections, lc);
 	MEM_freeN(lc);
@@ -337,6 +414,8 @@ static void layer_collection_object_add(SceneLayer *sl, LayerCollection *lc, Obj
 	if (BLI_findptr(&lc->object_bases, base, offsetof(LinkData, data))) {
 		return;
 	}
+
+	BKE_scene_layer_base_flag_recalculate(sl);
 
 	BLI_addtail(&lc->object_bases, BLI_genericNodeN(base));
 }
@@ -370,7 +449,7 @@ static void layer_collection_populate(SceneLayer *sl, LayerCollection *lc, Scene
 	}
 }
 
-LayerCollection *layer_collection_add(SceneLayer *sl, ListBase *lb, SceneCollection *sc)
+static LayerCollection *layer_collection_add(SceneLayer *sl, ListBase *lb, SceneCollection *sc)
 {
 	LayerCollection *lc = MEM_callocN(sizeof(LayerCollection), "Collection Base");
 	BLI_addtail(lb, lc);
@@ -380,6 +459,36 @@ LayerCollection *layer_collection_add(SceneLayer *sl, ListBase *lb, SceneCollect
 
 	layer_collection_populate(sl, lc, sc);
 	return lc;
+}
+
+
+/* ---------------------------------------------------------------------- */
+
+/**
+ * See if render layer has the scene collection linked directly, or indirectly (nested)
+ */
+bool BKE_scene_layer_has_collection(struct SceneLayer *sl, struct SceneCollection *sc)
+{
+	for (LayerCollection *lc = sl->layer_collections.first; lc; lc = lc->next) {
+		if (find_layer_collection_by_scene_collection(lc, sc) != NULL) {
+			return true;
+		}
+	}
+	return false;
+}
+
+/**
+ * See if the object is in any of the scene layers of the scene
+ */
+bool BKE_scene_has_object(Scene *scene, Object *ob)
+{
+	for (SceneLayer *sl = scene->render_layers.first; sl; sl = sl->next) {
+		ObjectBase *base = BKE_scene_layer_base_find(sl, ob);
+		if (base) {
+			return true;
+		}
+	}
+	return false;
 }
 
 
@@ -444,6 +553,7 @@ void BKE_layer_sync_object_unlink(Scene *scene, SceneCollection *sc, Object *ob)
 				layer_collection_object_remove(sl, found, ob);
 			}
 		}
+		BKE_scene_layer_base_flag_recalculate(sl);
 	}
 }
 
@@ -458,9 +568,10 @@ void BKE_collection_override_datablock_add(LayerCollection *UNUSED(lc), const ch
 	TODO_LAYER_OVERRIDE;
 }
 
+/* ---------------------------------------------------------------------- */
 /* Iterators */
 
-void BKE_selected_objects_Iterator_begin(Iterator *iter, void *data_in)
+static void object_bases_Iterator_begin(Iterator *iter, void *data_in, const int flag)
 {
 	SceneLayer *sl = data_in;
 	ObjectBase *base = sl->object_bases.first;
@@ -474,32 +585,90 @@ void BKE_selected_objects_Iterator_begin(Iterator *iter, void *data_in)
 	iter->valid = true;
 	iter->data = base;
 
-	if ((base->flag & BASE_SELECTED) == 0) {
-		BKE_selected_objects_Iterator_next(iter);
+	if ((base->flag & flag) == 0) {
+		object_bases_Iterator_next(iter, flag);
 	}
 	else {
-		iter->current = base->object;
+		iter->current = base;
 	}
 }
 
-void BKE_selected_objects_Iterator_next(Iterator *iter)
+static void object_bases_Iterator_next(Iterator *iter, const int flag)
 {
 	ObjectBase *base = ((ObjectBase *)iter->data)->next;
 
 	while (base) {
-		if ((base->flag & BASE_SELECTED) != 0) {
-			iter->current = base->object;
+		if ((base->flag & flag) != 0) {
+			iter->current = base;
 			iter->data = base;
 			return;
 		}
 		base = base->next;
-	};
+	}
 
 	iter->current = NULL;
 	iter->valid = false;
 }
 
+static void objects_Iterator_begin(Iterator *iter, void *data_in, const int flag)
+{
+	object_bases_Iterator_begin(iter, data_in, flag);
+
+	if (iter->valid) {
+		iter->current = ((ObjectBase *)iter->current)->object;
+	}
+}
+
+static void objects_Iterator_next(Iterator *iter, const int flag)
+{
+	object_bases_Iterator_next(iter, flag);
+
+	if (iter->valid) {
+		iter->current = ((ObjectBase *)iter->current)->object;
+	}
+}
+
+void BKE_selected_objects_Iterator_begin(Iterator *iter, void *data_in)
+{
+	objects_Iterator_begin(iter, data_in, BASE_SELECTED);
+}
+
+void BKE_selected_objects_Iterator_next(Iterator *iter)
+{
+	object_bases_Iterator_next(iter, BASE_SELECTED);
+}
+
 void BKE_selected_objects_Iterator_end(Iterator *UNUSED(iter))
+{
+	/* do nothing */
+}
+
+void BKE_visible_objects_Iterator_begin(Iterator *iter, void *data_in)
+{
+	objects_Iterator_begin(iter, data_in, BASE_VISIBLED);
+}
+
+void BKE_visible_objects_Iterator_next(Iterator *iter)
+{
+	objects_Iterator_next(iter, BASE_VISIBLED);
+}
+
+void BKE_visible_objects_Iterator_end(Iterator *UNUSED(iter))
+{
+	/* do nothing */
+}
+
+void BKE_visible_bases_Iterator_begin(Iterator *iter, void *data_in)
+{
+	object_bases_Iterator_begin(iter, data_in, BASE_VISIBLED);
+}
+
+void BKE_visible_bases_Iterator_next(Iterator *iter)
+{
+	object_bases_Iterator_next(iter, BASE_VISIBLED);
+}
+
+void BKE_visible_bases_Iterator_end(Iterator *UNUSED(iter))
 {
 	/* do nothing */
 }

@@ -41,6 +41,7 @@
 #include "IMB_imbuf_types.h"
 
 #include "BLI_math.h"
+#include "BLI_string_utils.h"
 
 #include "BLT_translation.h"
 
@@ -409,9 +410,34 @@ EnumPropertyItem rna_enum_bake_pass_filter_type_items[] = {
 	{0, NULL, 0, NULL, NULL}
 };
 
+EnumPropertyItem rna_enum_gpencil_interpolation_mode_items[] = {
+	/* interpolation */
+	{0, "", 0, N_("Interpolation"), "Standard transitions between keyframes"},
+	{GP_IPO_LINEAR,   "LINEAR", ICON_IPO_LINEAR, "Linear", "Straight-line interpolation between A and B (i.e. no ease in/out)"},
+	{GP_IPO_CURVEMAP, "CUSTOM", ICON_IPO_BEZIER, "Custom", "Custom interpolation defined using a curvemap"},
+	
+	/* easing */
+	{0, "", 0, N_("Easing (by strength)"), "Predefined inertial transitions, useful for motion graphics (from least to most ''dramatic'')"},
+	{GP_IPO_SINE, "SINE", ICON_IPO_SINE, "Sinusoidal", "Sinusoidal easing (weakest, almost linear but with a slight curvature)"},
+	{GP_IPO_QUAD, "QUAD", ICON_IPO_QUAD, "Quadratic", "Quadratic easing"},
+	{GP_IPO_CUBIC, "CUBIC", ICON_IPO_CUBIC, "Cubic", "Cubic easing"},
+	{GP_IPO_QUART, "QUART", ICON_IPO_QUART, "Quartic", "Quartic easing"},
+	{GP_IPO_QUINT, "QUINT", ICON_IPO_QUINT, "Quintic", "Quintic easing"},
+	{GP_IPO_EXPO, "EXPO", ICON_IPO_EXPO, "Exponential", "Exponential easing (dramatic)"},
+	{GP_IPO_CIRC, "CIRC", ICON_IPO_CIRC, "Circular", "Circular easing (strongest and most dynamic)"},
+	
+	{0, "", 0, N_("Dynamic Effects"), "Simple physics-inspired easing effects"},
+	{GP_IPO_BACK, "BACK", ICON_IPO_BACK, "Back", "Cubic easing with overshoot and settle"},
+	{GP_IPO_BOUNCE, "BOUNCE", ICON_IPO_BOUNCE, "Bounce", "Exponentially decaying parabolic bounce, like when objects collide"},
+	{GP_IPO_ELASTIC, "ELASTIC", ICON_IPO_ELASTIC, "Elastic", "Exponentially decaying sine wave, like an elastic band"},
+	
+	{0, NULL, 0, NULL, NULL}
+};
+
 #ifdef RNA_RUNTIME
 
 #include "DNA_anim_types.h"
+#include "DNA_color_types.h"
 #include "DNA_node_types.h"
 #include "DNA_object_types.h"
 #include "DNA_mesh_types.h"
@@ -423,6 +449,7 @@ EnumPropertyItem rna_enum_bake_pass_filter_type_items[] = {
 
 #include "BKE_brush.h"
 #include "BKE_collection.h"
+#include "BKE_colortools.h"
 #include "BKE_context.h"
 #include "BKE_global.h"
 #include "BKE_image.h"
@@ -450,6 +477,29 @@ EnumPropertyItem rna_enum_bake_pass_filter_type_items[] = {
 #ifdef WITH_FREESTYLE
 #include "FRS_freestyle.h"
 #endif
+
+/* Grease Pencil Interpolation settings */
+static char *rna_GPencilInterpolateSettings_path(PointerRNA *UNUSED(ptr))
+{
+	return BLI_strdup("tool_settings.gpencil_interpolate");
+}
+
+static void rna_GPencilInterpolateSettings_type_set(PointerRNA *ptr, int value)
+{
+	GP_Interpolate_Settings *settings = (GP_Interpolate_Settings *)ptr->data;
+	
+	/* NOTE: This cast should be fine, as we have a small + finite set of values (eGP_Interpolate_Type)
+	 * that should fit well within a char
+	 */
+	settings->type = (char)value;
+	
+	/* init custom interpolation curve here now the first time it's used */
+	if ((settings->type == GP_IPO_CURVEMAP) &&
+	    (settings->custom_ipo == NULL))
+	{
+		settings->custom_ipo = curvemapping_add(1, 0.0f, 0.0f, 1.0f, 1.0f);
+	}
+}
 
 /* Grease pencil Drawing Brushes */
 static bGPDbrush *rna_GPencil_brush_new(ToolSettings *ts, const char *name, int setactive)
@@ -2246,7 +2296,7 @@ static void rna_SceneCollection_object_unlink(
 		return;
 	}
 
-	BKE_collection_object_remove(scene, sc, ob);
+	BKE_collection_object_remove(bmain, scene, sc, ob, false);
 
 	/* needed otherwise the depgraph will contain freed objects which can crash, see [#20958] */
 	DAG_relations_tag_update(bmain);
@@ -2281,6 +2331,31 @@ static PointerRNA rna_LayerCollection_objects_get(CollectionPropertyIterator *it
 	ListBaseIterator *internal = &iter->internal.listbase;
 	ObjectBase *base = ((LinkData *)internal->link)->data;
 	return rna_pointer_inherit_refine(&iter->parent, &RNA_Object, base->object);
+}
+
+static void rna_LayerCollection_hide_update(bContext *C, PointerRNA *ptr)
+{
+	Scene *scene = CTX_data_scene(C);
+	LayerCollection *lc = ptr->data;
+	SceneLayer *sl = BKE_scene_layer_find_from_collection(scene, lc);
+
+	/* hide and deselect bases that are directly influenced by this LayerCollection */
+	BKE_scene_layer_base_flag_recalculate(sl);
+	WM_event_add_notifier(C, NC_SCENE | ND_OB_SELECT, scene);
+}
+
+static void rna_LayerCollection_hide_select_update(bContext *C, PointerRNA *ptr)
+{
+	LayerCollection *lc = ptr->data;
+
+	if ((lc->flag & COLLECTION_SELECTABLE) == 0) {
+		Scene *scene = CTX_data_scene(C);
+		SceneLayer *sl = BKE_scene_layer_find_from_collection(scene, lc);
+
+		/* deselect bases that are directly influenced by this LayerCollection */
+		BKE_scene_layer_base_flag_recalculate(sl);
+		WM_event_add_notifier(C, NC_SCENE | ND_OB_SELECT, CTX_data_scene(C));
+	}
 }
 
 static int rna_LayerCollections_active_collection_index_get(PointerRNA *ptr)
@@ -2507,6 +2582,73 @@ static void rna_ObjectBase_select_update(Main *UNUSED(bmain), Scene *UNUSED(scen
 }
 
 #else
+
+/* Grease Pencil Interpolation tool settings */
+static void rna_def_gpencil_interpolate(BlenderRNA *brna)
+{
+	StructRNA *srna;
+	PropertyRNA *prop;
+	
+	srna = RNA_def_struct(brna, "GPencilInterpolateSettings", NULL);
+	RNA_def_struct_sdna(srna, "GP_Interpolate_Settings");
+	RNA_def_struct_path_func(srna, "rna_GPencilInterpolateSettings_path");
+	RNA_def_struct_ui_text(srna, "Grease Pencil Interpolate Settings",
+	                       "Settings for Grease Pencil interpolation tools");
+	
+	/* flags */
+	prop = RNA_def_property(srna, "interpolate_all_layers", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "flag", GP_TOOLFLAG_INTERPOLATE_ALL_LAYERS);
+	RNA_def_property_ui_text(prop, "Interpolate All Layers", "Interpolate all layers, not only active");
+	RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
+
+	prop = RNA_def_property(srna, "interpolate_selected_only", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "flag", GP_TOOLFLAG_INTERPOLATE_ONLY_SELECTED);
+	RNA_def_property_ui_text(prop, "Interpolate Selected Strokes", "Interpolate only selected strokes in the original frame");
+	RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
+	
+	/* interpolation type */
+	prop = RNA_def_property(srna, "type", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_sdna(prop, NULL, "type");
+	RNA_def_property_enum_items(prop, rna_enum_gpencil_interpolation_mode_items);
+	RNA_def_property_enum_funcs(prop, NULL, "rna_GPencilInterpolateSettings_type_set", NULL);
+	RNA_def_property_ui_text(prop, "Type",
+	                         "Interpolation method to use the next time 'Interpolate Sequence' is run");
+	RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
+	
+	/* easing */
+	prop = RNA_def_property(srna, "easing", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_sdna(prop, NULL, "easing");
+	RNA_def_property_enum_items(prop, rna_enum_beztriple_interpolation_easing_items);
+	RNA_def_property_ui_text(prop, "Easing", 
+	                         "Which ends of the segment between the preceding and following grease pencil frames "
+	                         "easing interpolation is applied to");
+	RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
+	
+	/* easing options */
+	prop = RNA_def_property(srna, "back", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_float_sdna(prop, NULL, "back");
+	RNA_def_property_ui_text(prop, "Back", "Amount of overshoot for 'back' easing");
+	RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
+	
+	prop = RNA_def_property(srna, "amplitude", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_float_sdna(prop, NULL, "amplitude");
+	RNA_def_property_range(prop, 0.0f, FLT_MAX); /* only positive values... */
+	RNA_def_property_ui_text(prop, "Amplitude", "Amount to boost elastic bounces for 'elastic' easing");
+	RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
+	
+	prop = RNA_def_property(srna, "period", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_float_sdna(prop, NULL, "period");
+	RNA_def_property_ui_text(prop, "Period", "Time between bounces for elastic easing");
+	RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
+	
+	/* custom curvemap */
+	prop = RNA_def_property(srna, "interpolation_curve", PROP_POINTER, PROP_NONE);
+	RNA_def_property_pointer_sdna(prop, NULL, "custom_ipo");
+	RNA_def_property_struct_type(prop, "CurveMapping");
+	RNA_def_property_ui_text(prop, "Interpolation Curve", 
+	                         "Custom curve to control 'sequence' interpolation between Grease Pencil frames");
+	RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
+}
 
 /* Grease Pencil Drawing Brushes */
 static void rna_def_gpencil_brush(BlenderRNA *brna)
@@ -3043,7 +3185,14 @@ static void rna_def_tool_settings(BlenderRNA  *brna)
 	prop = RNA_def_property(srna, "gpencil_sculpt", PROP_POINTER, PROP_NONE);
 	RNA_def_property_pointer_sdna(prop, NULL, "gp_sculpt");
 	RNA_def_property_struct_type(prop, "GPencilSculptSettings");
-	RNA_def_property_ui_text(prop, "Grease Pencil Sculpt", "");
+	RNA_def_property_ui_text(prop, "Grease Pencil Sculpt",
+	                         "Settings for stroke sculpting tools and brushes");
+	
+	prop = RNA_def_property(srna, "gpencil_interpolate", PROP_POINTER, PROP_NONE);
+	RNA_def_property_pointer_sdna(prop, NULL, "gp_interpolate");
+	RNA_def_property_struct_type(prop, "GPencilInterpolateSettings");
+	RNA_def_property_ui_text(prop, "Grease Pencil Interpolate", 
+	                        "Settings for Grease Pencil Interpolation tools");
 
 	/* Grease Pencil - Drawing brushes */
 	prop = RNA_def_property(srna, "gpencil_brushes", PROP_COLLECTION, PROP_NONE);
@@ -5419,15 +5568,17 @@ static void rna_def_layer_collection(BlenderRNA *brna)
 	/* Flags */
 	prop = RNA_def_property(srna, "hide", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_negative_sdna(prop, NULL, "flag", COLLECTION_VISIBLE);
+	RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
 	RNA_def_property_ui_icon(prop, ICON_RESTRICT_VIEW_OFF, 1);
 	RNA_def_property_ui_text(prop, "Hide", "Restrict visiblity");
-	RNA_def_property_update(prop, NC_SCENE | ND_LAYER_CONTENT, NULL);
+	RNA_def_property_update(prop, NC_SCENE | ND_LAYER_CONTENT, "rna_LayerCollection_hide_update");
 
 	prop = RNA_def_property(srna, "hide_select", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_negative_sdna(prop, NULL, "flag", COLLECTION_SELECTABLE);
+	RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
 	RNA_def_property_ui_icon(prop, ICON_RESTRICT_SELECT_OFF, 1);
 	RNA_def_property_ui_text(prop, "Hide Selectable", "Restrict selection");
-	RNA_def_property_update(prop, NC_SCENE | ND_LAYER_CONTENT, NULL);
+	RNA_def_property_update(prop, NC_SCENE | ND_LAYER_CONTENT, "rna_LayerCollection_hide_select_update");
 
 	prop = RNA_def_property(srna, "is_unfolded", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_negative_sdna(prop, NULL, "flag", COLLECTION_FOLDED);
@@ -8083,6 +8234,7 @@ void RNA_def_scene(BlenderRNA *brna)
 	RNA_define_animate_sdna(false);
 	rna_def_tool_settings(brna);
 	rna_def_gpencil_brush(brna);
+	rna_def_gpencil_interpolate(brna);
 	rna_def_unified_paint_settings(brna);
 	rna_def_curve_paint_settings(brna);
 	rna_def_statvis(brna);

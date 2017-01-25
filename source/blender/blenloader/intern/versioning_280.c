@@ -129,7 +129,7 @@ void blo_do_versions_after_linking_280(Main *main)
 				/* convert selected bases */
 				for (Base *base = scene->base.first; base; base = base->next) {
 					ObjectBase *ob_base = BKE_scene_layer_base_find(sl, base->object);
-					if ((base->flag & BA_SELECT) != 0) {
+					if ((base->flag & SELECT) != 0) {
 						ob_base->flag |= BASE_SELECTED;
 					}
 					else {
@@ -145,6 +145,13 @@ void blo_do_versions_after_linking_280(Main *main)
 						BKE_collection_remove(scene, collections[i]);
 					}
 				}
+
+				/* remove bases once and for all */
+				for (Base *base = scene->base.first; base; base = base->next) {
+					id_us_min(&base->object->id);
+				}
+				BLI_freelistN(&scene->base);
+				scene->basact = NULL;
 			}
 		}
 	}

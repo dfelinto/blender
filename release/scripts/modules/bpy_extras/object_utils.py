@@ -130,7 +130,7 @@ def object_data_add(context, obdata, operator=None, name=None):
 
     obj_new = bpy.data.objects.new(name, obdata)
     scene_collection.objects.link(obj_new)
-    obj_new.select = True
+    obj_new.select_set(action='SELECT')
 
     obj_new.matrix_world = add_object_align_init(context, operator)
 
@@ -157,7 +157,7 @@ def object_data_add(context, obdata, operator=None, name=None):
         bpy.ops.mesh.select_all(action='DESELECT')
         bpy.ops.object.mode_set(mode='OBJECT')
 
-        obj_act.select = True
+        obj_act.select_set(action='SELECT')
         scene.update()  # apply location
         # scene.objects.active = obj_new
 

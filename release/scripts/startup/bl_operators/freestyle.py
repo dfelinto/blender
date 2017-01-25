@@ -74,7 +74,7 @@ class SCENE_OT_freestyle_fill_range_by_selection(bpy.types.Operator):
             self.report({'ERROR'}, "Unexpected modifier type: " + m.type)
             return {'CANCELLED'}
         # Find selected mesh objects
-        selection = [ob for ob in scene.objects if ob.select and ob.type == 'MESH' and ob.name != source.name]
+        selection = [ob for ob in scene.objects if ob.select_get() and ob.type == 'MESH' and ob.name != source.name]
         if selection:
             # Compute the min/max distance between selected mesh objects and the source
             min_dist = sys.float_info.max

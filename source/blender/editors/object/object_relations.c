@@ -1308,119 +1308,6 @@ void OBJECT_OT_track_set(wmOperatorType *ot)
 	ot->prop = RNA_def_enum(ot->srna, "type", prop_make_track_types, 0, "Type", "");
 }
 
-/************************** Move to Layer Operator *****************************/
-
-static unsigned int move_to_layer_init(bContext *C, wmOperator *op)
-{
-	int values[20], a;
-	unsigned int lay = 0;
-
-	if (!RNA_struct_property_is_set(op->ptr, "layers")) {
-		/* note: layers are set in bases, library objects work for this */
-		CTX_DATA_BEGIN (C, Base *, base, selected_bases)
-		{
-			lay |= base->lay;
-		}
-		CTX_DATA_END;
-
-		for (a = 0; a < 20; a++)
-			values[a] = (lay & (1 << a)) != 0;
-
-		RNA_boolean_set_array(op->ptr, "layers", values);
-	}
-	else {
-		RNA_boolean_get_array(op->ptr, "layers", values);
-
-		for (a = 0; a < 20; a++)
-			if (values[a])
-				lay |= (1 << a);
-	}
-
-	return lay;
-}
-
-static int move_to_layer_invoke(bContext *C, wmOperator *op, const wmEvent *event)
-{
-	View3D *v3d = CTX_wm_view3d(C);
-	if (v3d && v3d->localvd) {
-		return WM_operator_confirm_message(C, op, "Move out of Local View");
-	}
-	else {
-		move_to_layer_init(C, op);
-		return WM_operator_props_popup(C, op, event);
-	}
-}
-
-static int move_to_layer_exec(bContext *C, wmOperator *op)
-{
-	Main *bmain = CTX_data_main(C);
-	Scene *scene = CTX_data_scene(C);
-	View3D *v3d = CTX_wm_view3d(C);
-	unsigned int lay, local;
-	/* bool is_lamp = false; */ /* UNUSED */
-
-	lay = move_to_layer_init(C, op);
-	lay &= 0xFFFFFF;
-
-	if (lay == 0) return OPERATOR_CANCELLED;
-
-	if (v3d && v3d->localvd) {
-		/* now we can move out of localview. */
-		/* note: layers are set in bases, library objects work for this */
-		CTX_DATA_BEGIN (C, Base *, base, selected_bases)
-		{
-			lay = base->lay & ~v3d->lay;
-			base->lay = lay;
-			base->object->lay = lay;
-			base->object->flag &= ~SELECT;
-			base->flag &= ~SELECT;
-			/* if (base->object->type == OB_LAMP) is_lamp = true; */
-		}
-		CTX_DATA_END;
-	}
-	else {
-		/* normal non localview operation */
-		/* note: layers are set in bases, library objects work for this */
-		CTX_DATA_BEGIN (C, Base *, base, selected_bases)
-		{
-			/* upper byte is used for local view */
-			local = base->lay & 0xFF000000;
-			base->lay = lay + local;
-			base->object->lay = base->lay;
-			/* if (base->object->type == OB_LAMP) is_lamp = true; */
-		}
-		CTX_DATA_END;
-	}
-
-	/* warning, active object may be hidden now */
-
-	WM_event_add_notifier(C, NC_OBJECT | ND_DRAW, scene);
-	WM_event_add_notifier(C, NC_SCENE | ND_LAYER_CONTENT, scene);
-
-	DAG_relations_tag_update(bmain);
-
-	return OPERATOR_FINISHED;
-}
-
-void OBJECT_OT_move_to_layer(wmOperatorType *ot)
-{
-	/* identifiers */
-	ot->name = "Move to Layer";
-	ot->description = "Move the object to different layers";
-	ot->idname = "OBJECT_OT_move_to_layer";
-
-	/* api callbacks */
-	ot->invoke = move_to_layer_invoke;
-	ot->exec = move_to_layer_exec;
-	ot->poll = ED_operator_objectmode;
-
-	/* flags */
-	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
-
-	/* properties */
-	RNA_def_boolean_layer_member(ot->srna, "layers", 20, NULL, "Layer", "");
-}
-
 /************************** Link to Scene Operator *****************************/
 
 #if 0
@@ -1443,20 +1330,6 @@ static void link_to_scene(Main *UNUSED(bmain), unsigned short UNUSED(nr))
 }
 #endif
 
-Base *ED_object_scene_link(Scene *scene, Object *ob)
-{
-	Base *base;
-
-	if (BKE_scene_base_find(scene, ob)) {
-		return NULL;
-	}
-
-	base = BKE_scene_base_add(scene, ob);
-	id_us_plus(&ob->id);
-
-	return base;
-}
-
 static int make_links_scene_exec(bContext *C, wmOperator *op)
 {
 	Scene *scene_to = BLI_findlink(&CTX_data_main(C)->scene, RNA_enum_get(op->ptr, "scene"));
@@ -1476,9 +1349,10 @@ static int make_links_scene_exec(bContext *C, wmOperator *op)
 		return OPERATOR_CANCELLED;
 	}
 
-	CTX_DATA_BEGIN (C, Base *, base, selected_bases)
+	SceneCollection *sc_to = BKE_collection_master(scene_to);
+	CTX_DATA_BEGIN (C, ObjectBase *, base, selected_bases)
 	{
-		ED_object_scene_link(scene_to, base->object);
+		BKE_collection_object_add(scene_to, sc_to, base->object);
 	}
 	CTX_DATA_END;
 
@@ -1534,7 +1408,6 @@ static bool allow_make_links_data(const int type, Object *ob_src, Object *ob_dst
 static int make_links_data_exec(bContext *C, wmOperator *op)
 {
 	Main *bmain = CTX_data_main(C);
-	Scene *scene = CTX_data_scene(C);
 	const int type = RNA_enum_get(op->ptr, "type");
 	Object *ob_src;
 	ID *obdata_id;
@@ -1552,7 +1425,7 @@ static int make_links_data_exec(bContext *C, wmOperator *op)
 		ob_groups = BKE_object_groups(ob_src);
 	}
 
-	CTX_DATA_BEGIN (C, Base *, base_dst, selected_editable_bases)
+	CTX_DATA_BEGIN (C, ObjectBase *, base_dst, selected_editable_bases)
 	{
 		Object *ob_dst = base_dst->object;
 
@@ -1597,12 +1470,12 @@ static int make_links_data_exec(bContext *C, wmOperator *op)
 						LinkNode *group_node;
 
 						/* first clear groups */
-						BKE_object_groups_clear(scene, base_dst, ob_dst);
+						BKE_object_groups_clear(ob_dst);
 
 						/* now add in the groups from the link nodes */
 						for (group_node = ob_groups; group_node; group_node = group_node->next) {
 							if (ob_dst->dup_group != group_node->link) {
-								BKE_group_object_add(group_node->link, ob_dst, scene, base_dst);
+								BKE_group_object_add(group_node->link, ob_dst);
 							}
 							else {
 								is_cycle = true;
@@ -2237,7 +2110,7 @@ static bool make_local_all__instance_indirect_unused(Main *bmain, Scene *scene)
 
 			base = BKE_scene_base_add(scene, ob);
 			base->flag |= SELECT;
-			base->object->flag = base->flag;
+			BKE_scene_base_flag_sync_from_base(base);
 			DAG_id_tag_update(&ob->id, OB_RECALC_OB | OB_RECALC_DATA | OB_RECALC_TIME);
 
 			changed = true;

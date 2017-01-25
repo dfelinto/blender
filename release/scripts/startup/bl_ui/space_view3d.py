@@ -634,7 +634,6 @@ class VIEW3D_MT_select_object(Menu):
         layout.operator("object.select_all", text="Inverse").action = 'INVERT'
         layout.operator("object.select_random", text="Random")
         layout.operator("object.select_mirror", text="Mirror")
-        layout.operator("object.select_by_layer", text="Select All by Layer")
         layout.operator_menu_enum("object.select_by_type", "type", text="Select All by Type...")
         layout.operator("object.select_camera", text="Select Camera")
 
@@ -1311,15 +1310,6 @@ class VIEW3D_MT_object(Menu):
 
         layout.separator()
 
-        if is_local_view:
-            layout.operator_context = 'EXEC_REGION_WIN'
-            layout.operator("object.move_to_layer", text="Move out of Local View")
-            layout.operator_context = 'INVOKE_REGION_WIN'
-        else:
-            layout.operator("object.move_to_layer", text="Move to Layer...")
-
-        layout.menu("VIEW3D_MT_object_showhide")
-
         layout.operator_menu_enum("object.convert", "target")
 
 
@@ -1595,17 +1585,6 @@ class VIEW3D_MT_object_quick_effects(Menu):
         layout.operator("object.quick_explode")
         layout.operator("object.quick_smoke")
         layout.operator("object.quick_fluid")
-
-
-class VIEW3D_MT_object_showhide(Menu):
-    bl_label = "Show/Hide"
-
-    def draw(self, context):
-        layout = self.layout
-
-        layout.operator("object.hide_view_clear", text="Show Hidden")
-        layout.operator("object.hide_view_set", text="Hide Selected").unselected = False
-        layout.operator("object.hide_view_set", text="Hide Unselected").unselected = True
 
 
 class VIEW3D_MT_make_single_user(Menu):

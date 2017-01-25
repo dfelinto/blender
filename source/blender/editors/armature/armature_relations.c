@@ -269,7 +269,7 @@ int join_armature_exec(bContext *C, wmOperator *op)
 	if (!arm || arm->edbo)
 		return OPERATOR_CANCELLED;
 	
-	CTX_DATA_BEGIN(C, Base *, base, selected_editable_bases)
+	CTX_DATA_BEGIN(C, ObjectBase *, base, selected_editable_bases)
 	{
 		if (base->object == ob) {
 			ok = true;
@@ -291,7 +291,7 @@ int join_armature_exec(bContext *C, wmOperator *op)
 	pose = ob->pose;
 	ob->mode &= ~OB_MODE_POSE;
 
-	CTX_DATA_BEGIN(C, Base *, base, selected_editable_bases)
+	CTX_DATA_BEGIN(C, ObjectBase *, base, selected_editable_bases)
 	{
 		if ((base->object->type == OB_ARMATURE) && (base->object != ob)) {
 			tJoinArmature_AdtFixData afd = {NULL};
@@ -401,7 +401,7 @@ int join_armature_exec(bContext *C, wmOperator *op)
 			}
 			
 			/* Free the old object data */
-			ED_base_object_free_and_unlink(bmain, scene, base);
+			ED_base_object_free_and_unlink(bmain, scene, base->object);
 		}
 	}
 	CTX_DATA_END;
@@ -578,7 +578,6 @@ static void separate_armature_bones(Object *ob, short sel)
 /* separate selected bones into their armature */
 static int separate_armature_exec(bContext *C, wmOperator *op)
 {
-#if 0 /* TODO_LAYER */
 	Main *bmain = CTX_data_main(C);
 	Scene *scene = CTX_data_scene(C);
 	SceneLayer *sl = CTX_data_scene_layer(C);
@@ -603,10 +602,14 @@ static int separate_armature_exec(bContext *C, wmOperator *op)
 
 	/* 1) only edit-base selected */
 	/* TODO: use context iterators for this? */
-	CTX_DATA_BEGIN(C, Base *, base, visible_bases)
+	CTX_DATA_BEGIN(C, ObjectBase *, base, visible_bases)
 	{
-		if (base->object == obedit) base->flag |= SELECT;
-		else base->flag &= ~SELECT;
+		if (base->object == obedit) {
+			ED_object_base_select(base, BA_SELECT);
+		}
+		else {
+			ED_object_base_select(base, BA_DESELECT);
+		}
 	}
 	CTX_DATA_END;
 	
@@ -620,7 +623,7 @@ static int separate_armature_exec(bContext *C, wmOperator *op)
 	ED_armature_edit_free(obedit->data);
 	
 	/* 2) duplicate base */
-	newbase = ED_object_add_duplicate(bmain, scene, oldbase, USER_DUP_ARM); /* only duplicate linked armature */
+	newbase = ED_object_add_duplicate(bmain, scene, sl, oldbase, USER_DUP_ARM); /* only duplicate linked armature */
 	DAG_relations_tag_update(bmain);
 
 	newob = newbase->object;
@@ -656,13 +659,6 @@ static int separate_armature_exec(bContext *C, wmOperator *op)
 	WM_cursor_wait(0);
 	
 	return OPERATOR_FINISHED;
-#else
-	(void)C;
-	(void)op;
-	(void)separate_armature_bones;
-	(void)separated_armature_fix_links;
-	return OPERATOR_CANCELLED;
-#endif
 }
 
 void ARMATURE_OT_separate(wmOperatorType *ot)
