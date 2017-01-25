@@ -460,6 +460,7 @@ static Object *createRepresentation(bContext *C, struct recast_polyMesh *pmesh, 
 
 static int navmesh_create_exec(bContext *C, wmOperator *op)
 {
+	Scene *scene = CTX_data_scene(C);
 	SceneLayer *sl = CTX_data_scene_layer(C);
 	LinkNode *obs = NULL;
 	Base *navmeshBase = NULL;
