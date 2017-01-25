@@ -57,7 +57,13 @@ static void object_bases_Iterator_next(Iterator *iter, const int flag);
  */
 SceneLayer *BKE_scene_layer_add(Scene *scene, const char *name)
 {
+	if (!name) {
+		name = DATA_("Render Layer");
+	}
+
 	SceneLayer *sl = MEM_callocN(sizeof(SceneLayer), "Scene Layer");
+	sl->flag |= SCENE_LAYER_RENDER;
+
 	BLI_addtail(&scene->render_layers, sl);
 
 	/* unique name */
@@ -85,9 +91,11 @@ bool BKE_scene_layer_remove(Main *bmain, Scene *scene, SceneLayer *sl)
 	}
 
 	BLI_remlink(&scene->render_layers, sl);
+
 	BKE_scene_layer_free(sl);
 	MEM_freeN(sl);
 
+	scene->active_layer = 0;
 	/* TODO WORKSPACE: set active_layer to 0 */
 
 	for (Scene *sce = bmain->scene.first; sce; sce = sce->id.next) {

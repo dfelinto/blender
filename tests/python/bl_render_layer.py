@@ -752,6 +752,7 @@ class UnitsTesting(unittest.TestCase):
         See if we can link objects via bpy.context.scene_collection
         """
         import bpy
+        bpy.context.scene.render_layers.active_index = len(bpy.context.scene.render_layers) - 1
         master_collection = bpy.context.scene_collection
         self.do_link(master_collection)
 
@@ -827,6 +828,10 @@ class UnitsTesting(unittest.TestCase):
         layer.collections.link(subzero)
         layer.collections.active_index = 3
         self.assertEqual(layer.collections.active.name, 'scorpion')
+
+        scene = bpy.context.scene
+        scene.render_layers.active_index = len(scene.render_layers) - 2
+        self.assertEqual(scene.render_layers.active.name, "Render Layer")
 
         # old layer
         self.assertEqual(bpy.ops.testing.sample(render_layer='Render Layer', use_verbose=True), {'FINISHED'})
@@ -970,6 +975,8 @@ class UnitsTesting(unittest.TestCase):
             scorpion.objects.link(three_c)
             layer = scene.render_layers.new('Fresh new Layer')
             layer.collections.link(subzero)
+
+            scene.render_layers.active_index = len(scene.render_layers) - 1
 
             if mode == 'DUPLICATE':
                 # assuming the latest layer is the active layer

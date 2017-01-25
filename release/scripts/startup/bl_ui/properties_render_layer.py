@@ -35,7 +35,7 @@ class RenderLayerButtonsPanel:
 
 class RENDERLAYER_UL_renderlayers(UIList):
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
-        # assert(isinstance(item, bpy.types.SceneRenderLayer)
+        # assert(isinstance(item, bpy.types.SceneLayer)
         layer = item
         if self.layout_type in {'DEFAULT', 'COMPACT'}:
             layout.prop(layer, "name", text="", icon_value=icon, emboss=False)
@@ -62,7 +62,7 @@ class RENDERLAYER_PT_layers(RenderLayerButtonsPanel, Panel):
 
         row = layout.row()
         col = row.column()
-        col.template_list("RENDERLAYER_UL_renderlayers", "", rd, "layers", rd.layers, "active_index", rows=2)
+        col.template_list("RENDERLAYER_UL_renderlayers", "", scene, "render_layers", scene.render_layers, "active_index", rows=2)
 
         col = row.column()
         sub = col.column(align=True)

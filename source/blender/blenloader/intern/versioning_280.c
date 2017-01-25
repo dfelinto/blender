@@ -78,6 +78,8 @@ void blo_do_versions_after_linking_280(Main *main)
 					}
 				}
 
+				scene->active_layer = 0;
+
 				if (!BKE_scene_uses_blender_game(scene)) {
 					for (SceneRenderLayer *srl = scene->r.layers.first; srl; srl = srl->next) {
 
@@ -106,6 +108,10 @@ void blo_do_versions_after_linking_280(Main *main)
 						}
 
 						/* TODO: passes, samples, mask_layesr, exclude, ... */
+					}
+
+					if (BLI_findlink(&scene->render_layers, scene->r.actlay)) {
+						scene->active_layer = scene->r.actlay;
 					}
 				}
 

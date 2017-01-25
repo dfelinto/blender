@@ -907,9 +907,9 @@ SceneLayer *CTX_data_scene_layer(const bContext *C)
 	}
 	else {
 		Scene *scene = CTX_data_scene(C);
-		/* temporary, waiting for workspace or scene active layer */
-		TODO_LAYER_CONTEXT;
-		return scene->render_layers.last;
+		sl = BLI_findlink(&scene->render_layers, scene->active_layer);
+		BLI_assert(sl);
+		return sl;
 	}
 }
 
