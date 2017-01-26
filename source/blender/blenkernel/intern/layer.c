@@ -643,7 +643,7 @@ void BKE_selected_objects_Iterator_begin(Iterator *iter, void *data_in)
 
 void BKE_selected_objects_Iterator_next(Iterator *iter)
 {
-	object_bases_Iterator_next(iter, BASE_SELECTED);
+	objects_Iterator_next(iter, BASE_SELECTED);
 }
 
 void BKE_selected_objects_Iterator_end(Iterator *UNUSED(iter))
