@@ -1,4 +1,4 @@
-uniform ivec2 screenres;
+uniform vec2 screenres;
 uniform sampler2D depthtex;
 uniform mat4 WinMatrix;
 
@@ -164,7 +164,7 @@ void ssao_factors(in float depth, in vec3 normal, in vec3 position, in vec2 scre
 #endif
 
 void main() {
-	vec2 screenco = vec2(gl_FragCoord.xy) / vec2(screenres);
+	vec2 screenco = vec2(gl_FragCoord.xy) / screenres;
 	float depth = texture(depthtex, screenco).r;
 
 	vec3 position = get_view_space_from_depth(screenco, depth);

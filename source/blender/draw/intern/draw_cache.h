@@ -19,25 +19,23 @@
  *
  */
 
-/** \file draw_mode_pass.h
+/** \file draw_cache.h
  *  \ingroup draw
  */
 
-#ifndef __DRAW_MODE_PASS_H__
-#define __DRAW_MODE_PASS_H__
+#ifndef __DRAW_CACHE_H__
+#define __DRAW_CACHE_H__
 
-#include "DRW_render.h"
-
-struct DRWPass;
 struct Batch;
+struct Object;
 
-void DRW_pass_setup_common(struct DRWPass **wire_overlay, struct DRWPass **wire_outline, struct DRWPass **non_meshes, struct DRWPass **ob_center);
+/* Common Shapes */
+struct Batch *DRW_cache_fullscreen_quad_get(void);
+struct Batch *DRW_cache_single_vert_get(void);
+struct Batch *DRW_cache_plain_axes_get(void);
 
-void DRW_shgroup_wire_overlay(struct DRWPass *wire_overlay, Object *ob);
-void DRW_shgroup_wire_outline(
-        struct DRWPass *wire_outline, Object *ob, const bool do_front, const bool do_back, const bool do_outline);
+/* Meshes */
+struct Batch *DRW_cache_wire_outline_get(struct Object *ob);
+struct Batch *DRW_cache_surface_get(struct Object *ob);
 
-void DRW_shgroup_non_meshes(struct DRWPass *non_meshes, Object *ob);
-void DRW_shgroup_object_center(struct DRWPass *ob_center, Object *ob);
-
-#endif /* __DRAW_MODE_PASS_H__ */
+#endif /* __DRAW_CACHE_H__ */

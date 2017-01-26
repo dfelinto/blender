@@ -113,8 +113,10 @@ typedef struct CLAY_TextureList{
 typedef struct CLAY_PassList{
 	struct DRWPass *depth_pass;
 	struct DRWPass *clay_pass;
-	struct DRWPass *mode_ob_wire_pass;
-	struct DRWPass *mode_ob_center_pass;
+	struct DRWPass *wire_overlay_pass;
+	struct DRWPass *wire_outline_pass;
+	struct DRWPass *non_meshes_pass;
+	struct DRWPass *ob_center_pass;
 } CLAY_PassList;
 
 //#define GTAO
@@ -312,6 +314,57 @@ static void CLAY_engine_init(void)
 	}
 }
 
+static void CLAY_ssao_setup(void)
+{
+	float invproj[4][4];
+	float dfdyfacs[2];
+	bool is_persp = DRW_viewport_is_persp_get();
+	/* view vectors for the corners of the view frustum. Can be used to recreate the world space position easily */
+	float viewvecs[3][4] = {
+	    {-1.0f, -1.0f, -1.0f, 1.0f},
+	    {1.0f, -1.0f, -1.0f, 1.0f},
+	    {-1.0f, 1.0f, -1.0f, 1.0f}
+	};
+	int i;
+	float *size = DRW_viewport_size_get();
+	EngineDataClay *settings = DRW_render_settings();
+
+	DRW_get_dfdy_factors(dfdyfacs);
+
+	data.ssao_params[0] = settings->ssao_samples;
+	data.ssao_params[1] = size[0] / 64.0;
+	data.ssao_params[2] = size[1] / 64.0;
+	data.ssao_params[3] = dfdyfacs[1]; /* dfdy sign for offscreen */
+
+	/* invert the view matrix */
+	DRW_viewport_matrix_get(data.winmat, DRW_MAT_WIN);
+	invert_m4_m4(invproj, data.winmat);
+
+	/* convert the view vectors to view space */
+	for (i = 0; i < 3; i++) {
+		mul_m4_v4(invproj, viewvecs[i]);
+		/* normalized trick see http://www.derschmale.com/2014/01/26/reconstructing-positions-from-the-depth-buffer */
+		mul_v3_fl(viewvecs[i], 1.0f / viewvecs[i][3]);
+		if (is_persp)
+			mul_v3_fl(viewvecs[i], 1.0f / viewvecs[i][2]);
+		viewvecs[i][3] = 1.0;
+
+		copy_v4_v4(data.viewvecs[i], viewvecs[i]);
+	}
+
+	/* we need to store the differences */
+	data.viewvecs[1][0] -= data.viewvecs[0][0];
+	data.viewvecs[1][1] = data.viewvecs[2][1] - data.viewvecs[0][1];
+
+	/* calculate a depth offset as well */
+	if (!is_persp) {
+		float vec_far[] = {-1.0f, -1.0f, 1.0f, 1.0f};
+		mul_m4_v4(invproj, vec_far);
+		mul_v3_fl(vec_far, 1.0f / vec_far[3]);
+		data.viewvecs[1][2] = vec_far[2] - data.viewvecs[0][2];
+	}
+}
+
 static DRWShadingGroup *CLAY_shgroup_create(DRWPass *pass, int *material_id)
 {
 	const int depthloc = 0, matcaploc = 1, jitterloc = 2, sampleloc = 3;
@@ -319,7 +372,7 @@ static DRWShadingGroup *CLAY_shgroup_create(DRWPass *pass, int *material_id)
 	CLAY_UBO_Material *mat = &data.mat_storage.materials[0];
 	DRWShadingGroup *grp = DRW_shgroup_create(data.clay_sh, pass);
 
-	DRW_shgroup_uniform_ivec2(grp, "screenres", DRW_viewport_size_get(), 1);
+	DRW_shgroup_uniform_vec2(grp, "screenres", DRW_viewport_size_get(), 1);
 	DRW_shgroup_uniform_buffer(grp, "depthtex", SCENE_DEPTH, depthloc);
 	DRW_shgroup_uniform_texture(grp, "matcaps", data.matcap_array, matcaploc);
 	DRW_shgroup_uniform_mat4(grp, "WinMatrix", (float *)data.winmat);
@@ -463,84 +516,50 @@ static void CLAY_create_cache(CLAY_PassList *passes, const struct bContext *C)
 
 	/* Object Mode */
 	{
-		DRW_mode_object_setup(&passes->mode_ob_wire_pass, &passes->mode_ob_center_pass);
+		DRW_pass_setup_common(&passes->wire_overlay_pass,
+			                  &passes->wire_outline_pass,
+			                  &passes->non_meshes_pass,
+			                  &passes->ob_center_pass);
 	}
 
 	/* TODO Create hash table of batch based on material id*/
 	FOREACH_OBJECT(sl, ob)
 	{
-		if (ob->type == OB_MESH) {
-			struct Batch *geom = DRW_cache_surface_get(ob);
+		struct Batch *geom;
 
-			/* Add everything for now */
-			DRW_shgroup_call_add(default_shgrp, geom, &ob->obmat);
+		switch (ob->type) {
+			case OB_MESH:
+				geom = DRW_cache_surface_get(ob);
 
-			/* When encountering a new material :
-			 * - Create new Batch
-			 * - Initialize Batch
-			 * - Push it to the hash table
-			 * - The pass takes care of inserting it
-			 * next to the same shader calls */
+				/* Add everything for now */
+				DRW_shgroup_call_add(depthbatch, geom, &ob->obmat);
+				DRW_shgroup_call_add(default_shgrp, geom, &ob->obmat);
 
-			DRW_shgroup_call_add(depthbatch, geom, &ob->obmat);
+				/* When encountering a new material :
+				 * - Create new Batch
+				 * - Initialize Batch
+				 * - Push it to the hash table
+				 * - The pass takes care of inserting it
+				 * next to the same shader calls */
 
-			/* Free hash table */
-
-			DRW_mode_object_add(passes->mode_ob_wire_pass, passes->mode_ob_center_pass, ob);
+				/* Free hash table */
+				break;
+			case OB_LAMP:
+			case OB_CAMERA:
+			case OB_EMPTY:
+			default:
+				DRW_shgroup_non_meshes(passes->non_meshes_pass, ob);
+				break;
 		}
+
+		/* Add all object center for now */
+		DRW_shgroup_object_center(passes->ob_center_pass, ob);
 	}
 	FOREACH_OBJECT_END
-}
 
-static void CLAY_ssao_setup(void)
-{
-	float invproj[4][4];
-	float dfdyfacs[2];
-	bool is_persp = DRW_viewport_is_persp_get();
-	/* view vectors for the corners of the view frustum. Can be used to recreate the world space position easily */
-	float viewvecs[3][4] = {
-	    {-1.0f, -1.0f, -1.0f, 1.0f},
-	    {1.0f, -1.0f, -1.0f, 1.0f},
-	    {-1.0f, 1.0f, -1.0f, 1.0f}
-	};
-	int i;
-	int *size = DRW_viewport_size_get();
-	EngineDataClay *settings = DRW_render_settings();
-
-	DRW_get_dfdy_factors(dfdyfacs);
-
-	data.ssao_params[0] = settings->ssao_samples;
-	data.ssao_params[1] = size[0] / 64.0;
-	data.ssao_params[2] = size[1] / 64.0;
-	data.ssao_params[3] = dfdyfacs[1]; /* dfdy sign for offscreen */
-
-	/* invert the view matrix */
-	DRW_viewport_matrix_get(data.winmat, DRW_MAT_WIN);
-	invert_m4_m4(invproj, data.winmat);
-
-	/* convert the view vectors to view space */
-	for (i = 0; i < 3; i++) {
-		mul_m4_v4(invproj, viewvecs[i]);
-		/* normalized trick see http://www.derschmale.com/2014/01/26/reconstructing-positions-from-the-depth-buffer */
-		mul_v3_fl(viewvecs[i], 1.0f / viewvecs[i][3]);
-		if (is_persp)
-			mul_v3_fl(viewvecs[i], 1.0f / viewvecs[i][2]);
-		viewvecs[i][3] = 1.0;
-
-		copy_v4_v4(data.viewvecs[i], viewvecs[i]);
-	}
-
-	/* we need to store the differences */
-	data.viewvecs[1][0] -= data.viewvecs[0][0];
-	data.viewvecs[1][1] = data.viewvecs[2][1] - data.viewvecs[0][1];
-
-	/* calculate a depth offset as well */
-	if (!is_persp) {
-		float vec_far[] = {-1.0f, -1.0f, 1.0f, 1.0f};
-		mul_m4_v4(invproj, vec_far);
-		mul_v3_fl(vec_far, 1.0f / vec_far[3]);
-		data.viewvecs[1][2] = vec_far[2] - data.viewvecs[0][2];
-	}
+	/* Optimization */
+	// DRWShadingGroup *shgrp = DRW_pass_nth_shgroup_get(passes->ob_center_pass, 0);
+	// DRW_shgroup_batch_calls_object_center(shgrp);
 }
 
 static void CLAY_view_draw(RenderEngine *UNUSED(engine), const struct bContext *context)
@@ -560,7 +579,11 @@ static void CLAY_view_draw(RenderEngine *UNUSED(engine), const struct bContext *
 	/* TODO : tag to refresh by the deps graph */
 	/* ideally only refresh when objects are added/removed */
 	/* or render properties / materials change */
-	if (DRW_viewport_cache_is_dirty()) {
+	//static bool once = false;
+	if (DRW_viewport_cache_is_dirty()
+		//&& !once
+		) {
+		//once = true;
 		CLAY_create_cache(passes, context);
 	}
 
@@ -580,7 +603,8 @@ static void CLAY_view_draw(RenderEngine *UNUSED(engine), const struct bContext *
 
 	/* Pass 4 : Overlays */
 	DRW_framebuffer_texture_attach(buffers->default_fb, textures->depth, 0);
-	DRW_draw_pass(passes->mode_ob_wire_pass);
+	DRW_draw_pass(passes->non_meshes_pass);
+	DRW_draw_pass(passes->ob_center_pass);
 
 	/* Always finish by this */
 	DRW_state_reset();

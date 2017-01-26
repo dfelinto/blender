@@ -36,14 +36,7 @@
 #include "DRW_engine.h"
 #include "DRW_render.h"
 
-/* Clement : I need to get rid of this */
-#include "DNA_screen_types.h" /* hacky */
-#include "DNA_view3d_types.h" /* hacky */
-#include "DNA_object_types.h" /* hacky */
-#include "view3d_intern.h" /* hacky */
-#include "BKE_DerivedMesh.h" /* hacky */
-
-#include "DNA_mesh_types.h"
+#include "DNA_view3d_types.h"
 
 #include "GPU_basic_shader.h"
 #include "GPU_batch.h"
@@ -107,7 +100,7 @@ struct DRWPass {
 
 typedef struct DRWCall {
 	struct DRWCall *next, *prev;
-	struct Batch *geometry;
+	Batch *geometry;
 	float **obmat;
 } DRWCall;
 
@@ -115,8 +108,7 @@ struct DRWShadingGroup {
 	struct DRWShadingGroup *next, *prev;
 	struct GPUShader *shader;        /* Shader to bind */
 	struct DRWInterface *interface;  /* Uniforms pointers */
-	void *storage;                   /* Uniforms values */
-	ListBase call;                   /* List with all geometry and transforms */
+	ListBase calls;                  /* List with all geometry and transforms */
 	int state;                       /* State changes for this batch only */
 };
 
@@ -129,16 +121,10 @@ static struct DRWGlobalState{
 	PassList *current_psl;
 	ListBase bound_texs;
 	int tex_bind_id;
-	int size[2];
+	float size[2];
 	/* Current rendering context set by DRW_viewport_init */
 	bContext *context;
 } DST = {NULL};
-
-/* Fullscreen Quad Buffer */
-static const float fs_cos[4][2] = {{-1.0f, -1.0f}, {1.0f, -1.0f}, {-1.0f, 1.0f}, {1.0f, 1.0f}};
-static const float fs_uvs[4][2] = {{0.0f, 0.0f}, {1.0f, 0.0f}, {0.0f, 1.0f}, {1.0f, 1.0f}};
-static unsigned int fs_quad;
-static bool fs_quad_init = false;
 
 /* ***************************************** TEXTURES ******************************************/
 static void drw_texture_get_format(DRWTextureFormat format, GPUFormat *data_type, int *channels)
@@ -281,17 +267,15 @@ void DRW_shader_free(GPUShader *shader)
 
 /* ***************************************** INTERFACE ******************************************/
 
-static DRWInterface *DRW_interface_create(struct GPUShader *shader)
+static DRWInterface *DRW_interface_create(GPUShader *shader)
 {
 	DRWInterface *interface = MEM_mallocN(sizeof(DRWInterface), "DRWInterface");
 
-	int program = GPU_shader_get_program(shader);
-
-	interface->modelview = glGetUniformLocation(program, "ModelViewMatrix");
-	interface->projection = glGetUniformLocation(program, "ProjectionMatrix");
-	interface->modelviewprojection = glGetUniformLocation(program, "ModelViewProjectionMatrix");
-	interface->normal = glGetUniformLocation(program, "NormalMatrix");
-	interface->eye = glGetUniformLocation(program, "eye");
+	interface->modelview = GPU_shader_get_uniform(shader, "ModelViewMatrix");
+	interface->projection = GPU_shader_get_uniform(shader, "ProjectionMatrix");
+	interface->modelviewprojection = GPU_shader_get_uniform(shader, "ModelViewProjectionMatrix");
+	interface->normal = GPU_shader_get_uniform(shader, "NormalMatrix");
+	interface->eye = GPU_shader_get_uniform(shader, "eye");
 
 	BLI_listbase_clear(&interface->uniforms);
 
@@ -351,15 +335,13 @@ DRWShadingGroup *DRW_shgroup_create(struct GPUShader *shader, DRWPass *pass)
 
 void DRW_shgroup_free(struct DRWShadingGroup *shgroup)
 {
-	BLI_freelistN(&shgroup->call);
+	BLI_freelistN(&shgroup->calls);
 	BLI_freelistN(&shgroup->interface->uniforms);
 	MEM_freeN(shgroup->interface);
-	if (shgroup->storage)
-		MEM_freeN(shgroup->storage);
 }
 
 /* Later use VBO */
-void DRW_shgroup_call_add(DRWShadingGroup *shgroup, struct Batch *geom, const float **obmat)
+void DRW_shgroup_call_add(DRWShadingGroup *shgroup, Batch *geom, const float **obmat)
 {
 	if (geom) {
 		DRWCall *call = MEM_callocN(sizeof(DRWCall), "DRWCall");
@@ -367,7 +349,7 @@ void DRW_shgroup_call_add(DRWShadingGroup *shgroup, struct Batch *geom, const fl
 		call->obmat = obmat;
 		call->geometry = geom;
 
-		BLI_addtail(&shgroup->call, call);
+		BLI_addtail(&shgroup->calls, call);
 	}
 }
 
@@ -444,79 +426,50 @@ void DRW_shgroup_uniform_mat4(DRWShadingGroup *shgroup, const char *name, const 
 	DRW_interface_uniform(shgroup, name, DRW_UNIFORM_MAT4, value, 16, 1, 0);
 }
 
-/* ************************************* GEOMETRY CACHE **************************************/
+/* TODO move it to GPUViewport */
+static Batch *obj_centers = NULL;
 
-struct Batch *DRW_cache_wire_get(Object *ob) {
-	Mesh *me = ob->data;
-	DerivedMesh *dm = NULL;
-	struct Batch *fancy_wire = NULL;
-	Scene *scene = CTX_data_scene(DST.context);
-	Object *obedit = scene->obedit;
+void DRW_shgroup_batch_calls_object_center(DRWShadingGroup *shgroup)
+{
+	int nbr = BLI_listbase_count(&shgroup->calls);
+	/* Gather Data */
+	float *data = MEM_mallocN(sizeof(float) * 3 * nbr , "Object Center Batch data");
 
-	/* we won't use any function that doesn't comply to the new API, this is a short-lived exception TODO */
-	if (ob == obedit) {
-#if 0 /* Doesn't work */
-		struct BMEditMesh *em = me->edit_btmesh;
-		dm = editbmesh_get_derived_base(ob, em, CD_MASK_BAREMESH);
+	// int i = 0;
+	// /* TODO do something more generic usable for other things than obj center */
+	// for (DRWCall *call = shgroup->calls.first; call; call = call->next) {
+	// 	float *v = data + i*3;
+	// 	float ob[3] = {0.0f,0.0f,0.0f};
+	// 	copy_v3_v3(v, ob);
+	// 	i++;
+	// }
 
-		MBC_cache_get_fancy_edges(dm, &fancy_wire);
-
-		dm->release(dm);
-#endif
-	}
-	else {
-#if 0 /* Doesn't work */
-		dm = mesh_get_derived_final(scene, ob, CD_MASK_BAREMESH);
-
-		MBC_cache_get_fancy_edges(dm, &fancy_wire);
-
-		dm->release(dm);
-#endif
+	/* Upload Data */
+	static VertexFormat format = { 0 };
+	static unsigned pos_id;
+	if (format.attrib_ct == 0) {
+		pos_id = add_attrib(&format, "pos", GL_FLOAT, 3, KEEP_FLOAT);
 	}
 
-	return fancy_wire;
+	VertexBuffer *vbo = VertexBuffer_create_with_format(&format);
+	VertexBuffer_allocate_data(vbo, nbr);
+
+	fillAttrib(vbo, pos_id, data);
+
+	if (obj_centers)
+		Batch_discard(obj_centers);
+
+	obj_centers = Batch_create(GL_POINTS, vbo, NULL);
+
+	MEM_freeN(data);
+
+	/* Replacing multiple calls with only one */
+	BLI_freelistN(&shgroup->calls);
+	static float obmat[4][4];
+	unit_m4(obmat);
+	DRW_shgroup_call_add(shgroup, obj_centers, &obmat);
 }
 
-struct Batch *DRW_cache_surface_get(Object *ob) {
-	Mesh *me = ob->data;
-	DerivedMesh *dm = NULL;
-	struct Batch *surface = NULL;
-	Scene *scene = CTX_data_scene(DST.context);
-	Object *obedit = scene->obedit;
-
-	/* we won't use any function that doesn't comply to the new API, this is a short-lived exception TODO */
-	if (ob == obedit) {
-		DerivedMesh *finalDM;
-		struct BMEditMesh *em = me->edit_btmesh;
-		dm = editbmesh_get_derived_cage_and_final(
-			        scene, ob, em, CD_MASK_BAREMESH,
-			        &finalDM);
-
-		MBC_cache_get_all_triangles(dm, &surface);
-
-		finalDM->release(finalDM);
-	}
-	else {
-#if 0 /* Doesn't work */
-		dm = mesh_get_derived_final(scene, ob, CD_MASK_BAREMESH);
-		DM_ensure_tessface(dm);
-
-		MBC_cache_get_all_triangles(dm, &surface);
-
-		dm->release(dm);
-#endif
-	}
-
-
-	return surface;
-}
-
-#if 0 /* TODO */
-struct Batch *DRW_cache_surface_material_get(Object *ob, int nr) {
-	/* TODO */
-	return NULL;
-}
-#endif
 
 /* ***************************************** PASSES ******************************************/
 
@@ -534,6 +487,18 @@ void DRW_pass_free(DRWPass *pass)
 		DRW_shgroup_free(shgroup);
 	}
 	BLI_freelistN(&pass->shgroups);
+}
+
+DRWShadingGroup *DRW_pass_nth_shgroup_get(DRWPass *pass, int n)
+{
+	int i = 0;
+	for (DRWShadingGroup *shgroup = pass->shgroups.first; shgroup; shgroup = shgroup->next) {
+		if (i == n)
+			return shgroup;
+		i++;
+	}
+
+	return NULL;
 }
 
 /* ****************************************** DRAW ******************************************/
@@ -577,32 +542,6 @@ void DRW_draw_background(void)
 	}
 }
 
-static void DRW_draw_fullscreen(void)
-{
-	if (!fs_quad_init) {
-		glGenBuffers(1, &fs_quad);
-		glBindBuffer(GL_ARRAY_BUFFER, fs_quad);
-		glBufferData(GL_ARRAY_BUFFER, 16 * sizeof(float), NULL, GL_STATIC_DRAW);
-		glBufferSubData(GL_ARRAY_BUFFER, 0, 8 * sizeof(float), fs_cos);
-		glBufferSubData(GL_ARRAY_BUFFER, 8 * sizeof(float), 8 * sizeof(float), fs_uvs);
-	}
-
-	/* set up quad buffer */
-	glBindBuffer(GL_ARRAY_BUFFER, fs_quad);
-	glVertexPointer(2, GL_FLOAT, 0, NULL);
-	glTexCoordPointer(2, GL_FLOAT, 0, ((GLubyte *)NULL + 8 * sizeof(float)));
-	glEnableClientState(GL_VERTEX_ARRAY);
-	glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-
-	/* Draw */
-	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-
-	/* Restore */
-	glDisableClientState(GL_VERTEX_ARRAY);
-	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-}
-
 static void shgroup_set_state(DRWShadingGroup *shgroup)
 {
 	if (shgroup->state) {
@@ -620,11 +559,12 @@ typedef struct DRWBoundTexture {
 	GPUTexture *tex;
 } DRWBoundTexture;
 
-static void draw_shgroup(DRWShadingGroup *shgroup, const bool fullscreen)
+static void draw_shgroup(DRWShadingGroup *shgroup)
 {
 	BLI_assert(shgroup->shader);
 	BLI_assert(shgroup->interface);
 
+	RegionView3D *rv3d = CTX_wm_region_view3d(DST.context);
 	DRWInterface *interface = shgroup->interface;
 
 	if (DST.shader != shgroup->shader) {
@@ -635,6 +575,7 @@ static void draw_shgroup(DRWShadingGroup *shgroup, const bool fullscreen)
 
 	shgroup_set_state(shgroup);
 
+	/* Binding Uniform */
 	/* Don't check anything, Interface should already contain the least uniform as possible */
 	for (DRWUniform *uni = interface->uniforms.first; uni; uni = uni->next) {
 		DRWBoundTexture *bound_tex;
@@ -677,69 +618,63 @@ static void draw_shgroup(DRWShadingGroup *shgroup, const bool fullscreen)
 		}
 	}
 
-	if (fullscreen) {
-		/* step 1 : bind matrices */
+	/* Rendering Calls */
+	for (DRWCall *call = shgroup->calls.first; call; call = call->next) {
+		float mvp[4][4], mv[4][4], n[3][3];
+		float eye[3] = { 0.0f, 0.0f, 1.0f }; /* looking into the screen */
+
+		bool do_mvp = (interface->modelviewprojection != -1);
+		bool do_mv = (interface->modelview != -1);
+		bool do_n = (interface->normal != -1);
+		bool do_eye = (interface->eye != -1);
+
+		if (do_mvp) {
+			mul_m4_m4m4(mvp, rv3d->persmat, call->obmat);
+		}
+		if (do_mv || do_n || do_eye) {
+			mul_m4_m4m4(mv, rv3d->viewmat, call->obmat);
+		}
+		if (do_n || do_eye) {
+			copy_m3_m4(n, mv);
+			invert_m3(n);
+			transpose_m3(n);
+		}
+		if (do_eye) {
+			/* Used by orthographic wires */
+			float tmp[3][3];
+			invert_m3_m3(tmp, n);
+			/* set eye vector, transformed to object coords */
+			mul_m3_v3(tmp, eye);
+		}
+
+		/* Should be really simple */
+		/* step 1 : bind object dependent matrices */
 		if (interface->modelviewprojection != -1) {
-			float mvp[4][4];
-			unit_m4(mvp);
 			GPU_shader_uniform_vector(shgroup->shader, interface->modelviewprojection, 16, 1, (float *)mvp);
+		}
+		if (interface->projection != -1) {
+			GPU_shader_uniform_vector(shgroup->shader, interface->projection, 16, 1, (float *)rv3d->winmat);
+		}
+		if (interface->modelview != -1) {
+			GPU_shader_uniform_vector(shgroup->shader, interface->modelview, 16, 1, (float *)mv);
+		}
+		if (interface->normal != -1) {
+			GPU_shader_uniform_vector(shgroup->shader, interface->normal, 9, 1, (float *)n);
+		}
+		if (interface->eye != -1) {
+			GPU_shader_uniform_vector(shgroup->shader, interface->eye, 3, 1, (float *)eye);
 		}
 
 		/* step 2 : bind vertex array & draw */
-		DRW_draw_fullscreen();
-	}
-	//else if (DRW_STATE_POINT) {
-		/* TODO */
-	//}
-	else {
-		RegionView3D *rv3d = CTX_wm_region_view3d(DST.context);
-
-		for (DRWCall *call = shgroup->call.first; call; call = call->next) {
-			/* Should be really simple */
-			/* step 1 : bind object dependent matrices */
-			if (interface->modelviewprojection != -1) {
-				float mvp[4][4];
-				mul_m4_m4m4(mvp, rv3d->persmat, call->obmat);
-				GPU_shader_uniform_vector(shgroup->shader, interface->modelviewprojection, 16, 1, (float *)mvp);
-			}
-			if (interface->modelview != -1) {
-				float mv[4][4];
-				mul_m4_m4m4(mv, rv3d->viewmat, call->obmat);
-				GPU_shader_uniform_vector(shgroup->shader, interface->modelview, 16, 1, (float *)mv);
-			}
-			if (interface->normal != -1) {
-				float mv[4][4];
-				float n[3][3];
-				mul_m4_m4m4(mv, rv3d->viewmat, call->obmat);
-				copy_m3_m4(n, mv);
-				invert_m3(n);
-				transpose_m3(n);
-				GPU_shader_uniform_vector(shgroup->shader, interface->normal, 9, 1, (float *)n);
-			}
-			if (interface->eye != -1) {
-				/* Used by orthographic wires */
-				float mv[4][4];
-				float n[3][3];
-				mul_m4_m4m4(mv, rv3d->viewmat, call->obmat);
-				copy_m3_m4(n, mv);
-				invert_m3(n);
-				transpose_m3(n);
-				invert_m3(n);
-				/* set eye vector, transformed to object coords */
-				float eye[3] = { 0.0f, 0.0f, 1.0f }; /* looking into the screen */
-				mul_m3_v3(n, eye);
-				GPU_shader_uniform_vector(shgroup->shader, interface->eye, 3, 1, (float *)eye);
-			}
-
-			/* step 2 : bind vertex array & draw */
-			Batch_set_program(call->geometry, GPU_shader_get_program(shgroup->shader));
-			Batch_draw_stupid(call->geometry);
-		}
+		Batch_set_program(call->geometry, GPU_shader_get_program(shgroup->shader));
+		Batch_draw_stupid(call->geometry);
 	}
 }
 
 static void set_state(short flag)
 {
+	/* TODO Keep track of the state and only revert what is needed */
+
 	/* Depth Write */
 	if (flag & DRW_STATE_WRITE_DEPTH)
 		glDepthMask(GL_TRUE);
@@ -782,11 +717,29 @@ static void set_state(short flag)
 		glDisable(GL_DEPTH_TEST);
 	}
 
+	/* Wire Width */
 	if (flag & DRW_STATE_WIRE) {
 		glLineWidth(1.0f);
 	}
 	else if (flag & DRW_STATE_WIRE_LARGE) {
 		glLineWidth(UI_GetThemeValuef(TH_OUTLINE_WIDTH) * 2.0f);
+	}
+
+	/* Points Size */
+	if (flag & DRW_STATE_POINT) {
+		GPU_enable_program_point_size();
+		glPointSize(5.0f);
+	}
+	else {
+		GPU_disable_program_point_size();
+	}
+
+	/* Blending (all buffer) */
+	if (flag & DRW_STATE_BLEND) {
+		glEnable(GL_BLEND);
+	}
+	else {
+		glDisable(GL_BLEND);
 	}
 }
 
@@ -800,33 +753,8 @@ void DRW_draw_pass(DRWPass *pass)
 	BLI_listbase_clear(&DST.bound_texs);
 
 	for (DRWShadingGroup *shgroup = pass->shgroups.first; shgroup; shgroup = shgroup->next) {
-		draw_shgroup(shgroup, false);
+		draw_shgroup(shgroup);
 	}
-
-	/* Clear Bound textures */
-	for (DRWBoundTexture *bound_tex = DST.bound_texs.first; bound_tex; bound_tex = bound_tex->next) {
-		GPU_texture_unbind(bound_tex->tex);
-	}
-	DST.tex_bind_id = 0;
-	BLI_freelistN(&DST.bound_texs);
-
-	if (DST.shader) {
-		GPU_shader_unbind();
-		DST.shader = NULL;
-	}
-}
-
-void DRW_draw_pass_fullscreen(DRWPass *pass)
-{
-	/* Start fresh */
-	DST.shader = NULL;
-	DST.tex_bind_id = 0;
-
-	set_state(pass->state);
-	BLI_listbase_clear(&DST.bound_texs);
-
-	DRWShadingGroup *shgroup = pass->shgroups.first;
-	draw_shgroup(shgroup, true);
 
 	/* Clear Bound textures */
 	for (DRWBoundTexture *bound_tex = DST.bound_texs.first; bound_tex; bound_tex = bound_tex->next) {
@@ -930,7 +858,7 @@ void DRW_framebuffer_texture_detach(GPUTexture *tex)
 
 /* ****************************************** Viewport ******************************************/
 
-int *DRW_viewport_size_get(void)
+float *DRW_viewport_size_get(void)
 {
 	return &DST.size[0];
 }
@@ -944,8 +872,8 @@ void DRW_viewport_init(const bContext *C, void **buffers, void **textures, void 
 
 	/* Refresh DST.size */
 	DefaultTextureList *txl = (DefaultTextureList *)*textures;
-	DST.size[0] = GPU_texture_width(txl->color);
-	DST.size[1] = GPU_texture_height(txl->color);
+	DST.size[0] = (float)GPU_texture_width(txl->color);
+	DST.size[1] = (float)GPU_texture_height(txl->color);
 
 	DefaultFramebufferList *fbl = (DefaultFramebufferList *)*buffers;
 	DST.default_framebuffer = fbl->default_fb;

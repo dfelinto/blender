@@ -2117,7 +2117,6 @@ static void view3d_draw_view_new(const bContext *C, ARegion *ar, DrawData *draw_
 	/* Only 100% compliant on new spec goes bellow */
 	view3d_render_pass(C, ar);
 
-	view3d_draw_non_meshes(C, ar);
 	view3d_draw_grid(C, ar);
 	view3d_draw_manipulator(C);
 	view3d_draw_region_info(C, ar);
@@ -2132,7 +2131,7 @@ void view3d_main_region_draw(const bContext *C, ARegion *ar)
 	/* TODO layers - In the future we should get RE from Layers */
 	RenderEngineType *type = RE_engines_find(scene->r.engine);
 
-	if (IS_VIEWPORT_LEGACY(v3d)) {
+	if (IS_VIEWPORT_LEGACY(v3d) && !(type->flag & RE_USE_OGL_PIPELINE)) {
 		view3d_main_region_draw_legacy(C, ar);
 		return;
 	}

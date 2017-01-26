@@ -31,6 +31,7 @@ struct DRWPass;
 void DRW_engines_init(void);
 void DRW_engines_free(void);
 
+/* This is here because GPUViewport needs it */
 void DRW_pass_free(struct DRWPass *pass);
 
 #endif /* __DRW_ENGINE_H__ */

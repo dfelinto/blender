@@ -44,6 +44,7 @@
 #include "DNA_scene_types.h"
 
 #include "draw_mode_pass.h"
+#include "draw_cache.h"
 
 #include "MEM_guardedalloc.h"
 
@@ -147,8 +148,8 @@ typedef enum {
 	DRW_STATE_CULL_FRONT  = (1 << 5),
 	DRW_STATE_WIRE        = (1 << 6),
 	DRW_STATE_WIRE_LARGE  = (1 << 7),
-	DRW_STATE_POINT       = (1 << 8)
-	/* TODO GL_BLEND */
+	DRW_STATE_POINT       = (1 << 8),
+	DRW_STATE_BLEND       = (1 << 9)
 } DRWState;
 
 DRWShadingGroup *DRW_shgroup_create(struct GPUShader *shader, DRWPass *pass);
@@ -170,13 +171,11 @@ void DRW_shgroup_uniform_ivec3(DRWShadingGroup *batch, const char *name, const i
 void DRW_shgroup_uniform_mat3(DRWShadingGroup *batch, const char *name, const float *value);
 void DRW_shgroup_uniform_mat4(DRWShadingGroup *batch, const char *name, const float *value);
 
-/* Geometry Cache */
-struct Batch *DRW_cache_wire_get(Object *ob);
-struct Batch *DRW_cache_surface_get(Object *ob);
-struct Batch *DRW_cache_surface_material_get(Object *ob, int nr);
+void DRW_shgroup_batch_calls_object_center(DRWShadingGroup *shgroup);
 
 /* Passes */
 DRWPass *DRW_pass_create(const char *name, DRWState state);
+DRWShadingGroup *DRW_pass_nth_shgroup_get(DRWPass *pass, int n);
 
 /* Viewport */
 typedef enum {
@@ -187,7 +186,7 @@ typedef enum {
 
 void DRW_viewport_init(const bContext *C, void **buffers, void **textures, void **passes);
 void DRW_viewport_matrix_get(float mat[4][4], DRWViewportMatrixType type);
-int *DRW_viewport_size_get(void);
+float *DRW_viewport_size_get(void);
 bool DRW_viewport_is_persp_get(void);
 bool DRW_viewport_cache_is_dirty(void);
 
@@ -197,8 +196,8 @@ void *DRW_render_settings(void);
 
 /* Draw commands */
 void DRW_draw_background(void);
+void DRW_centercircle(const float co[3]);
 void DRW_draw_pass(DRWPass *pass);
-void DRW_draw_pass_fullscreen(DRWPass *pass);
 
 void DRW_state_reset(void);
 

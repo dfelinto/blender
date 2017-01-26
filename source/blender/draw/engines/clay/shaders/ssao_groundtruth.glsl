@@ -67,8 +67,8 @@ void ssao_factors(in float depth, in vec3 normal, in vec3 position, in vec2 scre
 	const float phi_step = 16.0;
 	const float theta_step = 16.0;
 	const float m_pi = 3.14159265358979323846;
-	vec2 pixel_ratio = vec2(float(screenres.y) / float(screenres.x), 1.0);
-	vec2 pixel_size = vec2(1.0) / vec2(screenres.xy);
+	vec2 pixel_ratio = vec2(screenres.y / screenres.x, 1.0);
+	vec2 pixel_size = vec2(1.0) / screenres.xy;
 	float min_stride = length(pixel_size);
 	float homcco = WinMatrix[2][3] * position.z + WinMatrix[3][3];
 	float n = max(min_stride * theta_step, ssao_distance / homcco); /* Search distance */

@@ -33,23 +33,41 @@
 
 /* ************************** OBJECT MODE ******************************* */
 
-
-void DRW_mode_object_setup(DRWPass **wire_pass, DRWPass **center_pass)
+/* This Function setup the passes needed for the mode rendering.
+ * The passes are populated by the rendering engine using the DRW_shgroup_* functions. */
+void DRW_pass_setup_common(DRWPass **wire_overlay, DRWPass **wire_outline, DRWPass **non_meshes, DRWPass **ob_center)
 {
-	{
-		/* Object Wires */
-		*wire_pass = DRW_pass_create("Wire Pass", DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS);
+	if (wire_overlay) {
+		/* This pass can draw mesh edges top of Shaded Meshes without any Z fighting */
+		DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_EQUAL | DRW_STATE_BLEND;
+		*wire_overlay = DRW_pass_create("Wire Overlays Pass", state);
 	}
 
-	{
-		/* Object Center */
-		DRWShadingGroup *grp;
+	if (wire_outline) {
+		/* This pass can draw mesh outlines and/or fancy wireframe */
+		/* Fancy wireframes are not meant to be occluded (without Z offset) */
+		/* Outlines and Fancy Wires use the same VBO */
+		DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS | DRW_STATE_BLEND;
+		*wire_outline = DRW_pass_create("Wire + Outlines Pass", state);
+	}
 
-		/* Static variables so they stay in memory */
-		static float colorActive[4], colorSelect[4], colorDeselect[4];
-		static float outlineColor[4];
-		static float outlineWidth;
-		static float size;
+	if (non_meshes) {
+		/* Non Meshes Pass (Camera, empties, lamps ...) */
+		DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS | DRW_STATE_BLEND;
+		state |= DRW_STATE_WIRE ;//| DRW_STATE_LINE_SMOOTH;
+		*non_meshes = DRW_pass_create("Non Meshes Pass", state);
+
+		/* TODO Define all groups here */
+	}
+
+	if (ob_center) {
+		/* Object Center pass grouped by State */
+		DRWShadingGroup *grp;
+		static float colorActive[4], colorSelect[4], colorDeselect[4], outlineColor[4];
+		static float outlineWidth, size;
+
+		DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND | DRW_STATE_POINT;
+		*ob_center = DRW_pass_create("Obj Center Pass", state);
 
 		outlineWidth = 1.0f * U.pixelsize;
 		size = U.obcenter_dia * U.pixelsize + outlineWidth;
@@ -59,108 +77,131 @@ void DRW_mode_object_setup(DRWPass **wire_pass, DRWPass **center_pass)
 		UI_GetThemeColorShadeAlpha4fv(TH_WIRE, 0, -30, outlineColor);
 
 		GPUShader *sh = GPU_shader_get_builtin_shader(GPU_SHADER_3D_POINT_UNIFORM_SIZE_UNIFORM_COLOR_OUTLINE_SMOOTH);
-		*center_pass = DRW_pass_create("Obj Center Pass", DRW_STATE_WRITE_COLOR | DRW_STATE_POINT);
 
 		/* Active */
-		grp = DRW_shgroup_create(sh, *center_pass);
+		grp = DRW_shgroup_create(sh, *ob_center);
 		DRW_shgroup_uniform_float(grp, "size", &size, 1);
 		DRW_shgroup_uniform_float(grp, "outlineWidth", &outlineWidth, 1);
 		DRW_shgroup_uniform_vec4(grp, "color", colorActive, 1);
 		DRW_shgroup_uniform_vec4(grp, "outlineColor", outlineColor, 1);
 
 		/* Select */
-		grp = DRW_shgroup_create(sh, *center_pass);
+		grp = DRW_shgroup_create(sh, *ob_center);
 		DRW_shgroup_uniform_vec4(grp, "color", colorSelect, 1);
 
 		/* Deselect */
-		grp = DRW_shgroup_create(sh, *center_pass);
+		grp = DRW_shgroup_create(sh, *ob_center);
 		DRW_shgroup_uniform_vec4(grp, "color", colorDeselect, 1);
 	}
 }
 
 /* ******************************************** WIRES *********************************************** */
 
-void DRW_shgroup_wire(struct DRWPass *pass, float frontcol[4], float backcol[4], struct Batch *geom, const float **obmat)
+void DRW_shgroup_wire_overlay(DRWPass *wire_overlay, Object *ob)
 {
-	bool is_perps = DRW_viewport_is_persp_get();
-	GPUShader *sh;
-	static bool bTrue = true;
-	static bool bFalse = false;
+	struct Batch *geom = DRW_cache_wire_outline_get(ob);
+	GPUShader *sh = GPU_shader_get_builtin_shader(GPU_SHADER_EDGES_OVERLAY);
 
-	if (is_perps) {
-		sh = GPU_shader_get_builtin_shader(GPU_SHADER_EDGES_FRONT_BACK_PERSP);
-	}
-	else {
-		sh = GPU_shader_get_builtin_shader(GPU_SHADER_EDGES_FRONT_BACK_ORTHO);
-	}
+	DRWShadingGroup *grp = DRW_shgroup_create(sh, wire_overlay);
+	DRW_shgroup_uniform_vec2(grp, "viewportSize", DRW_viewport_size_get(), 1);
 
-	DRWShadingGroup *batch = DRW_shgroup_create(sh, pass);
-	DRW_shgroup_state_set(batch, DRW_STATE_WIRE);
-	DRW_shgroup_uniform_vec4(batch, "frontColor", frontcol, 1);
-	DRW_shgroup_uniform_vec4(batch, "backColor", backcol, 1);
-	DRW_shgroup_uniform_bool(batch, "drawFront", &bTrue, 1);
-	DRW_shgroup_uniform_bool(batch, "drawBack", &bTrue, 1);
-	DRW_shgroup_uniform_bool(batch, "drawSilhouette", &bFalse, 1);
-
-	DRW_shgroup_call_add(batch, geom, obmat);
+	DRW_shgroup_call_add(grp, geom, &ob->obmat);
 }
 
-void DRW_shgroup_outline(struct DRWPass *pass, float color[4], struct Batch *geom, const float **obmat)
+void DRW_shgroup_wire_outline(DRWPass *wire_outline, Object *ob,
+                              const bool do_front, const bool do_back, const bool do_outline)
 {
-	bool is_perps = DRW_viewport_is_persp_get();
 	GPUShader *sh;
-	static bool bTrue = true;
-	static bool bFalse = false;
-
-	if (is_perps) {
-		sh = GPU_shader_get_builtin_shader(GPU_SHADER_EDGES_FRONT_BACK_PERSP);
-	}
-	else {
-		sh = GPU_shader_get_builtin_shader(GPU_SHADER_EDGES_FRONT_BACK_ORTHO);
-	}
-
-	DRWShadingGroup *grp = DRW_shgroup_create(sh, pass);
-	DRW_shgroup_state_set(grp, DRW_STATE_WIRE_LARGE);
-	DRW_shgroup_uniform_vec4(grp, "silhouetteColor", color, 1);
-	DRW_shgroup_uniform_bool(grp, "drawFront", &bFalse, 1);
-	DRW_shgroup_uniform_bool(grp, "drawBack", &bFalse, 1);
-	DRW_shgroup_uniform_bool(grp, "drawSilhouette", &bTrue, 1);
-
-	DRW_shgroup_call_add(grp, geom, obmat);
-}
-
-/* ******************************************** OBJECT MODE *********************************** */
-
-void DRW_mode_object_add(struct DRWPass *wire_pass, struct DRWPass *UNUSED(center_pass), Object *ob)
-{
-	bool draw_wire = true;
-	bool draw_outline = true;
+	struct Batch *geom = DRW_cache_wire_outline_get(ob);
 
 	/* Get color */
-	static float bg[3], low[4], med[4], base[4];
-	UI_GetThemeColor3fv(TH_BACK, bg);
-	//UI_GetThemeColor4fv(TH_WIRE, base);
-	UI_GetThemeColor4fv(TH_ACTIVE, base);
+	/* TODO get the right color depending on ob state (Groups, overides etc..) */
+	static float frontcol[4], backcol[4], color[4];
+	UI_GetThemeColor4fv(TH_ACTIVE, color);
+	copy_v4_v4(frontcol, color);
+	copy_v4_v4(backcol, color);
+	backcol[3] = 0.333f;
+	frontcol[3] = 0.667f;
 
-	interp_v3_v3v3(low, bg, base, 0.333f);
-	interp_v3_v3v3(med, bg, base, 0.667f);
-	low[3] = base[3];
-	med[3] = base[3];
+#if 1 /* New wire */
 
-	if (draw_wire) {
-		struct Batch *geom = DRW_cache_wire_get(ob);
-		DRW_shgroup_wire(wire_pass, med, low, geom, (float **)&ob->obmat);
+	bool is_perps = DRW_viewport_is_persp_get();
+	static bool bTrue = true;
+	static bool bFalse = false;
+
+	/* Note (TODO) : this requires cache to be discarded on ortho/perp switch
+	 * It may be preferable (or not depending on performance implication)
+	 * to introduce a shader uniform switch */
+	if (is_perps) {
+		sh = GPU_shader_get_builtin_shader(GPU_SHADER_EDGES_FRONT_BACK_PERSP);
+	}
+	else {
+		sh = GPU_shader_get_builtin_shader(GPU_SHADER_EDGES_FRONT_BACK_ORTHO);
 	}
 
-	if (draw_outline) {
-		struct Batch *geom = DRW_cache_wire_get(ob);
-		DRW_shgroup_outline(wire_pass, base, geom, (float **)&ob->obmat);
+	if (do_front || do_back) {
+		bool *bFront = (do_front) ? &bTrue : &bFalse;
+		bool *bBack = (do_back) ? &bTrue : &bFalse;
+
+		DRWShadingGroup *grp = DRW_shgroup_create(sh, wire_outline);
+		DRW_shgroup_state_set(grp, DRW_STATE_WIRE);
+		DRW_shgroup_uniform_vec4(grp, "frontColor", frontcol, 1);
+		DRW_shgroup_uniform_vec4(grp, "backColor", backcol, 1);
+		DRW_shgroup_uniform_bool(grp, "drawFront", bFront, 1);
+		DRW_shgroup_uniform_bool(grp, "drawFront", bBack, 1);
+		DRW_shgroup_uniform_bool(grp, "drawBack", &bFalse, 1);
+		DRW_shgroup_uniform_bool(grp, "drawSilhouette", &bFalse, 1);
+
+		DRW_shgroup_call_add(grp, geom, &ob->obmat);
 	}
 
-	/* We need a way to populate a Batch with theses */
-	// if (true) {
-	// 	DRW_shgroup_point_add(center_active, ob->obmat[3]);
-	// 	DRW_shgroup_point_add(center_select, ob->obmat[3]);
-	// 	DRW_shgroup_point_add(center_deselect, ob->obmat[3]);
-	// }
+	if (do_outline) {
+		DRWShadingGroup *grp = DRW_shgroup_create(sh, wire_outline);
+		DRW_shgroup_state_set(grp, DRW_STATE_WIRE_LARGE);
+		DRW_shgroup_uniform_vec4(grp, "silhouetteColor", color, 1);
+		DRW_shgroup_uniform_bool(grp, "drawFront", &bFalse, 1);
+		DRW_shgroup_uniform_bool(grp, "drawBack", &bFalse, 1);
+		DRW_shgroup_uniform_bool(grp, "drawSilhouette", &bTrue, 1);
+
+		DRW_shgroup_call_add(grp, geom, &ob->obmat);
+	}
+
+#else /* Old (flat) wire */
+
+	sh = GPU_shader_get_builtin_shader(GPU_SHADER_3D_UNIFORM_COLOR);
+	DRWShadingGroup *grp = DRW_shgroup_create(sh, wire_outline);
+	DRW_shgroup_state_set(grp, DRW_STATE_WIRE_LARGE);
+	DRW_shgroup_uniform_vec4(grp, "color", frontcol, 1);
+
+	DRW_shgroup_call_add(grp, geom, &ob->obmat);
+#endif
+
+}
+
+/* ***************************** NON MESHES ********************** */
+
+void DRW_shgroup_non_meshes(DRWPass *non_meshes, Object *ob)
+{
+	struct Batch *geom;
+	static float frontcol[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+	GPUShader *sh = GPU_shader_get_builtin_shader(GPU_SHADER_3D_UNIFORM_COLOR);
+
+	switch (ob->type) {
+		case OB_LAMP:
+		case OB_CAMERA:
+		case OB_EMPTY:
+		default:
+			geom = DRW_cache_plain_axes_get();
+			DRWShadingGroup *grp = DRW_shgroup_create(sh, non_meshes);
+			DRW_shgroup_uniform_vec4(grp, "color", frontcol, 1);
+			DRW_shgroup_call_add(grp, geom, &ob->obmat);
+			break;
+	}
+}
+
+void DRW_shgroup_object_center(DRWPass *ob_center, Object *ob)
+{
+	struct Batch *geom = DRW_cache_single_vert_get();
+	DRWShadingGroup *grp = DRW_pass_nth_shgroup_get(ob_center, 0);
+	DRW_shgroup_call_add(grp, geom, &ob->obmat);
 }

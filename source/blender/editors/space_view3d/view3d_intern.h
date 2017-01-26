@@ -143,11 +143,6 @@ void draw_motion_paths_cleanup(View3D *v3d);
 
 
 /* drawobject.c */
-
-void MBC_cache_get_all_verts(struct DerivedMesh *dm, struct Batch **batch); /* Short term function TODO */
-void MBC_cache_get_all_triangles(struct DerivedMesh *dm, struct Batch **batch); /* Short term function TODO */
-void MBC_cache_get_fancy_edges(struct DerivedMesh *dm, struct Batch **batch); /* Short term function TODO */
-
 void draw_object(Scene *scene, struct ARegion *ar, View3D *v3d, Base *base, const short dflag);
 void draw_mesh_object_outline(View3D *v3d, Object *ob, struct DerivedMesh *dm);
 

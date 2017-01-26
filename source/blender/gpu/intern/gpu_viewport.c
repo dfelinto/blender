@@ -70,9 +70,6 @@ GPUViewport *GPU_viewport_create(void)
 	viewport->fbl = MEM_callocN(sizeof(FramebufferList), "FramebufferList");
 	viewport->txl = MEM_callocN(sizeof(TextureList), "TextureList");
 	viewport->psl = MEM_callocN(sizeof(PassList), "PassList");
-	memset(viewport->fbl, 0, sizeof(FramebufferList));
-	memset(viewport->txl, 0, sizeof(TextureList));
-	memset(viewport->psl, 0, sizeof(PassList));
 	viewport->size[0] = viewport->size[1] = -1;
 
 	return viewport;
