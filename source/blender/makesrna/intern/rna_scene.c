@@ -2545,6 +2545,44 @@ static int rna_SceneLayer_multiple_engines_get(PointerRNA *UNUSED(ptr))
 	return (BLI_listbase_count(&R_engines) > 1);
 }
 
+static int rna_SceneLayer_active_layer_index_get(PointerRNA *ptr)
+{
+	Scene *scene = (Scene *)ptr->data;
+	return scene->active_layer;
+}
+
+static void rna_SceneLayer_active_layer_index_set(PointerRNA *ptr, int value)
+{
+	Scene *scene = (Scene *)ptr->data;
+	int num_layers = BLI_listbase_count(&scene->render_layers);
+	scene->active_layer = min_ff(value, num_layers - 1);
+}
+
+static void rna_SceneLayer_active_layer_index_range(
+        PointerRNA *ptr, int *min, int *max, int *UNUSED(softmin), int *UNUSED(softmax))
+{
+	Scene *scene = (Scene *)ptr->data;
+
+	*min = 0;
+	*max = max_ii(0, BLI_listbase_count(&scene->render_layers) - 1);
+}
+
+static PointerRNA rna_SceneLayer_active_layer_get(PointerRNA *ptr)
+{
+	Scene *scene = (Scene *)ptr->data;
+	SceneLayer *sl = BLI_findlink(&scene->render_layers, scene->active_layer);
+
+	return rna_pointer_inherit_refine(ptr, &RNA_SceneLayer, sl);
+}
+
+static void rna_SceneLayer_active_layer_set(PointerRNA *ptr, PointerRNA value)
+{
+	Scene *scene = (Scene *)ptr->data;
+	SceneLayer *sl = (SceneLayer *)value.data;
+	const int index = BLI_findindex(&scene->render_layers, sl);
+	if (index != -1) scene->active_layer = index;
+}
+
 static SceneLayer *rna_SceneLayer_new(ID *id, Scene *UNUSED(sce), const char *name)
 {
 	Scene *scene = (Scene *)id;
@@ -5693,6 +5731,12 @@ static void rna_def_scene_layer(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Objects", "All the objects in this layer");
 	rna_def_layer_objects(brna, prop);
 
+	/* layer options */
+	prop = RNA_def_property(srna, "use", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "flag", SCENE_LAYER_RENDER);
+	RNA_def_property_ui_text(prop, "Enabled", "Disable or enable the render layer");
+	RNA_def_property_update(prop, NC_SCENE | ND_LAYER, NULL);
+
 	/* engine */
 	prop = RNA_def_property(srna, "engine", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_items(prop, engine_items);
@@ -5713,11 +5757,28 @@ static void rna_def_scene_layers(BlenderRNA *brna, PropertyRNA *cprop)
 	StructRNA *srna;
 	FunctionRNA *func;
 	PropertyRNA *parm;
+	PropertyRNA *prop;
 
 	RNA_def_property_srna(cprop, "SceneLayers");
 	srna = RNA_def_struct(brna, "SceneLayers", NULL);
 	RNA_def_struct_sdna(srna, "Scene");
 	RNA_def_struct_ui_text(srna, "Render Layers", "Collection of render layers");
+
+	prop = RNA_def_property(srna, "active_index", PROP_INT, PROP_UNSIGNED);
+	RNA_def_property_int_sdna(prop, NULL, "active_layer");
+	RNA_def_property_int_funcs(prop, "rna_SceneLayer_active_layer_index_get",
+	                           "rna_SceneLayer_active_layer_index_set",
+	                           "rna_SceneLayer_active_layer_index_range");
+	RNA_def_property_ui_text(prop, "Active Layer Index", "Active index in render layer array");
+	RNA_def_property_update(prop, NC_SCENE | ND_LAYER, NULL);
+
+	prop = RNA_def_property(srna, "active", PROP_POINTER, PROP_NONE);
+	RNA_def_property_struct_type(prop, "SceneLayer");
+	RNA_def_property_pointer_funcs(prop, "rna_SceneLayer_active_layer_get",
+	                               "rna_SceneLayer_active_layer_set", NULL, NULL);
+	RNA_def_property_flag(prop, PROP_EDITABLE | PROP_NEVER_NULL);
+	RNA_def_property_ui_text(prop, "Active Render Layer", "Active Render Layer");
+	RNA_def_property_update(prop, NC_SCENE | ND_LAYER, NULL);
 
 	func = RNA_def_function(srna, "new", "rna_SceneLayer_new");
 	RNA_def_function_ui_description(func, "Add a render layer to scene");

@@ -79,6 +79,8 @@ void blo_do_versions_after_linking_280(Main *main)
 					}
 				}
 
+				scene->active_layer = 0;
+
 				if (!BKE_scene_uses_blender_game(scene)) {
 					for (SceneRenderLayer *srl = scene->r.layers.first; srl; srl = srl->next) {
 
@@ -108,6 +110,10 @@ void blo_do_versions_after_linking_280(Main *main)
 
 						/* TODO: passes, samples, mask_layesr, exclude, ... */
 					}
+
+					if (BLI_findlink(&scene->render_layers, scene->r.actlay)) {
+						scene->active_layer = scene->r.actlay;
+					}
 				}
 
 				SceneLayer *sl = BKE_scene_layer_add(scene, "Render Layer");
@@ -121,6 +127,9 @@ void blo_do_versions_after_linking_280(Main *main)
 					lc = lc->next;
 				}
 
+				/* but we still need to make the flags synced */
+				BKE_scene_layer_base_flag_recalculate(sl);
+
 				/* convert active base */
 				if (scene->basact) {
 					sl->basact = BKE_scene_layer_base_find(sl, scene->basact->object);
@@ -130,7 +139,9 @@ void blo_do_versions_after_linking_280(Main *main)
 				for (Base *base = scene->base.first; base; base = base->next) {
 					ObjectBase *ob_base = BKE_scene_layer_base_find(sl, base->object);
 					if ((base->flag & SELECT) != 0) {
-						ob_base->flag |= BASE_SELECTED;
+						if ((ob_base->flag & BASE_SELECTABLED) != 0) {
+							ob_base->flag |= BASE_SELECTED;
+						}
 					}
 					else {
 						ob_base->flag &= ~BASE_SELECTED;

@@ -1751,6 +1751,8 @@ typedef struct Scene {
 
 	ListBase render_layers;
 	struct SceneCollection *collection;
+	int active_layer;
+	int pad4;
 
 	/* Engine Settings */
 	struct EngineDataClay claydata;

@@ -251,8 +251,6 @@ int CTX_data_mode_enum(const bContext *C);
 
 void CTX_data_main_set(bContext *C, struct Main *bmain);
 void CTX_data_scene_set(bContext *C, struct Scene *bmain);
-void CTX_data_scene_collection_set(bContext *C, struct SceneCollection *sc);
-void CTX_data_scene_layer_set(bContext *C, struct SceneLayer *sl);
 
 int CTX_data_selected_editable_objects(const bContext *C, ListBase *list);
 int CTX_data_selected_editable_bases(const bContext *C, ListBase *list);

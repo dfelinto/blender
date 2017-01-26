@@ -62,7 +62,8 @@ typedef struct SceneLayer {
 	char name[64]; /* MAX_NAME */
 	char engine[32]; /* render engine */
 	short active_collection;
-	short pad[3];
+	short flag;
+	short pad[2];
 	ListBase object_bases;      /* ObjectBase */
 	struct ObjectBase *basact;
 	ListBase layer_collections; /* LayerCollection */
@@ -90,6 +91,11 @@ enum {
 	COLLECTION_VISIBLE    = (1 << 0),
 	COLLECTION_SELECTABLE = (1 << 1),
 	COLLECTION_FOLDED     = (1 << 2),
+};
+
+/* SceneLayer->flag */
+enum {
+	SCENE_LAYER_RENDER = (1 << 0),
 };
 
 #ifdef __cplusplus

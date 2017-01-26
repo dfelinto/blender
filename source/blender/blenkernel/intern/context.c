@@ -79,8 +79,6 @@ struct bContext {
 	struct {
 		struct Main *main;
 		struct Scene *scene;
-		struct SceneLayer *render_layer;
-		struct SceneCollection *scene_collection;
 
 		int recursion;
 		int py_init; /* true if python is initialized */
@@ -908,7 +906,10 @@ SceneLayer *CTX_data_scene_layer(const bContext *C)
 		return sl;
 	}
 	else {
-		return C->data.render_layer;
+		Scene *scene = CTX_data_scene(C);
+		sl = BLI_findlink(&scene->render_layers, scene->active_layer);
+		BLI_assert(sl);
+		return sl;
 	}
 }
 
@@ -928,15 +929,11 @@ SceneCollection *CTX_data_scene_collection(const bContext *C)
 		if (BKE_scene_layer_has_collection(sl, sc)) {
 			return sc;
 		}
-		else {
-			/* fallback */
-			LayerCollection *lc = BKE_layer_collection_active(sl);
-			return lc->scene_collection;
-		}
 	}
-	else {
-		return C->data.scene_collection;
-	}
+
+	/* fallback */
+	LayerCollection *lc = BKE_layer_collection_active(sl);
+	return lc->scene_collection;
 }
 
 int CTX_data_mode_enum(const bContext *C)
@@ -1005,26 +1002,6 @@ const char *CTX_data_mode_string(const bContext *C)
 void CTX_data_scene_set(bContext *C, Scene *scene)
 {
 	C->data.scene = scene;
-	TODO_LAYER_CONTEXT
-
-	/* render_layer comes from workspace (or even viewport) actually
-	 * this is only while we wait for workspace changes to be merged
-	 */
-	CTX_data_scene_layer_set(C, scene->render_layers.last);
-}
-
-void CTX_data_scene_collection_set(bContext *C, SceneCollection *sc)
-{
-	C->data.scene_collection = sc;
-}
-
-void CTX_data_scene_layer_set(bContext *C, SceneLayer *sl)
-{
-	C->data.render_layer = sl;
-
-	/* update the related data */
-	LayerCollection *lc = BKE_layer_collection_active(sl);
-	CTX_data_scene_collection_set(C, lc->scene_collection);
 }
 
 ToolSettings *CTX_data_tool_settings(const bContext *C)
