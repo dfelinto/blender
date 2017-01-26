@@ -46,7 +46,7 @@
 
 #include "MEM_guardedalloc.h"
 
-void blo_do_versions_after_linking_280(Main *main)
+void do_versions_after_linking_280(Main *main)
 {
 	if (!MAIN_VERSION_ATLEAST(main, 280, 0)) {
 		for (Scene *scene = main->scene.first; scene; scene = scene->id.next) {
