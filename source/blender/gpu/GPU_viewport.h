@@ -69,10 +69,8 @@ typedef struct DefaultTextureList {
 } DefaultTextureList;
 
 typedef struct DefaultPassList {
-	/* Put Default passes here
-	 * - Edit Wire
-	 * - Active objects outlines
-	 * ... */
+	struct DRWPass *non_meshes_pass;
+	struct DRWPass *ob_center_pass;
 } DefaultPassList;
 
 GPUViewport *GPU_viewport_create(void);

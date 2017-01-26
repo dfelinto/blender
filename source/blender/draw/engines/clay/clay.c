@@ -111,12 +111,14 @@ typedef struct CLAY_TextureList{
 
 /* keep it under MAX_PASSES */
 typedef struct CLAY_PassList{
+	/* default */
+	struct DRWPass *non_meshes_pass;
+	struct DRWPass *ob_center_pass;
+	/* engine specific */
 	struct DRWPass *depth_pass;
 	struct DRWPass *clay_pass;
 	struct DRWPass *wire_overlay_pass;
 	struct DRWPass *wire_outline_pass;
-	struct DRWPass *non_meshes_pass;
-	struct DRWPass *ob_center_pass;
 } CLAY_PassList;
 
 //#define GTAO
