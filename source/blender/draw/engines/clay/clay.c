@@ -577,11 +577,18 @@ static void CLAY_view_draw(RenderEngine *UNUSED(engine), const struct bContext *
 	/* TODO : tag to refresh by the deps graph */
 	/* ideally only refresh when objects are added/removed */
 	/* or render properties / materials change */
-	//static bool once = false;
+#ifdef WITH_VIEWPORT_CACHE_TEST
+	static bool once = false;
+	printf("AA\n");
+#endif
 	if (DRW_viewport_cache_is_dirty()
-		//&& !once
+#ifdef WITH_VIEWPORT_CACHE_TEST
+		&& !once
+#endif
 		) {
-		//once = true;
+#ifdef WITH_VIEWPORT_CACHE_TEST
+		once = true;
+#endif
 		CLAY_create_cache(passes, context);
 	}
 

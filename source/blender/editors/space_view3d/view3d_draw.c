@@ -2109,7 +2109,7 @@ static void view3d_render_pass(const bContext *C, ARegion *ar)
 	}
 }
 
-static void view3d_draw_view_new(const bContext *C, ARegion *ar, DrawData *draw_data)
+static void view3d_draw_view_new(const bContext *C, ARegion *ar, DrawData *UNUSED(draw_data))
 {
 
 	view3d_draw_setup_view(C, ar);

@@ -446,6 +446,10 @@ static void shgroup_dynamic_batch_from_calls(DRWShadingGroup *shgroup)
 	int nbr = BLI_listbase_count(&shgroup->calls);
 	GLenum type;
 
+#ifdef WITH_VIEWPORT_CACHE_TEST
+	if (shgroup->dyngeom) return;
+#endif
+
 	if (nbr == 0) {
 		if (shgroup->dyngeom) {
 			Batch_discard(shgroup->dyngeom);
@@ -457,7 +461,6 @@ static void shgroup_dynamic_batch_from_calls(DRWShadingGroup *shgroup)
 	/* Gather Data */
 	float *data = MEM_mallocN(sizeof(float) * 3 * nbr , "Object Center Batch data");
 
-	/* TODO do something more generic usable for other things than obj center */
 	for (DRWCall *call = shgroup->calls.first; call; call = call->next, i++) {
 		copy_v3_v3(&data[i*3], call->obmat[3]);
 	}
@@ -506,6 +509,7 @@ void DRW_pass_free(DRWPass *pass)
 	BLI_freelistN(&pass->shgroups);
 }
 
+/* TODO this is slow we should not have to use this (better store shgroup pointer somewhere) */
 DRWShadingGroup *DRW_pass_nth_shgroup_get(DRWPass *pass, int n)
 {
 	int i = 0;

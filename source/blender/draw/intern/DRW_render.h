@@ -50,6 +50,8 @@
 
 #include "RE_engine.h"
 
+//#define WITH_VIEWPORT_CACHE_TEST
+
 struct GPUFrameBuffer;
 struct GPUShader;
 struct GPUTexture;
