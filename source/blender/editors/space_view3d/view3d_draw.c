@@ -2131,7 +2131,7 @@ void view3d_main_region_draw(const bContext *C, ARegion *ar)
 	/* TODO layers - In the future we should get RE from Layers */
 	RenderEngineType *type = RE_engines_find(scene->r.engine);
 
-	if (IS_VIEWPORT_LEGACY(v3d) && !(type->flag & RE_USE_OGL_PIPELINE)) {
+	if (IS_VIEWPORT_LEGACY(v3d) && ((type->flag & RE_USE_OGL_PIPELINE) == 0)) {
 		view3d_main_region_draw_legacy(C, ar);
 		return;
 	}

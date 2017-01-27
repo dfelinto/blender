@@ -53,11 +53,34 @@ void DRW_pass_setup_common(DRWPass **wire_overlay, DRWPass **wire_outline, DRWPa
 
 	if (non_meshes) {
 		/* Non Meshes Pass (Camera, empties, lamps ...) */
+		DRWShadingGroup *grp;
+
 		DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS | DRW_STATE_BLEND;
 		state |= DRW_STATE_WIRE ;//| DRW_STATE_LINE_SMOOTH;
 		*non_meshes = DRW_pass_create("Non Meshes Pass", state);
 
-		/* TODO Define all groups here */
+		GPUShader *sh = GPU_shader_get_builtin_shader(GPU_SHADER_3D_UNIFORM_COLOR);
+
+		/* Solid Wires */
+		grp = DRW_shgroup_create(sh, *non_meshes);
+
+		/* Points */
+		grp = DRW_shgroup_create(sh, *non_meshes);
+
+		/* Stipple Wires */
+		grp = DRW_shgroup_create(sh, *non_meshes);
+		DRW_shgroup_state_set(grp, DRW_STATE_STIPPLE_2);
+
+		grp = DRW_shgroup_create(sh, *non_meshes);
+		DRW_shgroup_state_set(grp, DRW_STATE_STIPPLE_3);
+
+		grp = DRW_shgroup_create(sh, *non_meshes);
+		DRW_shgroup_state_set(grp, DRW_STATE_STIPPLE_4);
+
+		/* Relationship Lines */
+		grp = DRW_shgroup_create(sh, *non_meshes);
+		DRW_shgroup_state_set(grp, DRW_STATE_STIPPLE_3);
+		DRW_shgroup_dyntype_set(grp, DRW_DYN_LINES);
 	}
 
 	if (ob_center) {
@@ -80,6 +103,7 @@ void DRW_pass_setup_common(DRWPass **wire_overlay, DRWPass **wire_outline, DRWPa
 
 		/* Active */
 		grp = DRW_shgroup_create(sh, *ob_center);
+		DRW_shgroup_dyntype_set(grp, DRW_DYN_POINTS);
 		DRW_shgroup_uniform_float(grp, "size", &size, 1);
 		DRW_shgroup_uniform_float(grp, "outlineWidth", &outlineWidth, 1);
 		DRW_shgroup_uniform_vec4(grp, "color", colorActive, 1);
@@ -87,10 +111,12 @@ void DRW_pass_setup_common(DRWPass **wire_overlay, DRWPass **wire_outline, DRWPa
 
 		/* Select */
 		grp = DRW_shgroup_create(sh, *ob_center);
+		DRW_shgroup_dyntype_set(grp, DRW_DYN_POINTS);
 		DRW_shgroup_uniform_vec4(grp, "color", colorSelect, 1);
 
 		/* Deselect */
 		grp = DRW_shgroup_create(sh, *ob_center);
+		DRW_shgroup_dyntype_set(grp, DRW_DYN_POINTS);
 		DRW_shgroup_uniform_vec4(grp, "color", colorDeselect, 1);
 	}
 }
@@ -105,7 +131,7 @@ void DRW_shgroup_wire_overlay(DRWPass *wire_overlay, Object *ob)
 	DRWShadingGroup *grp = DRW_shgroup_create(sh, wire_overlay);
 	DRW_shgroup_uniform_vec2(grp, "viewportSize", DRW_viewport_size_get(), 1);
 
-	DRW_shgroup_call_add(grp, geom, &ob->obmat);
+	DRW_shgroup_call_add(grp, geom, ob->obmat);
 }
 
 void DRW_shgroup_wire_outline(DRWPass *wire_outline, Object *ob,
@@ -152,7 +178,7 @@ void DRW_shgroup_wire_outline(DRWPass *wire_outline, Object *ob,
 		DRW_shgroup_uniform_bool(grp, "drawBack", &bFalse, 1);
 		DRW_shgroup_uniform_bool(grp, "drawSilhouette", &bFalse, 1);
 
-		DRW_shgroup_call_add(grp, geom, &ob->obmat);
+		DRW_shgroup_call_add(grp, geom, ob->obmat);
 	}
 
 	if (do_outline) {
@@ -163,7 +189,7 @@ void DRW_shgroup_wire_outline(DRWPass *wire_outline, Object *ob,
 		DRW_shgroup_uniform_bool(grp, "drawBack", &bFalse, 1);
 		DRW_shgroup_uniform_bool(grp, "drawSilhouette", &bTrue, 1);
 
-		DRW_shgroup_call_add(grp, geom, &ob->obmat);
+		DRW_shgroup_call_add(grp, geom, ob->obmat);
 	}
 
 #else /* Old (flat) wire */
@@ -173,12 +199,17 @@ void DRW_shgroup_wire_outline(DRWPass *wire_outline, Object *ob,
 	DRW_shgroup_state_set(grp, DRW_STATE_WIRE_LARGE);
 	DRW_shgroup_uniform_vec4(grp, "color", frontcol, 1);
 
-	DRW_shgroup_call_add(grp, geom, &ob->obmat);
+	DRW_shgroup_call_add(grp, geom, ob->obmat);
 #endif
 
 }
 
 /* ***************************** NON MESHES ********************** */
+
+void DRW_draw_lamp(DRWPass *non_meshes, Object *ob)
+{
+	/* TODO */
+}
 
 void DRW_shgroup_non_meshes(DRWPass *non_meshes, Object *ob)
 {
@@ -192,16 +223,31 @@ void DRW_shgroup_non_meshes(DRWPass *non_meshes, Object *ob)
 		case OB_EMPTY:
 		default:
 			geom = DRW_cache_plain_axes_get();
-			DRWShadingGroup *grp = DRW_shgroup_create(sh, non_meshes);
+			DRWShadingGroup *grp = DRW_pass_nth_shgroup_get(non_meshes, 0);
 			DRW_shgroup_uniform_vec4(grp, "color", frontcol, 1);
-			DRW_shgroup_call_add(grp, geom, &ob->obmat);
+			DRW_shgroup_call_add(grp, geom, ob->obmat);
 			break;
 	}
 }
 
+void DRW_shgroup_relationship_lines(DRWPass *non_meshes, Object *ob)
+{
+	if (ob->parent) {
+		struct Batch *geom = DRW_cache_single_vert_get();
+		DRWShadingGroup *grp = DRW_pass_nth_shgroup_get(non_meshes, 5);
+		DRW_shgroup_call_add(grp, geom, ob->obmat);
+		DRW_shgroup_call_add(grp, geom, ob->parent->obmat);
+	}
+}
+
+/* ***************************** COMMON **************************** */
+
 void DRW_shgroup_object_center(DRWPass *ob_center, Object *ob)
 {
 	struct Batch *geom = DRW_cache_single_vert_get();
+
 	DRWShadingGroup *grp = DRW_pass_nth_shgroup_get(ob_center, 0);
-	DRW_shgroup_call_add(grp, geom, &ob->obmat);
+
+	/* Add all object center for now */
+	DRW_shgroup_call_add(grp, geom, ob->obmat);
 }

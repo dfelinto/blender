@@ -534,8 +534,8 @@ static void CLAY_create_cache(CLAY_PassList *passes, const struct bContext *C)
 				geom = DRW_cache_surface_get(ob);
 
 				/* Add everything for now */
-				DRW_shgroup_call_add(depthbatch, geom, &ob->obmat);
-				DRW_shgroup_call_add(default_shgrp, geom, &ob->obmat);
+				DRW_shgroup_call_add(depthbatch, geom, ob->obmat);
+				DRW_shgroup_call_add(default_shgrp, geom, ob->obmat);
 
 				/* When encountering a new material :
 				 * - Create new Batch
@@ -554,14 +554,10 @@ static void CLAY_create_cache(CLAY_PassList *passes, const struct bContext *C)
 				break;
 		}
 
-		/* Add all object center for now */
 		DRW_shgroup_object_center(passes->ob_center_pass, ob);
+		DRW_shgroup_relationship_lines(passes->non_meshes_pass, ob);
 	}
 	FOREACH_OBJECT_END
-
-	/* Optimization */
-	// DRWShadingGroup *shgrp = DRW_pass_nth_shgroup_get(passes->ob_center_pass, 0);
-	// DRW_shgroup_batch_calls_object_center(shgrp);
 }
 
 static void CLAY_view_draw(RenderEngine *UNUSED(engine), const struct bContext *context)

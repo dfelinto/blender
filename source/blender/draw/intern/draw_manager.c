@@ -29,9 +29,11 @@
 #include "BLI_rect.h"
 #include "BLI_string.h"
 
-#include "BLT_translation.h"
+#include "BIF_glutil.h"
 
 #include "BKE_global.h"
+
+#include "BLT_translation.h"
 
 #include "DRW_engine.h"
 #include "DRW_render.h"
@@ -101,7 +103,7 @@ struct DRWPass {
 typedef struct DRWCall {
 	struct DRWCall *next, *prev;
 	Batch *geometry;
-	float **obmat;
+	float(*obmat)[4];
 } DRWCall;
 
 struct DRWShadingGroup {
@@ -110,6 +112,8 @@ struct DRWShadingGroup {
 	struct DRWInterface *interface;  /* Uniforms pointers */
 	ListBase calls;                  /* List with all geometry and transforms */
 	int state;                       /* State changes for this batch only */
+	short dyntype;                   /* Dynamic Batch type, 0 is normal */
+	Batch *dyngeom;                  /* Dynamic batch */
 };
 
 /* Render State */
@@ -325,6 +329,8 @@ DRWShadingGroup *DRW_shgroup_create(struct GPUShader *shader, DRWPass *pass)
 	shgroup->shader = shader;
 	shgroup->interface = DRW_interface_create(shader);
 	shgroup->state = 0;
+	shgroup->dyntype = 0;
+	shgroup->dyngeom = NULL;
 
 	BLI_listbase_clear(&shgroup->interface->uniforms);
 
@@ -338,10 +344,13 @@ void DRW_shgroup_free(struct DRWShadingGroup *shgroup)
 	BLI_freelistN(&shgroup->calls);
 	BLI_freelistN(&shgroup->interface->uniforms);
 	MEM_freeN(shgroup->interface);
+
+	if (shgroup->dyngeom)
+		Batch_discard(shgroup->dyngeom);
 }
 
 /* Later use VBO */
-void DRW_shgroup_call_add(DRWShadingGroup *shgroup, Batch *geom, const float **obmat)
+void DRW_shgroup_call_add(DRWShadingGroup *shgroup, Batch *geom, float (*obmat)[4])
 {
 	if (geom) {
 		DRWCall *call = MEM_callocN(sizeof(DRWCall), "DRWCall");
@@ -358,6 +367,11 @@ void DRW_shgroup_call_add(DRWShadingGroup *shgroup, Batch *geom, const float **o
 void DRW_shgroup_state_set(DRWShadingGroup *shgroup, DRWState state)
 {
 	shgroup->state = state;
+}
+
+void DRW_shgroup_dyntype_set(DRWShadingGroup *shgroup, int type)
+{
+	shgroup->dyntype = type;
 }
 
 void DRW_shgroup_uniform_texture(DRWShadingGroup *shgroup, const char *name, const GPUTexture *tex, int loc)
@@ -426,23 +440,27 @@ void DRW_shgroup_uniform_mat4(DRWShadingGroup *shgroup, const char *name, const 
 	DRW_interface_uniform(shgroup, name, DRW_UNIFORM_MAT4, value, 16, 1, 0);
 }
 
-/* TODO move it to GPUViewport */
-static Batch *obj_centers = NULL;
-
-void DRW_shgroup_batch_calls_object_center(DRWShadingGroup *shgroup)
+static void shgroup_dynamic_batch_from_calls(DRWShadingGroup *shgroup)
 {
+	int i = 0;
 	int nbr = BLI_listbase_count(&shgroup->calls);
+	GLenum type;
+
+	if (nbr == 0) {
+		if (shgroup->dyngeom) {
+			Batch_discard(shgroup->dyngeom);
+			shgroup->dyngeom = NULL;
+		}
+		return;
+	}
+
 	/* Gather Data */
 	float *data = MEM_mallocN(sizeof(float) * 3 * nbr , "Object Center Batch data");
 
-	// int i = 0;
-	// /* TODO do something more generic usable for other things than obj center */
-	// for (DRWCall *call = shgroup->calls.first; call; call = call->next) {
-	// 	float *v = data + i*3;
-	// 	float ob[3] = {0.0f,0.0f,0.0f};
-	// 	copy_v3_v3(v, ob);
-	// 	i++;
-	// }
+	/* TODO do something more generic usable for other things than obj center */
+	for (DRWCall *call = shgroup->calls.first; call; call = call->next, i++) {
+		copy_v3_v3(&data[i*3], call->obmat[3]);
+	}
 
 	/* Upload Data */
 	static VertexFormat format = { 0 };
@@ -456,20 +474,19 @@ void DRW_shgroup_batch_calls_object_center(DRWShadingGroup *shgroup)
 
 	fillAttrib(vbo, pos_id, data);
 
-	if (obj_centers)
-		Batch_discard(obj_centers);
+	if (shgroup->dyntype == DRW_DYN_POINTS)
+		type = GL_POINTS;
+	else
+		type = GL_LINES;
 
-	obj_centers = Batch_create(GL_POINTS, vbo, NULL);
+	/* TODO make the batch dynamic instead of freeing it every times */
+	if (shgroup->dyngeom)
+		Batch_discard(shgroup->dyngeom);
+
+	shgroup->dyngeom = Batch_create(type, vbo, NULL);
 
 	MEM_freeN(data);
-
-	/* Replacing multiple calls with only one */
-	BLI_freelistN(&shgroup->calls);
-	static float obmat[4][4];
-	unit_m4(obmat);
-	DRW_shgroup_call_add(shgroup, obj_centers, &obmat);
 }
-
 
 /* ***************************************** PASSES ******************************************/
 
@@ -542,14 +559,27 @@ void DRW_draw_background(void)
 	}
 }
 
+/* Only alter the state (does not reset it like set_state() ) */
 static void shgroup_set_state(DRWShadingGroup *shgroup)
 {
 	if (shgroup->state) {
+		/* Wire width */
 		if (shgroup->state & DRW_STATE_WIRE) {
 			glLineWidth(1.0f);
 		}
 		else if (shgroup->state & DRW_STATE_WIRE_LARGE) {
 			glLineWidth(UI_GetThemeValuef(TH_OUTLINE_WIDTH) * 2.0f);
+		}
+
+		/* Line Stipple */
+		if (shgroup->state & DRW_STATE_STIPPLE_2) {
+			setlinestyle(2);
+		}
+		else if (shgroup->state & DRW_STATE_STIPPLE_3) {
+			setlinestyle(3);
+		}
+		else if (shgroup->state & DRW_STATE_STIPPLE_4) {
+			setlinestyle(4);
 		}
 	}
 }
@@ -559,18 +589,75 @@ typedef struct DRWBoundTexture {
 	GPUTexture *tex;
 } DRWBoundTexture;
 
+static void draw_geometry(DRWShadingGroup *shgroup, DRWInterface *interface, Batch *geom, const float (*obmat)[4])
+{
+	RegionView3D *rv3d = CTX_wm_region_view3d(DST.context);
+	
+	float mvp[4][4], mv[4][4], n[3][3];
+	float eye[3] = { 0.0f, 0.0f, 1.0f }; /* looking into the screen */
+
+	bool do_mvp = (interface->modelviewprojection != -1);
+	bool do_mv = (interface->modelview != -1);
+	bool do_n = (interface->normal != -1);
+	bool do_eye = (interface->eye != -1);
+
+	if (do_mvp) {
+		mul_m4_m4m4(mvp, rv3d->persmat, obmat);
+	}
+	if (do_mv || do_n || do_eye) {
+		mul_m4_m4m4(mv, rv3d->viewmat, obmat);
+	}
+	if (do_n || do_eye) {
+		copy_m3_m4(n, mv);
+		invert_m3(n);
+		transpose_m3(n);
+	}
+	if (do_eye) {
+		/* Used by orthographic wires */
+		float tmp[3][3];
+		invert_m3_m3(tmp, n);
+		/* set eye vector, transformed to object coords */
+		mul_m3_v3(tmp, eye);
+	}
+
+	/* Should be really simple */
+	/* step 1 : bind object dependent matrices */
+	if (interface->modelviewprojection != -1) {
+		GPU_shader_uniform_vector(shgroup->shader, interface->modelviewprojection, 16, 1, (float *)mvp);
+	}
+	if (interface->projection != -1) {
+		GPU_shader_uniform_vector(shgroup->shader, interface->projection, 16, 1, (float *)rv3d->winmat);
+	}
+	if (interface->modelview != -1) {
+		GPU_shader_uniform_vector(shgroup->shader, interface->modelview, 16, 1, (float *)mv);
+	}
+	if (interface->normal != -1) {
+		GPU_shader_uniform_vector(shgroup->shader, interface->normal, 9, 1, (float *)n);
+	}
+	if (interface->eye != -1) {
+		GPU_shader_uniform_vector(shgroup->shader, interface->eye, 3, 1, (float *)eye);
+	}
+
+	/* step 2 : bind vertex array & draw */
+	Batch_set_program(geom, GPU_shader_get_program(shgroup->shader));
+	Batch_draw_stupid(geom);
+}
+
 static void draw_shgroup(DRWShadingGroup *shgroup)
 {
 	BLI_assert(shgroup->shader);
 	BLI_assert(shgroup->interface);
 
-	RegionView3D *rv3d = CTX_wm_region_view3d(DST.context);
 	DRWInterface *interface = shgroup->interface;
 
 	if (DST.shader != shgroup->shader) {
 		if (DST.shader) GPU_shader_unbind();
 		GPU_shader_bind(shgroup->shader);
 		DST.shader = shgroup->shader;
+	}
+
+	if (shgroup->dyntype != 0) {
+		shgroup_dynamic_batch_from_calls(shgroup);
 	}
 
 	shgroup_set_state(shgroup);
@@ -619,55 +706,18 @@ static void draw_shgroup(DRWShadingGroup *shgroup)
 	}
 
 	/* Rendering Calls */
-	for (DRWCall *call = shgroup->calls.first; call; call = call->next) {
-		float mvp[4][4], mv[4][4], n[3][3];
-		float eye[3] = { 0.0f, 0.0f, 1.0f }; /* looking into the screen */
-
-		bool do_mvp = (interface->modelviewprojection != -1);
-		bool do_mv = (interface->modelview != -1);
-		bool do_n = (interface->normal != -1);
-		bool do_eye = (interface->eye != -1);
-
-		if (do_mvp) {
-			mul_m4_m4m4(mvp, rv3d->persmat, call->obmat);
+	if (shgroup->dyntype != 0) {
+		/* Replacing multiple calls with only one */
+		float obmat[4][4];
+		unit_m4(obmat);
+		/* Some dynamic batch can have no geom (no call to aggregate) */
+		if (shgroup->dyngeom)
+			draw_geometry(shgroup, interface, shgroup->dyngeom, obmat);
+	}
+	else {
+		for (DRWCall *call = shgroup->calls.first; call; call = call->next) {
+			draw_geometry(shgroup, interface, call->geometry, call->obmat);
 		}
-		if (do_mv || do_n || do_eye) {
-			mul_m4_m4m4(mv, rv3d->viewmat, call->obmat);
-		}
-		if (do_n || do_eye) {
-			copy_m3_m4(n, mv);
-			invert_m3(n);
-			transpose_m3(n);
-		}
-		if (do_eye) {
-			/* Used by orthographic wires */
-			float tmp[3][3];
-			invert_m3_m3(tmp, n);
-			/* set eye vector, transformed to object coords */
-			mul_m3_v3(tmp, eye);
-		}
-
-		/* Should be really simple */
-		/* step 1 : bind object dependent matrices */
-		if (interface->modelviewprojection != -1) {
-			GPU_shader_uniform_vector(shgroup->shader, interface->modelviewprojection, 16, 1, (float *)mvp);
-		}
-		if (interface->projection != -1) {
-			GPU_shader_uniform_vector(shgroup->shader, interface->projection, 16, 1, (float *)rv3d->winmat);
-		}
-		if (interface->modelview != -1) {
-			GPU_shader_uniform_vector(shgroup->shader, interface->modelview, 16, 1, (float *)mv);
-		}
-		if (interface->normal != -1) {
-			GPU_shader_uniform_vector(shgroup->shader, interface->normal, 9, 1, (float *)n);
-		}
-		if (interface->eye != -1) {
-			GPU_shader_uniform_vector(shgroup->shader, interface->eye, 3, 1, (float *)eye);
-		}
-
-		/* step 2 : bind vertex array & draw */
-		Batch_set_program(call->geometry, GPU_shader_get_program(shgroup->shader));
-		Batch_draw_stupid(call->geometry);
 	}
 }
 
@@ -740,6 +790,20 @@ static void set_state(short flag)
 	}
 	else {
 		glDisable(GL_BLEND);
+	}
+
+	/* Line Stipple */
+	if (flag & DRW_STATE_STIPPLE_2) {
+		setlinestyle(2);
+	}
+	else if (flag & DRW_STATE_STIPPLE_3) {
+		setlinestyle(3);
+	}
+	else if (flag & DRW_STATE_STIPPLE_4) {
+		setlinestyle(4);
+	}
+	else {
+		setlinestyle(0);
 	}
 }
 

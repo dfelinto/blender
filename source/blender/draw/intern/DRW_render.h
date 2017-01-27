@@ -149,29 +149,35 @@ typedef enum {
 	DRW_STATE_WIRE        = (1 << 6),
 	DRW_STATE_WIRE_LARGE  = (1 << 7),
 	DRW_STATE_POINT       = (1 << 8),
-	DRW_STATE_BLEND       = (1 << 9)
+	DRW_STATE_STIPPLE_2   = (1 << 9),
+	DRW_STATE_STIPPLE_3   = (1 << 10),
+	DRW_STATE_STIPPLE_4   = (1 << 11),
+	DRW_STATE_BLEND       = (1 << 12),
 } DRWState;
 
+/* Used by DRWShadingGroup.dyntype */
+#define DRW_DYN_POINTS 1
+#define DRW_DYN_LINES 2
+
 DRWShadingGroup *DRW_shgroup_create(struct GPUShader *shader, DRWPass *pass);
-void DRW_shgroup_free(struct DRWShadingGroup *batch);
-void DRW_shgroup_call_add(DRWShadingGroup *batch, struct Batch *geom, const float **obmat);
-void DRW_shgroup_state_set(DRWShadingGroup *batch, DRWState state);
+void DRW_shgroup_free(struct DRWShadingGroup *shgroup);
+void DRW_shgroup_call_add(DRWShadingGroup *shgroup, struct Batch *geom, float (*obmat)[4]);
+void DRW_shgroup_state_set(DRWShadingGroup *shgroup, DRWState state);
+void DRW_shgroup_dyntype_set(DRWShadingGroup *shgroup, int type);
 
-void DRW_shgroup_uniform_texture(DRWShadingGroup *batch, const char *name, const struct GPUTexture *tex, int loc);
+void DRW_shgroup_uniform_texture(DRWShadingGroup *shgroup, const char *name, const struct GPUTexture *tex, int loc);
 void DRW_shgroup_uniform_block(DRWShadingGroup *shgroup, const char *name, const struct GPUUniformBuffer *ubo, int loc);
-void DRW_shgroup_uniform_buffer(DRWShadingGroup *batch, const char *name, const int value, int loc);
-void DRW_shgroup_uniform_bool(DRWShadingGroup *batch, const char *name, const bool *value, int arraysize);
-void DRW_shgroup_uniform_float(DRWShadingGroup *batch, const char *name, const float *value, int arraysize);
-void DRW_shgroup_uniform_vec2(DRWShadingGroup *batch, const char *name, const float *value, int arraysize);
-void DRW_shgroup_uniform_vec3(DRWShadingGroup *batch, const char *name, const float *value, int arraysize);
-void DRW_shgroup_uniform_vec4(DRWShadingGroup *batch, const char *name, const float *value, int arraysize);
-void DRW_shgroup_uniform_int(DRWShadingGroup *batch, const char *name, const int *value, int arraysize);
-void DRW_shgroup_uniform_ivec2(DRWShadingGroup *batch, const char *name, const int *value, int arraysize);
-void DRW_shgroup_uniform_ivec3(DRWShadingGroup *batch, const char *name, const int *value, int arraysize);
-void DRW_shgroup_uniform_mat3(DRWShadingGroup *batch, const char *name, const float *value);
-void DRW_shgroup_uniform_mat4(DRWShadingGroup *batch, const char *name, const float *value);
-
-void DRW_shgroup_batch_calls_object_center(DRWShadingGroup *shgroup);
+void DRW_shgroup_uniform_buffer(DRWShadingGroup *shgroup, const char *name, const int value, int loc);
+void DRW_shgroup_uniform_bool(DRWShadingGroup *shgroup, const char *name, const bool *value, int arraysize);
+void DRW_shgroup_uniform_float(DRWShadingGroup *shgroup, const char *name, const float *value, int arraysize);
+void DRW_shgroup_uniform_vec2(DRWShadingGroup *shgroup, const char *name, const float *value, int arraysize);
+void DRW_shgroup_uniform_vec3(DRWShadingGroup *shgroup, const char *name, const float *value, int arraysize);
+void DRW_shgroup_uniform_vec4(DRWShadingGroup *shgroup, const char *name, const float *value, int arraysize);
+void DRW_shgroup_uniform_int(DRWShadingGroup *shgroup, const char *name, const int *value, int arraysize);
+void DRW_shgroup_uniform_ivec2(DRWShadingGroup *shgroup, const char *name, const int *value, int arraysize);
+void DRW_shgroup_uniform_ivec3(DRWShadingGroup *shgroup, const char *name, const int *value, int arraysize);
+void DRW_shgroup_uniform_mat3(DRWShadingGroup *shgroup, const char *name, const float *value);
+void DRW_shgroup_uniform_mat4(DRWShadingGroup *shgroup, const char *name, const float *value);
 
 /* Passes */
 DRWPass *DRW_pass_create(const char *name, DRWState state);
