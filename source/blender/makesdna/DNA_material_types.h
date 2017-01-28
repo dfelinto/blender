@@ -90,8 +90,17 @@ typedef struct TexPaintSlot {
 	int pad;
 } TexPaintSlot;
 
-/* Runtime Render Data Not saved in file */
-typedef struct MaterialDataClayRuntime {
+/* Material Engine Settings */
+typedef struct MaterialEngineSettings {
+	struct MaterialEngineSettings *next, *prev;
+	char name[64]; /* engine name - MAX_NAME */
+	void *runtime; /* To be free on file read */
+} MaterialEngineSettings;
+
+/* Clay engine */
+
+/* Runtime Data Not saved in file */
+typedef struct MaterialRuntimeClay {
 	short type;
 	short flag;
 	int material_id;   /* Index in materials UBO */
@@ -99,14 +108,13 @@ typedef struct MaterialDataClayRuntime {
 	float matcap_rot[2];
 	float matcap_hsv[3];
 	float ssao_params_var[4];
-} MaterialDataClayRuntime;
+} MaterialRuntimeClay;
 
-/* MaterialDataClayRuntime.flag */
+/* MaterialRuntimeClay.flag */
 #define CLAY_OUTDATED		1
 
-/* Duplicated in DNA_scene_types.h under SceneSettingsClay */
-typedef struct MaterialSettingsClay {
-	struct MaterialDataClayRuntime *runtime;
+typedef struct MaterialEngineSettingsClay {
+	struct MaterialEngineSettings mes; /* keep first */
 
 	short type;
 	short matcap_icon; /* Icon ID */
@@ -122,9 +130,9 @@ typedef struct MaterialSettingsClay {
 	float ssao_factor_edge;
 
 	float pad;
-} MaterialSettingsClay;
+} MaterialEngineSettingsClay;
 
-/* MaterialSettingsClay.type */
+/* MaterialEngineSettingsClay.type */
 #define CLAY_MATCAP_NONE		0
 #define CLAY_MATCAP_SIMPLE		1
 #define CLAY_MATCAP_COMPLETE	2
@@ -243,8 +251,7 @@ typedef struct Material {
 	struct TexPaintSlot *texpaintslot; /* cached slot for painting. Make sure to recalculate before use
 	                                    * with refresh_texpaint_image_cache */
 	/* Engine Settings */
-	struct MaterialSettingsClay clay;
-	float pad6[2];
+	ListBase engines_settings; /* MaterialEngineSettings */
 
 	ListBase gpumaterial;		/* runtime */
 } Material;

@@ -178,37 +178,5 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *main)
 				BLI_strncpy(scene->collection->name, "Master Collection", sizeof(scene->collection->name));
 			}
 		}
-
-		/* Clay engine defaults */
-		if (!DNA_struct_elem_find(fd->filesdna, "Scene", "EngineDataClay", "claydata")) {
-			for (Scene *scene = main->scene.first; scene; scene = scene->id.next) {
-				EngineDataClay *settings = &scene->claydata;
-
-				settings->defsettings.matcap_rot = 0.0f;
-				settings->defsettings.matcap_hue = 0.5f;
-				settings->defsettings.matcap_sat = 0.5f;
-				settings->defsettings.matcap_val = 0.5f;
-				settings->defsettings.ssao_distance = 0.2;
-				settings->defsettings.ssao_attenuation = 1.0f;
-				settings->defsettings.ssao_factor_cavity = 1.0f;
-				settings->defsettings.ssao_factor_edge = 1.0f;
-				settings->ssao_samples = 32;
-			}
-		}
-
-		if (!DNA_struct_elem_find(fd->filesdna, "Material", "MaterialSettingsClay", "clay")) {
-			for (Material *mat = main->mat.first; mat; mat = mat->id.next) {
-				MaterialSettingsClay *clay = &mat->clay;
-
-				clay->matcap_rot = 0.0f;
-				clay->matcap_hue = 0.5f;
-				clay->matcap_sat = 0.5f;
-				clay->matcap_val = 0.5f;
-				clay->ssao_distance = 0.2;
-				clay->ssao_attenuation = 1.0f;
-				clay->ssao_factor_cavity = 1.0f;
-				clay->ssao_factor_edge = 1.0f;
-			}
-		}
 	}
 }

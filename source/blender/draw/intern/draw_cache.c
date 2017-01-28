@@ -29,6 +29,7 @@
 #include "DNA_object_types.h"
 
 #include "BLI_utildefines.h"
+#include "BLI_math.h"
 
 #include "BKE_mesh_render.h"
 
@@ -40,7 +41,7 @@ static struct DRWShapeCache{
 	Batch *drw_single_vertice;
 	Batch *drw_fullscreen_quad;
 	Batch *drw_plain_axes;
-	// Batch drw_single_arrow;
+	Batch *drw_circle_ball;
 	// Batch drw_cube;
 	// Batch drw_circle;
 	// Batch drw_sphere;
@@ -78,6 +79,36 @@ Batch *DRW_cache_fullscreen_quad_get(void)
 		SHC.drw_fullscreen_quad = Batch_create(GL_TRIANGLES, vbo, NULL);
 	}
 	return SHC.drw_fullscreen_quad;
+}
+
+/* Common */
+#define CIRCLE_RESOL 32
+
+Batch *DRW_cache_circle_ball_get(void)
+{
+	if (!SHC.drw_circle_ball) {
+		float v[3] = {0.0f, 0.0f, 0.0f};
+
+		/* Position Only 3D format */
+		static VertexFormat format = { 0 };
+		static unsigned pos_id;
+		if (format.attrib_ct == 0) {
+			pos_id = add_attrib(&format, "pos", GL_FLOAT, 3, KEEP_FLOAT);
+		}
+
+		VertexBuffer *vbo = VertexBuffer_create_with_format(&format);
+		VertexBuffer_allocate_data(vbo, CIRCLE_RESOL);
+
+		for (int a = 0; a < CIRCLE_RESOL; a++) {
+			v[0] = sinf((2.0f * M_PI * a) / ((float)CIRCLE_RESOL));
+			v[1] = cosf((2.0f * M_PI * a) / ((float)CIRCLE_RESOL));
+			v[2] = 0.0f;
+			setAttrib(vbo, pos_id, 0, v);
+		}
+
+		SHC.drw_circle_ball = Batch_create(GL_LINE_LOOP, vbo, NULL);
+	}
+	return SHC.drw_circle_ball;
 }
 
 /* Empties */

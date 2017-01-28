@@ -847,28 +847,48 @@ void DRW_state_reset(void)
 	set_state(state);
 }
 
-/* ****************************************** Materials ******************************************/
+/* ****************************************** Settings ******************************************/
 
-void *DRW_material_settings(Material *ma)
+void *DRW_material_settings_get(Material *ma, const char *engine_name)
 {
-	Scene *scene = CTX_data_scene(DST.context);
+	MaterialEngineSettings *ms = NULL;
 
-	if (STREQ(scene->r.engine, RE_engine_id_BLENDER_CLAY))
-		return &ma->clay;
+	ms = BLI_findstring(&ma->engines_settings, engine_name, offsetof(MaterialEngineSettings, name));
 
-	BLI_assert(false);
-	return NULL;
+	/* If the settings does not exists yet, create it */
+	if (ms == NULL) {
+		/* TODO make render_settings_create a polymorphic function */
+		if (STREQ(engine_name, RE_engine_id_BLENDER_CLAY)) {
+			ms = CLAY_material_settings_create();
+		}
+
+		BLI_addtail(&ma->engines_settings, ms);
+	}
+
+	return ms;
 }
 
-void *DRW_render_settings(void)
+/* If scene is NULL, use context scene */
+void *DRW_render_settings_get(Scene *scene, const char *engine_name)
 {
-	Scene *scene = CTX_data_scene(DST.context);
+	RenderEngineSettings *rs = NULL;
 
-	if (STREQ(scene->r.engine, RE_engine_id_BLENDER_CLAY))
-		return &scene->claydata;
+	if (scene == NULL)
+		scene = CTX_data_scene(DST.context);
 
-	BLI_assert(false);
-	return NULL;
+	rs = BLI_findstring(&scene->engines_settings, engine_name, offsetof(RenderEngineSettings, name));
+
+	/* If the settings does not exists yet, create it */
+	if (rs == NULL) {
+		/* TODO make render_settings_create a polymorphic function */
+		if (STREQ(engine_name, RE_engine_id_BLENDER_CLAY)) {
+			rs = CLAY_render_settings_create();
+		}
+
+		BLI_addtail(&scene->engines_settings, rs);
+	}
+
+	return rs;
 }
 
 /* ****************************************** Framebuffers ******************************************/

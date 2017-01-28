@@ -29,11 +29,17 @@
 //#define WITH_VIEWPORT_CACHE_TEST
 
 struct DRWPass;
+struct Material;
+struct Scene;
 
 void DRW_engines_init(void);
 void DRW_engines_free(void);
 
 /* This is here because GPUViewport needs it */
 void DRW_pass_free(struct DRWPass *pass);
+
+/* Settings */
+void *DRW_material_settings_get(struct Material *ma, const char *engine_name);
+void *DRW_render_settings_get(struct Scene *scene, const char *engine_name);
 
 #endif /* __DRW_ENGINE_H__ */

@@ -569,10 +569,7 @@ void BKE_scene_free(Scene *sce)
 	sce->collection = NULL;
 
 	/* Runtime Engine Data */
-	if (sce->claydata.defsettings.runtime) {
-		MEM_freeN(sce->claydata.defsettings.runtime);
-		sce->claydata.defsettings.runtime = NULL;
-	}
+	BLI_freelistN(&sce->engines_settings);
 }
 
 void BKE_scene_init(Scene *sce)

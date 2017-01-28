@@ -2666,6 +2666,7 @@ static void write_scenes(WriteData *wd, ListBase *scebase)
 	FreestyleModuleConfig *fmc;
 	FreestyleLineSet *fls;
 	SceneLayer *sl;
+	RenderEngineSettings *res;
 
 	sce = scebase->first;
 	while (sce) {
@@ -2878,7 +2879,11 @@ static void write_scenes(WriteData *wd, ListBase *scebase)
 			writelist(wd, DATA, ObjectBase, &sl->object_bases);
 			write_layer_collections(wd, &sl->layer_collections);
 		}
-
+#if 0
+		for (res = sce->engines_settings.first; res; res = res->next) {
+			/* How to write if struct type is not known? */
+		}
+#endif
 		sce = sce->id.next;
 	}
 

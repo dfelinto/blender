@@ -199,8 +199,10 @@ bool DRW_viewport_is_persp_get(void);
 bool DRW_viewport_cache_is_dirty(void);
 
 /* Settings */
-void *DRW_material_settings(Material *ma);
-void *DRW_render_settings(void);
+#ifndef __DRW_ENGINE_H__
+void *DRW_material_settings_get(Material *ma, const char *engine_name);
+void *DRW_render_settings_get(Scene *scene, const char *engine_name);
+#endif /* __DRW_ENGINE_H__ */
 
 /* Draw commands */
 void DRW_draw_background(void);

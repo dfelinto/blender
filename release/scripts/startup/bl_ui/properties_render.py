@@ -590,17 +590,16 @@ class RENDER_PT_clay(RenderButtonsPanel, Panel):
 
     def draw(self, context):
         layout = self.layout;
-        settings = context.scene.clay_settings
-        matsettings = context.scene.clay_settings.mat_settings
-        layout.template_icon_view(matsettings, "matcap_icon")
-        layout.prop(matsettings, "matcap_rotation")
-        layout.prop(matsettings, "matcap_hue")
-        layout.prop(matsettings, "matcap_saturation")
-        layout.prop(matsettings, "matcap_value")
-        layout.prop(matsettings, "ssao_factor_cavity")
-        layout.prop(matsettings, "ssao_factor_edge")
-        layout.prop(matsettings, "ssao_distance")
-        layout.prop(matsettings, "ssao_attenuation")
+        settings = context.scene.render_engine
+        layout.template_icon_view(settings, "matcap_icon")
+        layout.prop(settings, "matcap_rotation")
+        layout.prop(settings, "matcap_hue")
+        layout.prop(settings, "matcap_saturation")
+        layout.prop(settings, "matcap_value")
+        layout.prop(settings, "ssao_factor_cavity")
+        layout.prop(settings, "ssao_factor_edge")
+        layout.prop(settings, "ssao_distance")
+        layout.prop(settings, "ssao_attenuation")
         layout.prop(settings, "ssao_samples")
 
 

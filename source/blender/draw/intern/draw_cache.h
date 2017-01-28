@@ -31,9 +31,9 @@ struct Object;
 
 /* Common Shapes */
 struct Batch *DRW_cache_fullscreen_quad_get(void);
+struct Batch *DRW_cache_circle_ball_get(void);
 struct Batch *DRW_cache_single_vert_get(void);
 struct Batch *DRW_cache_plain_axes_get(void);
-
 /* Meshes */
 struct Batch *DRW_cache_wire_outline_get(struct Object *ob);
 struct Batch *DRW_cache_surface_get(struct Object *ob);

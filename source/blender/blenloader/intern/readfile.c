@@ -3988,8 +3988,6 @@ static void direct_link_material(FileData *fd, Material *ma)
 	
 	ma->preview = direct_link_preview_image(fd, ma->preview);
 	BLI_listbase_clear(&ma->gpumaterial);
-
-	ma->clay.runtime = NULL;
 }
 
 /* ************ READ PARTICLE SETTINGS ***************** */
@@ -5949,6 +5947,7 @@ static void direct_link_scene(FileData *fd, Scene *sce)
 	RigidBodyWorld *rbw;
 	SceneLayer *sl;
 	SceneRenderLayer *srl;
+	RenderEngineSettings *res;
 	
 	sce->theDag = NULL;
 	sce->depsgraph = NULL;
@@ -6211,8 +6210,12 @@ static void direct_link_scene(FileData *fd, Scene *sce)
 		sl->basact = newdataadr(fd, sl->basact);
 		direct_link_layer_collections(fd, &sl->layer_collections);
 	}
-
-	sce->claydata.defsettings.runtime = NULL;
+#if 0
+	link_list(fd, &sce->engines_settings);
+	for (res = sce->engines_settings.first; res; res = res->next) {
+		res->runtime = NULL;
+	}
+#endif
 }
 
 /* ************ READ WM ***************** */

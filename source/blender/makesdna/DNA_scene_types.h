@@ -68,7 +68,6 @@ struct bGPDbrush;
 struct MovieClip;
 struct ColorSpace;
 struct SceneCollection;
-struct MaterialSettingsClay;
 
 /* ************************************************************* */
 /* Scene Data */
@@ -547,6 +546,50 @@ typedef enum BakePassFilter {
 #define R_BAKE_PASS_FILTER_ALL (~0)
 
 /* *************************************************************** */
+/* Engine Settings */
+
+typedef struct RenderEngineSettings {
+	struct RenderEngineSettings *next, *prev;
+	char name[64]; /* engine name - MAX_NAME */
+	void *runtime; /* Here to be free on file read */
+} RenderEngineSettings;
+
+/* Render Data */
+typedef struct RenderEngineSettingsClay {
+	struct RenderEngineSettings res; /* keep first */
+
+	/* Use same layout as MaterialEngineSettingsClay so this struct
+	 * can be used as Material Settings. */
+	short type;
+	short matcap_icon; /* Icon ID */
+
+	float matcap_rot;
+	float matcap_hue;
+	float matcap_sat;
+	float matcap_val;
+
+	float ssao_distance;
+	float ssao_attenuation;
+	float ssao_factor_cavity;
+	float ssao_factor_edge;
+
+	float pad;
+	/* end of MaterialEngineSettingsClay */
+
+	/* Global Settings */
+	short options;
+	short pad1;
+	int ssao_samples;
+	int pad2[2];
+} RenderEngineSettingsClay;
+
+/* RenderEngineSettingsClay.options */
+typedef enum ClayFlagSettings {
+	CLAY_USE_AO     = (1 << 0),
+	CLAY_USE_HSV    = (1 << 1),
+} ClayFlagSettings;
+
+/* *************************************************************** */
 /* Render Data */
 
 typedef struct RenderData {
@@ -792,44 +835,6 @@ typedef struct RenderProfile {
 	float ao_error, pad2;
 	
 } RenderProfile;
-
-/* *************************************************************** */
-/* Clay Engine */
-
-/* Duplicated in DNA_material_types.h under MaterialSettingsClay */
-typedef struct SceneSettingsClay {
-	struct MaterialDataClayRuntime *runtime;
-
-	short type;
-	short matcap_icon; /* Icon ID */
-
-	float matcap_rot;
-	float matcap_hue;
-	float matcap_sat;
-	float matcap_val;
-
-	float ssao_distance;
-	float ssao_attenuation;
-	float ssao_factor_cavity;
-	float ssao_factor_edge;
-
-	float pad;
-} SceneSettingsClay;
-
-/* Render Data */
-typedef struct EngineDataClay {
-	/* Default Matcap settings */
-	struct SceneSettingsClay defsettings;
-	short options;
-	short pad;
-	/* Global Settings */
-	int ssao_samples;
-	int pad2[2];
-} EngineDataClay;
-
-/* EngineDataClay.options */
-#define CLAY_USE_AO				1
-#define CLAY_USE_HSV			2
 
 /* *************************************************************** */
 /* Game Engine - Dome */
@@ -1754,9 +1759,8 @@ typedef struct Scene {
 	int active_layer;
 	int pad4;
 
-	/* Engine Settings */
-	struct EngineDataClay claydata;
-	short pad10[4];
+	ListBase engines_settings; /* RenderEngineSettings */
+	int pad5[2];
 } Scene;
 
 /* **************** RENDERDATA ********************* */

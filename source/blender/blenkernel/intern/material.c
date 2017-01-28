@@ -112,10 +112,7 @@ void BKE_material_free(Material *ma)
 	BKE_icon_id_delete((ID *)ma);
 	BKE_previewimg_free(&ma->preview);
 
-	if (ma->clay.runtime) {
-		MEM_freeN(ma->clay.runtime);
-		ma->clay.runtime = NULL;
-	}
+	/* TODO Free Engine Settings */
 }
 
 void BKE_material_init(Material *ma)
@@ -211,17 +208,6 @@ void BKE_material_init(Material *ma)
 	ma->mode2 = MA_CASTSHADOW;
 	ma->shade_flag = MA_APPROX_OCCLUSION;
 	ma->preview = NULL;
-
-	/* New engines */
-	ma->clay.matcap_rot = 0.0f;
-	ma->clay.matcap_hue = 0.5f;
-	ma->clay.matcap_sat = 0.5f;
-	ma->clay.matcap_val = 0.5f;
-	ma->clay.ssao_distance = 0.2;
-	ma->clay.ssao_attenuation = 1.0f;
-	ma->clay.ssao_factor_cavity = 1.0f;
-	ma->clay.ssao_factor_edge = 1.0f;
-	ma->clay.runtime = NULL;
 }
 
 Material *BKE_material_add(Main *bmain, const char *name)
@@ -263,7 +249,8 @@ Material *BKE_material_copy(Main *bmain, Material *ma)
 	BKE_previewimg_id_copy(&man->id, &ma->id);
 
 	BLI_listbase_clear(&man->gpumaterial);
-	man->clay.runtime = NULL;
+
+	/* TODO Duplicate Engine Settings and set runtime to NULL */
 
 	BKE_id_copy_ensure_local(bmain, &ma->id, &man->id);
 
@@ -296,7 +283,8 @@ Material *localize_material(Material *ma)
 		man->nodetree = ntreeLocalize(ma->nodetree);
 	
 	BLI_listbase_clear(&man->gpumaterial);
-	man->clay.runtime = NULL;
+
+	/* TODO Duplicate Engine Settings and set runtime to NULL */
 	
 	return man;
 }
@@ -1716,7 +1704,7 @@ void copy_matcopybuf(Material *ma)
 	matcopybuf.nodetree = ntreeCopyTree_ex(ma->nodetree, G.main, false);
 	matcopybuf.preview = NULL;
 	BLI_listbase_clear(&matcopybuf.gpumaterial);
-	matcopybuf.clay.runtime = NULL;
+	/* TODO Duplicate Engine Settings and set runtime to NULL */
 	matcopied = 1;
 }
 

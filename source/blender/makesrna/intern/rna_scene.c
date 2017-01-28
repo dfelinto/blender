@@ -52,6 +52,8 @@
 
 #include "GPU_extensions.h"
 
+#include "DRW_engine.h"
+
 #include "RNA_define.h"
 #include "RNA_enum_types.h"
 
@@ -945,6 +947,34 @@ static void rna_Scene_all_keyingsets_next(CollectionPropertyIterator *iter)
 		internal->link = (Link *)ks->next;
 		
 	iter->valid = (internal->link != NULL);
+}
+
+static StructRNA *rna_Scene_render_engine_typef(PointerRNA *ptr)
+{
+	Scene *scene = (Scene *)ptr->data;
+
+	if (STREQ(scene->r.engine, RE_engine_id_BLENDER_CLAY)) {
+		return &RNA_RenderEngineSettingsClay;
+	}
+
+	return &RNA_RenderEngineSettings;
+}
+
+static PointerRNA rna_Scene_render_engine_get(PointerRNA *ptr)
+{
+	Scene *scene = (Scene *)ptr->data;
+	RenderEngineSettings *res = DRW_render_settings_get(scene, scene->r.engine);
+
+	if (STREQ(scene->r.engine, RE_engine_id_BLENDER_CLAY)) {
+		return rna_pointer_inherit_refine(ptr, &RNA_RenderEngineSettingsClay, res);
+	}
+
+	return rna_pointer_inherit_refine(ptr, &RNA_RenderEngineSettings, res);
+}
+
+static char *rna_RenderEngineSettings_path(PointerRNA *UNUSED(ptr))
+{
+	return BLI_sprintfN("render_engine");
 }
 
 static int rna_RenderSettings_stereoViews_skip(CollectionPropertyIterator *iter, void *UNUSED(data))
@@ -1872,15 +1902,15 @@ static void rna_GameSettings_exit_key_set(PointerRNA *ptr, int value)
 		gm->exitkey = value;
 }
 
-static void rna_ClaySettings_update(Main *UNUSED(bmain), Scene *UNUSED(scene), PointerRNA *ptr)
+static void rna_RenderEngineSettings_update(Main *UNUSED(bmain), Scene *UNUSED(scene), PointerRNA *ptr)
 {
 	Scene *sce = ptr->id.data;
-	EngineDataClay *ed = &sce->claydata;
-	SceneSettingsClay *ms = &ed->defsettings;
-	MaterialDataClayRuntime *mdr = ms->runtime;
+	RenderEngineSettings *ed = DRW_render_settings_get(sce, sce->r.engine);
 
-	if (mdr)
-		mdr->flag |= CLAY_OUTDATED;
+	if (ed->runtime) {
+		MEM_freeN(ed->runtime);
+		ed->runtime = NULL;
+	}
 
 	WM_main_add_notifier(NC_SPACE | ND_SPACE_VIEW3D, NULL);
 }
@@ -6545,11 +6575,10 @@ static void rna_def_scene_quicktime_settings(BlenderRNA *brna)
 }
 #endif
 
-static void rna_def_material_settings_clay(BlenderRNA *brna)
+static void rna_def_render_engine_settings_clay(BlenderRNA *brna)
 {
 	StructRNA *srna;
 	PropertyRNA *prop;
-
 	static EnumPropertyItem clay_matcap_items[] = {
 		{ICON_MATCAP_01, "01", ICON_MATCAP_01, "", ""},
 		{ICON_MATCAP_02, "02", ICON_MATCAP_02, "", ""},
@@ -6578,85 +6607,77 @@ static void rna_def_material_settings_clay(BlenderRNA *brna)
 		{0, NULL, 0, NULL, NULL}
 	};
 
-	srna = RNA_def_struct(brna, "ClayRenderMaterialSettings", NULL);
-	RNA_def_struct_sdna(srna, "SceneSettingsClay");
-	RNA_def_struct_nested(brna, srna, "ClayRenderSettings");
+	srna = RNA_def_struct(brna, "RenderEngineSettingsClay", NULL);
+	RNA_def_struct_nested(brna, srna, "Scene");
 	RNA_def_struct_ui_text(srna, "Material Clay Settings", "Clay Engine settings for a Material data-block");
 
 	prop = RNA_def_property(srna, "matcap_icon", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_items(prop, clay_matcap_items);
 	RNA_def_property_ui_text(prop, "Matcap", "Image to use for Material Capture by this material");
-	RNA_def_property_update(prop, 0, "rna_ClaySettings_update");
+	RNA_def_property_update(prop, 0, "rna_RenderEngineSettings_update");
 
 	prop = RNA_def_property(srna, "matcap_rotation", PROP_FLOAT, PROP_FACTOR);
 	RNA_def_property_float_sdna(prop, NULL, "matcap_rot");
 	RNA_def_property_range(prop, 0.0f, 1.0f);
 	RNA_def_property_ui_text(prop, "Matcap Rotation", "Orientation of the matcap on the model");
-	RNA_def_property_update(prop, 0, "rna_ClaySettings_update");
+	RNA_def_property_update(prop, 0, "rna_RenderEngineSettings_update");
 
 	prop = RNA_def_property(srna, "matcap_hue", PROP_FLOAT, PROP_FACTOR);
 	RNA_def_property_range(prop, 0.0f, 1.0f);
 	RNA_def_property_ui_text(prop, "Matcap Hue shift", "Hue correction of the matcap");
-	RNA_def_property_update(prop, 0, "rna_ClaySettings_update");
+	RNA_def_property_update(prop, 0, "rna_RenderEngineSettings_update");
 
 	prop = RNA_def_property(srna, "matcap_saturation", PROP_FLOAT, PROP_FACTOR);
 	RNA_def_property_float_sdna(prop, NULL, "matcap_sat");
 	RNA_def_property_range(prop, 0.0f, 1.0f);
 	RNA_def_property_ui_text(prop, "Matcap Saturation", "Saturation correction of the matcap");
-	RNA_def_property_update(prop, 0, "rna_ClaySettings_update");
+	RNA_def_property_update(prop, 0, "rna_RenderEngineSettings_update");
 
 	prop = RNA_def_property(srna, "matcap_value", PROP_FLOAT, PROP_FACTOR);
 	RNA_def_property_float_sdna(prop, NULL, "matcap_val");
 	RNA_def_property_range(prop, 0.0f, 1.0f);
 	RNA_def_property_ui_text(prop, "Matcap Value", "Value correction of the matcap");
-	RNA_def_property_update(prop, 0, "rna_ClaySettings_update");
+	RNA_def_property_update(prop, 0, "rna_RenderEngineSettings_update");
 
 	prop = RNA_def_property(srna, "ssao_factor_cavity", PROP_FLOAT, PROP_NONE);
 	RNA_def_property_ui_text(prop, "Cavity Strength", "Strength of the Cavity effect");
 	RNA_def_property_range(prop, 0.0f, 250.0f);
-	RNA_def_property_update(prop, 0, "rna_ClaySettings_update");
+	RNA_def_property_update(prop, 0, "rna_RenderEngineSettings_update");
 
 	prop = RNA_def_property(srna, "ssao_factor_edge", PROP_FLOAT, PROP_NONE);
 	RNA_def_property_ui_text(prop, "Edge Strength", "Strength of the Edge effect");
 	RNA_def_property_range(prop, 0.0f, 250.0f);
-	RNA_def_property_update(prop, 0, "rna_ClaySettings_update");
+	RNA_def_property_update(prop, 0, "rna_RenderEngineSettings_update");
 
 	prop = RNA_def_property(srna, "ssao_distance", PROP_FLOAT, PROP_NONE);
 	RNA_def_property_ui_text(prop, "Distance", "Distance of object that contribute to the Cavity/Edge effect");
 	RNA_def_property_range(prop, 0.0f, 100000.0f);
 	RNA_def_property_ui_range(prop, 0.0f, 100.0f, 1, 3);
-	RNA_def_property_update(prop, 0, "rna_ClaySettings_update");
+	RNA_def_property_update(prop, 0, "rna_RenderEngineSettings_update");
 
 	prop = RNA_def_property(srna, "ssao_attenuation", PROP_FLOAT, PROP_NONE);
 	RNA_def_property_ui_text(prop, "Attenuation", "Attenuation constant");
 	RNA_def_property_range(prop, 1.0f, 100000.0f);
 	RNA_def_property_ui_range(prop, 1.0f, 100.0f, 1, 3);
-	RNA_def_property_update(prop, 0, "rna_ClaySettings_update");
-}
-
-static void rna_def_clay_data(BlenderRNA *brna)
-{
-	StructRNA *srna;
-	PropertyRNA *prop;
-
-	srna = RNA_def_struct(brna, "ClayRenderSettings", NULL);
-	RNA_def_struct_sdna(srna, "EngineDataClay");
-	RNA_def_struct_nested(brna, srna, "Scene");
-	RNA_def_struct_ui_text(srna, "Render Clay Settings", "Clay Engine settings for a Scene data-block");
+	RNA_def_property_update(prop, 0, "rna_RenderEngineSettings_update");
 
 	/* Clay settings */
-	prop = RNA_def_property(srna, "mat_settings", PROP_POINTER, PROP_NONE);
-	RNA_def_property_flag(prop, PROP_NEVER_NULL);
-	RNA_def_property_pointer_sdna(prop, NULL, "defsettings");
-	RNA_def_property_struct_type(prop, "ClayRenderMaterialSettings");
-	RNA_def_property_ui_text(prop, "Clay Settings", "Clay default material settings");
-
 	prop = RNA_def_property(srna, "ssao_samples", PROP_INT, PROP_NONE);
 	RNA_def_property_ui_text(prop, "Samples", "Number of samples");
 	RNA_def_property_range(prop, 1, 500);
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
+}
 
-	rna_def_material_settings_clay(brna);
+static void rna_def_scene_render_engine(BlenderRNA *brna)
+{
+	StructRNA *srna;
+
+	srna = RNA_def_struct(brna, "RenderEngineSettings", NULL);
+	RNA_def_struct_nested(brna, srna, "Scene");
+	RNA_def_struct_path_func(srna, "rna_RenderEngineSettings_path");
+	RNA_def_struct_ui_text(srna, "Render Engine Data", "");
+
+	rna_def_render_engine_settings_clay(brna);
 }
 
 static void rna_def_scene_render_data(BlenderRNA *brna)
@@ -8155,12 +8176,12 @@ void RNA_def_scene(BlenderRNA *brna)
 	RNA_def_property_struct_type(prop, "RenderSettings");
 	RNA_def_property_ui_text(prop, "Render Data", "");
 
-	/* Engines Data */
-	prop = RNA_def_property(srna, "clay_settings", PROP_POINTER, PROP_NONE);
+	/* Render Engine Data */
+	prop = RNA_def_property(srna, "render_engine", PROP_POINTER, PROP_NONE);
 	RNA_def_property_flag(prop, PROP_NEVER_NULL);
-	RNA_def_property_pointer_sdna(prop, NULL, "claydata");
-	RNA_def_property_struct_type(prop, "ClayRenderSettings");
-	RNA_def_property_ui_text(prop, "Clay Settings", "Clay Engine settings");
+	RNA_def_property_pointer_funcs(prop, "rna_Scene_render_engine_get", NULL, "rna_Scene_render_engine_typef", NULL);
+	RNA_def_property_struct_type(prop, "RenderEngineSettings");
+	RNA_def_property_ui_text(prop, "Render Engine Data", "");
 
 	/* Safe Areas */
 	prop = RNA_def_property(srna, "safe_areas", PROP_POINTER, PROP_NONE);
@@ -8312,8 +8333,8 @@ void RNA_def_scene(BlenderRNA *brna)
 	RNA_define_animate_sdna(true);
 	/* *** Animated *** */
 	rna_def_scene_render_data(brna);
+	rna_def_scene_render_engine(brna);
 	rna_def_scene_render_layer(brna);
-	rna_def_clay_data(brna);
 	rna_def_gpu_fx(brna);
 	rna_def_scene_render_view(brna);
 

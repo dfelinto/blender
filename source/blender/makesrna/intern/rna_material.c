@@ -123,17 +123,6 @@ static void rna_Material_draw_update(Main *UNUSED(bmain), Scene *UNUSED(scene), 
 	WM_main_add_notifier(NC_MATERIAL | ND_SHADING_DRAW, ma);
 }
 
-static void rna_Material_update_engine_data(Main *UNUSED(bmain), Scene *UNUSED(scene), PointerRNA *ptr)
-{
-	Material *ma = ptr->id.data;
-
-	if (ma->clay.runtime) {
-		ma->clay.runtime->flag |= CLAY_OUTDATED;
-	}
-
-	WM_main_add_notifier(NC_MATERIAL | ND_SHADING_DRAW, ma);
-}
-
 static PointerRNA rna_Material_mirror_get(PointerRNA *ptr)
 {
 	return rna_pointer_inherit_refine(ptr, &RNA_MaterialRaytraceMirror, ptr->id.data);
@@ -875,8 +864,8 @@ static void rna_def_material_settings_clay(BlenderRNA *brna)
 		{0, NULL, 0, NULL, NULL}
 	};
 
-	srna = RNA_def_struct(brna, "ClayMaterialSettings", NULL);
-	RNA_def_struct_sdna(srna, "MaterialSettingsClay");
+	srna = RNA_def_struct(brna, "MaterialSettingsClay", NULL);
+	RNA_def_struct_sdna(srna, "MaterialEngineSettingsClay");
 	RNA_def_struct_nested(brna, srna, "Material");
 	RNA_def_struct_ui_text(srna, "Material Clay Settings", "Clay Engine settings for a Material data-block");
 
@@ -2199,13 +2188,14 @@ void RNA_def_material(BlenderRNA *brna)
 	RNA_def_property_struct_type(prop, "MaterialGameSettings");
 	RNA_def_property_ui_text(prop, "Game Settings", "Game material settings");
 
-	/* Clay settings */
+	/* Engine settings */
+#if 0 /* TODO */
 	prop = RNA_def_property(srna, "clay_settings", PROP_POINTER, PROP_NONE);
 	RNA_def_property_flag(prop, PROP_NEVER_NULL);
 	RNA_def_property_pointer_sdna(prop, NULL, "clay");
 	RNA_def_property_struct_type(prop, "ClayMaterialSettings");
 	RNA_def_property_ui_text(prop, "Clay Settings", "Clay material settings");
-
+#endif
 	/* nodetree */
 	prop = RNA_def_property(srna, "node_tree", PROP_POINTER, PROP_NONE);
 	RNA_def_property_pointer_sdna(prop, NULL, "nodetree");
@@ -2255,7 +2245,7 @@ void RNA_def_material(BlenderRNA *brna)
 	rna_def_material_strand(brna);
 	rna_def_material_physics(brna);
 	rna_def_material_gamesettings(brna);
-	rna_def_material_settings_clay(brna);
+	// rna_def_material_settings_clay(brna);
 
 	RNA_api_material(srna);
 }

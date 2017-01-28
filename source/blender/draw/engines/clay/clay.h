@@ -28,6 +28,9 @@
 
 extern RenderEngineType viewport_clay_type;
 
+struct RenderEngineSettings *CLAY_render_settings_create(void);
+struct MaterialEngineSettings *CLAY_material_settings_create(void);
+
 void clay_engine_free(void);
 
 #endif /* __ENGINE_CLAY_H__ */
