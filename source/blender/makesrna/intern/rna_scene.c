@@ -5559,6 +5559,21 @@ static void rna_def_scene_collection(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Filter Objects", "All the objects dynamically added to this collection via the filter");
 }
 
+static void rna_def_layer_collection_override(BlenderRNA *brna)
+{
+	StructRNA *srna;
+	PropertyRNA *prop;
+
+	srna = RNA_def_struct(brna, "LayerCollectionOverride", NULL);
+	RNA_def_struct_sdna(srna, "CollectionOverride");
+	RNA_def_struct_ui_text(srna, "Collection Override", "Collection Override");
+
+	prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
+	RNA_def_property_ui_text(prop, "Name", "Collection name");
+	RNA_def_struct_name_property(srna, prop);
+	RNA_def_property_update(prop, NC_SCENE | ND_LAYER_CONTENT, NULL);
+}
+
 static void rna_def_layer_collection(BlenderRNA *brna)
 {
 	StructRNA *srna;
@@ -5589,6 +5604,11 @@ static void rna_def_layer_collection(BlenderRNA *brna)
 	RNA_def_property_struct_type(prop, "Object");
 	RNA_def_property_collection_funcs(prop, NULL, NULL, NULL, "rna_LayerCollection_objects_get", NULL, NULL, NULL, NULL);
 	RNA_def_property_ui_text(prop, "Objects", "All the objects directly or indirectly added to this collection (not including sub-collection objects)");
+
+	prop = RNA_def_property(srna, "overrides", PROP_COLLECTION, PROP_NONE);
+	RNA_def_property_collection_sdna(prop, NULL, "overrides", NULL);
+	RNA_def_property_struct_type(prop, "LayerCollectionOverride");
+	RNA_def_property_ui_text(prop, "Collection Overrides", "");
 
 	/* Flags */
 	prop = RNA_def_property(srna, "hide", PROP_BOOLEAN, PROP_NONE);
@@ -8173,6 +8193,7 @@ void RNA_def_scene(BlenderRNA *brna)
 	rna_def_display_safe_areas(brna);
 	rna_def_scene_collection(brna);
 	rna_def_layer_collection(brna);
+	rna_def_layer_collection_override(brna);
 	rna_def_scene_layer(brna);
 	rna_def_object_base(brna);
 	RNA_define_animate_sdna(true);
