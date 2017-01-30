@@ -4615,6 +4615,7 @@ static void direct_link_mesh(FileData *fd, Mesh *mesh)
 
 	mesh->bb = NULL;
 	mesh->edit_btmesh = NULL;
+	mesh->batch_cache = NULL;
 	
 	/* happens with old files */
 	if (mesh->mselect == NULL) {
