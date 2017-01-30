@@ -905,6 +905,8 @@ void *DRW_render_settings_get(Scene *scene, const char *engine_name, void **runt
 			BLI_assert(false);
 		}
 
+		printf("DRW_render_settings_get %s\n", rs->name);
+
 		BLI_addtail(&scene->engines_settings, rs);
 	}
 

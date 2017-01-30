@@ -1885,6 +1885,19 @@ static StructRNA *rna_RenderEngineSettings_refine(PointerRNA *ptr)
 	return &RNA_RenderEngineSettings;
 }
 
+static PointerRNA rna_RenderEngineSettings_active_get(PointerRNA *ptr)
+{
+	Scene *scene = (Scene *)ptr->data;
+	RenderEngineSettings *res;
+
+	/* Ensure settings exists */
+	DRW_render_settings_get(scene, scene->r.engine, NULL);
+
+	res = BLI_findstring(&scene->engines_settings, scene->r.engine, offsetof(RenderEngineSettings, name));
+
+	return rna_pointer_inherit_refine(ptr, &RNA_RenderEngineSettings, res);
+}
+
 static void rna_RenderEngineSettings_update(Main *UNUSED(bmain), Scene *UNUSED(scene), PointerRNA *ptr)
 {
 	Scene *sce = (Scene *)ptr->id.data;
@@ -8165,6 +8178,11 @@ void RNA_def_scene(BlenderRNA *brna)
 	prop = RNA_def_property(srna, "engines_settings", PROP_COLLECTION, PROP_NONE);
 	RNA_def_property_struct_type(prop, "RenderEngineSettings");
 	RNA_def_property_ui_text(prop, "Render Engine Settings", "Engine specific render settings");
+
+	prop = RNA_def_property(srna, "active_engine_settings", PROP_POINTER, PROP_NONE);
+	RNA_def_property_struct_type(prop, "RenderEngineSettings");
+	RNA_def_property_pointer_funcs(prop, "rna_RenderEngineSettings_active_get", NULL, NULL, NULL);
+	RNA_def_property_ui_text(prop, "Active Render Engine Settings", "Active Engine specific render settings for this scene");
 
 	/* Safe Areas */
 	prop = RNA_def_property(srna, "safe_areas", PROP_POINTER, PROP_NONE);
