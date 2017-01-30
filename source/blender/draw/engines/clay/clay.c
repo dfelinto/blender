@@ -487,19 +487,19 @@ static void update_ubo_storage(MaterialRuntimeClay *runtime, unsigned int curren
 static void CLAY_update_material_ubo(const struct bContext *C)
 {
 	Main *bmain = CTX_data_main(C);
-	MaterialRuntimeClay *runtime;
+	MaterialRuntimeClay **runtime;
 
 	/* Update Default materials */
 	for (Scene *sce = bmain->scene.first; sce; sce = sce->id.next) {
 		/* Using render settings as material settings */
-		MaterialEngineSettingsClay *res = DRW_render_settings_get(sce, RE_engine_id_BLENDER_CLAY, (void **)&runtime);
-		CLAY_update_material_runtime(res, &runtime);
+		MaterialEngineSettingsClay *res = DRW_render_settings_get(sce, RE_engine_id_BLENDER_CLAY, (void ***)&runtime);
+		CLAY_update_material_runtime(res, runtime);
 	}
 
 	/* Update Scene Materials */
 	for (Material *mat = bmain->mat.first; mat; mat = mat->id.next) {
-		MaterialEngineSettingsClay *mesc = DRW_material_settings_get(mat, RE_engine_id_BLENDER_CLAY, (void **)&runtime);
-		CLAY_update_material_runtime(mesc, &runtime);
+		MaterialEngineSettingsClay *mesc = DRW_material_settings_get(mat, RE_engine_id_BLENDER_CLAY, (void ***)&runtime);
+		CLAY_update_material_runtime(mesc, runtime);
 	}
 
 	if (data.ubo_flag & CLAY_UBO_REFRESH) {
@@ -507,15 +507,15 @@ static void CLAY_update_material_ubo(const struct bContext *C)
 
 		/* Default materials */
 		for (Scene *sce = bmain->scene.first; sce; sce = sce->id.next) {
-			DRW_render_settings_get(sce, RE_engine_id_BLENDER_CLAY, (void **)&runtime);
-			update_ubo_storage(runtime, current_id);
+			DRW_render_settings_get(sce, RE_engine_id_BLENDER_CLAY, (void ***)&runtime);
+			update_ubo_storage(*runtime, current_id);
 			current_id++;
 		}
 
 		/* TODO only add materials linked to geometry */
 		for (Material *mat = bmain->mat.first; mat; mat = mat->id.next) {
-			DRW_material_settings_get(mat, RE_engine_id_BLENDER_CLAY, (void **)&runtime);
-			update_ubo_storage(runtime, current_id);
+			DRW_material_settings_get(mat, RE_engine_id_BLENDER_CLAY, (void ***)&runtime);
+			update_ubo_storage(*runtime, current_id);
 			current_id++;
 		}
 
@@ -540,12 +540,12 @@ static void CLAY_create_cache(CLAY_PassList *passes, const struct bContext *C)
 
 	/* Clay Pass */
 	{
-		MaterialRuntimeClay *runtime;
-		DRW_render_settings_get(NULL, RE_engine_id_BLENDER_CLAY, (void **)&runtime);
+		MaterialRuntimeClay **runtime;
+		DRW_render_settings_get(NULL, RE_engine_id_BLENDER_CLAY, (void ***)&runtime);
 
 		passes->clay_pass = DRW_pass_create("Clay Pass", DRW_STATE_WRITE_COLOR);
 
-		default_shgrp = CLAY_shgroup_create(passes->clay_pass, &runtime->material_id);
+		default_shgrp = CLAY_shgroup_create(passes->clay_pass, &(*runtime)->material_id);
 		DRW_shgroup_uniform_block(default_shgrp, "material_block", data.mat_ubo, 0);
 	}
 

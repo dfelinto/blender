@@ -849,7 +849,7 @@ void DRW_state_reset(void)
 
 /* ****************************************** Settings ******************************************/
 
-void *DRW_material_settings_get(Material *ma, const char *engine_name, void **runtime)
+void *DRW_material_settings_get(Material *ma, const char *engine_name, void ***runtime)
 {
 	MaterialEngineSettings *ms = NULL;
 
@@ -881,7 +881,7 @@ void *DRW_material_settings_get(Material *ma, const char *engine_name, void **ru
 }
 
 /* If scene is NULL, use context scene */
-void *DRW_render_settings_get(Scene *scene, const char *engine_name, void **runtime)
+void *DRW_render_settings_get(Scene *scene, const char *engine_name, void ***runtime)
 {
 	RenderEngineSettings *rs = NULL;
 
@@ -904,8 +904,6 @@ void *DRW_render_settings_get(Scene *scene, const char *engine_name, void **runt
 			/* No engine matched */
 			BLI_assert(false);
 		}
-
-		printf("DRW_render_settings_get %s\n", rs->name);
 
 		BLI_addtail(&scene->engines_settings, rs);
 	}

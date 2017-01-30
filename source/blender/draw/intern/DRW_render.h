@@ -200,8 +200,8 @@ bool DRW_viewport_cache_is_dirty(void);
 
 /* Settings */
 #ifndef __DRW_ENGINE_H__
-void *DRW_material_settings_get(Material *ma, const char *engine_name, void **runtime);
-void *DRW_render_settings_get(Scene *scene, const char *engine_name, void **runtime);
+void *DRW_material_settings_get(Material *ma, const char *engine_name, void ***runtime);
+void *DRW_render_settings_get(Scene *scene, const char *engine_name, void ***runtime);
 #endif /* __DRW_ENGINE_H__ */
 
 /* Draw commands */

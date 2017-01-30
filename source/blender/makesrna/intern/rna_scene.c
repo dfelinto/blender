@@ -1901,13 +1901,13 @@ static PointerRNA rna_RenderEngineSettings_active_get(PointerRNA *ptr)
 static void rna_RenderEngineSettings_update(Main *UNUSED(bmain), Scene *UNUSED(scene), PointerRNA *ptr)
 {
 	Scene *sce = (Scene *)ptr->id.data;
-	void *runtime;
+	void **runtime;
 
-	DRW_render_settings_get(sce, sce->r.engine, &runtime);
+	DRW_render_settings_get(sce, sce->r.engine, (void ***)&runtime);
 
-	if (runtime) {
-		MEM_freeN(runtime);
-		runtime = NULL;
+	if (*runtime) {
+		MEM_freeN(*runtime);
+		*runtime = NULL;
 	}
 
 	WM_main_add_notifier(NC_SPACE | ND_SPACE_VIEW3D, NULL);
