@@ -209,6 +209,7 @@ static EnumPropertyItem buttons_context_items[] = {
 	{BCONTEXT_TEXTURE, "TEXTURE", ICON_TEXTURE, "Texture", "Texture"},
 	{BCONTEXT_PARTICLE, "PARTICLES", ICON_PARTICLES, "Particles", "Particle"},
 	{BCONTEXT_PHYSICS, "PHYSICS", ICON_PHYSICS, "Physics", "Physics"},
+	{BCONTEXT_COLLECTION, "COLLECTION", ICON_COLLAPSEMENU, "Collection", "Collection"},
 	{0, NULL, 0, NULL, NULL}
 };
 
@@ -1077,6 +1078,10 @@ static EnumPropertyItem *rna_SpaceProperties_context_itemf(bContext *UNUSED(C), 
 
 	if (sbuts->pathflag & (1 << BCONTEXT_SCENE)) {
 		RNA_enum_items_add_value(&item, &totitem, buttons_context_items, BCONTEXT_SCENE);
+	}
+
+	if (sbuts->pathflag & (1 << BCONTEXT_COLLECTION)) {
+		RNA_enum_items_add_value(&item, &totitem, buttons_context_items, BCONTEXT_COLLECTION);
 	}
 
 	if (sbuts->pathflag & (1 << BCONTEXT_WORLD)) {
