@@ -2254,6 +2254,26 @@ static void rna_SceneCollection_remove(
 	WM_main_add_notifier(NC_SCENE | ND_LAYER, NULL);
 }
 
+static int rna_SceneCollection_objects_active_index_get(PointerRNA *ptr)
+{
+	SceneCollection *sc = (SceneCollection *)ptr->data;
+	return sc->active_object_index;
+}
+
+static void rna_SceneCollection_objects_active_index_set(PointerRNA *ptr, int value)
+{
+	SceneCollection *sc = (SceneCollection *)ptr->data;
+	sc->active_object_index = value;
+}
+
+static void rna_SceneCollection_objects_active_index_range(
+        PointerRNA *ptr, int *min, int *max, int *UNUSED(softmin), int *UNUSED(softmax))
+{
+	SceneCollection *sc = (SceneCollection *)ptr->data;
+	*min = 0;
+	*max = max_ii(0, BLI_listbase_count(&sc->objects) - 1);
+}
+
 void rna_SceneCollection_object_link(
         ID *id, SceneCollection *sc, Main *bmain, ReportList *reports, Object *ob)
 {
@@ -5501,11 +5521,19 @@ static void rna_def_collection_objects(BlenderRNA *brna, PropertyRNA *cprop)
 	StructRNA *srna;
 	FunctionRNA *func;
 	PropertyRNA *parm;
+	PropertyRNA *prop;
 
 	RNA_def_property_srna(cprop, "CollectionObjects");
 	srna = RNA_def_struct(brna, "CollectionObjects", NULL);
 	RNA_def_struct_sdna(srna, "SceneCollection");
 	RNA_def_struct_ui_text(srna, "Collection Objects", "Objects of a collection");
+
+	prop = RNA_def_property(srna, "active_index", PROP_INT, PROP_UNSIGNED);
+	RNA_def_property_int_funcs(prop, "rna_SceneCollection_objects_active_index_get",
+	                           "rna_SceneCollection_objects_active_index_set",
+	                           "rna_SceneCollection_objects_active_index_range");
+	RNA_def_property_ui_text(prop, "Active Object Index", "Active index in collection objects array");
+	RNA_def_property_update(prop, NC_SCENE | ND_LAYER_CONTENT, NULL);
 
 	func = RNA_def_function(srna, "link", "rna_SceneCollection_object_link");
 	RNA_def_function_ui_description(func, "Link an object to collection");

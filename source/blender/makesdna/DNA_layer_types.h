@@ -73,6 +73,8 @@ typedef struct SceneCollection {
 	struct SceneCollection *next, *prev;
 	char name[64]; /* MAX_NAME */
 	char filter[64]; /* MAX_NAME */
+	int active_object_index; /* for UI */
+	int pad;
 	ListBase objects;           /* (Object *)LinkData->data */
 	ListBase filter_objects;    /* (Object *)LinkData->data */
 	ListBase scene_collections; /* nested collections */
