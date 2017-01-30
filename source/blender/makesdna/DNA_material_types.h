@@ -93,7 +93,7 @@ typedef struct TexPaintSlot {
 /* Material Engine Settings */
 typedef struct MaterialEngineSettings {
 	struct MaterialEngineSettings *next, *prev;
-	char name[64]; /* engine name - MAX_NAME */
+	char name[32]; /* engine name - MAX_NAME */
 	void *runtime; /* To be free on file read */
 	void *data;
 } MaterialEngineSettings;

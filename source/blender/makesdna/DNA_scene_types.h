@@ -550,7 +550,7 @@ typedef enum BakePassFilter {
 
 typedef struct RenderEngineSettings {
 	struct RenderEngineSettings *next, *prev;
-	char name[64]; /* engine name - MAX_NAME */
+	char name[32]; /* engine name */
 	void *runtime; /* Here to be free on file read */
 	void *data;
 } RenderEngineSettings;

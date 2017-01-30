@@ -859,7 +859,7 @@ void *DRW_material_settings_get(Material *ma, const char *engine_name, void **ru
 	if (ms == NULL) {
 		ms = MEM_callocN(sizeof(RenderEngineSettings), "RenderEngineSettings");
 
-		BLI_strncpy(ms->name, engine_name, 64);
+		BLI_strncpy(ms->name, engine_name, 32);
 
 		/* TODO make render_settings_create a polymorphic function */
 		if (STREQ(engine_name, RE_engine_id_BLENDER_CLAY)) {
@@ -894,7 +894,7 @@ void *DRW_render_settings_get(Scene *scene, const char *engine_name, void **runt
 	if (rs == NULL) {
 		rs = MEM_callocN(sizeof(RenderEngineSettings), "RenderEngineSettings");
 
-		BLI_strncpy(rs->name, engine_name, 64);
+		BLI_strncpy(rs->name, engine_name, 32);
 
 		/* TODO make render_settings_create a polymorphic function */
 		if (STREQ(engine_name, RE_engine_id_BLENDER_CLAY)) {
