@@ -552,12 +552,11 @@ typedef struct RenderEngineSettings {
 	struct RenderEngineSettings *next, *prev;
 	char name[64]; /* engine name - MAX_NAME */
 	void *runtime; /* Here to be free on file read */
+	void *data;
 } RenderEngineSettings;
 
 /* Render Data */
 typedef struct RenderEngineSettingsClay {
-	struct RenderEngineSettings res; /* keep first */
-
 	/* Use same layout as MaterialEngineSettingsClay so this struct
 	 * can be used as Material Settings. */
 	short type;

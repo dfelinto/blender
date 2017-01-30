@@ -949,34 +949,6 @@ static void rna_Scene_all_keyingsets_next(CollectionPropertyIterator *iter)
 	iter->valid = (internal->link != NULL);
 }
 
-static StructRNA *rna_Scene_render_engine_typef(PointerRNA *ptr)
-{
-	Scene *scene = (Scene *)ptr->data;
-
-	if (STREQ(scene->r.engine, RE_engine_id_BLENDER_CLAY)) {
-		return &RNA_RenderEngineSettingsClay;
-	}
-
-	return &RNA_RenderEngineSettings;
-}
-
-static PointerRNA rna_Scene_render_engine_get(PointerRNA *ptr)
-{
-	Scene *scene = (Scene *)ptr->data;
-	RenderEngineSettings *res = DRW_render_settings_get(scene, scene->r.engine);
-
-	if (STREQ(scene->r.engine, RE_engine_id_BLENDER_CLAY)) {
-		return rna_pointer_inherit_refine(ptr, &RNA_RenderEngineSettingsClay, res);
-	}
-
-	return rna_pointer_inherit_refine(ptr, &RNA_RenderEngineSettings, res);
-}
-
-static char *rna_RenderEngineSettings_path(PointerRNA *UNUSED(ptr))
-{
-	return BLI_sprintfN("render_engine");
-}
-
 static int rna_RenderSettings_stereoViews_skip(CollectionPropertyIterator *iter, void *UNUSED(data))
 {
 	ListBaseIterator *internal = &iter->internal.listbase;
@@ -1902,14 +1874,27 @@ static void rna_GameSettings_exit_key_set(PointerRNA *ptr, int value)
 		gm->exitkey = value;
 }
 
+static StructRNA *rna_RenderEngineSettings_refine(PointerRNA *ptr)
+{
+	RenderEngineSettings *res = (RenderEngineSettings *)ptr->data;
+
+	if (STREQ(res->name, RE_engine_id_BLENDER_CLAY)) {
+		return  &RNA_RenderEngineSettingsClay;
+	}
+
+	return &RNA_RenderEngineSettings;
+}
+
 static void rna_RenderEngineSettings_update(Main *UNUSED(bmain), Scene *UNUSED(scene), PointerRNA *ptr)
 {
-	Scene *sce = ptr->id.data;
-	RenderEngineSettings *ed = DRW_render_settings_get(sce, sce->r.engine);
+	Scene *sce = (Scene *)ptr->id.data;
+	void *runtime;
 
-	if (ed->runtime) {
-		MEM_freeN(ed->runtime);
-		ed->runtime = NULL;
+	DRW_render_settings_get(sce, sce->r.engine, &runtime);
+
+	if (runtime) {
+		MEM_freeN(runtime);
+		runtime = NULL;
 	}
 
 	WM_main_add_notifier(NC_SPACE | ND_SPACE_VIEW3D, NULL);
@@ -6607,9 +6592,9 @@ static void rna_def_render_engine_settings_clay(BlenderRNA *brna)
 		{0, NULL, 0, NULL, NULL}
 	};
 
-	srna = RNA_def_struct(brna, "RenderEngineSettingsClay", NULL);
-	RNA_def_struct_nested(brna, srna, "Scene");
+	srna = RNA_def_struct(brna, "RenderEngineSettingsClay", "RenderEngineSettings");
 	RNA_def_struct_ui_text(srna, "Material Clay Settings", "Clay Engine settings for a Material data-block");
+	RNA_def_struct_sdna_from(srna, "RenderEngineSettingsClay", "data");
 
 	prop = RNA_def_property(srna, "matcap_icon", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_items(prop, clay_matcap_items);
@@ -6673,9 +6658,9 @@ static void rna_def_scene_render_engine(BlenderRNA *brna)
 	StructRNA *srna;
 
 	srna = RNA_def_struct(brna, "RenderEngineSettings", NULL);
-	RNA_def_struct_nested(brna, srna, "Scene");
-	RNA_def_struct_path_func(srna, "rna_RenderEngineSettings_path");
-	RNA_def_struct_ui_text(srna, "Render Engine Data", "");
+	RNA_def_struct_ui_text(srna, "Render Engine Settings", "Engine specific render settings");
+	RNA_def_struct_sdna(srna, "RenderEngineSettings");
+	RNA_def_struct_refine_func(srna, "rna_RenderEngineSettings_refine");
 
 	rna_def_render_engine_settings_clay(brna);
 }
@@ -8177,11 +8162,9 @@ void RNA_def_scene(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Render Data", "");
 
 	/* Render Engine Data */
-	prop = RNA_def_property(srna, "render_engine", PROP_POINTER, PROP_NONE);
-	RNA_def_property_flag(prop, PROP_NEVER_NULL);
-	RNA_def_property_pointer_funcs(prop, "rna_Scene_render_engine_get", NULL, "rna_Scene_render_engine_typef", NULL);
+	prop = RNA_def_property(srna, "engines_settings", PROP_COLLECTION, PROP_NONE);
 	RNA_def_property_struct_type(prop, "RenderEngineSettings");
-	RNA_def_property_ui_text(prop, "Render Engine Data", "");
+	RNA_def_property_ui_text(prop, "Render Engine Settings", "Engine specific render settings");
 
 	/* Safe Areas */
 	prop = RNA_def_property(srna, "safe_areas", PROP_POINTER, PROP_NONE);

@@ -313,6 +313,31 @@ static void rna_MaterialTextureSlot_use_set(PointerRNA *ptr, int value)
 	}
 }
 
+static StructRNA *rna_MaterialEngineSettings_refine(PointerRNA *ptr)
+{
+	MaterialEngineSettings *mes = (MaterialEngineSettings *)ptr->data;
+
+	if (STREQ(mes->name, RE_engine_id_BLENDER_CLAY)) {
+		return  &RNA_MaterialEngineSettingsClay;
+	}
+
+	return &RNA_MaterialEngineSettings;
+}
+
+static void rna_Material_update_engine_data(Main *UNUSED(bmain), Scene *UNUSED(scene), PointerRNA *UNUSED(ptr))
+{
+#if 0
+	Material *ma = (Material *)ptr->data;
+	RenderEngineSettings *ed = DRW_material_settings_get(ma, sce->r.engine, NULL);
+
+	if (ed->runtime) {
+		MEM_freeN(ed->runtime);
+		ed->runtime = NULL;
+	}
+#endif
+	WM_main_add_notifier(NC_SPACE | ND_SPACE_VIEW3D, NULL);
+}
+
 static void rna_Material_use_diffuse_ramp_set(PointerRNA *ptr, int value)
 {
 	Material *ma = (Material *)ptr->data;
@@ -864,10 +889,9 @@ static void rna_def_material_settings_clay(BlenderRNA *brna)
 		{0, NULL, 0, NULL, NULL}
 	};
 
-	srna = RNA_def_struct(brna, "MaterialSettingsClay", NULL);
-	RNA_def_struct_sdna(srna, "MaterialEngineSettingsClay");
-	RNA_def_struct_nested(brna, srna, "Material");
+	srna = RNA_def_struct(brna, "MaterialEngineSettingsClay", "MaterialEngineSettings");
 	RNA_def_struct_ui_text(srna, "Material Clay Settings", "Clay Engine settings for a Material data-block");
+	RNA_def_struct_sdna_from(srna, "MaterialEngineSettingsClay", "data");
 
 	prop = RNA_def_property(srna, "type", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_items(prop, clay_matcap_type);
@@ -923,6 +947,18 @@ static void rna_def_material_settings_clay(BlenderRNA *brna)
 	RNA_def_property_range(prop, 1.0f, 100000.0f);
 	RNA_def_property_ui_range(prop, 1.0f, 100.0f, 1, 3);
 	RNA_def_property_update(prop, 0, "rna_Material_update_engine_data");
+}
+
+static void rna_def_material_engine_settings(BlenderRNA *brna)
+{
+	StructRNA *srna;
+
+	srna = RNA_def_struct(brna, "MaterialEngineSettings", NULL);
+	RNA_def_struct_ui_text(srna, "Engine Settings", "Engine specific settings");
+	RNA_def_struct_sdna(srna, "MaterialEngineSettings");
+	RNA_def_struct_refine_func(srna, "rna_MaterialEngineSettings_refine");
+
+	rna_def_material_settings_clay(brna);
 }
 
 static void rna_def_material_gamesettings(BlenderRNA *brna)
@@ -2189,13 +2225,10 @@ void RNA_def_material(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Game Settings", "Game material settings");
 
 	/* Engine settings */
-#if 0 /* TODO */
-	prop = RNA_def_property(srna, "clay_settings", PROP_POINTER, PROP_NONE);
-	RNA_def_property_flag(prop, PROP_NEVER_NULL);
-	RNA_def_property_pointer_sdna(prop, NULL, "clay");
-	RNA_def_property_struct_type(prop, "ClayMaterialSettings");
-	RNA_def_property_ui_text(prop, "Clay Settings", "Clay material settings");
-#endif
+	prop = RNA_def_property(srna, "engines_settings", PROP_COLLECTION, PROP_NONE);
+	RNA_def_property_struct_type(prop, "MaterialEngineSettings");
+	RNA_def_property_ui_text(prop, "Material Engine Settings", "Engine specific settings");
+
 	/* nodetree */
 	prop = RNA_def_property(srna, "node_tree", PROP_POINTER, PROP_NONE);
 	RNA_def_property_pointer_sdna(prop, NULL, "nodetree");
@@ -2245,7 +2278,7 @@ void RNA_def_material(BlenderRNA *brna)
 	rna_def_material_strand(brna);
 	rna_def_material_physics(brna);
 	rna_def_material_gamesettings(brna);
-	// rna_def_material_settings_clay(brna);
+	rna_def_material_engine_settings(brna);
 
 	RNA_api_material(srna);
 }

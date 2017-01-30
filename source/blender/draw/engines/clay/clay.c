@@ -237,7 +237,7 @@ static struct GPUTexture *create_jitter_texture(void)
 
 static void clay_material_settings_init(MaterialEngineSettingsClay *ma)
 {
-	ma->matcap_icon = 0;
+	ma->matcap_icon = ICON_MATCAP_01;
 	ma->matcap_rot = 0.0f;
 	ma->matcap_hue = 0.5f;
 	ma->matcap_sat = 0.5f;
@@ -252,8 +252,6 @@ RenderEngineSettings *CLAY_render_settings_create(void)
 {
 	RenderEngineSettingsClay *settings = MEM_callocN(sizeof(RenderEngineSettingsClay), "RenderEngineSettingsClay");
 
-	BLI_strncpy(settings->res.name, RE_engine_id_BLENDER_CLAY, 64);
-
 	clay_material_settings_init((MaterialEngineSettingsClay *)settings);
 
 	settings->ssao_samples = 32;
@@ -264,8 +262,6 @@ RenderEngineSettings *CLAY_render_settings_create(void)
 MaterialEngineSettings *CLAY_material_settings_create(void)
 {
 	MaterialEngineSettingsClay *settings = MEM_callocN(sizeof(MaterialEngineSettingsClay), "MaterialEngineSettingsClay");
-
-	BLI_strncpy(settings->mes.name, RE_engine_id_BLENDER_CLAY, 64);
 
 	clay_material_settings_init(settings);
 
@@ -366,7 +362,7 @@ static void CLAY_ssao_setup(void)
 	};
 	int i;
 	float *size = DRW_viewport_size_get();
-	RenderEngineSettingsClay *settings = DRW_render_settings_get(NULL, RE_engine_id_BLENDER_CLAY);
+	RenderEngineSettingsClay *settings = DRW_render_settings_get(NULL, RE_engine_id_BLENDER_CLAY, NULL);
 
 	DRW_get_dfdy_factors(dfdyfacs);
 
@@ -429,33 +425,33 @@ static DRWShadingGroup *CLAY_shgroup_create(DRWPass *pass, int *UNUSED(material_
 	return grp;
 }
 
-static void CLAY_update_material_runtime(MaterialEngineSettingsClay *settings)
+static void CLAY_update_material_runtime(MaterialEngineSettingsClay *settings, MaterialRuntimeClay **runtime)
 {
-	MaterialRuntimeClay *runtime;
+	MaterialRuntimeClay *rt;
 
-	if (!settings->mes.runtime) {
-		runtime = MEM_mallocN(sizeof(MaterialRuntimeClay), "MaterialRuntimeClay");
-		runtime->flag = CLAY_OUTDATED;
-		settings->mes.runtime = runtime;
+	if (*runtime == NULL) {
+		rt = MEM_mallocN(sizeof(MaterialRuntimeClay), "MaterialRuntimeClay");
+		rt->flag = CLAY_OUTDATED;
 		data.ubo_flag |= CLAY_UBO_CLEAR;
+		*runtime = rt;
 	}
 
-	runtime = settings->mes.runtime;
+	rt = *runtime;
 
-	if (runtime->flag & CLAY_OUTDATED) {
+	if (rt->flag & CLAY_OUTDATED) {
 
 		/* Update default material */
-		runtime->matcap_rot[0] = cosf(settings->matcap_rot * 3.14159f * 2.0f);
-		runtime->matcap_rot[1] = sinf(settings->matcap_rot * 3.14159f * 2.0f);
+		rt->matcap_rot[0] = cosf(settings->matcap_rot * 3.14159f * 2.0f);
+		rt->matcap_rot[1] = sinf(settings->matcap_rot * 3.14159f * 2.0f);
 
-		runtime->matcap_hsv[0] = settings->matcap_hue + 0.5f;
-		runtime->matcap_hsv[1] = settings->matcap_sat * 2.0f;
-		runtime->matcap_hsv[2] = settings->matcap_val * 2.0f;
+		rt->matcap_hsv[0] = settings->matcap_hue + 0.5f;
+		rt->matcap_hsv[1] = settings->matcap_sat * 2.0f;
+		rt->matcap_hsv[2] = settings->matcap_val * 2.0f;
 
-		runtime->ssao_params_var[0] = settings->ssao_distance;
-		runtime->ssao_params_var[1] = settings->ssao_factor_cavity;
-		runtime->ssao_params_var[2] = settings->ssao_factor_edge;
-		runtime->ssao_params_var[3] = settings->ssao_attenuation;
+		rt->ssao_params_var[0] = settings->ssao_distance;
+		rt->ssao_params_var[1] = settings->ssao_factor_cavity;
+		rt->ssao_params_var[2] = settings->ssao_factor_edge;
+		rt->ssao_params_var[3] = settings->ssao_attenuation;
 
 		if (settings->matcap_icon < ICON_MATCAP_01 ||
 		    settings->matcap_icon > ICON_MATCAP_24)
@@ -463,16 +459,16 @@ static void CLAY_update_material_runtime(MaterialEngineSettingsClay *settings)
 			settings->matcap_icon = ICON_MATCAP_01;
 		}
 
-		runtime->matcap_id = matcap_to_index(settings->matcap_icon);
+		rt->matcap_id = matcap_to_index(settings->matcap_icon);
 
-		if ((runtime->type != settings->type)) {
+		if ((rt->type != settings->type)) {
 			data.ubo_flag |= CLAY_UBO_CLEAR;
 		}
 
-		runtime->type = settings->type;
+		rt->type = settings->type;
 
 		data.ubo_flag |= CLAY_UBO_REFRESH;
-		runtime->flag &= ~CLAY_OUTDATED;
+		rt->flag &= ~CLAY_OUTDATED;
 	}
 }
 
@@ -491,36 +487,34 @@ static void update_ubo_storage(MaterialRuntimeClay *runtime, unsigned int curren
 static void CLAY_update_material_ubo(const struct bContext *C)
 {
 	Main *bmain = CTX_data_main(C);
+	MaterialRuntimeClay *runtime;
 
 	/* Update Default materials */
 	for (Scene *sce = bmain->scene.first; sce; sce = sce->id.next) {
 		/* Using render settings as material settings */
-		MaterialEngineSettingsClay *res = DRW_render_settings_get(sce, RE_engine_id_BLENDER_CLAY);
-		CLAY_update_material_runtime(res);
+		MaterialEngineSettingsClay *res = DRW_render_settings_get(sce, RE_engine_id_BLENDER_CLAY, (void **)&runtime);
+		CLAY_update_material_runtime(res, &runtime);
 	}
 
 	/* Update Scene Materials */
 	for (Material *mat = bmain->mat.first; mat; mat = mat->id.next) {
-		MaterialEngineSettingsClay *mesc = DRW_material_settings_get(mat, RE_engine_id_BLENDER_CLAY);
-		CLAY_update_material_runtime(mesc);
+		MaterialEngineSettingsClay *mesc = DRW_material_settings_get(mat, RE_engine_id_BLENDER_CLAY, (void **)&runtime);
+		CLAY_update_material_runtime(mesc, &runtime);
 	}
 
 	if (data.ubo_flag & CLAY_UBO_REFRESH) {
-		MaterialRuntimeClay *runtime;
 		int current_id = 0;
 
 		/* Default materials */
 		for (Scene *sce = bmain->scene.first; sce; sce = sce->id.next) {
-			RenderEngineSettingsClay *ed = DRW_render_settings_get(sce, RE_engine_id_BLENDER_CLAY);
-			runtime = ed->res.runtime;
+			DRW_render_settings_get(sce, RE_engine_id_BLENDER_CLAY, (void **)&runtime);
 			update_ubo_storage(runtime, current_id);
 			current_id++;
 		}
 
 		/* TODO only add materials linked to geometry */
 		for (Material *mat = bmain->mat.first; mat; mat = mat->id.next) {
-			MaterialEngineSettingsClay *mesc = DRW_material_settings_get(mat, RE_engine_id_BLENDER_CLAY);
-			runtime = mesc->mes.runtime;
+			DRW_material_settings_get(mat, RE_engine_id_BLENDER_CLAY, (void **)&runtime);
 			update_ubo_storage(runtime, current_id);
 			current_id++;
 		}
@@ -547,11 +541,9 @@ static void CLAY_create_cache(CLAY_PassList *passes, const struct bContext *C)
 	/* Clay Pass */
 	{
 		MaterialRuntimeClay *runtime;
-		RenderEngineSettingsClay *settings = DRW_render_settings_get(NULL, RE_engine_id_BLENDER_CLAY);
+		DRW_render_settings_get(NULL, RE_engine_id_BLENDER_CLAY, (void **)&runtime);
 
 		passes->clay_pass = DRW_pass_create("Clay Pass", DRW_STATE_WRITE_COLOR);
-
-		runtime = settings->res.runtime;
 
 		default_shgrp = CLAY_shgroup_create(passes->clay_pass, &runtime->material_id);
 		DRW_shgroup_uniform_block(default_shgrp, "material_block", data.mat_ubo, 0);
@@ -620,7 +612,6 @@ static void CLAY_view_draw(RenderEngine *UNUSED(engine), const struct bContext *
 	/* or render properties / materials change */
 #ifdef WITH_VIEWPORT_CACHE_TEST
 	static bool once = false;
-	printf("AA\n");
 #endif
 	if (DRW_viewport_cache_is_dirty()
 #ifdef WITH_VIEWPORT_CACHE_TEST

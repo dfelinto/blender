@@ -95,6 +95,7 @@ typedef struct MaterialEngineSettings {
 	struct MaterialEngineSettings *next, *prev;
 	char name[64]; /* engine name - MAX_NAME */
 	void *runtime; /* To be free on file read */
+	void *data;
 } MaterialEngineSettings;
 
 /* Clay engine */
@@ -114,8 +115,6 @@ typedef struct MaterialRuntimeClay {
 #define CLAY_OUTDATED		1
 
 typedef struct MaterialEngineSettingsClay {
-	struct MaterialEngineSettings mes; /* keep first */
-
 	short type;
 	short matcap_icon; /* Icon ID */
 

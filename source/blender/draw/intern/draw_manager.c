@@ -849,7 +849,7 @@ void DRW_state_reset(void)
 
 /* ****************************************** Settings ******************************************/
 
-void *DRW_material_settings_get(Material *ma, const char *engine_name)
+void *DRW_material_settings_get(Material *ma, const char *engine_name, void **runtime)
 {
 	MaterialEngineSettings *ms = NULL;
 
@@ -857,19 +857,31 @@ void *DRW_material_settings_get(Material *ma, const char *engine_name)
 
 	/* If the settings does not exists yet, create it */
 	if (ms == NULL) {
+		ms = MEM_callocN(sizeof(RenderEngineSettings), "RenderEngineSettings");
+
+		BLI_strncpy(ms->name, engine_name, 64);
+
 		/* TODO make render_settings_create a polymorphic function */
 		if (STREQ(engine_name, RE_engine_id_BLENDER_CLAY)) {
-			ms = CLAY_material_settings_create();
+			ms->data = CLAY_material_settings_create();
+		}
+		else {
+			/* No engine matched */
+			BLI_assert(false);
 		}
 
 		BLI_addtail(&ma->engines_settings, ms);
 	}
 
-	return ms;
+	if (runtime) {
+		*runtime = &ms->runtime;
+	}
+
+	return ms->data;
 }
 
 /* If scene is NULL, use context scene */
-void *DRW_render_settings_get(Scene *scene, const char *engine_name)
+void *DRW_render_settings_get(Scene *scene, const char *engine_name, void **runtime)
 {
 	RenderEngineSettings *rs = NULL;
 
@@ -880,15 +892,27 @@ void *DRW_render_settings_get(Scene *scene, const char *engine_name)
 
 	/* If the settings does not exists yet, create it */
 	if (rs == NULL) {
+		rs = MEM_callocN(sizeof(RenderEngineSettings), "RenderEngineSettings");
+
+		BLI_strncpy(rs->name, engine_name, 64);
+
 		/* TODO make render_settings_create a polymorphic function */
 		if (STREQ(engine_name, RE_engine_id_BLENDER_CLAY)) {
-			rs = CLAY_render_settings_create();
+			rs->data = CLAY_render_settings_create();
+		}
+		else {
+			/* No engine matched */
+			BLI_assert(false);
 		}
 
 		BLI_addtail(&scene->engines_settings, rs);
 	}
 
-	return rs;
+	if (runtime) {
+		*runtime = &rs->runtime;
+	}
+
+	return rs->data;
 }
 
 /* ****************************************** Framebuffers ******************************************/
