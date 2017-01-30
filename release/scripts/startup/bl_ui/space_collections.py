@@ -28,7 +28,13 @@ class COLLECTIONS_HT_header(Header):
         layout = self.layout
 
         layout.template_header()
-        layout.label(text="Work in progress")
+
+        row = layout.row(align=True)
+        row.operator("collections.collection_new", text="", icon='NEW')
+        row.operator("collections.override_new", text="", icon='LINK_AREA')
+        row.operator("collections.collection_link", text="", icon='LINKED')
+        row.operator("collections.collection_unlink", text="", icon='UNLINKED')
+        row.operator("collections.delete", text="", icon='X')
 
 
 if __name__ == "__main__":  # only for live edit.
