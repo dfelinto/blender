@@ -210,6 +210,7 @@ static EnumPropertyItem buttons_context_items[] = {
 	{BCONTEXT_PARTICLE, "PARTICLES", ICON_PARTICLES, "Particles", "Particle"},
 	{BCONTEXT_PHYSICS, "PHYSICS", ICON_PHYSICS, "Physics", "Physics"},
 	{BCONTEXT_COLLECTION, "COLLECTION", ICON_COLLAPSEMENU, "Collection", "Collection"},
+	{BCONTEXT_COLLECTION_OVERRIDE, "COLLECTION_OVERRIDE", ICON_LINK_AREA, "Collection Override", "Collection Override"},
 	{0, NULL, 0, NULL, NULL}
 };
 
@@ -1082,6 +1083,10 @@ static EnumPropertyItem *rna_SpaceProperties_context_itemf(bContext *UNUSED(C), 
 
 	if (sbuts->pathflag & (1 << BCONTEXT_COLLECTION)) {
 		RNA_enum_items_add_value(&item, &totitem, buttons_context_items, BCONTEXT_COLLECTION);
+	}
+
+	if (sbuts->pathflag & (1 << BCONTEXT_COLLECTION_OVERRIDE)) {
+		RNA_enum_items_add_value(&item, &totitem, buttons_context_items, BCONTEXT_COLLECTION_OVERRIDE);
 	}
 
 	if (sbuts->pathflag & (1 << BCONTEXT_WORLD)) {

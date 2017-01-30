@@ -576,6 +576,14 @@ static int buttons_context_path_collection(const bContext *C, ButsContextPath *p
 	return 0;
 }
 
+static int buttons_context_path_override(ButsContextPath *UNUSED(path))
+{
+	TODO_LAYER_OVERRIDE;
+
+	/* no path to an override possible */
+	return 0;
+}
+
 static int buttons_context_path(const bContext *C, ButsContextPath *path, int mainb, int flag)
 {
 	SpaceButs *sbuts = CTX_wm_space_buts(C);
@@ -652,6 +660,9 @@ static int buttons_context_path(const bContext *C, ButsContextPath *path, int ma
 			break;
 	    case BCONTEXT_COLLECTION:
 		    found = buttons_context_path_collection(C, path);
+		    break;
+	    case BCONTEXT_COLLECTION_OVERRIDE:
+		    found = buttons_context_path_override(path);
 		    break;
 	    default:
 			found = 0;
@@ -770,7 +781,7 @@ const char *buttons_context_dir[] = {
 	"texture", "texture_user", "texture_user_property", "bone", "edit_bone",
 	"pose_bone", "particle_system", "particle_system_editable", "particle_settings",
 	"cloth", "soft_body", "fluid", "smoke", "collision", "brush", "dynamic_paint",
-	"line_style", "collection", NULL
+	"line_style", "collection", "collection_override", NULL
 };
 
 int buttons_context(const bContext *C, const char *member, bContextDataResult *result)
@@ -1092,6 +1103,10 @@ int buttons_context(const bContext *C, const char *member, bContextDataResult *r
 	}
 	else if (CTX_data_equals(member, "collection")) {
 		set_pointer_type(path, result, &RNA_LayerCollection);
+		return 1;
+	}
+	else if (CTX_data_equals(member, "collection_override")) {
+		set_pointer_type(path, result, &RNA_LayerCollectionOverride);
 		return 1;
 	}
 	else {
