@@ -2468,6 +2468,21 @@ static void write_textures(WriteData *wd, ListBase *idbase)
 	mywrite_flush(wd);
 }
 
+static void write_material_engines_settings(WriteData *wd, ListBase *lb)
+{
+	for (MaterialEngineSettings *res = lb->first; res; res = res->next) {
+		writestruct(wd, DATA, MaterialEngineSettings, 1, res);
+
+		if (STREQ(res->name, RE_engine_id_BLENDER_CLAY)) {
+			writestruct(wd, DATA, MaterialEngineSettingsClay, 1, res->data);
+		}
+		else {
+			/* No engine matched */
+			/* error: don't know how to write this file */
+		}
+	}
+}
+
 static void write_materials(WriteData *wd, ListBase *idbase)
 {
 	Material *ma;
@@ -2504,6 +2519,8 @@ static void write_materials(WriteData *wd, ListBase *idbase)
 			}
 
 			write_previews(wd, ma->preview);
+
+			write_material_engines_settings(wd, &ma->engines_settings);
 		}
 		ma = ma->id.next;
 	}
@@ -2650,6 +2667,21 @@ static void write_layer_collections(WriteData *wd, ListBase *lb)
 	}
 }
 
+static void write_render_engines_settings(WriteData *wd, ListBase *lb)
+{
+	for (RenderEngineSettings *res = lb->first; res; res = res->next) {
+		writestruct(wd, DATA, RenderEngineSettings, 1, res);
+
+		if (STREQ(res->name, RE_engine_id_BLENDER_CLAY)) {
+			writestruct(wd, DATA, RenderEngineSettingsClay, 1, res->data);
+		}
+		else {
+			/* No engine matched */
+			/* error: don't know how to write this file */
+		}
+	}
+}
+
 static void write_scenes(WriteData *wd, ListBase *scebase)
 {
 	Scene *sce;
@@ -2666,7 +2698,6 @@ static void write_scenes(WriteData *wd, ListBase *scebase)
 	FreestyleModuleConfig *fmc;
 	FreestyleLineSet *fls;
 	SceneLayer *sl;
-	RenderEngineSettings *res;
 
 	sce = scebase->first;
 	while (sce) {
@@ -2879,11 +2910,9 @@ static void write_scenes(WriteData *wd, ListBase *scebase)
 			writelist(wd, DATA, ObjectBase, &sl->object_bases);
 			write_layer_collections(wd, &sl->layer_collections);
 		}
-#if 0
-		for (res = sce->engines_settings.first; res; res = res->next) {
-			/* How to write if struct type is not known? */
-		}
-#endif
+
+		write_render_engines_settings(wd, &sce->engines_settings);
+
 		sce = sce->id.next;
 	}
 

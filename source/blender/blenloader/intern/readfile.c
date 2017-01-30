@@ -3968,6 +3968,7 @@ static void lib_link_material(FileData *fd, Main *main)
 static void direct_link_material(FileData *fd, Material *ma)
 {
 	int a;
+	MaterialEngineSettings *mes;
 	
 	ma->adt = newdataadr(fd, ma->adt);
 	direct_link_animdata(fd, ma->adt);
@@ -3988,6 +3989,12 @@ static void direct_link_material(FileData *fd, Material *ma)
 	
 	ma->preview = direct_link_preview_image(fd, ma->preview);
 	BLI_listbase_clear(&ma->gpumaterial);
+
+	link_list(fd, &ma->engines_settings);
+	for (mes = ma->engines_settings.first; mes; mes = mes->next) {
+		mes->runtime = NULL;
+		mes->data = newdataadr(fd, mes->data);
+	}
 }
 
 /* ************ READ PARTICLE SETTINGS ***************** */
@@ -6210,12 +6217,12 @@ static void direct_link_scene(FileData *fd, Scene *sce)
 		sl->basact = newdataadr(fd, sl->basact);
 		direct_link_layer_collections(fd, &sl->layer_collections);
 	}
-#if 0
+
 	link_list(fd, &sce->engines_settings);
 	for (res = sce->engines_settings.first; res; res = res->next) {
 		res->runtime = NULL;
+		res->data = newdataadr(fd, res->data);
 	}
-#endif
 }
 
 /* ************ READ WM ***************** */
