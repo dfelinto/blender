@@ -928,20 +928,39 @@ SceneLayer *CTX_data_scene_layer(const bContext *C)
  * If the scene_collection is linked to the SceneLayer we use it.
  * Otherwise we fallback to the active one of the SceneLayer.
  */
-SceneCollection *CTX_data_scene_collection(const bContext *C)
+LayerCollection *CTX_data_layer_collection(const bContext *C)
 {
 	SceneLayer *sl = CTX_data_scene_layer(C);
-	SceneCollection *sc;
+	LayerCollection *lc;
 
-	if (ctx_data_pointer_verify(C, "scene_collection", (void *)&sc)) {
-		if (BKE_scene_layer_has_collection(sl, sc)) {
-			return sc;
+	if (ctx_data_pointer_verify(C, "layer_collection", (void *)&lc)) {
+		if (BKE_scene_layer_has_collection(sl, lc->scene_collection)) {
+			return lc;
 		}
 	}
 
 	/* fallback */
-	LayerCollection *lc = BKE_layer_collection_active(sl);
-	return lc->scene_collection;
+	return BKE_layer_collection_active(sl);
+}
+
+SceneCollection *CTX_data_scene_collection(const bContext *C)
+{
+	SceneCollection *sc;
+	if (ctx_data_pointer_verify(C, "scene_collection", (void *)&sc)) {
+		if (BKE_scene_layer_has_collection(CTX_data_scene_layer(C), sc)) {
+			return sc;
+		}
+	}
+	else {
+		LayerCollection *lc = CTX_data_layer_collection(C);
+		if (lc) {
+			return lc->scene_collection;
+		}
+	}
+
+	/* fallback */
+	Scene *scene = CTX_data_scene(C);
+	return BKE_collection_master(scene);
 }
 
 int CTX_data_mode_enum(const bContext *C)
