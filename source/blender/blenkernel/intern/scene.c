@@ -569,6 +569,12 @@ void BKE_scene_free(Scene *sce)
 	sce->collection = NULL;
 
 	/* Runtime Engine Data */
+	for (RenderEngineSettings *res = sce->engines_settings.first; res; res = res->next) {
+		if (res->runtime)
+			MEM_freeN(res->runtime);
+		if (res->data)
+			MEM_freeN(res->data);
+	}
 	BLI_freelistN(&sce->engines_settings);
 }
 

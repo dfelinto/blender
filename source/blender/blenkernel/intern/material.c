@@ -112,7 +112,13 @@ void BKE_material_free(Material *ma)
 	BKE_icon_id_delete((ID *)ma);
 	BKE_previewimg_free(&ma->preview);
 
-	/* TODO Free Engine Settings */
+	for (MaterialEngineSettings *mes = ma->engines_settings.first; mes; mes = mes->next) {
+		if (mes->runtime)
+			MEM_SAFE_FREE(mes->runtime);
+		if (mes->data)
+			MEM_SAFE_FREE(mes->data);
+	}
+	BLI_freelistN(&ma->engines_settings);
 }
 
 void BKE_material_init(Material *ma)
