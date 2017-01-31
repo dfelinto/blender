@@ -178,6 +178,19 @@ void BKE_visible_bases_Iterator_end(Iterator *iter);
 	ITER_END                                                                  \
 }
 
+/* temporary hacky solution waiting for final depsgraph evaluation */
+#define DEG_OBJECT_ITER(sl_, ob_)                                             \
+{                                                                             \
+	/* flush all the data to objects*/                                        \
+	ObjectBase *base_;					                                      \
+	for (base_ = sl->object_bases.first; base_; base_ = base_->next) {        \
+	    ob_ = base_->object;			                                      \
+	    ob_->base_flag = base_->flag;
+
+#define DEG_OBJECT_ITER_END                                                   \
+    }                                                                         \
+}
+
 #ifdef __cplusplus
 }
 #endif
