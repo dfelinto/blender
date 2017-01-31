@@ -49,10 +49,6 @@ static SceneCollection *collection_manager_collection_active(bContext *C)
 
 static int operator_not_master_collection_active(bContext *C)
 {
-	if (ED_operator_collections_active(C) == false) {
-		return 0;
-	}
-
 	SceneCollection *sc = collection_manager_collection_active(C);
 	if (sc == NULL) {
 		return 1;
@@ -63,10 +59,6 @@ static int operator_not_master_collection_active(bContext *C)
 
 static int operator_top_collection_active(bContext *C)
 {
-	if (ED_operator_collections_active(C) == false) {
-		return 0;
-	}
-
 	SceneCollection *sc = collection_manager_collection_active(C);
 	if (sc == NULL) {
 		return 0;
@@ -79,9 +71,6 @@ static int operator_top_collection_active(bContext *C)
 
 static int operator_collection_active(bContext *C)
 {
-	if (ED_operator_collections_active(C) == false) {
-		return 0;
-	}
 	return collection_manager_collection_active(C) ? 1 : 0;
 }
 
@@ -104,7 +93,6 @@ static void COLLECTIONS_OT_collection_link(wmOperatorType *ot)
 
 	/* api callbacks */
 	ot->invoke = collection_link_invoke;
-	ot->poll = ED_operator_collections_active;
 
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
