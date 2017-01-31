@@ -283,11 +283,6 @@ void DRW_shgroup_wire_outline(DRWPass *wire_outline, Object *ob,
 
 /* ***************************** NON MESHES ********************** */
 
-void DRW_draw_lamp(DRWPass *non_meshes, Object *ob)
-{
-	/* TODO */
-}
-
 /* TODO FINISH */
 static int draw_object_wire_theme(ObjectBase *base)
 {
