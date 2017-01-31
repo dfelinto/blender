@@ -31,6 +31,9 @@
 #include "WM_api.h"
 #include "WM_types.h"
 
+#include "RNA_access.h"
+#include "RNA_define.h"
+
 #include "collections_intern.h" /* own include */
 
 /* -------------------------------------------------------------------- */
@@ -200,11 +203,13 @@ static void COLLECTIONS_OT_delete(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
-static int select_invoke(bContext *UNUSED(C), wmOperator *op, const wmEvent *UNUSED(event))
+static int select_exec(bContext *C, wmOperator *op)
 {
-	TODO_LAYER_OPERATORS;
-	BKE_report(op->reports, RPT_ERROR, "COLLECTIONS_OT_select not implemented yet");
-	return OPERATOR_CANCELLED;
+	SceneLayer *sl = CTX_data_scene_layer(C);
+	const int collection_index = RNA_int_get(op->ptr, "collection_index");
+	sl->active_collection = collection_index;
+	WM_main_add_notifier(NC_SCENE | ND_LAYER, NULL);
+	return OPERATOR_FINISHED;
 }
 
 static void COLLECTIONS_OT_select(wmOperatorType *ot)
@@ -215,11 +220,13 @@ static void COLLECTIONS_OT_select(wmOperatorType *ot)
 	ot->description = "Change active collection or override";
 
 	/* api callbacks */
-	ot->invoke = select_invoke;
-	ot->poll = ED_operator_collections_active;
+	ot->exec = select_exec;
 
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+	RNA_def_int(ot->srna, "collection_index", 0, 0, INT_MAX, "Index",
+	            "Index of collection to select", 0, INT_MAX);
 }
 
 static int rename_invoke(bContext *UNUSED(C), wmOperator *op, const wmEvent *UNUSED(event))
