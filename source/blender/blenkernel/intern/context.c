@@ -952,12 +952,9 @@ SceneCollection *CTX_data_scene_collection(const bContext *C)
 		}
 	}
 
-	LayerCollection *lc;
-	if (ctx_data_pointer_verify(C, "layer_collection", (void *)&lc)) {
-		lc = CTX_data_layer_collection(C);
-		if (lc) {
-			return lc->scene_collection;
-		}
+	LayerCollection *lc = CTX_data_layer_collection(C);
+	if (lc) {
+		return lc->scene_collection;
 	}
 
 	/* fallback */
