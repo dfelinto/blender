@@ -50,8 +50,16 @@
  */
 SceneCollection *BKE_collection_add(Scene *scene, SceneCollection *sc_parent, const char *name)
 {
-	SceneCollection *sc = MEM_callocN(sizeof(SceneCollection), "New Collection");
 	SceneCollection *sc_master = BKE_collection_master(scene);
+	SceneCollection *sc = MEM_callocN(sizeof(SceneCollection), "New Collection");
+
+	if (!name) {
+		name = DATA_("New Collection");
+	}
+
+	if (!sc_parent) {
+		sc_parent = sc_master;
+	}
 
 	BLI_strncpy(sc->name, name, sizeof(sc->name));
 	BLI_uniquename(&sc_master->scene_collections, sc, DATA_("Collection"), '.', offsetof(SceneCollection, name), sizeof(sc->name));

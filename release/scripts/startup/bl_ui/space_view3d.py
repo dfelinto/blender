@@ -3146,54 +3146,70 @@ class VIEW3D_PT_viewport_debug(Panel):
         col.row(align=True).prop(view, "debug_background", expand=True)
 
 
-class VIEW3D_PT_layers_debug(Panel):
+class VIEW3D_PT_collections_editor(Panel):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
-    bl_label = "Layers"
+    bl_label = "Collections"
     bl_options = {'DEFAULT_CLOSED'}
 
     @classmethod
     def poll(cls, context):
-        view = context.space_data
-        return (view and view.use_modern_viewport)
+        return context.space_data
 
     def draw(self, context):
         layout = self.layout
-        view = context.space_data
-        scene = context.scene
+        layer = context.render_layer
+        active_collection = context.layer_collection
 
-        for layer in scene.render_layers:
-            col = layout.column()
-            col.label(text=layer.name)
+        col = layout.column()
+        box = col.box()
 
-            box = col.box()
-            for collection in layer.collections:
-                self._draw_layer_collection(box, collection, True)
+        index = -1
+        for collection in layer.collections:
+            index = self._draw_layer_collection(box, index, active_collection, collection, True, True)
 
-    def _draw_layer_collection(self, box, collection, is_active, depth=0):
-        row = box.row()
-        row.active = is_active
-        row.label(text="{0}{1}{2}".format(
-            "  " * depth,
-            u'\u21b3 ' if depth else "",
-            collection.name))
+        row = layout.row(align=True)
+        row.operator("collections.collection_new", text="", icon='NEW')
+        row.operator("collections.override_new", text="", icon='LINK_AREA')
+        row.operator("collections.collection_link", text="", icon='LINKED')
+        row.operator("collections.collection_unlink", text="", icon='UNLINKED')
+        row.operator("collections.delete", text="", icon='X')
 
-        row.prop(collection, "hide", text="", emboss=False)
-        row.prop(collection, "hide_select", text="", emboss=False)
-
+    def _draw_layer_collection(self, box, index, active_collection, collection, is_active, is_draw, depth=0):
+        index += 1
         nested_collections = collection.collections
-        if nested_collections:
-            row.prop(collection, "is_unfolded", text="", emboss=False)
-        else:
-            row.label(icon='BLANK1')
-            return
 
-        if not collection.is_unfolded:
-            return
+        if is_draw:
+            row = box.row()
+            row.active = is_active
+            is_collection_selected = (collection == active_collection)
 
-        is_active &= not collection.hide
+            if is_collection_selected:
+                sub_box = row.box()
+                row = sub_box.row()
+
+            row.label(text="{0}{1}{2}".format(
+                "  " * depth,
+                u'\u21b3 ' if depth else "",
+                collection.name))
+
+            row.prop(collection, "hide", text="", emboss=False)
+            row.operator("collections.select", text="", icon='BLANK1' if is_collection_selected else 'HAND', emboss=False).collection_index=index
+
+            if nested_collections:
+                row.prop(collection, "is_unfolded", text="", emboss=False)
+            else:
+                row.label(icon='BLANK1')
+
+            if not collection.is_unfolded:
+                is_draw = False
+
+            is_active &= not collection.hide
+
         for nested_collection in nested_collections:
-            self._draw_layer_collection(box, nested_collection, is_active, depth + 1)
+            index = self._draw_layer_collection(box, index, active_collection, nested_collection, is_active, is_draw, depth + 1)
+
+        return index
 
 
 class VIEW3D_PT_grease_pencil(GreasePencilDataPanel, Panel):

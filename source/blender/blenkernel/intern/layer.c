@@ -30,6 +30,7 @@
 #include "BLI_string_utils.h"
 #include "BLT_translation.h"
 
+#include "BKE_layer.h"
 #include "BKE_collection.h"
 #include "BKE_layer.h"
 #include "BKE_main.h"
@@ -395,6 +396,7 @@ int BKE_layer_collection_findindex(SceneLayer *sl, LayerCollection *lc)
 LayerCollection *BKE_collection_link(SceneLayer *sl, SceneCollection *sc)
 {
 	LayerCollection *lc = layer_collection_add(sl, &sl->layer_collections, sc);
+	sl->active_collection = BKE_layer_collection_findindex(sl, lc);
 	return lc;
 }
 
