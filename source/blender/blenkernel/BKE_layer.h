@@ -144,15 +144,6 @@ void BKE_visible_bases_Iterator_end(Iterator *iter);
     }                                                                         \
 }
 
-#define FOREACH_BASE(sl, _object_base)                                        \
-{                                                                             \
-	for (base = sl->object_bases.first; base; base = base->next) {            \
-	    _object_base = base;
-
-#define FOREACH_BASE_END                                                      \
-    }                                                                         \
-}
-
 #define FOREACH_OBJECT_FLAG(scene, sl, flag, _ob)                             \
 {                                                                             \
 	IteratorBeginCb func_begin;                                               \

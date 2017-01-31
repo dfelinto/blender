@@ -30,15 +30,16 @@
 
 struct DRWPass;
 struct Batch;
+struct Object;
 
 void DRW_pass_setup_common(struct DRWPass **wire_overlay, struct DRWPass **wire_outline, struct DRWPass **non_meshes, struct DRWPass **ob_center);
 
-void DRW_shgroup_wire_overlay(struct DRWPass *wire_overlay, Object *ob);
+void DRW_shgroup_wire_overlay(struct DRWPass *wire_overlay, struct Object *ob);
 void DRW_shgroup_wire_outline(
-        struct DRWPass *wire_outline, Object *ob, const bool do_front, const bool do_back, const bool do_outline);
+        struct DRWPass *wire_outline, struct Object *ob, const bool do_front, const bool do_back, const bool do_outline);
 
-void DRW_shgroup_non_meshes(struct DRWPass *non_meshes, ObjectBase *base);
-void DRW_shgroup_relationship_lines(struct DRWPass *non_meshes, ObjectBase *base);
-void DRW_shgroup_object_center(struct DRWPass *ob_center, ObjectBase *base);
+void DRW_shgroup_non_meshes(struct DRWPass *non_meshes, struct Object *ob);
+void DRW_shgroup_relationship_lines(struct DRWPass *non_meshes, struct Object *ob);
+void DRW_shgroup_object_center(struct DRWPass *ob_center, struct Object *ob);
 
 #endif /* __DRAW_MODE_PASS_H__ */

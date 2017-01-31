@@ -284,9 +284,8 @@ void DRW_shgroup_wire_outline(DRWPass *wire_outline, Object *ob,
 /* ***************************** NON MESHES ********************** */
 
 /* TODO FINISH */
-static int draw_object_wire_theme(ObjectBase *base)
+static int draw_object_wire_theme(Object *ob)
 {
-	Object *ob = base->object;
 	const bool is_edit = (ob->mode & OB_MODE_EDIT) != 0;
 	/* confusing logic here, there are 2 methods of setting the color
 	 * 'colortab[colindex]' and 'theme_id', colindex overrides theme_id.
@@ -295,15 +294,15 @@ static int draw_object_wire_theme(ObjectBase *base)
 	int theme_id = is_edit ? TH_WIRE_EDIT : TH_WIRE;
 
 	if (//(scene->obedit == NULL) &&
-	    (G.moving & G_TRANSFORM_OBJ) &&
-	    (base->flag & BASE_SELECTED))
+	    ((G.moving & G_TRANSFORM_OBJ) != 0) &&
+	    ((ob->base_flag & BASE_SELECTED) != 0))
 	{
 		theme_id = TH_TRANSFORM;
 	}
 	else {
 		/* Sets the 'theme_id' or fallback to wire */
 		if ((ob->flag & OB_FROMGROUP) != 0) {
-			if (base->flag & BASE_SELECTED) {
+			if ((ob->base_flag & BASE_SELECTED) != 0) {
 				/* uses darker active color for non-active + selected */
 				theme_id = TH_GROUP_ACTIVE;
 
@@ -316,7 +315,7 @@ static int draw_object_wire_theme(ObjectBase *base)
 			}
 		}
 		else {
-			if (base->flag & BASE_SELECTED) {
+			if ((ob->base_flag & BASE_SELECTED) != 0) {
 				theme_id = //scene->basact == base ? TH_ACTIVE :
 				TH_SELECT;
 			}
@@ -333,12 +332,11 @@ static int draw_object_wire_theme(ObjectBase *base)
 	return theme_id;
 }
 
-void DRW_shgroup_non_meshes(DRWPass *UNUSED(non_meshes), ObjectBase *base)
+void DRW_shgroup_non_meshes(DRWPass *UNUSED(non_meshes), Object *ob)
 {
 	struct Batch *geom;
 	DRWShadingGroup *grp;
-	Object *ob = base->object;
-	int theme_id = draw_object_wire_theme(base);
+	int theme_id = draw_object_wire_theme(ob);
 
 	switch (ob->type) {
 		case OB_LAMP:
@@ -364,9 +362,8 @@ void DRW_shgroup_non_meshes(DRWPass *UNUSED(non_meshes), ObjectBase *base)
 	}
 }
 
-void DRW_shgroup_relationship_lines(DRWPass *UNUSED(non_meshes), ObjectBase *base)
+void DRW_shgroup_relationship_lines(DRWPass *UNUSED(non_meshes), Object *ob)
 {
-	Object *ob = base->object;
 	if (ob->parent) {
 		struct Batch *geom = DRW_cache_single_vert_get();
 		DRW_shgroup_call_add(relationship_lines, geom, ob->obmat);
@@ -376,13 +373,14 @@ void DRW_shgroup_relationship_lines(DRWPass *UNUSED(non_meshes), ObjectBase *bas
 
 /* ***************************** COMMON **************************** */
 
-void DRW_shgroup_object_center(DRWPass *UNUSED(ob_center), ObjectBase *base)
+void DRW_shgroup_object_center(DRWPass *UNUSED(ob_center), Object *ob)
 {
-	Object *ob = base->object;
 	struct Batch *geom = DRW_cache_single_vert_get();
 
-	if (base->flag & BASE_SELECTED)
+	if ((ob->base_flag & BASE_SELECTED) != 0) {
 		DRW_shgroup_call_add(center_selected, geom, ob->obmat);
-	else
+	}
+	else {
 		DRW_shgroup_call_add(center_deselected, geom, ob->obmat);
+	}
 }
