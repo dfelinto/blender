@@ -29,9 +29,29 @@
 
 #include "UI_resources.h"
 
+#include "BKE_global.h"
+
 #include "draw_mode_pass.h"
 
 /* ************************** OBJECT MODE ******************************* */
+
+/* Store list of shading group for easy access*/
+
+/* Empties */
+static DRWShadingGroup *empty_wire;
+static DRWShadingGroup *empty_active;
+static DRWShadingGroup *empty_select;
+static DRWShadingGroup *empty_transform;
+static DRWShadingGroup *empty_group;
+static DRWShadingGroup *empty_group_active;
+
+/* Helpers */
+static DRWShadingGroup *relationship_lines;
+
+/* Objects Centers */
+static DRWShadingGroup *center_active;
+static DRWShadingGroup *center_selected;
+static DRWShadingGroup *center_deselected;
 
 /* This Function setup the passes needed for the mode rendering.
  * The passes are populated by the rendering engine using the DRW_shgroup_* functions. */
@@ -52,6 +72,22 @@ void DRW_pass_setup_common(DRWPass **wire_overlay, DRWPass **wire_outline, DRWPa
 	}
 
 	if (non_meshes) {
+		static float colorWire[4], colorWireEdit[4];
+		static float colorActive[4], colorSelect[4], colorTransform[4], colorGroup[4], colorGroupActive[4];
+		static float colorEmpty[4], colorLamp[4], colorCamera[4], colorSpeaker[4];
+
+		UI_GetThemeColor4fv(TH_WIRE, colorWire);
+		UI_GetThemeColor4fv(TH_WIRE_EDIT, colorWireEdit);
+		UI_GetThemeColor4fv(TH_ACTIVE, colorActive);
+		UI_GetThemeColor4fv(TH_SELECT, colorSelect);
+		UI_GetThemeColor4fv(TH_TRANSFORM, colorTransform);
+		UI_GetThemeColor4fv(TH_GROUP_ACTIVE, colorGroupActive);
+		UI_GetThemeColor4fv(TH_GROUP, colorGroup);
+		UI_GetThemeColor4fv(OB_LAMP, colorLamp);
+		UI_GetThemeColor4fv(OB_SPEAKER, colorSpeaker);
+		UI_GetThemeColor4fv(OB_CAMERA, colorCamera);
+		UI_GetThemeColor4fv(OB_EMPTY, colorEmpty);
+
 		/* Non Meshes Pass (Camera, empties, lamps ...) */
 		DRWShadingGroup *grp;
 
@@ -69,14 +105,40 @@ void DRW_pass_setup_common(DRWPass **wire_overlay, DRWPass **wire_outline, DRWPa
 		grp = DRW_shgroup_create(sh, *non_meshes);
 
 		/* Empties */
-		static float frontcol[4] = {0.0f, 0.0f, 0.0f, 1.0f};
-		grp = DRW_shgroup_create(sh_inst, *non_meshes);
-		DRW_shgroup_uniform_vec4(grp, "color", frontcol, 1);
-		DRW_shgroup_dyntype_set(grp, DRW_DYN_INSTANCE);
+		{
+			grp = DRW_shgroup_create(sh_inst, *non_meshes);
+			DRW_shgroup_uniform_vec4(grp, "color", colorEmpty, 1);
+			DRW_shgroup_dyntype_set(grp, DRW_DYN_INSTANCE);
+			empty_wire = grp;
+
+			grp = DRW_shgroup_create(sh_inst, *non_meshes);
+			DRW_shgroup_uniform_vec4(grp, "color", colorActive, 1);
+			DRW_shgroup_dyntype_set(grp, DRW_DYN_INSTANCE);
+			empty_active = grp;
+
+			grp = DRW_shgroup_create(sh_inst, *non_meshes);
+			DRW_shgroup_uniform_vec4(grp, "color", colorSelect, 1);
+			DRW_shgroup_dyntype_set(grp, DRW_DYN_INSTANCE);
+			empty_select = grp;
+
+			grp = DRW_shgroup_create(sh_inst, *non_meshes);
+			DRW_shgroup_uniform_vec4(grp, "color", colorTransform, 1);
+			DRW_shgroup_dyntype_set(grp, DRW_DYN_INSTANCE);
+			empty_transform = grp;
+
+			grp = DRW_shgroup_create(sh_inst, *non_meshes);
+			DRW_shgroup_uniform_vec4(grp, "color", colorGroup, 1);
+			DRW_shgroup_dyntype_set(grp, DRW_DYN_INSTANCE);
+			empty_group = grp;
+
+			grp = DRW_shgroup_create(sh_inst, *non_meshes);
+			DRW_shgroup_uniform_vec4(grp, "color", colorGroupActive, 1);
+			DRW_shgroup_dyntype_set(grp, DRW_DYN_INSTANCE);
+			empty_group_active = grp;
+		}
 
 		/* Stipple Wires */
 		grp = DRW_shgroup_create(sh, *non_meshes);
-		DRW_shgroup_uniform_vec4(grp, "color", frontcol, 1);
 		DRW_shgroup_state_set(grp, DRW_STATE_STIPPLE_2);
 
 		grp = DRW_shgroup_create(sh, *non_meshes);
@@ -86,9 +148,13 @@ void DRW_pass_setup_common(DRWPass **wire_overlay, DRWPass **wire_outline, DRWPa
 		DRW_shgroup_state_set(grp, DRW_STATE_STIPPLE_4);
 
 		/* Relationship Lines */
-		grp = DRW_shgroup_create(sh, *non_meshes);
-		DRW_shgroup_state_set(grp, DRW_STATE_STIPPLE_3);
-		DRW_shgroup_dyntype_set(grp, DRW_DYN_LINES);
+		{
+			grp = DRW_shgroup_create(sh, *non_meshes);
+			DRW_shgroup_uniform_vec4(grp, "color", colorWire, 1);
+			DRW_shgroup_state_set(grp, DRW_STATE_STIPPLE_3);
+			DRW_shgroup_dyntype_set(grp, DRW_DYN_LINES);
+			relationship_lines = grp;
+		}
 	}
 
 	if (ob_center) {
@@ -116,16 +182,19 @@ void DRW_pass_setup_common(DRWPass **wire_overlay, DRWPass **wire_outline, DRWPa
 		DRW_shgroup_uniform_float(grp, "outlineWidth", &outlineWidth, 1);
 		DRW_shgroup_uniform_vec4(grp, "color", colorActive, 1);
 		DRW_shgroup_uniform_vec4(grp, "outlineColor", outlineColor, 1);
+		center_active = grp;
 
 		/* Select */
 		grp = DRW_shgroup_create(sh, *ob_center);
 		DRW_shgroup_dyntype_set(grp, DRW_DYN_POINTS);
 		DRW_shgroup_uniform_vec4(grp, "color", colorSelect, 1);
+		center_selected = grp;
 
 		/* Deselect */
 		grp = DRW_shgroup_create(sh, *ob_center);
 		DRW_shgroup_dyntype_set(grp, DRW_DYN_POINTS);
 		DRW_shgroup_uniform_vec4(grp, "color", colorDeselect, 1);
+		center_deselected = grp;
 	}
 }
 
@@ -219,40 +288,106 @@ void DRW_draw_lamp(DRWPass *non_meshes, Object *ob)
 	/* TODO */
 }
 
-void DRW_shgroup_non_meshes(DRWPass *non_meshes, Object *ob)
+/* TODO FINISH */
+static int draw_object_wire_theme(ObjectBase *base)
+{
+	Object *ob = base->object;
+	const bool is_edit = (ob->mode & OB_MODE_EDIT) != 0;
+	/* confusing logic here, there are 2 methods of setting the color
+	 * 'colortab[colindex]' and 'theme_id', colindex overrides theme_id.
+	 *
+	 * note: no theme yet for 'colindex' */
+	int theme_id = is_edit ? TH_WIRE_EDIT : TH_WIRE;
+
+	if (//(scene->obedit == NULL) &&
+	    (G.moving & G_TRANSFORM_OBJ) &&
+	    (base->flag & BASE_SELECTED))
+	{
+		theme_id = TH_TRANSFORM;
+	}
+	else {
+		/* Sets the 'theme_id' or fallback to wire */
+		if ((ob->flag & OB_FROMGROUP) != 0) {
+			if (base->flag & BASE_SELECTED) {
+				/* uses darker active color for non-active + selected */
+				theme_id = TH_GROUP_ACTIVE;
+
+				// if (scene->basact != base) {
+				// 	theme_shade = -16;
+				// }
+			}
+			else {
+				theme_id = TH_GROUP;
+			}
+		}
+		else {
+			if (base->flag & BASE_SELECTED) {
+				theme_id = //scene->basact == base ? TH_ACTIVE :
+				TH_SELECT;
+			}
+			else {
+				if (ob->type == OB_LAMP) theme_id = TH_LAMP;
+				else if (ob->type == OB_SPEAKER) theme_id = TH_SPEAKER;
+				else if (ob->type == OB_CAMERA) theme_id = TH_CAMERA;
+				else if (ob->type == OB_EMPTY) theme_id = TH_EMPTY;
+				/* fallback to TH_WIRE */
+			}
+		}
+	}
+
+	return theme_id;
+}
+
+void DRW_shgroup_non_meshes(DRWPass *UNUSED(non_meshes), ObjectBase *base)
 {
 	struct Batch *geom;
+	DRWShadingGroup *grp;
+	Object *ob = base->object;
+	int theme_id = draw_object_wire_theme(base);
 
 	switch (ob->type) {
 		case OB_LAMP:
 		case OB_CAMERA:
 		case OB_EMPTY:
 		default:
+			if (theme_id == TH_ACTIVE)
+				grp = empty_active;
+			else if (theme_id == TH_SELECT)
+				grp = empty_select;
+			else if (theme_id == TH_GROUP_ACTIVE)
+				grp = empty_group_active;
+			else if (theme_id == TH_GROUP)
+				grp = empty_group;
+			else if (theme_id == TH_TRANSFORM)
+				grp = empty_transform;
+			else
+				grp = empty_wire;
+
 			geom = DRW_cache_plain_axes_get();
-			DRWShadingGroup *grp = DRW_pass_nth_shgroup_get(non_meshes, 2);
 			DRW_shgroup_call_add(grp, geom, ob->obmat);
 			break;
 	}
 }
 
-void DRW_shgroup_relationship_lines(DRWPass *non_meshes, Object *ob)
+void DRW_shgroup_relationship_lines(DRWPass *UNUSED(non_meshes), ObjectBase *base)
 {
+	Object *ob = base->object;
 	if (ob->parent) {
 		struct Batch *geom = DRW_cache_single_vert_get();
-		DRWShadingGroup *grp = DRW_pass_nth_shgroup_get(non_meshes, 6);
-		DRW_shgroup_call_add(grp, geom, ob->obmat);
-		DRW_shgroup_call_add(grp, geom, ob->parent->obmat);
+		DRW_shgroup_call_add(relationship_lines, geom, ob->obmat);
+		DRW_shgroup_call_add(relationship_lines, geom, ob->parent->obmat);
 	}
 }
 
 /* ***************************** COMMON **************************** */
 
-void DRW_shgroup_object_center(DRWPass *ob_center, Object *ob)
+void DRW_shgroup_object_center(DRWPass *UNUSED(ob_center), ObjectBase *base)
 {
+	Object *ob = base->object;
 	struct Batch *geom = DRW_cache_single_vert_get();
 
-	DRWShadingGroup *grp = DRW_pass_nth_shgroup_get(ob_center, 0);
-
-	/* Add all object center for now */
-	DRW_shgroup_call_add(grp, geom, ob->obmat);
+	if (base->flag & BASE_SELECTED)
+		DRW_shgroup_call_add(center_selected, geom, ob->obmat);
+	else
+		DRW_shgroup_call_add(center_deselected, geom, ob->obmat);
 }

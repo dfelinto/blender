@@ -529,7 +529,7 @@ static void CLAY_create_cache(CLAY_PassList *passes, const struct bContext *C)
 {
 	SceneLayer *sl = CTX_data_scene_layer(C);
 	DRWShadingGroup *default_shgrp, *depthbatch;
-	Object *ob;
+	ObjectBase *base;
 
 	/* Depth Pass */
 	{
@@ -558,9 +558,10 @@ static void CLAY_create_cache(CLAY_PassList *passes, const struct bContext *C)
 	}
 
 	/* TODO Create hash table of batch based on material id*/
-	FOREACH_OBJECT(sl, ob)
+	FOREACH_BASE(sl, base)
 	{
 		struct Batch *geom;
+		Object *ob = base->object;
 
 		switch (ob->type) {
 			case OB_MESH:
@@ -583,14 +584,14 @@ static void CLAY_create_cache(CLAY_PassList *passes, const struct bContext *C)
 			case OB_CAMERA:
 			case OB_EMPTY:
 			default:
-				DRW_shgroup_non_meshes(passes->non_meshes_pass, ob);
+				DRW_shgroup_non_meshes(passes->non_meshes_pass, base);
 				break;
 		}
 
-		DRW_shgroup_object_center(passes->ob_center_pass, ob);
-		DRW_shgroup_relationship_lines(passes->non_meshes_pass, ob);
+		DRW_shgroup_object_center(passes->ob_center_pass, base);
+		DRW_shgroup_relationship_lines(passes->non_meshes_pass, base);
 	}
-	FOREACH_OBJECT_END
+	FOREACH_BASE_END
 }
 
 static void CLAY_view_draw(RenderEngine *UNUSED(engine), const struct bContext *context)

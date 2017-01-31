@@ -544,7 +544,6 @@ static void shgroup_dynamic_batch_from_calls(DRWShadingGroup *shgroup)
 #ifdef WITH_VIEWPORT_CACHE_TEST
 	if (shgroup->dyngeom) return;
 #endif
-
 	if (shgroup->dyntype == DRW_DYN_INSTANCE) {
 		shgroup_dynamic_batch_instance(shgroup);
 	}
@@ -786,7 +785,7 @@ static void draw_shgroup(DRWShadingGroup *shgroup)
 		float obmat[4][4];
 		unit_m4(obmat);
 
-		if (shgroup->dyntype == DRW_DYN_INSTANCE) {
+		if (shgroup->dyntype == DRW_DYN_INSTANCE && shgroup->instance_count > 0) {
 			DRWCall *call = shgroup->calls.first;
 			draw_geometry(shgroup, interface, call->geometry, shgroup->instance_vbo, shgroup->instance_count, obmat);
 		}
