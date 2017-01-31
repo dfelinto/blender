@@ -38,9 +38,9 @@ class COLLECTION_PT_context_collection(CollectionButtonsPanel, Panel):
         collection = context.layer_collection
         name = collection.name
         if name == 'Master Collection':
-            layout.label(text=name)
+            layout.label(text=name, icon='COLLAPSEMENU')
         else:
-            layout.prop(collection, "name")
+            layout.prop(collection, "name", text="", icon='COLLAPSEMENU')
 
 
 class COLLECTION_UL_objects(UIList):
