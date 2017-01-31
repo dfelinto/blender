@@ -38,12 +38,12 @@
 /* Store list of shading group for easy access*/
 
 /* Empties */
-static DRWShadingGroup *empty_wire;
-static DRWShadingGroup *empty_active;
-static DRWShadingGroup *empty_select;
-static DRWShadingGroup *empty_transform;
-static DRWShadingGroup *empty_group;
-static DRWShadingGroup *empty_group_active;
+static DRWShadingGroup *plain_axes_wire;
+static DRWShadingGroup *plain_axes_active;
+static DRWShadingGroup *plain_axes_select;
+static DRWShadingGroup *plain_axes_transform;
+static DRWShadingGroup *plain_axes_group;
+static DRWShadingGroup *plain_axes_group_active;
 
 /* Helpers */
 static DRWShadingGroup *relationship_lines;
@@ -52,6 +52,17 @@ static DRWShadingGroup *relationship_lines;
 static DRWShadingGroup *center_active;
 static DRWShadingGroup *center_selected;
 static DRWShadingGroup *center_deselected;
+
+static DRWShadingGroup *shgroup_instance_uniform_color(DRWPass *pass, float color[4])
+{
+	GPUShader *sh_inst = GPU_shader_get_builtin_shader(GPU_SHADER_3D_UNIFORM_COLOR_INSTANCE);
+
+	DRWShadingGroup *grp = DRW_shgroup_create(sh_inst, pass);
+	DRW_shgroup_uniform_vec4(grp, "color", color, 1);
+	DRW_shgroup_dyntype_set(grp, DRW_DYN_INSTANCE);
+
+	return grp;
+}
 
 /* This Function setup the passes needed for the mode rendering.
  * The passes are populated by the rendering engine using the DRW_shgroup_* functions. */
@@ -96,7 +107,6 @@ void DRW_pass_setup_common(DRWPass **wire_overlay, DRWPass **wire_outline, DRWPa
 		*non_meshes = DRW_pass_create("Non Meshes Pass", state);
 
 		GPUShader *sh = GPU_shader_get_builtin_shader(GPU_SHADER_3D_UNIFORM_COLOR);
-		GPUShader *sh_inst = GPU_shader_get_builtin_shader(GPU_SHADER_3D_UNIFORM_COLOR_INSTANCE);
 
 		/* Solid Wires */
 		grp = DRW_shgroup_create(sh, *non_meshes);
@@ -105,37 +115,12 @@ void DRW_pass_setup_common(DRWPass **wire_overlay, DRWPass **wire_outline, DRWPa
 		grp = DRW_shgroup_create(sh, *non_meshes);
 
 		/* Empties */
-		{
-			grp = DRW_shgroup_create(sh_inst, *non_meshes);
-			DRW_shgroup_uniform_vec4(grp, "color", colorEmpty, 1);
-			DRW_shgroup_dyntype_set(grp, DRW_DYN_INSTANCE);
-			empty_wire = grp;
-
-			grp = DRW_shgroup_create(sh_inst, *non_meshes);
-			DRW_shgroup_uniform_vec4(grp, "color", colorActive, 1);
-			DRW_shgroup_dyntype_set(grp, DRW_DYN_INSTANCE);
-			empty_active = grp;
-
-			grp = DRW_shgroup_create(sh_inst, *non_meshes);
-			DRW_shgroup_uniform_vec4(grp, "color", colorSelect, 1);
-			DRW_shgroup_dyntype_set(grp, DRW_DYN_INSTANCE);
-			empty_select = grp;
-
-			grp = DRW_shgroup_create(sh_inst, *non_meshes);
-			DRW_shgroup_uniform_vec4(grp, "color", colorTransform, 1);
-			DRW_shgroup_dyntype_set(grp, DRW_DYN_INSTANCE);
-			empty_transform = grp;
-
-			grp = DRW_shgroup_create(sh_inst, *non_meshes);
-			DRW_shgroup_uniform_vec4(grp, "color", colorGroup, 1);
-			DRW_shgroup_dyntype_set(grp, DRW_DYN_INSTANCE);
-			empty_group = grp;
-
-			grp = DRW_shgroup_create(sh_inst, *non_meshes);
-			DRW_shgroup_uniform_vec4(grp, "color", colorGroupActive, 1);
-			DRW_shgroup_dyntype_set(grp, DRW_DYN_INSTANCE);
-			empty_group_active = grp;
-		}
+		plain_axes_wire = shgroup_instance_uniform_color(*non_meshes, colorEmpty);
+		plain_axes_active = shgroup_instance_uniform_color(*non_meshes, colorActive);
+		plain_axes_select = shgroup_instance_uniform_color(*non_meshes, colorSelect);
+		plain_axes_transform = shgroup_instance_uniform_color(*non_meshes, colorTransform);
+		plain_axes_group = shgroup_instance_uniform_color(*non_meshes, colorGroup);
+		plain_axes_group_active = shgroup_instance_uniform_color(*non_meshes, colorGroupActive);
 
 		/* Stipple Wires */
 		grp = DRW_shgroup_create(sh, *non_meshes);
@@ -332,32 +317,47 @@ static int draw_object_wire_theme(Object *ob)
 	return theme_id;
 }
 
-void DRW_shgroup_non_meshes(DRWPass *UNUSED(non_meshes), Object *ob)
+static void DRW_draw_lamp(DRWPass *non_meshes, Object *ob)
+{
+	/* TODO */
+}
+
+static void DRW_draw_empty(Object *ob)
 {
 	struct Batch *geom;
 	DRWShadingGroup *grp;
 	int theme_id = draw_object_wire_theme(ob);
 
+	switch (ob->empty_drawtype) {
+		case OB_PLAINAXES:
+			if (theme_id == TH_ACTIVE)
+				grp = plain_axes_active;
+			else if (theme_id == TH_SELECT)
+				grp = plain_axes_select;
+			else if (theme_id == TH_GROUP_ACTIVE)
+				grp = plain_axes_group_active;
+			else if (theme_id == TH_GROUP)
+				grp = plain_axes_group;
+			else if (theme_id == TH_TRANSFORM)
+				grp = plain_axes_transform;
+			else
+				grp = plain_axes_wire;
+
+			geom = DRW_cache_plain_axes_get();
+			DRW_shgroup_call_add(grp, geom, ob->obmat);
+			break;
+	}
+}
+
+void DRW_shgroup_non_meshes(DRWPass *UNUSED(non_meshes), Object *ob)
+{
+
 	switch (ob->type) {
 		case OB_LAMP:
 		case OB_CAMERA:
 		case OB_EMPTY:
+			DRW_draw_empty(ob);
 		default:
-			if (theme_id == TH_ACTIVE)
-				grp = empty_active;
-			else if (theme_id == TH_SELECT)
-				grp = empty_select;
-			else if (theme_id == TH_GROUP_ACTIVE)
-				grp = empty_group_active;
-			else if (theme_id == TH_GROUP)
-				grp = empty_group;
-			else if (theme_id == TH_TRANSFORM)
-				grp = empty_transform;
-			else
-				grp = empty_wire;
-
-			geom = DRW_cache_plain_axes_get();
-			DRW_shgroup_call_add(grp, geom, ob->obmat);
 			break;
 	}
 }
