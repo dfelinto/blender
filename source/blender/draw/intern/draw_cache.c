@@ -169,6 +169,21 @@ Batch *DRW_cache_single_vert_get(void)
 }
 
 /* Meshes */
+Batch *DRW_cache_wire_overlay_get(Object *ob)
+{
+	Batch *overlay_wire = NULL;
+
+	BLI_assert(ob->type == OB_MESH);
+
+	Mesh *me = ob->data;
+#if 1 /* new version not working */
+	overlay_wire = BKE_mesh_batch_cache_get_overlay_edges(me);
+#else
+	overlay_wire = BKE_mesh_batch_cache_get_all_edges(me);
+#endif
+	return overlay_wire;
+}
+
 Batch *DRW_cache_wire_outline_get(Object *ob)
 {
 	Batch *fancy_wire = NULL;

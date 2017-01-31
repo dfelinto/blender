@@ -86,7 +86,7 @@ void DRW_pass_setup_common(DRWPass **wire_overlay, DRWPass **wire_outline, DRWPa
 
 	if (wire_overlay) {
 		/* This pass can draw mesh edges top of Shaded Meshes without any Z fighting */
-		DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_EQUAL | DRW_STATE_BLEND;
+		DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH | DRW_STATE_BLEND;
 		*wire_overlay = DRW_pass_create("Wire Overlays Pass", state);
 	}
 
@@ -236,13 +236,24 @@ static int draw_object_wire_theme(Object *ob)
 
 void DRW_shgroup_wire_overlay(DRWPass *wire_overlay, Object *ob)
 {
-	struct Batch *geom = DRW_cache_wire_outline_get(ob);
+#if 1
+	struct Batch *geom = DRW_cache_wire_overlay_get(ob);
 	GPUShader *sh = GPU_shader_get_builtin_shader(GPU_SHADER_EDGES_OVERLAY);
 
 	DRWShadingGroup *grp = DRW_shgroup_create(sh, wire_overlay);
 	DRW_shgroup_uniform_vec2(grp, "viewportSize", DRW_viewport_size_get(), 1);
 
 	DRW_shgroup_call_add(grp, geom, ob->obmat);
+#else
+	static float col[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+	struct Batch *geom = DRW_cache_wire_overlay_get(ob);
+	GPUShader *sh = GPU_shader_get_builtin_shader(GPU_SHADER_3D_UNIFORM_COLOR);
+
+	DRWShadingGroup *grp = DRW_shgroup_create(sh, wire_overlay);
+	DRW_shgroup_uniform_vec4(grp, "color", col, 1);
+
+	DRW_shgroup_call_add(grp, geom, ob->obmat);
+#endif
 }
 
 void DRW_shgroup_wire_outline(DRWPass *wire_outline, Object *ob,
