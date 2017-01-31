@@ -129,7 +129,7 @@ static void COLLECTIONS_OT_collection_unlink(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
-static int collection_new_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event))
+static int collection_new_exec(bContext *C, wmOperator *UNUSED(op))
 {
 	Scene *scene = CTX_data_scene(C);
 	SceneLayer *sl = CTX_data_scene_layer(C);
@@ -137,12 +137,8 @@ static int collection_new_invoke(bContext *C, wmOperator *op, const wmEvent *UNU
 	SceneCollection *sc = BKE_collection_add(scene, NULL, NULL);
 	BKE_collection_link(sl, sc);
 
-	TODO_LAYER_OPERATORS;
-	/* make sure the active element of the editor is correct */
-
-	/* add name as part of operator properties ? */
-	BKE_report(op->reports, RPT_ERROR, "COLLECTIONS_OT_collection_new not implemented yet");
-	return OPERATOR_CANCELLED;
+	WM_main_add_notifier(NC_SCENE | ND_LAYER, NULL);
+	return OPERATOR_FINISHED;
 }
 
 static void COLLECTIONS_OT_collection_new(wmOperatorType *ot)
@@ -153,8 +149,7 @@ static void COLLECTIONS_OT_collection_new(wmOperatorType *ot)
 	ot->description = "Add a new collection to the scene, and link it to the active layer";
 
 	/* api callbacks */
-	ot->invoke = collection_new_invoke;
-	ot->poll = ED_operator_collections_active;
+	ot->exec = collection_new_exec;
 
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
