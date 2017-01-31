@@ -198,8 +198,15 @@ class UnitsTesting(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        """Runs once"""
         cls.pretest_import_blendfile()
         cls.pretest_parsing()
+
+    @classmethod
+    def setUp(cls):
+        """Runs once per test"""
+        import bpy
+        bpy.ops.wm.read_factory_settings()
 
     def path_exists(self, filepath):
         import os
