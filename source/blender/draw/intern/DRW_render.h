@@ -160,6 +160,7 @@ typedef enum {
 /* Used by DRWShadingGroup.dyntype */
 #define DRW_DYN_POINTS 1
 #define DRW_DYN_LINES 2
+#define DRW_DYN_INSTANCE 3
 
 DRWShadingGroup *DRW_shgroup_create(struct GPUShader *shader, DRWPass *pass);
 void DRW_shgroup_free(struct DRWShadingGroup *shgroup);

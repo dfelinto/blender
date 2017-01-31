@@ -60,6 +60,7 @@ void DRW_pass_setup_common(DRWPass **wire_overlay, DRWPass **wire_outline, DRWPa
 		*non_meshes = DRW_pass_create("Non Meshes Pass", state);
 
 		GPUShader *sh = GPU_shader_get_builtin_shader(GPU_SHADER_3D_UNIFORM_COLOR);
+		GPUShader *sh_inst = GPU_shader_get_builtin_shader(GPU_SHADER_3D_UNIFORM_COLOR_INSTANCE);
 
 		/* Solid Wires */
 		grp = DRW_shgroup_create(sh, *non_meshes);
@@ -67,8 +68,15 @@ void DRW_pass_setup_common(DRWPass **wire_overlay, DRWPass **wire_outline, DRWPa
 		/* Points */
 		grp = DRW_shgroup_create(sh, *non_meshes);
 
+		/* Empties */
+		static float frontcol[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+		grp = DRW_shgroup_create(sh_inst, *non_meshes);
+		DRW_shgroup_uniform_vec4(grp, "color", frontcol, 1);
+		DRW_shgroup_dyntype_set(grp, DRW_DYN_INSTANCE);
+
 		/* Stipple Wires */
 		grp = DRW_shgroup_create(sh, *non_meshes);
+		DRW_shgroup_uniform_vec4(grp, "color", frontcol, 1);
 		DRW_shgroup_state_set(grp, DRW_STATE_STIPPLE_2);
 
 		grp = DRW_shgroup_create(sh, *non_meshes);
@@ -214,8 +222,6 @@ void DRW_draw_lamp(DRWPass *non_meshes, Object *ob)
 void DRW_shgroup_non_meshes(DRWPass *non_meshes, Object *ob)
 {
 	struct Batch *geom;
-	static float frontcol[4] = {0.0f, 0.0f, 0.0f, 1.0f};
-	GPUShader *sh = GPU_shader_get_builtin_shader(GPU_SHADER_3D_UNIFORM_COLOR);
 
 	switch (ob->type) {
 		case OB_LAMP:
@@ -223,8 +229,7 @@ void DRW_shgroup_non_meshes(DRWPass *non_meshes, Object *ob)
 		case OB_EMPTY:
 		default:
 			geom = DRW_cache_plain_axes_get();
-			DRWShadingGroup *grp = DRW_pass_nth_shgroup_get(non_meshes, 0);
-			DRW_shgroup_uniform_vec4(grp, "color", frontcol, 1);
+			DRWShadingGroup *grp = DRW_pass_nth_shgroup_get(non_meshes, 2);
 			DRW_shgroup_call_add(grp, geom, ob->obmat);
 			break;
 	}
@@ -234,7 +239,7 @@ void DRW_shgroup_relationship_lines(DRWPass *non_meshes, Object *ob)
 {
 	if (ob->parent) {
 		struct Batch *geom = DRW_cache_single_vert_get();
-		DRWShadingGroup *grp = DRW_pass_nth_shgroup_get(non_meshes, 5);
+		DRWShadingGroup *grp = DRW_pass_nth_shgroup_get(non_meshes, 6);
 		DRW_shgroup_call_add(grp, geom, ob->obmat);
 		DRW_shgroup_call_add(grp, geom, ob->parent->obmat);
 	}

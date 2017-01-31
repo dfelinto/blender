@@ -90,6 +90,7 @@ struct DRWInterface {
 	int modelview;
 	int projection;
 	int modelviewprojection;
+	int viewprojection;
 	int normal;
 	int eye;
 };
@@ -114,6 +115,8 @@ struct DRWShadingGroup {
 	int state;                       /* State changes for this batch only */
 	short dyntype;                   /* Dynamic Batch type, 0 is normal */
 	Batch *dyngeom;                  /* Dynamic batch */
+	GLuint instance_vbo;             /* Dynamic batch VBO storing Model Matrices */
+	int instance_count;                /* Dynamic batch Number of instance to render */
 };
 
 /* Render State */
@@ -277,6 +280,7 @@ static DRWInterface *DRW_interface_create(GPUShader *shader)
 
 	interface->modelview = GPU_shader_get_uniform(shader, "ModelViewMatrix");
 	interface->projection = GPU_shader_get_uniform(shader, "ProjectionMatrix");
+	interface->viewprojection = GPU_shader_get_uniform(shader, "ViewProjectionMatrix");
 	interface->modelviewprojection = GPU_shader_get_uniform(shader, "ModelViewProjectionMatrix");
 	interface->normal = GPU_shader_get_uniform(shader, "NormalMatrix");
 	interface->eye = GPU_shader_get_uniform(shader, "eye");
@@ -440,15 +444,12 @@ void DRW_shgroup_uniform_mat4(DRWShadingGroup *shgroup, const char *name, const 
 	DRW_interface_uniform(shgroup, name, DRW_UNIFORM_MAT4, value, 16, 1, 0);
 }
 
-static void shgroup_dynamic_batch_from_calls(DRWShadingGroup *shgroup)
+/* Creates OGL primitives based on DRWCall.obmat position list */
+static void shgroup_dynamic_batch_primitives(DRWShadingGroup *shgroup)
 {
 	int i = 0;
 	int nbr = BLI_listbase_count(&shgroup->calls);
 	GLenum type;
-
-#ifdef WITH_VIEWPORT_CACHE_TEST
-	if (shgroup->dyngeom) return;
-#endif
 
 	if (nbr == 0) {
 		if (shgroup->dyngeom) {
@@ -489,6 +490,67 @@ static void shgroup_dynamic_batch_from_calls(DRWShadingGroup *shgroup)
 	shgroup->dyngeom = Batch_create(type, vbo, NULL);
 
 	MEM_freeN(data);
+}
+
+static void shgroup_dynamic_batch_instance(DRWShadingGroup *shgroup)
+{
+	int i = 0;
+	int nbr = BLI_listbase_count(&shgroup->calls);
+
+	shgroup->instance_count = nbr;
+
+	if (nbr == 0) {
+		if (shgroup->instance_vbo) {
+			glDeleteBuffers(1, &shgroup->instance_vbo);
+			shgroup->instance_vbo = 0;
+		}
+		return;
+	}
+
+	/* Gather Data */
+	float *data = MEM_mallocN(sizeof(float) * 4 * 4 * nbr , "Instance Model Matrix");
+
+	for (DRWCall *call = shgroup->calls.first; call; call = call->next, i++) {
+		copy_m4_m4(&data[i*16], call->obmat);
+	}
+
+	/* Upload Data */
+	static VertexFormat format = { 0 };
+	static unsigned mat_id;
+	if (format.attrib_ct == 0) {
+		mat_id = add_attrib(&format, "InstanceModelMatrix", GL_FLOAT, 4, KEEP_FLOAT);
+	}
+
+	VertexBuffer *vbo = VertexBuffer_create_with_format(&format);
+	VertexBuffer_allocate_data(vbo, nbr);
+
+	fillAttrib(vbo, mat_id, data);
+
+	/* TODO poke mike to add this to gawain */
+	if (shgroup->instance_vbo) {
+		glDeleteBuffers(1, &shgroup->instance_vbo);
+		shgroup->instance_vbo = 0;
+	}
+
+	glGenBuffers(1, &shgroup->instance_vbo);
+	glBindBuffer(GL_ARRAY_BUFFER, shgroup->instance_vbo);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 4 * 4 * nbr, data, GL_STATIC_DRAW);
+
+	MEM_freeN(data);
+}
+
+static void shgroup_dynamic_batch_from_calls(DRWShadingGroup *shgroup)
+{
+#ifdef WITH_VIEWPORT_CACHE_TEST
+	if (shgroup->dyngeom) return;
+#endif
+
+	if (shgroup->dyntype == DRW_DYN_INSTANCE) {
+		shgroup_dynamic_batch_instance(shgroup);
+	}
+	else {
+		shgroup_dynamic_batch_primitives(shgroup);
+	}
 }
 
 /* ***************************************** PASSES ******************************************/
@@ -593,7 +655,8 @@ typedef struct DRWBoundTexture {
 	GPUTexture *tex;
 } DRWBoundTexture;
 
-static void draw_geometry(DRWShadingGroup *shgroup, DRWInterface *interface, Batch *geom, const float (*obmat)[4])
+static void draw_geometry(DRWShadingGroup *shgroup, DRWInterface *interface, Batch *geom,
+                          unsigned int instance_vbo, int instance_count, const float (*obmat)[4])
 {
 	RegionView3D *rv3d = CTX_wm_region_view3d(DST.context);
 	
@@ -629,6 +692,9 @@ static void draw_geometry(DRWShadingGroup *shgroup, DRWInterface *interface, Bat
 	if (interface->modelviewprojection != -1) {
 		GPU_shader_uniform_vector(shgroup->shader, interface->modelviewprojection, 16, 1, (float *)mvp);
 	}
+	if (interface->viewprojection != -1) {
+		GPU_shader_uniform_vector(shgroup->shader, interface->viewprojection, 16, 1, (float *)rv3d->persmat);
+	}
 	if (interface->projection != -1) {
 		GPU_shader_uniform_vector(shgroup->shader, interface->projection, 16, 1, (float *)rv3d->winmat);
 	}
@@ -644,7 +710,12 @@ static void draw_geometry(DRWShadingGroup *shgroup, DRWInterface *interface, Bat
 
 	/* step 2 : bind vertex array & draw */
 	Batch_set_program(geom, GPU_shader_get_program(shgroup->shader));
-	Batch_draw_stupid(geom);
+	if (instance_vbo) {
+		Batch_draw_stupid_instanced(geom, instance_vbo, instance_count);
+	}
+	else {
+		Batch_draw_stupid(geom);
+	}
 }
 
 static void draw_shgroup(DRWShadingGroup *shgroup)
@@ -714,13 +785,21 @@ static void draw_shgroup(DRWShadingGroup *shgroup)
 		/* Replacing multiple calls with only one */
 		float obmat[4][4];
 		unit_m4(obmat);
-		/* Some dynamic batch can have no geom (no call to aggregate) */
-		if (shgroup->dyngeom)
-			draw_geometry(shgroup, interface, shgroup->dyngeom, obmat);
+
+		if (shgroup->dyntype == DRW_DYN_INSTANCE) {
+			DRWCall *call = shgroup->calls.first;
+			draw_geometry(shgroup, interface, call->geometry, shgroup->instance_vbo, shgroup->instance_count, obmat);
+		}
+		else {
+			/* Some dynamic batch can have no geom (no call to aggregate) */
+			if (shgroup->dyngeom) {
+				draw_geometry(shgroup, interface, shgroup->dyngeom, 0, 1, obmat);
+			}
+		}
 	}
 	else {
 		for (DRWCall *call = shgroup->calls.first; call; call = call->next) {
-			draw_geometry(shgroup, interface, call->geometry, call->obmat);
+			draw_geometry(shgroup, interface, call->geometry, 0, 1, call->obmat);
 		}
 	}
 }
