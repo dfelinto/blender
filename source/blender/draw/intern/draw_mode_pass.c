@@ -68,6 +68,22 @@ static DRWShadingGroup *shgroup_instance_uniform_color(DRWPass *pass, float colo
  * The passes are populated by the rendering engine using the DRW_shgroup_* functions. */
 void DRW_pass_setup_common(DRWPass **wire_overlay, DRWPass **wire_outline, DRWPass **non_meshes, DRWPass **ob_center)
 {
+	static float colorWire[4], colorWireEdit[4];
+	static float colorActive[4], colorSelect[4], colorTransform[4], colorGroup[4], colorGroupActive[4];
+	static float colorEmpty[4], colorLamp[4], colorCamera[4], colorSpeaker[4];
+
+	UI_GetThemeColor4fv(TH_WIRE, colorWire);
+	UI_GetThemeColor4fv(TH_WIRE_EDIT, colorWireEdit);
+	UI_GetThemeColor4fv(TH_ACTIVE, colorActive);
+	UI_GetThemeColor4fv(TH_SELECT, colorSelect);
+	UI_GetThemeColor4fv(TH_TRANSFORM, colorTransform);
+	UI_GetThemeColor4fv(TH_GROUP_ACTIVE, colorGroupActive);
+	UI_GetThemeColor4fv(TH_GROUP, colorGroup);
+	UI_GetThemeColor4fv(OB_LAMP, colorLamp);
+	UI_GetThemeColor4fv(OB_SPEAKER, colorSpeaker);
+	UI_GetThemeColor4fv(OB_CAMERA, colorCamera);
+	UI_GetThemeColor4fv(OB_EMPTY, colorEmpty);
+
 	if (wire_overlay) {
 		/* This pass can draw mesh edges top of Shaded Meshes without any Z fighting */
 		DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_EQUAL | DRW_STATE_BLEND;
@@ -83,22 +99,6 @@ void DRW_pass_setup_common(DRWPass **wire_overlay, DRWPass **wire_outline, DRWPa
 	}
 
 	if (non_meshes) {
-		static float colorWire[4], colorWireEdit[4];
-		static float colorActive[4], colorSelect[4], colorTransform[4], colorGroup[4], colorGroupActive[4];
-		static float colorEmpty[4], colorLamp[4], colorCamera[4], colorSpeaker[4];
-
-		UI_GetThemeColor4fv(TH_WIRE, colorWire);
-		UI_GetThemeColor4fv(TH_WIRE_EDIT, colorWireEdit);
-		UI_GetThemeColor4fv(TH_ACTIVE, colorActive);
-		UI_GetThemeColor4fv(TH_SELECT, colorSelect);
-		UI_GetThemeColor4fv(TH_TRANSFORM, colorTransform);
-		UI_GetThemeColor4fv(TH_GROUP_ACTIVE, colorGroupActive);
-		UI_GetThemeColor4fv(TH_GROUP, colorGroup);
-		UI_GetThemeColor4fv(OB_LAMP, colorLamp);
-		UI_GetThemeColor4fv(OB_SPEAKER, colorSpeaker);
-		UI_GetThemeColor4fv(OB_CAMERA, colorCamera);
-		UI_GetThemeColor4fv(OB_EMPTY, colorEmpty);
-
 		/* Non Meshes Pass (Camera, empties, lamps ...) */
 		DRWShadingGroup *grp;
 
@@ -145,7 +145,7 @@ void DRW_pass_setup_common(DRWPass **wire_overlay, DRWPass **wire_outline, DRWPa
 	if (ob_center) {
 		/* Object Center pass grouped by State */
 		DRWShadingGroup *grp;
-		static float colorActive[4], colorSelect[4], colorDeselect[4], outlineColor[4];
+		static float colorDeselect[4], outlineColor[4];
 		static float outlineWidth, size;
 
 		DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND | DRW_STATE_POINT;
@@ -153,8 +153,8 @@ void DRW_pass_setup_common(DRWPass **wire_overlay, DRWPass **wire_outline, DRWPa
 
 		outlineWidth = 1.0f * U.pixelsize;
 		size = U.obcenter_dia * U.pixelsize + outlineWidth;
-		UI_GetThemeColorShadeAlpha4fv(TH_ACTIVE, 0, -80, colorActive);
-		UI_GetThemeColorShadeAlpha4fv(TH_SELECT, 0, -80, colorSelect);
+		//UI_GetThemeColorShadeAlpha4fv(TH_ACTIVE, 0, -80, colorActive);
+		//UI_GetThemeColorShadeAlpha4fv(TH_SELECT, 0, -80, colorSelect);
 		UI_GetThemeColorShadeAlpha4fv(TH_TRANSFORM, 0, -80, colorDeselect);
 		UI_GetThemeColorShadeAlpha4fv(TH_WIRE, 0, -30, outlineColor);
 
@@ -184,6 +184,55 @@ void DRW_pass_setup_common(DRWPass **wire_overlay, DRWPass **wire_outline, DRWPa
 }
 
 /* ******************************************** WIRES *********************************************** */
+
+/* TODO FINISH */
+static int draw_object_wire_theme(Object *ob)
+{
+	const bool is_edit = (ob->mode & OB_MODE_EDIT) != 0;
+	/* confusing logic here, there are 2 methods of setting the color
+	 * 'colortab[colindex]' and 'theme_id', colindex overrides theme_id.
+	 *
+	 * note: no theme yet for 'colindex' */
+	int theme_id = is_edit ? TH_WIRE_EDIT : TH_WIRE;
+
+	if (//(scene->obedit == NULL) &&
+	    ((G.moving & G_TRANSFORM_OBJ) != 0) &&
+	    ((ob->base_flag & BASE_SELECTED) != 0))
+	{
+		theme_id = TH_TRANSFORM;
+	}
+	else {
+		/* Sets the 'theme_id' or fallback to wire */
+		if ((ob->flag & OB_FROMGROUP) != 0) {
+			if ((ob->base_flag & BASE_SELECTED) != 0) {
+				/* uses darker active color for non-active + selected */
+				theme_id = TH_GROUP_ACTIVE;
+
+				// if (scene->basact != base) {
+				// 	theme_shade = -16;
+				// }
+			}
+			else {
+				theme_id = TH_GROUP;
+			}
+		}
+		else {
+			if ((ob->base_flag & BASE_SELECTED) != 0) {
+				theme_id = //scene->basact == base ? TH_ACTIVE :
+				TH_SELECT;
+			}
+			else {
+				if (ob->type == OB_LAMP) theme_id = TH_LAMP;
+				else if (ob->type == OB_SPEAKER) theme_id = TH_SPEAKER;
+				else if (ob->type == OB_CAMERA) theme_id = TH_CAMERA;
+				else if (ob->type == OB_EMPTY) theme_id = TH_EMPTY;
+				/* fallback to TH_WIRE */
+			}
+		}
+	}
+
+	return theme_id;
+}
 
 void DRW_shgroup_wire_overlay(DRWPass *wire_overlay, Object *ob)
 {
@@ -236,10 +285,8 @@ void DRW_shgroup_wire_outline(DRWPass *wire_outline, Object *ob,
 		DRW_shgroup_uniform_vec4(grp, "frontColor", frontcol, 1);
 		DRW_shgroup_uniform_vec4(grp, "backColor", backcol, 1);
 		DRW_shgroup_uniform_bool(grp, "drawFront", bFront, 1);
-		DRW_shgroup_uniform_bool(grp, "drawFront", bBack, 1);
-		DRW_shgroup_uniform_bool(grp, "drawBack", &bFalse, 1);
+		DRW_shgroup_uniform_bool(grp, "drawBack", bBack, 1);
 		DRW_shgroup_uniform_bool(grp, "drawSilhouette", &bFalse, 1);
-
 		DRW_shgroup_call_add(grp, geom, ob->obmat);
 	}
 
@@ -268,56 +315,7 @@ void DRW_shgroup_wire_outline(DRWPass *wire_outline, Object *ob,
 
 /* ***************************** NON MESHES ********************** */
 
-/* TODO FINISH */
-static int draw_object_wire_theme(Object *ob)
-{
-	const bool is_edit = (ob->mode & OB_MODE_EDIT) != 0;
-	/* confusing logic here, there are 2 methods of setting the color
-	 * 'colortab[colindex]' and 'theme_id', colindex overrides theme_id.
-	 *
-	 * note: no theme yet for 'colindex' */
-	int theme_id = is_edit ? TH_WIRE_EDIT : TH_WIRE;
-
-	if (//(scene->obedit == NULL) &&
-	    ((G.moving & G_TRANSFORM_OBJ) != 0) &&
-	    ((ob->base_flag & BASE_SELECTED) != 0))
-	{
-		theme_id = TH_TRANSFORM;
-	}
-	else {
-		/* Sets the 'theme_id' or fallback to wire */
-		if ((ob->flag & OB_FROMGROUP) != 0) {
-			if ((ob->base_flag & BASE_SELECTED) != 0) {
-				/* uses darker active color for non-active + selected */
-				theme_id = TH_GROUP_ACTIVE;
-
-				// if (scene->basact != base) {
-				// 	theme_shade = -16;
-				// }
-			}
-			else {
-				theme_id = TH_GROUP;
-			}
-		}
-		else {
-			if ((ob->base_flag & BASE_SELECTED) != 0) {
-				theme_id = //scene->basact == base ? TH_ACTIVE :
-				TH_SELECT;
-			}
-			else {
-				if (ob->type == OB_LAMP) theme_id = TH_LAMP;
-				else if (ob->type == OB_SPEAKER) theme_id = TH_SPEAKER;
-				else if (ob->type == OB_CAMERA) theme_id = TH_CAMERA;
-				else if (ob->type == OB_EMPTY) theme_id = TH_EMPTY;
-				/* fallback to TH_WIRE */
-			}
-		}
-	}
-
-	return theme_id;
-}
-
-static void DRW_draw_lamp(DRWPass *non_meshes, Object *ob)
+static void DRW_draw_lamp(Object *UNUSED(ob))
 {
 	/* TODO */
 }
@@ -354,6 +352,7 @@ void DRW_shgroup_non_meshes(DRWPass *UNUSED(non_meshes), Object *ob)
 
 	switch (ob->type) {
 		case OB_LAMP:
+			DRW_draw_lamp(ob);
 		case OB_CAMERA:
 		case OB_EMPTY:
 			DRW_draw_empty(ob);

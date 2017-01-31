@@ -336,8 +336,6 @@ DRWShadingGroup *DRW_shgroup_create(struct GPUShader *shader, DRWPass *pass)
 	shgroup->dyntype = 0;
 	shgroup->dyngeom = NULL;
 
-	BLI_listbase_clear(&shgroup->interface->uniforms);
-
 	BLI_addtail(&pass->shgroups, shgroup);
 
 	return shgroup;
@@ -558,6 +556,8 @@ DRWPass *DRW_pass_create(const char *name, DRWState state)
 {
 	DRWPass *pass = MEM_callocN(sizeof(DRWPass), name);
 	pass->state = state;
+
+	BLI_listbase_clear(&pass->shgroups);
 
 	return pass;
 }
