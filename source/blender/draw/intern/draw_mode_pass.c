@@ -94,6 +94,11 @@ static DRWShadingGroup *arrows_transform;
 static DRWShadingGroup *arrows_group;
 static DRWShadingGroup *arrows_group_active;
 
+/* Lamps */
+static DRWShadingGroup *lamp_center;
+static DRWShadingGroup *lamp_groundpoint;
+static DRWShadingGroup *lamp_groundline;
+
 /* Helpers */
 static DRWShadingGroup *relationship_lines;
 
@@ -124,13 +129,50 @@ static DRWShadingGroup *shgroup_dynlines_uniform_color(DRWPass *pass, float colo
 	return grp;
 }
 
+static DRWShadingGroup *shgroup_dynpoints_uniform_color(DRWPass *pass, float color[4], float *size)
+{
+	GPUShader *sh = GPU_shader_get_builtin_shader(GPU_SHADER_3D_POINT_UNIFORM_SIZE_UNIFORM_COLOR_SMOOTH);
+
+	DRWShadingGroup *grp = DRW_shgroup_create(sh, pass);
+	DRW_shgroup_uniform_vec4(grp, "color", color, 1);
+	DRW_shgroup_uniform_float(grp, "size", size, 1);
+	DRW_shgroup_dyntype_set(grp, DRW_DYN_POINTS);
+	DRW_shgroup_state_set(grp, DRW_STATE_POINT);
+
+	return grp;
+}
+
+static DRWShadingGroup *shgroup_groundlines_uniform_color(DRWPass *pass, float color[4])
+{
+	GPUShader *sh = GPU_shader_get_builtin_shader(GPU_SHADER_3D_GROUNDLINE);
+
+	DRWShadingGroup *grp = DRW_shgroup_create(sh, pass);
+	DRW_shgroup_uniform_vec4(grp, "color", color, 1);
+	DRW_shgroup_dyntype_set(grp, DRW_DYN_POINTS);
+
+	return grp;
+}
+
+static DRWShadingGroup *shgroup_groundpoints_uniform_color(DRWPass *pass, float color[4])
+{
+	GPUShader *sh = GPU_shader_get_builtin_shader(GPU_SHADER_3D_GROUNDPOINT);
+
+	DRWShadingGroup *grp = DRW_shgroup_create(sh, pass);
+	DRW_shgroup_uniform_vec4(grp, "color", color, 1);
+	DRW_shgroup_dyntype_set(grp, DRW_DYN_POINTS);
+	DRW_shgroup_state_set(grp, DRW_STATE_POINT);
+	return grp;
+}
+
 /* This Function setup the passes needed for the mode rendering.
  * The passes are populated by the rendering engine using the DRW_shgroup_* functions. */
 void DRW_pass_setup_common(DRWPass **wire_overlay, DRWPass **wire_outline, DRWPass **non_meshes, DRWPass **ob_center)
 {
+	/* Theses are defined for the whole application so make sure they rely on global settings */
 	static float colorWire[4], colorWireEdit[4];
 	static float colorActive[4], colorSelect[4], colorTransform[4], colorGroup[4], colorGroupActive[4];
 	static float colorEmpty[4], colorLamp[4], colorCamera[4], colorSpeaker[4];
+	static float lampCenterSize, colorLampNoAlpha[4];
 
 	UI_GetThemeColor4fv(TH_WIRE, colorWire);
 	UI_GetThemeColor4fv(TH_WIRE_EDIT, colorWireEdit);
@@ -139,10 +181,13 @@ void DRW_pass_setup_common(DRWPass **wire_overlay, DRWPass **wire_outline, DRWPa
 	UI_GetThemeColor4fv(TH_TRANSFORM, colorTransform);
 	UI_GetThemeColor4fv(TH_GROUP_ACTIVE, colorGroupActive);
 	UI_GetThemeColor4fv(TH_GROUP, colorGroup);
-	UI_GetThemeColor4fv(OB_LAMP, colorLamp);
-	UI_GetThemeColor4fv(OB_SPEAKER, colorSpeaker);
-	UI_GetThemeColor4fv(OB_CAMERA, colorCamera);
-	UI_GetThemeColor4fv(OB_EMPTY, colorEmpty);
+	UI_GetThemeColor4fv(TH_LAMP, colorLamp);
+	UI_GetThemeColor4fv(TH_LAMP, colorLampNoAlpha);
+	UI_GetThemeColor4fv(TH_SPEAKER, colorSpeaker);
+	UI_GetThemeColor4fv(TH_CAMERA, colorCamera);
+	UI_GetThemeColor4fv(TH_EMPTY, colorEmpty);
+
+	colorLampNoAlpha[3] = 1.0f;
 
 	if (wire_overlay) {
 		/* This pass can draw mesh edges top of Shaded Meshes without any Z fighting */
@@ -163,7 +208,7 @@ void DRW_pass_setup_common(DRWPass **wire_overlay, DRWPass **wire_outline, DRWPa
 		DRWShadingGroup *grp;
 
 		DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS | DRW_STATE_BLEND;
-		state |= DRW_STATE_WIRE ;//| DRW_STATE_LINE_SMOOTH;
+		state |= DRW_STATE_WIRE;
 		*non_meshes = DRW_pass_create("Non Meshes Pass", state);
 
 		GPUShader *sh = GPU_shader_get_builtin_shader(GPU_SHADER_3D_UNIFORM_COLOR);
@@ -225,6 +270,15 @@ void DRW_pass_setup_common(DRWPass **wire_overlay, DRWPass **wire_outline, DRWPa
 		arrows_group = shgroup_instance_uniform_color(*non_meshes, colorGroup);
 		arrows_group_active = shgroup_instance_uniform_color(*non_meshes, colorGroupActive);
 
+		/* Lamps */
+		lampCenterSize = (U.obcenter_dia + 1.5f) * U.pixelsize;
+		/* TODO
+		 * for now we create 3 times the same VBO with only lamp center coordinates
+		 * but ideally we would only create it once */
+		lamp_center = shgroup_dynpoints_uniform_color(*non_meshes, colorLampNoAlpha, &lampCenterSize);
+		lamp_groundline = shgroup_groundlines_uniform_color(*non_meshes, colorLamp);
+		lamp_groundpoint = shgroup_groundpoints_uniform_color(*non_meshes, colorLamp);
+
 		/* Stipple Wires */
 		grp = DRW_shgroup_create(sh, *non_meshes);
 		DRW_shgroup_state_set(grp, DRW_STATE_STIPPLE_2);
@@ -236,11 +290,8 @@ void DRW_pass_setup_common(DRWPass **wire_overlay, DRWPass **wire_outline, DRWPa
 		DRW_shgroup_state_set(grp, DRW_STATE_STIPPLE_4);
 
 		/* Relationship Lines */
-		grp = DRW_shgroup_create(sh, *non_meshes);
-		DRW_shgroup_uniform_vec4(grp, "color", colorWire, 1);
-		DRW_shgroup_state_set(grp, DRW_STATE_STIPPLE_3);
-		DRW_shgroup_dyntype_set(grp, DRW_DYN_LINES);
-		relationship_lines = grp;
+		relationship_lines = shgroup_dynlines_uniform_color(*non_meshes, colorWire);
+		DRW_shgroup_state_set(relationship_lines, DRW_STATE_STIPPLE_3);
 	}
 
 	if (ob_center) {
@@ -427,9 +478,17 @@ void DRW_shgroup_wire_outline(DRWPass *wire_outline, Object *ob,
 
 /* ***************************** NON MESHES ********************** */
 
-static void DRW_draw_lamp(Object *UNUSED(ob))
+static void DRW_draw_lamp(Object *ob)
 {
-	/* TODO */
+	struct Batch *geom = DRW_cache_single_vert_get();
+
+	/* Don't draw the center if it's selected */
+	if ((ob->base_flag & BASE_SELECTED) == 0) {
+		DRW_shgroup_call_add(lamp_center, geom, ob->obmat);
+	}
+
+	DRW_shgroup_call_add(lamp_groundline, geom, ob->obmat);
+	DRW_shgroup_call_add(lamp_groundpoint, geom, ob->obmat);
 }
 
 static void DRW_draw_empty(Object *ob)
@@ -587,6 +646,7 @@ void DRW_shgroup_non_meshes(DRWPass *UNUSED(non_meshes), Object *ob)
 	switch (ob->type) {
 		case OB_LAMP:
 			DRW_draw_lamp(ob);
+			break;
 		case OB_CAMERA:
 		case OB_EMPTY:
 			DRW_draw_empty(ob);
@@ -613,7 +673,7 @@ void DRW_shgroup_object_center(DRWPass *UNUSED(ob_center), Object *ob)
 	if ((ob->base_flag & BASE_SELECTED) != 0) {
 		DRW_shgroup_call_add(center_selected, geom, ob->obmat);
 	}
-	else {
+	else if (0) {
 		DRW_shgroup_call_add(center_deselected, geom, ob->obmat);
 	}
 }

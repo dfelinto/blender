@@ -616,6 +616,11 @@ void DRW_draw_background(void)
 static void shgroup_set_state(DRWShadingGroup *shgroup)
 {
 	if (shgroup->state) {
+		/* Blend */
+		if (shgroup->state & DRW_STATE_BLEND) {
+			glEnable(GL_BLEND);
+		}
+
 		/* Wire width */
 		if (shgroup->state & DRW_STATE_WIRE) {
 			glLineWidth(1.0f);
@@ -633,6 +638,11 @@ static void shgroup_set_state(DRWShadingGroup *shgroup)
 		}
 		else if (shgroup->state & DRW_STATE_STIPPLE_4) {
 			setlinestyle(4);
+		}
+
+		if (shgroup->state & DRW_STATE_POINT) {
+			GPU_enable_program_point_size();
+			glPointSize(5.0f);
 		}
 	}
 }
