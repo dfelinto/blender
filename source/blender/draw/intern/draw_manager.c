@@ -348,7 +348,7 @@ void DRW_shgroup_free(struct DRWShadingGroup *shgroup)
 	MEM_freeN(shgroup->interface);
 
 	if (shgroup->dyngeom)
-		Batch_discard(shgroup->dyngeom);
+		Batch_discard_all(shgroup->dyngeom);
 }
 
 /* Later use VBO */
@@ -483,7 +483,7 @@ static void shgroup_dynamic_batch_primitives(DRWShadingGroup *shgroup)
 
 	/* TODO make the batch dynamic instead of freeing it every times */
 	if (shgroup->dyngeom)
-		Batch_discard(shgroup->dyngeom);
+		Batch_discard_all(shgroup->dyngeom);
 
 	shgroup->dyngeom = Batch_create(type, vbo, NULL);
 
@@ -511,18 +511,6 @@ static void shgroup_dynamic_batch_instance(DRWShadingGroup *shgroup)
 	for (DRWCall *call = shgroup->calls.first; call; call = call->next, i++) {
 		copy_m4_m4((float (*)[4])&data[i*16], call->obmat);
 	}
-
-	/* Upload Data */
-	static VertexFormat format = { 0 };
-	static unsigned mat_id;
-	if (format.attrib_ct == 0) {
-		mat_id = add_attrib(&format, "InstanceModelMatrix", GL_FLOAT, 4, KEEP_FLOAT);
-	}
-
-	VertexBuffer *vbo = VertexBuffer_create_with_format(&format);
-	VertexBuffer_allocate_data(vbo, nbr);
-
-	fillAttrib(vbo, mat_id, data);
 
 	/* TODO poke mike to add this to gawain */
 	if (shgroup->instance_vbo) {
