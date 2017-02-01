@@ -130,7 +130,7 @@ static struct DRWGlobalState{
 	int tex_bind_id;
 	float size[2];
 	/* Current rendering context set by DRW_viewport_init */
-	bContext *context;
+	const struct bContext *context;
 } DST = {NULL};
 
 /* ***************************************** TEXTURES ******************************************/
