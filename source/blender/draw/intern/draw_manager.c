@@ -509,7 +509,7 @@ static void shgroup_dynamic_batch_instance(DRWShadingGroup *shgroup)
 	float *data = MEM_mallocN(sizeof(float) * 4 * 4 * nbr , "Instance Model Matrix");
 
 	for (DRWCall *call = shgroup->calls.first; call; call = call->next, i++) {
-		copy_m4_m4(&data[i*16], call->obmat);
+		copy_m4_m4((float (*)[4])&data[i*16], call->obmat);
 	}
 
 	/* Upload Data */
