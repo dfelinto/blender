@@ -29,6 +29,8 @@
 struct Batch;
 struct Object;
 
+void DRW_shape_cache_free(void);
+
 /* Common Shapes */
 struct Batch *DRW_cache_fullscreen_quad_get(void);
 struct Batch *DRW_cache_single_vert_get(void);

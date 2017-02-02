@@ -1134,5 +1134,7 @@ void DRW_engines_free(void)
 {
 	clay_engine_free();
 
+	DRW_shape_cache_free();
+
 	BLI_remlink(&R_engines, &viewport_clay_type);
 }

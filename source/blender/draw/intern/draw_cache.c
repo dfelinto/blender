@@ -51,6 +51,32 @@ static struct DRWShapeCache{
 	Batch *drw_lamp;
 } SHC = {NULL};
 
+void DRW_shape_cache_free(void)
+{
+	if (SHC.drw_single_vertice)
+		Batch_discard_all(SHC.drw_single_vertice);
+	if (SHC.drw_fullscreen_quad)
+		Batch_discard_all(SHC.drw_fullscreen_quad);
+	if (SHC.drw_plain_axes)
+		Batch_discard_all(SHC.drw_plain_axes);
+	if (SHC.drw_single_arrow)
+		Batch_discard_all(SHC.drw_single_arrow);
+	if (SHC.drw_single_arrow_line)
+		Batch_discard_all(SHC.drw_single_arrow_line);
+	if (SHC.drw_cube)
+		Batch_discard_all(SHC.drw_cube);
+	if (SHC.drw_circle)
+		Batch_discard_all(SHC.drw_circle);
+	if (SHC.drw_empty_sphere)
+		Batch_discard_all(SHC.drw_empty_sphere);
+	if (SHC.drw_empty_cone)
+		Batch_discard_all(SHC.drw_empty_cone);
+	if (SHC.drw_arrows)
+		Batch_discard_all(SHC.drw_arrows);
+	if (SHC.drw_lamp)
+		Batch_discard_all(SHC.drw_lamp);
+}
+
 /* Quads */
 Batch *DRW_cache_fullscreen_quad_get(void)
 {
