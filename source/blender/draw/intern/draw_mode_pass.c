@@ -101,6 +101,12 @@ static DRWShadingGroup *lamp_groundline;
 static DRWShadingGroup *lamp_circle_wire;
 static DRWShadingGroup *lamp_circle_active;
 static DRWShadingGroup *lamp_circle_select;
+static DRWShadingGroup *lamp_circle_shadow_wire;
+static DRWShadingGroup *lamp_circle_shadow_active;
+static DRWShadingGroup *lamp_circle_shadow_select;
+static DRWShadingGroup *lamp_sunrays_wire;
+static DRWShadingGroup *lamp_sunrays_active;
+static DRWShadingGroup *lamp_sunrays_select;
 
 /* Helpers */
 static DRWShadingGroup *relationship_lines;
@@ -167,7 +173,7 @@ static DRWShadingGroup *shgroup_groundpoints_uniform_color(DRWPass *pass, float 
 	return grp;
 }
 
-static DRWShadingGroup *shgroup_lampcircle(DRWPass *pass, float color[4], float *size)
+static DRWShadingGroup *shgroup_lamp(DRWPass *pass, float color[4], float *size)
 {
 	GPUShader *sh = GPU_shader_get_builtin_shader(GPU_SHADER_3D_LAMP_COMMON);
 
@@ -189,7 +195,7 @@ void DRW_pass_setup_common(DRWPass **wire_overlay, DRWPass **wire_outline, DRWPa
 	static float colorWire[4], colorWireEdit[4];
 	static float colorActive[4], colorSelect[4], colorTransform[4], colorGroup[4], colorGroupActive[4];
 	static float colorEmpty[4], colorLamp[4], colorCamera[4], colorSpeaker[4];
-	static float lampCenterSize, lampCircleRad, colorLampNoAlpha[4];
+	static float lampCenterSize, lampCircleRad, lampCircleShadowRad, colorLampNoAlpha[4];
 
 	UI_GetThemeColor4fv(TH_WIRE, colorWire);
 	UI_GetThemeColor4fv(TH_WIRE_EDIT, colorWireEdit);
@@ -290,13 +296,20 @@ void DRW_pass_setup_common(DRWPass **wire_overlay, DRWPass **wire_outline, DRWPa
 		/* Lamps */
 		lampCenterSize = (U.obcenter_dia + 1.5f) * U.pixelsize;
 		lampCircleRad = U.pixelsize * 9.0f;
+		lampCircleShadowRad = lampCircleRad + U.pixelsize * 3.0f;
 		/* TODO
 		 * for now we create 3 times the same VBO with only lamp center coordinates
 		 * but ideally we would only create it once */
 		lamp_center = shgroup_dynpoints_uniform_color(*non_meshes, colorLampNoAlpha, &lampCenterSize);
-		lamp_circle_wire = shgroup_lampcircle(*non_meshes, colorLampNoAlpha, &lampCircleRad);
-		lamp_circle_active = shgroup_lampcircle(*non_meshes, colorActive, &lampCircleRad);
-		lamp_circle_select = shgroup_lampcircle(*non_meshes, colorSelect, &lampCircleRad);
+		lamp_circle_wire = shgroup_lamp(*non_meshes, colorLampNoAlpha, &lampCircleRad);
+		lamp_circle_active = shgroup_lamp(*non_meshes, colorActive, &lampCircleRad);
+		lamp_circle_select = shgroup_lamp(*non_meshes, colorSelect, &lampCircleRad);
+		lamp_circle_shadow_wire = shgroup_lamp(*non_meshes, colorLampNoAlpha, &lampCircleShadowRad);
+		lamp_circle_shadow_active = shgroup_lamp(*non_meshes, colorActive, &lampCircleShadowRad);
+		lamp_circle_shadow_select = shgroup_lamp(*non_meshes, colorSelect, &lampCircleShadowRad);
+		lamp_sunrays_wire = shgroup_lamp(*non_meshes, colorLampNoAlpha, &lampCircleRad);
+		lamp_sunrays_active = shgroup_lamp(*non_meshes, colorActive, &lampCircleRad);
+		lamp_sunrays_select = shgroup_lamp(*non_meshes, colorSelect, &lampCircleRad);
 		lamp_groundline = shgroup_groundlines_uniform_color(*non_meshes, colorLamp);
 		lamp_groundpoint = shgroup_groundpoints_uniform_color(*non_meshes, colorLamp);
 
@@ -503,6 +516,8 @@ static void DRW_draw_lamp(Object *ob)
 {
 	struct Batch *geom = DRW_cache_single_vert_get();
 	struct Batch *lamp = DRW_cache_lamp_get();
+	struct Batch *sunrays = DRW_cache_lamp_sunrays_get();
+	Lamp *la = ob->data;
 
 	/* Don't draw the center if it's selected */
 	if ((ob->base_flag & BASE_SELECTED) == 0) {
@@ -511,6 +526,27 @@ static void DRW_draw_lamp(Object *ob)
 	}
 	else {
 		DRW_shgroup_call_add(lamp_circle_select, lamp, ob->obmat);
+	}
+
+	/* draw dashed outer circle if shadow is on. remember some lamps can't have certain shadows! */
+	if (la->type != LA_HEMI) {
+		if ((la->mode & LA_SHAD_RAY) || ((la->mode & LA_SHAD_BUF) && (la->type == LA_SPOT))) {
+			if ((ob->base_flag & BASE_SELECTED) == 0) {
+				DRW_shgroup_call_add(lamp_circle_shadow_wire, lamp, ob->obmat);
+			}
+			else {
+				DRW_shgroup_call_add(lamp_circle_shadow_select, lamp, ob->obmat);
+			}
+		}
+	}
+
+	if (la->type == LA_SUN) {
+		if ((ob->base_flag & BASE_SELECTED) == 0) {
+			DRW_shgroup_call_add(lamp_sunrays_wire, sunrays, ob->obmat);
+		}
+		else {
+			DRW_shgroup_call_add(lamp_sunrays_select, sunrays, ob->obmat);
+		}
 	}
 
 	DRW_shgroup_call_add(lamp_groundline, geom, ob->obmat);

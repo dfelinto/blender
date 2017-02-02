@@ -49,6 +49,7 @@ static struct DRWShapeCache{
 	Batch *drw_empty_cone;
 	Batch *drw_arrows;
 	Batch *drw_lamp;
+	Batch *drw_lamp_sunrays;
 } SHC = {NULL};
 
 void DRW_shape_cache_free(void)
@@ -75,6 +76,8 @@ void DRW_shape_cache_free(void)
 		Batch_discard_all(SHC.drw_arrows);
 	if (SHC.drw_lamp)
 		Batch_discard_all(SHC.drw_lamp);
+	if (SHC.drw_lamp_sunrays)
+		Batch_discard_all(SHC.drw_lamp_sunrays);
 }
 
 /* Quads */
@@ -438,6 +441,39 @@ Batch *DRW_cache_lamp_get(void)
 	return SHC.drw_lamp;
 #undef NSEGMENTS
 }
+
+Batch *DRW_cache_lamp_sunrays_get(void)
+{
+	if (!SHC.drw_lamp_sunrays) {
+		float v[3], v1[3], v2[3];
+
+		/* Position Only 3D format */
+		static VertexFormat format = { 0 };
+		static unsigned pos_id;
+		if (format.attrib_ct == 0) {
+			pos_id = add_attrib(&format, "pos", GL_FLOAT, 3, KEEP_FLOAT);
+		}
+
+		VertexBuffer *vbo = VertexBuffer_create_with_format(&format);
+		VertexBuffer_allocate_data(vbo, 16);
+
+		for (int a = 0; a < 8; a++) {
+			v[0] = sinf((2.0f * M_PI * a) / 8.0f);
+			v[1] = cosf((2.0f * M_PI * a) / 8.0f);
+			v[2] = 0.0f;
+
+			mul_v3_v3fl(v1, v, 1.2f);
+			mul_v3_v3fl(v2, v, 2.5f);
+
+			setAttrib(vbo, pos_id, a * 2, v1);
+			setAttrib(vbo, pos_id, a * 2 + 1, v2);
+		}
+
+		SHC.drw_lamp_sunrays = Batch_create(GL_LINES, vbo, NULL);
+	}
+	return SHC.drw_lamp_sunrays;
+}
+
 
 /* Object Center */
 Batch *DRW_cache_single_vert_get(void)
