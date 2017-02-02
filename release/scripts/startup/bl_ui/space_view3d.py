@@ -3194,6 +3194,8 @@ class VIEW3D_PT_collections_editor(Panel):
                 collection.name))
 
             row.prop(collection, "hide", text="", emboss=False)
+            row.prop(collection, "hide_select", text="", emboss=False)
+
             row.operator("collections.select", text="", icon='BLANK1' if is_collection_selected else 'HAND', emboss=False).collection_index=index
 
             if nested_collections:
