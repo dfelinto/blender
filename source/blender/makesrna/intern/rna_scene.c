@@ -82,6 +82,8 @@
 
 #include "BLI_threads.h"
 
+#define NO_ENGINE "NO_ENGINE"
+
 #ifdef WITH_OPENEXR
 EnumPropertyItem rna_enum_exr_codec_items[] = {
 	{R_IMF_EXR_CODEC_NONE, "NONE", 0, "None", ""},
@@ -2352,6 +2354,19 @@ static void rna_SceneCollection_object_unlink(
 	WM_main_add_notifier(NC_SCENE | ND_LAYER | ND_OB_ACTIVE, scene);
 }
 
+/****** layer collection engine settings *******/
+
+static StructRNA *rna_CollectionEngineSettings_refine(struct PointerRNA *ptr)
+{
+	CollectionEngineSettings *ces = (CollectionEngineSettings *)ptr->data;
+
+	/* TODO - handle engines */
+	TODO_LAYER;
+	(void) ces;
+
+	return &RNA_CollectionEngineSettings;
+}
+
 static void rna_LayerCollection_name_get(PointerRNA *ptr, char *value)
 {
 	SceneCollection *sc = ((LayerCollection *)ptr->data)->scene_collection;
@@ -2379,6 +2394,25 @@ static PointerRNA rna_LayerCollection_objects_get(CollectionPropertyIterator *it
 	ListBaseIterator *internal = &iter->internal.listbase;
 	ObjectBase *base = ((LinkData *)internal->link)->data;
 	return rna_pointer_inherit_refine(&iter->parent, &RNA_Object, base->object);
+}
+
+static PointerRNA rna_LayerCollection_engine_settings_get(ID *UNUSED(id), LayerCollection *lc, bContext *C, const char *engine)
+{
+	Scene *scene = CTX_data_scene(C);
+	const char *engine_name;
+
+	if (STREQ(engine, NO_ENGINE)) {
+		RenderData *rd = &scene->r;
+		engine_name = rd->engine;
+	}
+	else {
+		engine_name = engine;
+	}
+
+	PointerRNA ptr;
+	CollectionEngineSettings *ces = BKE_layer_collection_engine_get(lc, engine_name);
+	RNA_pointer_create(NULL, &RNA_CollectionEngineSettings, ces, &ptr);
+	return rna_pointer_inherit_refine(&ptr, &RNA_CollectionEngineSettings, ces);
 }
 
 static void rna_LayerCollection_hide_update(bContext *C, PointerRNA *ptr)
@@ -5643,10 +5677,30 @@ static void rna_def_layer_collection_override(BlenderRNA *brna)
 	RNA_def_property_update(prop, NC_SCENE | ND_LAYER_CONTENT, NULL);
 }
 
+static void rna_def_layer_collection_engine_settings(BlenderRNA *brna)
+{
+	StructRNA *srna;
+	PropertyRNA *prop;
+
+	srna = RNA_def_struct(brna, "CollectionEngineSettings", NULL);
+	RNA_def_struct_ui_text(srna, "Collections Engine Settings", "Engine specific settings for this collection");
+	RNA_def_struct_refine_func(srna, "rna_CollectionEngineSettings_refine");
+
+	prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
+	RNA_def_property_ui_text(prop, "Name", "Engine name");
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+	RNA_def_struct_name_property(srna, prop);
+
+	/* the engine specific structs */
+}
+
 static void rna_def_layer_collection(BlenderRNA *brna)
 {
 	StructRNA *srna;
 	PropertyRNA *prop;
+
+	FunctionRNA *func;
+	PropertyRNA *parm;
 
 	srna = RNA_def_struct(brna, "LayerCollection", NULL);
 	RNA_def_struct_ui_text(srna, "Layer Collection", "Layer collection");
@@ -5678,6 +5732,15 @@ static void rna_def_layer_collection(BlenderRNA *brna)
 	RNA_def_property_collection_sdna(prop, NULL, "overrides", NULL);
 	RNA_def_property_struct_type(prop, "LayerCollectionOverride");
 	RNA_def_property_ui_text(prop, "Collection Overrides", "");
+
+	func = RNA_def_function(srna, "get_engine_settings", "rna_LayerCollection_engine_settings_get");
+	RNA_def_function_ui_description(func, "Return the engine settings for this collection");
+	RNA_def_function_flag(func, FUNC_USE_SELF_ID | FUNC_USE_CONTEXT);
+	parm = RNA_def_string(func, "engine", NO_ENGINE, MAX_NAME, "Engine", "use context one by default");
+	RNA_def_parameter_clear_flags(parm, 0, PARM_REQUIRED);
+	parm = RNA_def_pointer(func, "result", "CollectionEngineSettings", "", "");
+	RNA_def_parameter_flags(parm, 0, PARM_RNAPTR);
+	RNA_def_function_return(func, parm);
 
 	/* Flags */
 	prop = RNA_def_property(srna, "hide", PROP_BOOLEAN, PROP_NONE);
@@ -8378,6 +8441,7 @@ void RNA_def_scene(BlenderRNA *brna)
 	rna_def_scene_collection(brna);
 	rna_def_layer_collection(brna);
 	rna_def_layer_collection_override(brna);
+	rna_def_layer_collection_engine_settings(brna);
 	rna_def_scene_layer(brna);
 	rna_def_object_base(brna);
 	RNA_define_animate_sdna(true);
@@ -8393,3 +8457,5 @@ void RNA_def_scene(BlenderRNA *brna)
 }
 
 #endif
+
+#undef NO_ENGINE

@@ -5559,6 +5559,7 @@ static void direct_link_object(FileData *fd, Object *ob)
 	ob->bb = NULL;
 	ob->derivedDeform = NULL;
 	ob->derivedFinal = NULL;
+	ob->collection_settings = NULL;
 	BLI_listbase_clear(&ob->gpulamp);
 	link_list(fd, &ob->pc_ids);
 
@@ -5931,6 +5932,14 @@ static void direct_link_scene_collection(FileData *fd, SceneCollection *sc)
 	}
 }
 
+static void direct_link_engine_settings(FileData *fd, ListBase *lb)
+{
+	link_list(fd, lb);
+	for (CollectionEngineSettings *ces = lb->first; ces; ces = ces->next) {
+		link_list(fd, &ces->properties);
+	}
+}
+
 static void direct_link_layer_collections(FileData *fd, ListBase *lb)
 {
 	link_list(fd, lb);
@@ -5944,6 +5953,8 @@ static void direct_link_layer_collections(FileData *fd, ListBase *lb)
 		}
 
 		link_list(fd, &lc->overrides);
+
+		direct_link_engine_settings(fd, &lc->engine_settings);
 
 		direct_link_layer_collections(fd, &lc->layer_collections);
 	}

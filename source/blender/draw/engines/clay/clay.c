@@ -686,6 +686,6 @@ void clay_engine_free(void)
 RenderEngineType viewport_clay_type = {
 	NULL, NULL,
 	"BLENDER_CLAY", N_("Clay"), RE_INTERNAL | RE_USE_OGL_PIPELINE,
-	NULL, NULL, NULL, NULL, &CLAY_view_draw, NULL,
+	NULL, NULL, NULL, NULL, &CLAY_view_draw, NULL, NULL,
 	{NULL, NULL, NULL}
 };

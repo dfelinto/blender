@@ -1894,6 +1894,8 @@ static void write_objects(WriteData *wd, ListBase *idbase)
 
 			writelist(wd, DATA, LinkData, &ob->pc_ids);
 			writelist(wd, DATA, LodLevel, &ob->lodlevels);
+
+			ob->collection_settings = NULL;
 		}
 
 		write_previews(wd, ob->preview);
@@ -2656,6 +2658,26 @@ static void write_scene_collection(WriteData *wd, SceneCollection *sc)
 	}
 }
 
+static void write_collection_engine_settings(WriteData *wd, ListBase *lb)
+{
+	for (CollectionEngineSettings *ces = lb->first; ces; ces = ces->next) {
+		writestruct(wd, DATA, CollectionEngineSettings, 1, ces);
+
+		for (CollectionEngineProperty *prop = ces->properties.first; prop; prop = prop->next) {
+			switch (prop->type) {
+			    case COLLECTION_PROP_TYPE_FLOAT:
+				    writestruct(wd, DATA, CollectionEnginePropertyFloat, 1, prop);
+				    break;
+			    case COLLECTION_PROP_TYPE_INT:
+				    writestruct(wd, DATA, CollectionEnginePropertyInt, 1, prop);
+				    break;
+			    default:
+				    ; /* error: don't know how to write this file */
+			}
+		}
+	}
+}
+
 static void write_layer_collections(WriteData *wd, ListBase *lb)
 {
 	for (LayerCollection *lc = lb->first; lc; lc = lc->next) {
@@ -2663,6 +2685,8 @@ static void write_layer_collections(WriteData *wd, ListBase *lb)
 
 		writelist(wd, DATA, LinkData, &lc->object_bases);
 		writelist(wd, DATA, CollectionOverride, &lc->overrides);
+
+		write_collection_engine_settings(wd, &lc->engine_settings);
 
 		write_layer_collections(wd, &lc->layer_collections);
 	}

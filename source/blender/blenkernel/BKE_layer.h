@@ -41,11 +41,13 @@ extern "C" {
 #define TODO_LAYER_OPERATORS /* collection mamanger and property panel operators */
 #define TODO_LAYER /* generic todo */
 
+struct CollectionEngineSettings;
 struct LayerCollection;
 struct ID;
 struct Main;
 struct Object;
 struct ObjectBase;
+struct RenderEngine;
 struct Scene;
 struct SceneCollection;
 struct SceneLayer;
@@ -90,6 +92,16 @@ void BKE_layer_sync_object_unlink(struct Scene *scene, struct SceneCollection *s
 /* override */
 
 void BKE_collection_override_datablock_add(struct LayerCollection *lc, const char *data_path, struct ID *id);
+
+/* engine settings */
+typedef void (*CollectionEngineSettingsCB)(struct RenderEngine *engine, struct CollectionEngineSettings *ces);
+struct CollectionEngineSettings *BKE_layer_collection_engine_get(struct LayerCollection *lc, const char *engine_name);
+void BKE_layer_collection_engine_settings_callback_register(struct Main *bmain, const char *engine_name, CollectionEngineSettingsCB func);
+void BKE_layer_collection_engine_settings_callback_free(void);
+
+void BKE_collection_engine_property_add_float(struct CollectionEngineSettings *ces, const char *name, float value);
+void BKE_collection_engine_property_add_int(struct CollectionEngineSettings *ces, const char *name, int value);
+struct CollectionEngineProperty *BKE_collection_engine_property_get(struct CollectionEngineSettings *ces, const char *name);
 
 /* iterators */
 

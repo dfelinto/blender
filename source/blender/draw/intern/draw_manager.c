@@ -1092,7 +1092,7 @@ bool DRW_viewport_cache_is_dirty(void)
 
 void DRW_engines_init(void)
 {
-	BLI_addtail(&R_engines, &viewport_clay_type);
+	RE_engines_register(NULL, &viewport_clay_type);
 }
 
 void DRW_engines_free(void)
