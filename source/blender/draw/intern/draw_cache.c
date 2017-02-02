@@ -412,13 +412,13 @@ Batch *DRW_cache_lamp_get(void)
 {
 #define NSEGMENTS 8
 	if (!SHC.drw_lamp) {
-		float v[3] = {0.0f, 0.0f, 0.0f};
+		float v[2];
 
 		/* Position Only 3D format */
 		static VertexFormat format = { 0 };
 		static unsigned pos_id;
 		if (format.attrib_ct == 0) {
-			pos_id = add_attrib(&format, "pos", GL_FLOAT, 3, KEEP_FLOAT);
+			pos_id = add_attrib(&format, "pos", GL_FLOAT, 2, KEEP_FLOAT);
 		}
 
 		VertexBuffer *vbo = VertexBuffer_create_with_format(&format);
@@ -427,12 +427,10 @@ Batch *DRW_cache_lamp_get(void)
 		for (int a = 0; a < NSEGMENTS; a++) {
 			v[0] = sinf((2.0f * M_PI * a) / ((float)NSEGMENTS));
 			v[1] = cosf((2.0f * M_PI * a) / ((float)NSEGMENTS));
-			v[2] = 0.0f;
 			setAttrib(vbo, pos_id, a * 2, v);
 
 			v[0] = sinf((2.0f * M_PI * (a + 1)) / ((float)NSEGMENTS));
 			v[1] = cosf((2.0f * M_PI * (a + 1)) / ((float)NSEGMENTS));
-			v[2] = 0.0f;
 			setAttrib(vbo, pos_id, a * 2 + 1, v);
 		}
 
@@ -445,13 +443,13 @@ Batch *DRW_cache_lamp_get(void)
 Batch *DRW_cache_lamp_sunrays_get(void)
 {
 	if (!SHC.drw_lamp_sunrays) {
-		float v[3], v1[3], v2[3];
+		float v[2], v1[2], v2[2];
 
 		/* Position Only 3D format */
 		static VertexFormat format = { 0 };
 		static unsigned pos_id;
 		if (format.attrib_ct == 0) {
-			pos_id = add_attrib(&format, "pos", GL_FLOAT, 3, KEEP_FLOAT);
+			pos_id = add_attrib(&format, "pos", GL_FLOAT, 2, KEEP_FLOAT);
 		}
 
 		VertexBuffer *vbo = VertexBuffer_create_with_format(&format);
@@ -460,10 +458,9 @@ Batch *DRW_cache_lamp_sunrays_get(void)
 		for (int a = 0; a < 8; a++) {
 			v[0] = sinf((2.0f * M_PI * a) / 8.0f);
 			v[1] = cosf((2.0f * M_PI * a) / 8.0f);
-			v[2] = 0.0f;
 
-			mul_v3_v3fl(v1, v, 1.2f);
-			mul_v3_v3fl(v2, v, 2.5f);
+			mul_v2_v2fl(v1, v, 1.2f);
+			mul_v2_v2fl(v2, v, 2.5f);
 
 			setAttrib(vbo, pos_id, a * 2, v1);
 			setAttrib(vbo, pos_id, a * 2 + 1, v2);

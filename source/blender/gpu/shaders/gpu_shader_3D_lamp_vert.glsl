@@ -4,7 +4,7 @@ uniform vec3 screen_vecs[2];
 uniform float size;
 uniform float pixel_size;
 
-in vec3 pos;
+in vec2 pos;
 in mat4 InstanceModelMatrix;
 
 #define lamp_pos InstanceModelMatrix[3].xyz
