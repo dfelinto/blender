@@ -565,7 +565,7 @@ static void CLAY_create_cache(CLAY_PassList *passes, const struct bContext *C)
 		}
 
 		struct Batch *geom;
-		bool do_outlines;
+		//bool do_outlines;
 
 		switch (ob->type) {
 			case OB_MESH:
@@ -577,7 +577,7 @@ static void CLAY_create_cache(CLAY_PassList *passes, const struct bContext *C)
 
 				//DRW_shgroup_wire_overlay(passes->wire_overlay_pass, ob);
 
-				do_outlines  = ((ob->base_flag & BASE_SELECTED) != 0);
+				//do_outlines  = ((ob->base_flag & BASE_SELECTED) != 0);
 				//DRW_shgroup_wire_outline(passes->wire_outline_pass, ob, false, false, do_outlines);
 
 				/* When encountering a new material :
