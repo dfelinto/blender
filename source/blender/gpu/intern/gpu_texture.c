@@ -597,7 +597,13 @@ void GPU_texture_bind(GPUTexture *tex, int number)
 	else
 		GPU_invalid_tex_bind(tex->target_base);
 
-	glEnable(tex->target_base); /* TODO: remove this line once we're using GLSL everywhere */
+	/* TODO: remove this lines */
+	GLenum target = tex->target_base;
+	if (tex->target_base == GL_TEXTURE_1D_ARRAY)
+		target = GL_TEXTURE_2D;
+	if (tex->target_base == GL_TEXTURE_2D_ARRAY)
+		target = GL_TEXTURE_3D;
+	glEnable(target);
 
 	if (number != 0)
 		glActiveTexture(GL_TEXTURE0);
@@ -619,7 +625,14 @@ void GPU_texture_unbind(GPUTexture *tex)
 		glActiveTexture(GL_TEXTURE0 + tex->number);
 
 	glBindTexture(tex->target_base, 0);
-	glDisable(tex->target_base); /* TODO: remove this line */
+
+	/* TODO: remove this lines */
+	GLenum target = tex->target_base;
+	if (tex->target_base == GL_TEXTURE_1D_ARRAY)
+		target = GL_TEXTURE_2D;
+	if (tex->target_base == GL_TEXTURE_2D_ARRAY)
+		target = GL_TEXTURE_3D;
+	glDisable(target);
 
 	if (tex->number != 0)
 		glActiveTexture(GL_TEXTURE0);
