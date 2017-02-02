@@ -577,6 +577,10 @@ DRWShadingGroup *DRW_pass_nth_shgroup_get(DRWPass *pass, int n)
 
 void DRW_draw_background(void)
 {
+	/* Just to make sure */
+	glDepthMask(GL_TRUE);
+	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+
 	if (UI_GetThemeValue(TH_SHOW_BACK_GRAD)) {
 		/* Gradient background Color */
 		gpuMatrixBegin3D(); /* TODO: finish 2D API */
