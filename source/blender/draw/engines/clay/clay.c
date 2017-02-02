@@ -542,7 +542,7 @@ static void CLAY_create_cache(CLAY_PassList *passes, const struct bContext *C)
 		MaterialRuntimeClay **runtime;
 		DRW_render_settings_get(NULL, RE_engine_id_BLENDER_CLAY, (void ***)&runtime);
 
-		passes->clay_pass = DRW_pass_create("Clay Pass", DRW_STATE_WRITE_COLOR);
+		passes->clay_pass = DRW_pass_create("Clay Pass", DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS);
 
 		default_shgrp = CLAY_shgroup_create(passes->clay_pass, &(*runtime)->material_id);
 		DRW_shgroup_uniform_block(default_shgrp, "material_block", data.mat_ubo, 0);
@@ -575,10 +575,10 @@ static void CLAY_create_cache(CLAY_PassList *passes, const struct bContext *C)
 				DRW_shgroup_call_add(depthbatch, geom, ob->obmat);
 				DRW_shgroup_call_add(default_shgrp, geom, ob->obmat);
 
-				DRW_shgroup_wire_overlay(passes->wire_overlay_pass, ob);
+				//DRW_shgroup_wire_overlay(passes->wire_overlay_pass, ob);
 
 				do_outlines  = ((ob->base_flag & BASE_SELECTED) != 0);
-				DRW_shgroup_wire_outline(passes->wire_outline_pass, ob, false, false, do_outlines);
+				//DRW_shgroup_wire_outline(passes->wire_outline_pass, ob, false, false, do_outlines);
 
 				/* When encountering a new material :
 				 * - Create new Batch
@@ -650,8 +650,8 @@ static void CLAY_view_draw(RenderEngine *UNUSED(engine), const struct bContext *
 
 	/* Pass 4 : Overlays */
 	DRW_framebuffer_texture_attach(buffers->default_fb, textures->depth, 0);
-	DRW_draw_pass(passes->wire_overlay_pass);
-	DRW_draw_pass(passes->wire_outline_pass);
+	//DRW_draw_pass(passes->wire_overlay_pass);
+	//DRW_draw_pass(passes->wire_outline_pass);
 	DRW_draw_pass(passes->non_meshes_pass);
 	DRW_draw_pass(passes->ob_center_pass);
 
