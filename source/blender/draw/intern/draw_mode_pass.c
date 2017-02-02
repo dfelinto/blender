@@ -96,17 +96,27 @@ static DRWShadingGroup *arrows_group_active;
 
 /* Lamps */
 static DRWShadingGroup *lamp_center;
+static DRWShadingGroup *lamp_center_group;
 static DRWShadingGroup *lamp_groundpoint;
 static DRWShadingGroup *lamp_groundline;
-static DRWShadingGroup *lamp_circle_wire;
+static DRWShadingGroup *lamp_circle;
 static DRWShadingGroup *lamp_circle_active;
 static DRWShadingGroup *lamp_circle_select;
-static DRWShadingGroup *lamp_circle_shadow_wire;
+static DRWShadingGroup *lamp_circle_transform;
+static DRWShadingGroup *lamp_circle_group;
+static DRWShadingGroup *lamp_circle_group_active;
+static DRWShadingGroup *lamp_circle_shadow;
 static DRWShadingGroup *lamp_circle_shadow_active;
 static DRWShadingGroup *lamp_circle_shadow_select;
-static DRWShadingGroup *lamp_sunrays_wire;
+static DRWShadingGroup *lamp_circle_shadow_transform;
+static DRWShadingGroup *lamp_circle_shadow_group;
+static DRWShadingGroup *lamp_circle_shadow_group_active;
+static DRWShadingGroup *lamp_sunrays;
 static DRWShadingGroup *lamp_sunrays_active;
 static DRWShadingGroup *lamp_sunrays_select;
+static DRWShadingGroup *lamp_sunrays_transform;
+static DRWShadingGroup *lamp_sunrays_group;
+static DRWShadingGroup *lamp_sunrays_group_active;
 
 /* Helpers */
 static DRWShadingGroup *relationship_lines;
@@ -301,15 +311,25 @@ void DRW_pass_setup_common(DRWPass **wire_overlay, DRWPass **wire_outline, DRWPa
 		 * for now we create 3 times the same VBO with only lamp center coordinates
 		 * but ideally we would only create it once */
 		lamp_center = shgroup_dynpoints_uniform_color(*non_meshes, colorLampNoAlpha, &lampCenterSize);
-		lamp_circle_wire = shgroup_lamp(*non_meshes, colorLampNoAlpha, &lampCircleRad);
+		lamp_center_group = shgroup_dynpoints_uniform_color(*non_meshes, colorGroup, &lampCenterSize);
+		lamp_circle = shgroup_lamp(*non_meshes, colorLampNoAlpha, &lampCircleRad);
 		lamp_circle_active = shgroup_lamp(*non_meshes, colorActive, &lampCircleRad);
 		lamp_circle_select = shgroup_lamp(*non_meshes, colorSelect, &lampCircleRad);
-		lamp_circle_shadow_wire = shgroup_lamp(*non_meshes, colorLampNoAlpha, &lampCircleShadowRad);
+		lamp_circle_transform = shgroup_lamp(*non_meshes, colorTransform, &lampCircleRad);
+		lamp_circle_group = shgroup_lamp(*non_meshes, colorGroup, &lampCircleRad);
+		lamp_circle_group_active = shgroup_lamp(*non_meshes, colorGroupActive, &lampCircleRad);
+		lamp_circle_shadow = shgroup_lamp(*non_meshes, colorLampNoAlpha, &lampCircleShadowRad);
 		lamp_circle_shadow_active = shgroup_lamp(*non_meshes, colorActive, &lampCircleShadowRad);
 		lamp_circle_shadow_select = shgroup_lamp(*non_meshes, colorSelect, &lampCircleShadowRad);
-		lamp_sunrays_wire = shgroup_lamp(*non_meshes, colorLampNoAlpha, &lampCircleRad);
+		lamp_circle_shadow_transform = shgroup_lamp(*non_meshes, colorTransform, &lampCircleShadowRad);
+		lamp_circle_shadow_group = shgroup_lamp(*non_meshes, colorGroup, &lampCircleShadowRad);
+		lamp_circle_shadow_group_active = shgroup_lamp(*non_meshes, colorGroupActive, &lampCircleShadowRad);
+		lamp_sunrays = shgroup_lamp(*non_meshes, colorLampNoAlpha, &lampCircleRad);
 		lamp_sunrays_active = shgroup_lamp(*non_meshes, colorActive, &lampCircleRad);
 		lamp_sunrays_select = shgroup_lamp(*non_meshes, colorSelect, &lampCircleRad);
+		lamp_sunrays_transform = shgroup_lamp(*non_meshes, colorTransform, &lampCircleRad);
+		lamp_sunrays_group = shgroup_lamp(*non_meshes, colorGroup, &lampCircleRad);
+		lamp_sunrays_group_active = shgroup_lamp(*non_meshes, colorGroupActive, &lampCircleRad);
 		lamp_groundline = shgroup_groundlines_uniform_color(*non_meshes, colorLamp);
 		lamp_groundpoint = shgroup_groundpoints_uniform_color(*non_meshes, colorLamp);
 
@@ -514,43 +534,69 @@ void DRW_shgroup_wire_outline(DRWPass *wire_outline, Object *ob,
 
 static void DRW_draw_lamp(Object *ob)
 {
-	struct Batch *geom = DRW_cache_single_vert_get();
+	struct Batch *center = DRW_cache_single_vert_get();
 	struct Batch *lamp = DRW_cache_lamp_get();
 	struct Batch *sunrays = DRW_cache_lamp_sunrays_get();
 	Lamp *la = ob->data;
+	int theme_id = draw_object_wire_theme(ob);
 
-	/* Don't draw the center if it's selected */
-	if ((ob->base_flag & BASE_SELECTED) == 0) {
-		DRW_shgroup_call_add(lamp_center, geom, ob->obmat);
-		DRW_shgroup_call_add(lamp_circle_wire, lamp, ob->obmat);
-	}
-	else {
+	/* Don't draw the center if it's selected or active */
+	if (theme_id == TH_GROUP)
+		DRW_shgroup_call_add(lamp_center_group, center, ob->obmat);
+	else if (theme_id == TH_LAMP)
+		DRW_shgroup_call_add(lamp_center, center, ob->obmat);
+
+	/* First circle */
+	if (theme_id == TH_ACTIVE)
+		DRW_shgroup_call_add(lamp_circle_active, lamp, ob->obmat);
+	else if (theme_id == TH_SELECT)
 		DRW_shgroup_call_add(lamp_circle_select, lamp, ob->obmat);
-	}
+	else if (theme_id == TH_GROUP)
+		DRW_shgroup_call_add(lamp_circle_group, lamp, ob->obmat);
+	else if (theme_id == TH_GROUP_ACTIVE)
+		DRW_shgroup_call_add(lamp_circle_group_active, lamp, ob->obmat);
+	else if (theme_id == TH_TRANSFORM)
+		DRW_shgroup_call_add(lamp_circle_transform, lamp, ob->obmat);
+	else
+		DRW_shgroup_call_add(lamp_circle, lamp, ob->obmat);
 
 	/* draw dashed outer circle if shadow is on. remember some lamps can't have certain shadows! */
 	if (la->type != LA_HEMI) {
 		if ((la->mode & LA_SHAD_RAY) || ((la->mode & LA_SHAD_BUF) && (la->type == LA_SPOT))) {
-			if ((ob->base_flag & BASE_SELECTED) == 0) {
-				DRW_shgroup_call_add(lamp_circle_shadow_wire, lamp, ob->obmat);
-			}
-			else {
+			if (theme_id == TH_ACTIVE)
+				DRW_shgroup_call_add(lamp_circle_shadow_active, lamp, ob->obmat);
+			else if (theme_id == TH_SELECT)
 				DRW_shgroup_call_add(lamp_circle_shadow_select, lamp, ob->obmat);
-			}
+			else if (theme_id == TH_GROUP)
+				DRW_shgroup_call_add(lamp_circle_shadow_group, lamp, ob->obmat);
+			else if (theme_id == TH_GROUP_ACTIVE)
+				DRW_shgroup_call_add(lamp_circle_shadow_group_active, lamp, ob->obmat);
+			else if (theme_id == TH_TRANSFORM)
+				DRW_shgroup_call_add(lamp_circle_shadow_transform, lamp, ob->obmat);
+			else
+				DRW_shgroup_call_add(lamp_circle_shadow, lamp, ob->obmat);
 		}
 	}
 
+	/* Sunrays */
 	if (la->type == LA_SUN) {
-		if ((ob->base_flag & BASE_SELECTED) == 0) {
-			DRW_shgroup_call_add(lamp_sunrays_wire, sunrays, ob->obmat);
-		}
-		else {
+		if (theme_id == TH_ACTIVE)
+			DRW_shgroup_call_add(lamp_sunrays_active, sunrays, ob->obmat);
+		else if (theme_id == TH_SELECT)
 			DRW_shgroup_call_add(lamp_sunrays_select, sunrays, ob->obmat);
-		}
+		else if (theme_id == TH_GROUP)
+			DRW_shgroup_call_add(lamp_sunrays_group, sunrays, ob->obmat);
+		else if (theme_id == TH_GROUP_ACTIVE)
+			DRW_shgroup_call_add(lamp_sunrays_group_active, sunrays, ob->obmat);
+		else if (theme_id == TH_TRANSFORM)
+			DRW_shgroup_call_add(lamp_sunrays_transform, sunrays, ob->obmat);
+		else
+			DRW_shgroup_call_add(lamp_sunrays, sunrays, ob->obmat);
 	}
 
-	DRW_shgroup_call_add(lamp_groundline, geom, ob->obmat);
-	DRW_shgroup_call_add(lamp_groundpoint, geom, ob->obmat);
+	/* Line and point going to the ground */
+	DRW_shgroup_call_add(lamp_groundline, center, ob->obmat);
+	DRW_shgroup_call_add(lamp_groundpoint, center, ob->obmat);
 }
 
 static void DRW_draw_empty(Object *ob)
