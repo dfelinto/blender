@@ -659,6 +659,21 @@ static void CLAY_view_draw(RenderEngine *UNUSED(engine), const struct bContext *
 	DRW_state_reset();
 }
 
+static void CLAY_collection_settings_create(RenderEngine *UNUSED(engine), CollectionEngineSettings *ces)
+{
+	BLI_assert(ces);
+	BKE_collection_engine_property_add_int(ces, "matcap_icon", ICON_MATCAP_01);
+	BKE_collection_engine_property_add_int(ces, "type", CLAY_MATCAP_NONE);
+	BKE_collection_engine_property_add_float(ces, "matcap_rotation", 0.0f);
+	BKE_collection_engine_property_add_float(ces, "matcap_hue", 0.5f);
+	BKE_collection_engine_property_add_float(ces, "matcap_saturation", 0.5f);
+	BKE_collection_engine_property_add_float(ces, "matcap_value", 0.5f);
+	BKE_collection_engine_property_add_float(ces, "ssao_distance", 0.2f);
+	BKE_collection_engine_property_add_float(ces, "ssao_attenuation", 1.0f);
+	BKE_collection_engine_property_add_float(ces, "ssao_factor_cavity", 1.0f);
+	BKE_collection_engine_property_add_float(ces, "ssao_factor_edge", 1.0f);
+}
+
 void clay_engine_free(void)
 {
 	/* data.depth_sh Is builtin so it's automaticaly freed */
@@ -686,6 +701,6 @@ void clay_engine_free(void)
 RenderEngineType viewport_clay_type = {
 	NULL, NULL,
 	"BLENDER_CLAY", N_("Clay"), RE_INTERNAL | RE_USE_OGL_PIPELINE,
-	NULL, NULL, NULL, NULL, &CLAY_view_draw, NULL, NULL,
+	NULL, NULL, NULL, NULL, &CLAY_view_draw, NULL, &CLAY_collection_settings_create,
 	{NULL, NULL, NULL}
 };

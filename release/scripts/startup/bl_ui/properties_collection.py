@@ -75,5 +75,33 @@ class COLLECTION_PT_objects(CollectionButtonsPanel, Panel):
         row.operator("collections.objects_deselect", text="Deselect")
 
 
+class COLLECTION_PT_clay_settings(CollectionButtonsPanel, Panel):
+    bl_label = "Render Settings"
+    COMPAT_ENGINES = {'BLENDER_CLAY'}
+
+    @classmethod
+    def poll(cls, context):
+        scene = context.scene
+        return scene and (scene.render.engine in cls.COMPAT_ENGINES)
+
+    def draw(self, context):
+        layout = self.layout
+
+        collection = context.layer_collection
+        settings = collection.get_engine_settings()
+
+        col = layout.column()
+        col.template_icon_view(settings, "matcap_icon")
+        col.prop(settings, "type")
+        col.prop(settings, "matcap_rotation")
+        col.prop(settings, "matcap_hue")
+        col.prop(settings, "matcap_saturation")
+        col.prop(settings, "matcap_value")
+        col.prop(settings, "ssao_factor_cavity")
+        col.prop(settings, "ssao_factor_edge")
+        col.prop(settings, "ssao_distance")
+        col.prop(settings, "ssao_attenuation")
+
+
 if __name__ == "__main__":  # only for live edit.
     bpy.utils.register_module(__name__)
