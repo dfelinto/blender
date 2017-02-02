@@ -156,6 +156,7 @@ data_to_c_simple(shaders/gpu_shader_3D_smooth_color_frag.glsl SRC)
 data_to_c_simple(shaders/gpu_shader_3D_groundpoint_vert.glsl SRC)
 data_to_c_simple(shaders/gpu_shader_3D_groundline_vert.glsl SRC)
 data_to_c_simple(shaders/gpu_shader_3D_groundline_geom.glsl SRC)
+data_to_c_simple(shaders/gpu_shader_3D_lamp_vert.glsl SRC)
 
 data_to_c_simple(shaders/gpu_shader_point_uniform_color_frag.glsl SRC)
 data_to_c_simple(shaders/gpu_shader_point_uniform_color_smooth_frag.glsl SRC)

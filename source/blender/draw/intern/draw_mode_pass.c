@@ -98,6 +98,9 @@ static DRWShadingGroup *arrows_group_active;
 static DRWShadingGroup *lamp_center;
 static DRWShadingGroup *lamp_groundpoint;
 static DRWShadingGroup *lamp_groundline;
+static DRWShadingGroup *lamp_circle_wire;
+static DRWShadingGroup *lamp_circle_active;
+static DRWShadingGroup *lamp_circle_select;
 
 /* Helpers */
 static DRWShadingGroup *relationship_lines;
@@ -164,6 +167,20 @@ static DRWShadingGroup *shgroup_groundpoints_uniform_color(DRWPass *pass, float 
 	return grp;
 }
 
+static DRWShadingGroup *shgroup_lampcircle(DRWPass *pass, float color[4], float *size)
+{
+	GPUShader *sh = GPU_shader_get_builtin_shader(GPU_SHADER_3D_LAMP_COMMON);
+
+	DRWShadingGroup *grp = DRW_shgroup_create(sh, pass);
+	DRW_shgroup_uniform_vec4(grp, "color", color, 1);
+	DRW_shgroup_uniform_float(grp, "size", size, 1);
+	DRW_shgroup_uniform_float(grp, "pixel_size", DRW_viewport_pixelsize_get(), 1);
+	DRW_shgroup_uniform_vec3(grp, "screen_vecs", DRW_viewport_screenvecs_get(), 2);
+	DRW_shgroup_dyntype_set(grp, DRW_DYN_INSTANCE);
+	DRW_shgroup_state_set(grp, DRW_STATE_STIPPLE_3);
+	return grp;
+}
+
 /* This Function setup the passes needed for the mode rendering.
  * The passes are populated by the rendering engine using the DRW_shgroup_* functions. */
 void DRW_pass_setup_common(DRWPass **wire_overlay, DRWPass **wire_outline, DRWPass **non_meshes, DRWPass **ob_center)
@@ -172,7 +189,7 @@ void DRW_pass_setup_common(DRWPass **wire_overlay, DRWPass **wire_outline, DRWPa
 	static float colorWire[4], colorWireEdit[4];
 	static float colorActive[4], colorSelect[4], colorTransform[4], colorGroup[4], colorGroupActive[4];
 	static float colorEmpty[4], colorLamp[4], colorCamera[4], colorSpeaker[4];
-	static float lampCenterSize, colorLampNoAlpha[4];
+	static float lampCenterSize, lampCircleRad, colorLampNoAlpha[4];
 
 	UI_GetThemeColor4fv(TH_WIRE, colorWire);
 	UI_GetThemeColor4fv(TH_WIRE_EDIT, colorWireEdit);
@@ -272,10 +289,14 @@ void DRW_pass_setup_common(DRWPass **wire_overlay, DRWPass **wire_outline, DRWPa
 
 		/* Lamps */
 		lampCenterSize = (U.obcenter_dia + 1.5f) * U.pixelsize;
+		lampCircleRad = U.pixelsize * 9.0f;
 		/* TODO
 		 * for now we create 3 times the same VBO with only lamp center coordinates
 		 * but ideally we would only create it once */
 		lamp_center = shgroup_dynpoints_uniform_color(*non_meshes, colorLampNoAlpha, &lampCenterSize);
+		lamp_circle_wire = shgroup_lampcircle(*non_meshes, colorLampNoAlpha, &lampCircleRad);
+		lamp_circle_active = shgroup_lampcircle(*non_meshes, colorActive, &lampCircleRad);
+		lamp_circle_select = shgroup_lampcircle(*non_meshes, colorSelect, &lampCircleRad);
 		lamp_groundline = shgroup_groundlines_uniform_color(*non_meshes, colorLamp);
 		lamp_groundpoint = shgroup_groundpoints_uniform_color(*non_meshes, colorLamp);
 
@@ -481,10 +502,15 @@ void DRW_shgroup_wire_outline(DRWPass *wire_outline, Object *ob,
 static void DRW_draw_lamp(Object *ob)
 {
 	struct Batch *geom = DRW_cache_single_vert_get();
+	struct Batch *lamp = DRW_cache_lamp_get();
 
 	/* Don't draw the center if it's selected */
 	if ((ob->base_flag & BASE_SELECTED) == 0) {
 		DRW_shgroup_call_add(lamp_center, geom, ob->obmat);
+		DRW_shgroup_call_add(lamp_circle_wire, lamp, ob->obmat);
+	}
+	else {
+		DRW_shgroup_call_add(lamp_circle_select, lamp, ob->obmat);
 	}
 
 	DRW_shgroup_call_add(lamp_groundline, geom, ob->obmat);

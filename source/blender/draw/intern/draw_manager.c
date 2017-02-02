@@ -129,6 +129,8 @@ static struct DRWGlobalState{
 	ListBase bound_texs;
 	int tex_bind_id;
 	float size[2];
+	float screenvecs[2][3];
+	float pixsize;
 	/* Current rendering context set by DRW_viewport_init */
 	const struct bContext *context;
 } DST = {NULL};
@@ -1051,6 +1053,16 @@ float *DRW_viewport_size_get(void)
 	return &DST.size[0];
 }
 
+float *DRW_viewport_screenvecs_get(void)
+{
+	return &DST.screenvecs[0][0];
+}
+
+float *DRW_viewport_pixelsize_get(void)
+{
+	return &DST.pixsize;
+}
+
 void DRW_viewport_init(const bContext *C, void **buffers, void **textures, void **passes)
 {
 	RegionView3D *rv3d = CTX_wm_region_view3d(C);
@@ -1069,6 +1081,15 @@ void DRW_viewport_init(const bContext *C, void **buffers, void **textures, void 
 	DST.current_txl = (TextureList *)*textures;
 	DST.current_fbl = (FramebufferList *)*buffers;
 	DST.current_psl = (PassList *)*passes;
+
+	/* Refresh DST.screenvecs */
+	copy_v3_v3(DST.screenvecs[0], rv3d->viewinv[0]);
+	copy_v3_v3(DST.screenvecs[1], rv3d->viewinv[1]);
+	normalize_v3(DST.screenvecs[0]);
+	normalize_v3(DST.screenvecs[1]);
+
+	/* Refresh DST.pixelsize */
+	DST.pixsize = rv3d->pixsize;
 
 	/* Save context for all later needs */
 	DST.context = C;

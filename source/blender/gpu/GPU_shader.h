@@ -134,6 +134,7 @@ typedef enum GPUBuiltinShader {
 	/* lamp drawing */
 	GPU_SHADER_3D_GROUNDPOINT,
 	GPU_SHADER_3D_GROUNDLINE,
+	GPU_SHADER_3D_LAMP_COMMON,
 
 	GPU_NUM_BUILTIN_SHADERS /* (not an actual shader) */
 } GPUBuiltinShader;

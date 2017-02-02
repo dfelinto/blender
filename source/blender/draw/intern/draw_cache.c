@@ -48,6 +48,7 @@ static struct DRWShapeCache{
 	Batch *drw_empty_sphere;
 	Batch *drw_empty_cone;
 	Batch *drw_arrows;
+	Batch *drw_lamp;
 } SHC = {NULL};
 
 /* Quads */
@@ -370,6 +371,36 @@ Batch *DRW_cache_arrows_get(void)
 		SHC.drw_arrows = Batch_create(GL_LINES, vbo, NULL);
 	}
 	return SHC.drw_arrows;
+}
+
+/* Lamps */
+Batch *DRW_cache_lamp_get(void)
+{
+#define NSEGMENTS 8
+	if (!SHC.drw_lamp) {
+		float v[3] = {0.0f, 0.0f, 0.0f};
+
+		/* Position Only 3D format */
+		static VertexFormat format = { 0 };
+		static unsigned pos_id;
+		if (format.attrib_ct == 0) {
+			pos_id = add_attrib(&format, "pos", GL_FLOAT, 3, KEEP_FLOAT);
+		}
+
+		VertexBuffer *vbo = VertexBuffer_create_with_format(&format);
+		VertexBuffer_allocate_data(vbo, NSEGMENTS);
+
+		for (int a = 0; a < NSEGMENTS; a++) {
+			v[0] = sinf((2.0f * M_PI * a) / ((float)NSEGMENTS));
+			v[1] = cosf((2.0f * M_PI * a) / ((float)NSEGMENTS));
+			v[2] = 0.0f;
+			setAttrib(vbo, pos_id, a, v);
+		}
+
+		SHC.drw_lamp = Batch_create(GL_LINE_LOOP, vbo, NULL);
+	}
+	return SHC.drw_lamp;
+#undef NSEGMENTS
 }
 
 /* Object Center */
