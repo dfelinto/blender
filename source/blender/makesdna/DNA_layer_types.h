@@ -141,8 +141,6 @@ enum {
 typedef enum CollectionEnginePropertyType {
 	COLLECTION_PROP_TYPE_FLOAT = 0,
 	COLLECTION_PROP_TYPE_INT = 1,
-	COLLECTION_PROP_TYPE_BOOLEAN = 2,
-	COLLECTION_PROP_TYPE_POINTER = 3,
 } CollectionEnginePropertyType;
 
 /* *************************************************************** */
