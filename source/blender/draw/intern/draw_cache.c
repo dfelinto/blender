@@ -135,16 +135,21 @@ Batch *DRW_cache_circle_get(void)
 		}
 
 		VertexBuffer *vbo = VertexBuffer_create_with_format(&format);
-		VertexBuffer_allocate_data(vbo, CIRCLE_RESOL);
+		VertexBuffer_allocate_data(vbo, CIRCLE_RESOL * 2);
 
 		for (int a = 0; a < CIRCLE_RESOL; a++) {
 			v[0] = sinf((2.0f * M_PI * a) / ((float)CIRCLE_RESOL));
 			v[1] = cosf((2.0f * M_PI * a) / ((float)CIRCLE_RESOL));
 			v[2] = 0.0f;
-			setAttrib(vbo, pos_id, a, v);
+			setAttrib(vbo, pos_id, a * 2, v);
+
+			v[0] = sinf((2.0f * M_PI * (a + 1)) / ((float)CIRCLE_RESOL));
+			v[1] = cosf((2.0f * M_PI * (a + 1)) / ((float)CIRCLE_RESOL));
+			v[2] = 0.0f;
+			setAttrib(vbo, pos_id, a * 2 + 1, v);
 		}
 
-		SHC.drw_circle = Batch_create(GL_LINE_LOOP, vbo, NULL);
+		SHC.drw_circle = Batch_create(GL_LINES, vbo, NULL);
 	}
 	return SHC.drw_circle;
 #undef CIRCLE_RESOL
@@ -388,16 +393,21 @@ Batch *DRW_cache_lamp_get(void)
 		}
 
 		VertexBuffer *vbo = VertexBuffer_create_with_format(&format);
-		VertexBuffer_allocate_data(vbo, NSEGMENTS);
+		VertexBuffer_allocate_data(vbo, NSEGMENTS * 2);
 
 		for (int a = 0; a < NSEGMENTS; a++) {
 			v[0] = sinf((2.0f * M_PI * a) / ((float)NSEGMENTS));
 			v[1] = cosf((2.0f * M_PI * a) / ((float)NSEGMENTS));
 			v[2] = 0.0f;
-			setAttrib(vbo, pos_id, a, v);
+			setAttrib(vbo, pos_id, a * 2, v);
+
+			v[0] = sinf((2.0f * M_PI * (a + 1)) / ((float)NSEGMENTS));
+			v[1] = cosf((2.0f * M_PI * (a + 1)) / ((float)NSEGMENTS));
+			v[2] = 0.0f;
+			setAttrib(vbo, pos_id, a * 2 + 1, v);
 		}
 
-		SHC.drw_lamp = Batch_create(GL_LINE_LOOP, vbo, NULL);
+		SHC.drw_lamp = Batch_create(GL_LINES, vbo, NULL);
 	}
 	return SHC.drw_lamp;
 #undef NSEGMENTS
