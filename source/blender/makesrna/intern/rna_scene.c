@@ -1878,9 +1878,9 @@ static void rna_GameSettings_exit_key_set(PointerRNA *ptr, int value)
 
 static StructRNA *rna_RenderEngineSettings_refine(PointerRNA *ptr)
 {
+#ifdef WITH_CLAY_ENGINE
 	RenderEngineSettings *res = (RenderEngineSettings *)ptr->data;
 
-#ifdef WITH_CLAY_ENGINE
 	if (STREQ(res->name, RE_engine_id_BLENDER_CLAY)) {
 		return  &RNA_RenderEngineSettingsClay;
 	}
