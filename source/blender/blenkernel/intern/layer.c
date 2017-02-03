@@ -49,7 +49,6 @@ static void layer_collection_free(SceneLayer *sl, LayerCollection *lc);
 static LayerCollection *layer_collection_add(SceneLayer *sl, ListBase *lb, SceneCollection *sc);
 static LayerCollection *find_layer_collection_by_scene_collection(LayerCollection *lc, const SceneCollection *sc);
 static void object_bases_Iterator_next(Iterator *iter, const int flag);
-static void layer_collection_create_engine_settings(LayerCollection *lc);
 
 /* RenderLayer */
 
@@ -596,20 +595,13 @@ typedef struct CollectionEngineSettingsCB_Type {
 
 } CollectionEngineSettingsCB_Type;
 
-
 static void create_engine_settings_layer_collection(LayerCollection *lc, CollectionEngineSettingsCB_Type *ces_type)
 {
 	if (BKE_layer_collection_engine_get(lc, ces_type->name)) {
 		return;
 	}
 
-	/* create callback data */
-	CollectionEngineSettings *ces = MEM_callocN(sizeof(CollectionEngineSettings), "Collection Engine Settings");
-	BLI_strncpy_utf8(ces->name, ces_type->name, sizeof(ces->name));
-	BLI_addtail(&lc->engine_settings, ces);
-
-	/* call callback */
-	ces_type->callback(NULL, ces);
+	BKE_layer_collection_engine_settings_create(&lc->engine_settings, ces_type);
 
 	for (LayerCollection *lcn = lc->layer_collections.first; lcn; lcn = lcn->next) {
 		create_engine_settings_layer_collection(lcn, ces_type);
@@ -654,6 +646,23 @@ void BKE_layer_collection_engine_settings_callback_register(
 void BKE_layer_collection_engine_settings_callback_free(void)
 {
 	BLI_freelistN(&R_engines_settings_callbacks);
+}
+
+/**
+ * Initialize a CollectionEngineSettings
+ *
+ * Usually we would pass LayerCollection->engine_settings
+ * But depsgraph uses this for Object->collection_settings
+ */
+void BKE_layer_collection_engine_settings_create(ListBase *lb, CollectionEngineSettingsCB_Type *ces_type)
+{
+	/* create callback data */
+	CollectionEngineSettings *ces = MEM_callocN(sizeof(CollectionEngineSettings), "Collection Engine Settings");
+	BLI_strncpy_utf8(ces->name, ces_type->name, sizeof(ces->name));
+	BLI_addtail(lb, ces);
+
+	/* call callback */
+	ces_type->callback(NULL, ces);
 }
 
 /**
