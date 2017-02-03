@@ -75,6 +75,27 @@ class COLLECTION_PT_objects(CollectionButtonsPanel, Panel):
         row.operator("collections.objects_deselect", text="Deselect")
 
 
+def template_engine_settings(col, settings, name, use_icon_view=False):
+    icons = {
+            False: 'ZOOMIN',
+            True: 'X',
+            }
+
+    use_name = "{0}_use".format(name)
+    use = getattr(settings, use_name)
+
+    row = col.row()
+    col = row.column()
+    col.active = use
+
+    if use_icon_view:
+        col.template_icon_view(settings, name)
+    else:
+        col.prop(settings, name)
+
+    row.prop(settings, "{}_use".format(name), text="", icon=icons[use], emboss=False)
+
+
 class COLLECTION_PT_clay_settings(CollectionButtonsPanel, Panel):
     bl_label = "Render Settings"
     COMPAT_ENGINES = {'BLENDER_CLAY'}
@@ -91,16 +112,16 @@ class COLLECTION_PT_clay_settings(CollectionButtonsPanel, Panel):
         settings = collection.get_engine_settings()
 
         col = layout.column()
-        col.prop(settings, "type")
-        col.template_icon_view(settings, "matcap_icon")
-        col.prop(settings, "matcap_rotation")
-        col.prop(settings, "matcap_hue")
-        col.prop(settings, "matcap_saturation")
-        col.prop(settings, "matcap_value")
-        col.prop(settings, "ssao_factor_cavity")
-        col.prop(settings, "ssao_factor_edge")
-        col.prop(settings, "ssao_distance")
-        col.prop(settings, "ssao_attenuation")
+        template_engine_settings(col, settings, "type")
+        template_engine_settings(col, settings, "matcap_icon", use_icon_view=True)
+        template_engine_settings(col, settings, "matcap_rotation")
+        template_engine_settings(col, settings, "matcap_hue")
+        template_engine_settings(col, settings, "matcap_saturation")
+        template_engine_settings(col, settings, "matcap_value")
+        template_engine_settings(col, settings, "ssao_factor_cavity")
+        template_engine_settings(col, settings, "ssao_factor_edge")
+        template_engine_settings(col, settings, "ssao_distance")
+        template_engine_settings(col, settings, "ssao_attenuation")
 
 
 if __name__ == "__main__":  # only for live edit.
