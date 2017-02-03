@@ -66,7 +66,7 @@ typedef struct SceneLayer {
 	short pad[2];
 	ListBase object_bases;      /* ObjectBase */
 	struct ObjectBase *basact;
-	ListBase layer_collections; /* LayerCollection */
+	ListBase layer_collections; /* (LayerCollection *)LinkData->data */
 } SceneLayer;
 
 typedef struct SceneCollection {

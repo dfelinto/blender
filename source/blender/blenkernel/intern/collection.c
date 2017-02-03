@@ -113,10 +113,12 @@ static bool collection_remlink(SceneCollection *sc_parent, SceneCollection *sc_g
 
 /**
  * Recursively remove any instance of this SceneCollection
+ *
+ * return true if removed
  */
-static void layer_collection_remove(SceneLayer *sl, ListBase *lb, const SceneCollection *sc)
+static bool layer_collection_remove(SceneLayer *sl, LayerCollection *lc_parent, const SceneCollection *sc)
 {
-	LayerCollection *lc = lb->first;
+	LayerCollection *lc = lc_parent->first;
 	while(lc) {
 		if (lc->scene_collection == sc) {
 			BKE_layer_collection_free(sl, lc);
@@ -124,20 +126,14 @@ static void layer_collection_remove(SceneLayer *sl, ListBase *lb, const SceneCol
 
 			LayerCollection *lc_next = lc->next;
 			MEM_freeN(lc);
-			lc = lc_next;
-
-			/* only the "top-level" layer collections may have the
-			 * same SceneCollection in a sibling tree.
-			 */
-			if (lb != &sl->layer_collections) {
-				return;
+			return true;
+		}
+		else {
+			if (layer_collection_remove(sl, lc, sc)) {
+				return true;
 			}
 		}
-
-		else {
-			layer_collection_remove(sl, &lc->layer_collections, sc);
-			lc = lc->next;
-		}
+		lc = lc->next;
 	}
 }
 
@@ -163,9 +159,30 @@ bool BKE_collection_remove(Scene *scene, SceneCollection *sc)
 
 	/* check all layers that use this collection and clear them */
 	for (SceneLayer *sl = scene->render_layers.first; sl; sl = sl->next) {
-		layer_collection_remove(sl, &sl->layer_collections, sc);
-		BKE_scene_layer_base_flag_recalculate(sl);
-		sl->active_collection = 0;
+		bool dirty = false;
+		LinkData *link = sl->layer_collections.first;
+
+		while(link) {
+			LayerCollection *lc = link->data;
+			if (lc->scene_collection == sc) {
+				BKE_layer_collection_free(sl, lc);
+				BLI_remlink(&sl->layer_collections, link);
+
+				LinkData *link_next = link->next;
+				MEM_freeN(link);
+				link = link->next;
+				dirty = false;
+			}
+			else {
+				dirty &= layer_collection_remove(sl, lc, sc);
+			}
+		}
+		link = link->next;
+
+		if (dirty) {
+			BKE_scene_layer_base_flag_recalculate(sl);
+			sl->active_collection = 0;
+		}
 	}
 
 	MEM_freeN(sc);

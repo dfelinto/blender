@@ -197,15 +197,16 @@ static SceneCollection *scene_collection_from_new_tree(SceneCollection *sc_refer
 }
 
 /* recreate the LayerCollection tree */
-static void layer_collections_recreate(SceneLayer *sl, ListBase *lb, SceneCollection *mcn, SceneCollection *mc)
+static void layer_collections_recreate(SceneLayer *sln, SceneLayer *sl, SceneCollection *mcn, SceneCollection *mc)
 {
-	for (LayerCollection *lc = lb->first; lc; lc = lc->next) {
-
+	for (LinkData *link = sl->layer_collections.first; link; link = link->data) {
+		LayerCollection *lc = link->data;
 		SceneCollection *sc = scene_collection_from_new_tree(lc->scene_collection, mcn, mc);
+
 		BLI_assert(sc);
 
 		/* instead of syncronizing both trees we simply re-create it */
-		BKE_collection_link(sl, sc);
+		BKE_collection_link(sln, sc);
 	}
 }
 
@@ -316,7 +317,8 @@ Scene *BKE_scene_copy(Main *bmain, Scene *sce, int type)
 			 * instead of syncing both trees we simply unlink and relink the scene collection */
 			BLI_listbase_clear(&new_sl->layer_collections);
 			BLI_listbase_clear(&new_sl->object_bases);
-			layer_collections_recreate(new_sl, &sl->layer_collections, mcn, mc);
+
+			layer_collections_recreate(new_sl, sl, mcn, mc);
 
 			if (sl->basact) {
 				Object *active_ob = sl->basact->object;
