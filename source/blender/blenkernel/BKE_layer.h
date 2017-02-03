@@ -68,6 +68,10 @@ struct ObjectBase *BKE_scene_layer_base_find(struct SceneLayer *sl, struct Objec
 void BKE_scene_layer_base_deselect_all(struct SceneLayer *sl);
 void BKE_scene_layer_base_select(struct SceneLayer *sl, struct ObjectBase *selbase);
 void BKE_scene_layer_base_flag_recalculate(struct SceneLayer *sl);
+void BKE_scene_layer_base_engine_settings_recalculate(struct SceneLayer *sl);
+void BKE_scene_layer_base_engine_settings_recalculate_base(struct SceneLayer *sl, struct ObjectBase *base);
+void BKE_scene_layer_base_engine_settings_recalculate_collection(struct SceneLayer *sl, struct LayerCollection *lc);
+void BKE_scene_layer_base_flush(struct ObjectBase *base, struct Object *ob);
 
 void BKE_layer_collection_free(struct SceneLayer *sl, struct LayerCollection *lc);
 
@@ -120,6 +124,10 @@ void BKE_visible_bases_Iterator_begin(Iterator *iter, void *data_in);
 void BKE_visible_bases_Iterator_next(Iterator *iter);
 void BKE_visible_bases_Iterator_end(Iterator *iter);
 
+void BKE_layer_collection_bases_Iterator_begin(Iterator *iter, void *data_in);
+void BKE_layer_collection_bases_Iterator_next(Iterator *iter);
+void BKE_layer_collection_bases_Iterator_end(Iterator *iter);
+
 #define FOREACH_SELECTED_OBJECT(sl, _ob)                                      \
 	ITER_BEGIN(BKE_selected_objects_Iterator_begin,                           \
 	           BKE_selected_objects_Iterator_next,                            \
@@ -158,6 +166,15 @@ void BKE_visible_bases_Iterator_end(Iterator *iter);
 #define FOREACH_OBJECT_END                                                    \
     }                                                                         \
 }
+
+#define FOREACH_COLLECTION_BASE(sc, _ob)                                      \
+	ITER_BEGIN(BKE_layer_collection_bases_Iterator_begin,                     \
+	           BKE_layer_collection_bases_Iterator_next,                      \
+	           BKE_layer_collection_bases_Iterator_end,                       \
+	           sc, _ob)
+
+#define FOREACH_COLLECTION_BASE_END                                           \
+	ITER_END
 
 #define FOREACH_OBJECT_FLAG(scene, sl, flag, _ob)                             \
 {                                                                             \

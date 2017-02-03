@@ -700,6 +700,112 @@ CollectionEngineSettings *BKE_layer_collection_engine_get(LayerCollection *lc, c
 	return ces;
 }
 
+/**
+ * Set a value from a CollectionProperty to another
+ */
+static void collection_engine_property_set (CollectionEngineProperty *prop_src, CollectionEngineProperty *prop_dst){
+	if ((prop_src->flag & COLLECTION_PROP_USE) != 0) {
+		switch (prop_src->type) {
+		    case COLLECTION_PROP_TYPE_FLOAT:
+			    ((CollectionEnginePropertyFloat *)prop_dst)->value = ((CollectionEnginePropertyFloat *)prop_src)->value;
+			    break;
+		    case COLLECTION_PROP_TYPE_INT:
+			    ((CollectionEnginePropertyInt *)prop_dst)->value = ((CollectionEnginePropertyInt *)prop_src)->value;
+			    break;
+		    default:
+			    break;
+		}
+	}
+}
+
+/**
+ * Recursively set the ObjectBase engine properties based on the LayerCollection properties
+ *
+ * This function is way too slow!
+ */
+static void layer_collection_base_engine_settings_recalculate(LayerCollection *lc, ObjectBase *base)
+{
+	if ((lc->flag & COLLECTION_VISIBLE) == 0) {
+		return;
+	}
+
+	if (BLI_findptr(&lc->object_bases, base, offsetof(LinkData, data)) == NULL) {
+		/* merging */
+		for (CollectionEngineSettings *ces = lc->engine_settings.first; ces; ces = ces->next) {
+
+			CollectionEngineSettings *ces_ob;
+			ces_ob = BLI_findstring(&base->collection_engine_settings, ces->name, offsetof(CollectionEngineSettings, name));
+
+			CollectionEngineProperty *prop_ob = ces_ob->properties.first;
+			for (CollectionEngineProperty *prop = ces->properties.first; prop; prop = prop->next, prop_ob = prop_ob->next) {
+				collection_engine_property_set(prop, prop_ob);
+			}
+		}
+	}
+
+	for (LayerCollection *lcn = lc->layer_collections.first; lcn; lcn = lcn->next) {
+		layer_collection_base_engine_settings_recalculate(lcn, base);
+	}
+}
+
+static void scene_layer_base_engine_settings_reset_base(ObjectBase *base)
+{
+	collection_engine_settings_free(&base->collection_engine_settings);
+
+	CollectionEngineSettingsCB_Type *ces_type;
+	for (ces_type = R_engines_settings_callbacks.first; ces_type; ces_type = ces_type->next) {
+		create_engine_settings(&base->collection_engine_settings, ces_type);
+	}
+}
+
+static void scene_layer_base_engine_settings_reset_collection(LayerCollection *lc)
+{
+	for (LinkData *link = lc->object_bases.first; link; link = link->data) {
+		scene_layer_base_engine_settings_reset_base(link->data);
+	}
+}
+
+/**
+ * Re-evaluate the ObjectBase EngineSettings for all objects in SceneLayer
+ */
+void BKE_scene_layer_base_engine_settings_recalculate(SceneLayer *sl)
+{
+	/* reset the data */
+	for (ObjectBase *base = sl->object_bases.first; base; base = base->next) {
+		scene_layer_base_engine_settings_reset_base(base);
+
+		/* calculate it with the new values */
+		for (LayerCollection *lc = sl->layer_collections.first; lc; lc = lc->next) {
+			layer_collection_base_engine_settings_recalculate(lc, base);
+		}
+	}
+}
+
+/**
+ * Re-evaluate the ObjectBase EngineSettings for a single object
+ */
+void BKE_scene_layer_base_engine_settings_recalculate_base(SceneLayer *sl, ObjectBase *base)
+{
+	scene_layer_base_engine_settings_reset_base(base);
+
+	/* calculate it with the new values */
+	for (LayerCollection *lc = sl->layer_collections.first; lc; lc = lc->next) {
+		layer_collection_base_engine_settings_recalculate(lc, base);
+	}
+}
+
+/**
+ * Re-evaluate the ObjectBase EngineSettings for the objects of a LayerCollection
+ */
+void BKE_scene_layer_base_engine_settings_recalculate_collection(SceneLayer *sl, LayerCollection *lc)
+{
+	ObjectBase *base;
+	FOREACH_COLLECTION_BASE(lc, base)
+	{
+		BKE_scene_layer_base_engine_settings_recalculate_object(sl, base);
+	}
+}
+
 /* ---------------------------------------------------------------------- */
 /* Engine Settings Properties */
 
@@ -831,4 +937,19 @@ void BKE_visible_bases_Iterator_next(Iterator *iter)
 void BKE_visible_bases_Iterator_end(Iterator *UNUSED(iter))
 {
 	/* do nothing */
+}
+
+void BKE_layer_collection_bases_Iterator_begin(Iterator *UNUSED(iter), void *UNUSED(data_in))
+{
+	TODO_LAYER;
+}
+
+void BKE_layer_collection_bases_Iterator_next(Iterator *UNUSED(iter))
+{
+	TODO_LAYER;
+}
+
+void BKE_layer_collection_bases_Iterator_end(Iterator *UNUSED(iter))
+{
+	TODO_LAYER;
 }
