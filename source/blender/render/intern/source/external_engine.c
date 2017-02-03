@@ -92,7 +92,7 @@ void RE_engines_init(void)
 {
 	RE_engines_register(NULL, &internal_render_type);
 #ifdef WITH_GAMEENGINE
-	RE_engines_register(NULL, &internal_render_type);
+	RE_engines_register(NULL, &internal_game_type);
 #endif
 	DRW_engines_init();
 }
