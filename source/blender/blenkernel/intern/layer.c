@@ -293,15 +293,11 @@ static void layer_collection_free(SceneLayer *sl, LayerCollection *lc)
 
 	BLI_freelistN(&lc->object_bases);
 	BLI_freelistN(&lc->overrides);
+	BKE_layer_collection_engine_settings_free(&lc->engine_settings);
 
 	for (LayerCollection *nlc = lc->layer_collections.first; nlc; nlc = nlc->next) {
 		layer_collection_free(sl, nlc);
 	}
-
-	for (CollectionEngineSettings *cse = lc->engine_settings.first; cse; cse = cse->next) {
-		BLI_freelistN(&cse->properties);
-	}
-	BLI_freelistN(&lc->engine_settings);
 
 	BLI_freelistN(&lc->layer_collections);
 }
@@ -658,6 +654,20 @@ void BKE_layer_collection_engine_settings_callback_register(
 void BKE_layer_collection_engine_settings_callback_free(void)
 {
 	BLI_freelistN(&R_engines_settings_callbacks);
+}
+
+/**
+ * Free the CollectionEngineSettings ListBase
+ *
+ * Usually we would pass LayerCollection->engine_settings
+ * But depsgraph uses this for Object->collection_settings
+ */
+void BKE_layer_collection_engine_settings_free(ListBase *lb)
+{
+	for (CollectionEngineSettings *cse = lb->first; cse; cse = cse->next) {
+		BLI_freelistN(&cse->properties);
+	}
+	BLI_freelistN(lb);
 }
 
 /**
