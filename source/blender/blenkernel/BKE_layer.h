@@ -113,6 +113,8 @@ int BKE_collection_engine_property_value_get_int(struct CollectionEngineSettings
 int BKE_collection_engine_property_value_get_float(struct CollectionEngineSettings *ces, const char *name);
 void BKE_collection_engine_property_value_set_int(struct CollectionEngineSettings *ces, const char *name, int value);
 void BKE_collection_engine_property_value_set_float(struct CollectionEngineSettings *ces, const char *name, float value);
+bool BKE_collection_engine_property_use_get(struct CollectionEngineSettings *ces, const char *name);
+void BKE_collection_engine_property_use_set(struct CollectionEngineSettings *ces, const char *name, bool value);
 
 /* iterators */
 

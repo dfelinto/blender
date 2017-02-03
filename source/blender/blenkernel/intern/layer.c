@@ -798,6 +798,26 @@ void BKE_collection_engine_property_value_set_float(CollectionEngineSettings *ce
 	prop->data.flag |= COLLECTION_PROP_USE;
 }
 
+bool BKE_collection_engine_property_use_get(CollectionEngineSettings *ces, const char *name)
+{
+	CollectionEngineProperty *prop;
+	prop = (CollectionEngineProperty *)BLI_findstring(&ces->properties, name, offsetof(CollectionEngineProperty, name));
+	return ((prop->flag & COLLECTION_PROP_USE) != 0);
+}
+
+void BKE_collection_engine_property_use_set(CollectionEngineSettings *ces, const char *name, bool value)
+{
+	CollectionEngineProperty *prop;
+	prop = (CollectionEngineProperty *)BLI_findstring(&ces->properties, name, offsetof(CollectionEngineProperty, name));
+
+	if (value) {
+		prop->flag |= COLLECTION_PROP_USE;
+	}
+	else {
+		prop->flag &= ~COLLECTION_PROP_USE;
+	}
+}
+
 /* ---------------------------------------------------------------------- */
 /* Iterators */
 
