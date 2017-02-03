@@ -2371,33 +2371,24 @@ static StructRNA *rna_CollectionEngineSettings_refine(struct PointerRNA *ptr)
 
 /****** clay engine settings *******/
 
-#define RNA_LAYER_ENGINE_GET_SET(_TYPE_, _CLASS_, _NAME_)                          \
+#define RNA_LAYER_ENGINE_GET_SET(_TYPE_, _NAME_)                                   \
 static _TYPE_ rna_LayerEngineSettings_##_NAME_##_get(PointerRNA *ptr)              \
 {                                                                                  \
 	CollectionEngineSettings *ces = (CollectionEngineSettings *)ptr->data;         \
-	                                                                               \
-	_CLASS_ *prop = (_CLASS_ *)BKE_collection_engine_property_get(ces, #_NAME_);   \
-	BLI_assert(prop);                                                              \
-	                                                                               \
-	return prop->value;                                                            \
+	return BKE_collection_engine_property_value_get_##_TYPE_(ces, #_NAME_);        \
 }                                                                                  \
 	                                                                               \
 static void rna_LayerEngineSettings_##_NAME_##_set(PointerRNA *ptr, _TYPE_ value)  \
 {                                                                                  \
 	CollectionEngineSettings *ces = (CollectionEngineSettings *)ptr->data;         \
-	                                                                               \
-	_CLASS_ *prop = (_CLASS_ *)BKE_collection_engine_property_get(ces,  #_NAME_);  \
-	BLI_assert(prop);                                                              \
-	prop->data.flag |= COLLECTION_PROP_USE;                                        \
-	                                                                               \
-	prop->value = value;                                                           \
+	BKE_collection_engine_property_value_set_##_TYPE_(ces, #_NAME_, value);        \
 }
 
 #define RNA_LAYER_ENGINE_GET_SET_FLOAT(_NAME_) \
-	RNA_LAYER_ENGINE_GET_SET(float, CollectionEnginePropertyFloat, _NAME_)
+	RNA_LAYER_ENGINE_GET_SET(float, _NAME_)
 
 #define RNA_LAYER_ENGINE_GET_SET_INT(_NAME_) \
-	RNA_LAYER_ENGINE_GET_SET(int, CollectionEnginePropertyInt, _NAME_)
+	RNA_LAYER_ENGINE_GET_SET(int, _NAME_)
 
 
 RNA_LAYER_ENGINE_GET_SET_INT(type)
