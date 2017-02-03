@@ -91,8 +91,8 @@ class COLLECTION_PT_clay_settings(CollectionButtonsPanel, Panel):
         settings = collection.get_engine_settings()
 
         col = layout.column()
-        col.template_icon_view(settings, "matcap_icon")
         col.prop(settings, "type")
+        col.template_icon_view(settings, "matcap_icon")
         col.prop(settings, "matcap_rotation")
         col.prop(settings, "matcap_hue")
         col.prop(settings, "matcap_saturation")
