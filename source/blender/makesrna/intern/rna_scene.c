@@ -2390,6 +2390,7 @@ static void rna_LayerEngineSettings_##_NAME_##_set(PointerRNA *ptr, _TYPE_ value
 	                                                                               \
 	_CLASS_ *prop = (_CLASS_ *)BKE_collection_engine_property_get(ces,  #_NAME_);  \
 	BLI_assert(prop);                                                              \
+	prop->data.flag |= COLLECTION_PROP_USE;                                        \
 	                                                                               \
 	prop->value = value;                                                           \
 }
