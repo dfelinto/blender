@@ -304,7 +304,7 @@ typedef struct Object {
 
 	struct PreviewImage *preview;
 
-	struct CollectionSettings *collection_settings; /* used by depsgraph, flushed from collection-tree */
+	struct ListBase *collection_settings; /* used by depsgraph, flushed from collection-tree */
 } Object;
 
 /* Warning, this is not used anymore because hooks are now modifiers */
