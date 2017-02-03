@@ -551,7 +551,6 @@ typedef enum BakePassFilter {
 typedef struct RenderEngineSettings {
 	struct RenderEngineSettings *next, *prev;
 	char name[32]; /* engine name */
-	void *runtime; /* Here to be free on file read */
 	void *data;
 } RenderEngineSettings;
 
@@ -572,7 +571,9 @@ typedef struct RenderEngineSettingsClay {
 	float ssao_factor_cavity;
 	float ssao_factor_edge;
 
-	float pad;
+	short flag;
+	short pad;
+	int ubo_index;
 	/* end of MaterialEngineSettingsClay */
 
 	/* Global Settings */

@@ -39,7 +39,7 @@ void DRW_engines_free(void);
 void DRW_pass_free(struct DRWPass *pass);
 
 /* Settings */
-void *DRW_material_settings_get(struct Material *ma, const char *engine_name, void ***runtime);
-void *DRW_render_settings_get(struct Scene *scene, const char *engine_name, void ***runtime);
+void *DRW_material_settings_get(struct Material *ma, const char *engine_name);
+void *DRW_render_settings_get(struct Scene *scene, const char *engine_name);
 
 #endif /* __DRW_ENGINE_H__ */

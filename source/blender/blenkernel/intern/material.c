@@ -113,8 +113,6 @@ void BKE_material_free(Material *ma)
 	BKE_previewimg_free(&ma->preview);
 
 	for (MaterialEngineSettings *mes = ma->engines_settings.first; mes; mes = mes->next) {
-		if (mes->runtime)
-			MEM_SAFE_FREE(mes->runtime);
 		if (mes->data)
 			MEM_SAFE_FREE(mes->data);
 	}

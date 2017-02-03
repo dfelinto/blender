@@ -3994,7 +3994,6 @@ static void direct_link_material(FileData *fd, Material *ma)
 
 	link_list(fd, &ma->engines_settings);
 	for (mes = ma->engines_settings.first; mes; mes = mes->next) {
-		mes->runtime = NULL;
 		mes->data = newdataadr(fd, mes->data);
 	}
 }
@@ -6234,7 +6233,6 @@ static void direct_link_scene(FileData *fd, Scene *sce)
 
 	link_list(fd, &sce->engines_settings);
 	for (res = sce->engines_settings.first; res; res = res->next) {
-		res->runtime = NULL;
 		res->data = newdataadr(fd, res->data);
 	}
 }

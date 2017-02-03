@@ -94,22 +94,10 @@ typedef struct TexPaintSlot {
 typedef struct MaterialEngineSettings {
 	struct MaterialEngineSettings *next, *prev;
 	char name[32]; /* engine name - MAX_NAME */
-	void *runtime; /* To be free on file read */
 	void *data;
 } MaterialEngineSettings;
 
 /* Clay engine */
-
-/* Runtime Data Not saved in file */
-typedef struct MaterialRuntimeClay {
-	short type;
-	short flag;
-	int material_id;   /* Index in materials UBO */
-	int matcap_id;     /* Icon ID */
-	float matcap_rot[2];
-	float matcap_hsv[3];
-	float ssao_params_var[4];
-} MaterialRuntimeClay;
 
 /* MaterialRuntimeClay.flag */
 #define CLAY_OUTDATED		1
@@ -128,7 +116,10 @@ typedef struct MaterialEngineSettingsClay {
 	float ssao_factor_cavity;
 	float ssao_factor_edge;
 
-	float pad;
+	/* Runtime */
+	short flag;
+	short pad;
+	int ubo_index;
 } MaterialEngineSettingsClay;
 
 /* MaterialEngineSettingsClay.type */
