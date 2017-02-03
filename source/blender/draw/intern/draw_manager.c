@@ -617,7 +617,7 @@ void DRW_draw_background(void)
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	}
 }
-
+#ifdef WITH_CLAY_ENGINE
 /* Only alter the state (does not reset it like set_state() ) */
 static void shgroup_set_state(DRWShadingGroup *shgroup)
 {
@@ -928,15 +928,15 @@ void DRW_state_reset(void)
 	state |= DRW_STATE_DEPTH_LESS;
 	set_state(state);
 }
-
+#endif
 /* ****************************************** Settings ******************************************/
-
 void *DRW_material_settings_get(Material *ma, const char *engine_name)
 {
 	MaterialEngineSettings *ms = NULL;
 
 	ms = BLI_findstring(&ma->engines_settings, engine_name, offsetof(MaterialEngineSettings, name));
 
+#ifdef WITH_CLAY_ENGINE
 	/* If the settings does not exists yet, create it */
 	if (ms == NULL) {
 		ms = MEM_callocN(sizeof(RenderEngineSettings), "RenderEngineSettings");
@@ -954,6 +954,9 @@ void *DRW_material_settings_get(Material *ma, const char *engine_name)
 
 		BLI_addtail(&ma->engines_settings, ms);
 	}
+#else
+	return NULL;
+#endif
 
 	return ms->data;
 }
@@ -968,6 +971,7 @@ void *DRW_render_settings_get(Scene *scene, const char *engine_name)
 
 	rs = BLI_findstring(&scene->engines_settings, engine_name, offsetof(RenderEngineSettings, name));
 
+#ifdef WITH_CLAY_ENGINE
 	/* If the settings does not exists yet, create it */
 	if (rs == NULL) {
 		rs = MEM_callocN(sizeof(RenderEngineSettings), "RenderEngineSettings");
@@ -985,10 +989,12 @@ void *DRW_render_settings_get(Scene *scene, const char *engine_name)
 
 		BLI_addtail(&scene->engines_settings, rs);
 	}
+#else
+	return NULL;
+#endif
 
 	return rs->data;
 }
-
 /* ****************************************** Framebuffers ******************************************/
 
 void DRW_framebuffer_init(struct GPUFrameBuffer **fb, int width, int height, DRWFboTexture textures[MAX_FBO_TEX],
@@ -1119,14 +1125,18 @@ bool DRW_viewport_cache_is_dirty(void)
 
 void DRW_engines_init(void)
 {
+#ifdef WITH_CLAY_ENGINE
 	RE_engines_register(NULL, &viewport_clay_type);
+#endif
 }
 
 void DRW_engines_free(void)
 {
+#ifdef WITH_CLAY_ENGINE
 	clay_engine_free();
 
 	DRW_shape_cache_free();
 
 	BLI_remlink(&R_engines, &viewport_clay_type);
+#endif
 }

@@ -63,6 +63,10 @@ set(SRC
 	./DRW_engine.h
 )
 
+if(WITH_CLAY_ENGINE)
+	add_definitions(-DWITH_CLAY_ENGINE)
+endif()
+
 data_to_c_simple(engines/clay/shaders/clay_frag.glsl SRC)
 data_to_c_simple(engines/clay/shaders/clay_vert.glsl SRC)
 data_to_c_simple(engines/clay/shaders/ssao_alchemy.glsl SRC)

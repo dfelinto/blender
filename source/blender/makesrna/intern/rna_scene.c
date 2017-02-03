@@ -1880,10 +1880,11 @@ static StructRNA *rna_RenderEngineSettings_refine(PointerRNA *ptr)
 {
 	RenderEngineSettings *res = (RenderEngineSettings *)ptr->data;
 
+#ifdef WITH_CLAY_ENGINE
 	if (STREQ(res->name, RE_engine_id_BLENDER_CLAY)) {
 		return  &RNA_RenderEngineSettingsClay;
 	}
-
+#endif
 	return &RNA_RenderEngineSettings;
 }
 
@@ -6848,6 +6849,7 @@ static void rna_def_scene_quicktime_settings(BlenderRNA *brna)
 }
 #endif
 
+#ifdef WITH_CLAY_ENGINE
 static void rna_def_render_engine_settings_clay(BlenderRNA *brna)
 {
 	StructRNA *srna;
@@ -6940,6 +6942,7 @@ static void rna_def_render_engine_settings_clay(BlenderRNA *brna)
 	RNA_def_property_range(prop, 1, 500);
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
 }
+#endif
 
 static void rna_def_scene_render_engine(BlenderRNA *brna)
 {
@@ -6950,7 +6953,9 @@ static void rna_def_scene_render_engine(BlenderRNA *brna)
 	RNA_def_struct_sdna(srna, "RenderEngineSettings");
 	RNA_def_struct_refine_func(srna, "rna_RenderEngineSettings_refine");
 
+#ifdef WITH_CLAY_ENGINE
 	rna_def_render_engine_settings_clay(brna);
+#endif
 }
 
 static void rna_def_scene_render_data(BlenderRNA *brna)

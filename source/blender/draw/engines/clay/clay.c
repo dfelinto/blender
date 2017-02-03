@@ -34,7 +34,7 @@
 #include "UI_interface_icons.h"
 
 #include "clay.h"
-
+#ifdef WITH_CLAY_ENGINE
 /* Shaders */
 
 extern char datatoc_clay_frag_glsl[];
@@ -719,3 +719,4 @@ RenderEngineType viewport_clay_type = {
 	NULL, NULL, NULL, NULL, &CLAY_view_draw, NULL, &CLAY_collection_settings_create,
 	{NULL, NULL, NULL}
 };
+#endif

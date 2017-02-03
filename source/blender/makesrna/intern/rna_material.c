@@ -316,11 +316,11 @@ static void rna_MaterialTextureSlot_use_set(PointerRNA *ptr, int value)
 static StructRNA *rna_MaterialEngineSettings_refine(PointerRNA *ptr)
 {
 	MaterialEngineSettings *mes = (MaterialEngineSettings *)ptr->data;
-
+#ifdef WITH_CLAY_ENGINE
 	if (STREQ(mes->name, RE_engine_id_BLENDER_CLAY)) {
 		return  &RNA_MaterialEngineSettingsClay;
 	}
-
+#endif
 	return &RNA_MaterialEngineSettings;
 }
 
