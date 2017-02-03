@@ -775,7 +775,7 @@ int BKE_collection_engine_property_value_get_int(CollectionEngineSettings *ces, 
 	return prop->value;
 }
 
-int BKE_collection_engine_property_value_get_float(CollectionEngineSettings *ces, const char *name)
+float BKE_collection_engine_property_value_get_float(CollectionEngineSettings *ces, const char *name)
 {
 	CollectionEnginePropertyFloat *prop;
 	prop = (CollectionEnginePropertyFloat *)BLI_findstring(&ces->properties, name, offsetof(CollectionEngineProperty, name));
