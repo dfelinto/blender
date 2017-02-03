@@ -99,6 +99,7 @@ typedef void (*CollectionEngineSettingsCB)(struct RenderEngine *engine, struct C
 struct CollectionEngineSettings *BKE_layer_collection_engine_get(struct LayerCollection *lc, const char *engine_name);
 void BKE_layer_collection_engine_settings_callback_register(struct Main *bmain, const char *engine_name, CollectionEngineSettingsCB func);
 void BKE_layer_collection_engine_settings_callback_free(void);
+void BKE_layer_collection_engine_settings_create(struct ListBase *lb, const char *engine_name);
 void BKE_layer_collection_engine_settings_free(struct ListBase *lb);
 
 void BKE_collection_engine_property_add_float(struct CollectionEngineSettings *ces, const char *name, float value);
