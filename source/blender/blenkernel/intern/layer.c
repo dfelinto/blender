@@ -758,6 +758,7 @@ void BKE_collection_engine_property_value_set_int(CollectionEngineSettings *ces,
 	CollectionEnginePropertyInt *prop;
 	prop = (CollectionEnginePropertyInt *)BLI_findstring(&ces->properties, name, offsetof(CollectionEngineProperty, name));
 	prop->value = value;
+	prop->data.flag |= COLLECTION_PROP_USE;
 }
 
 void BKE_collection_engine_property_value_set_float(CollectionEngineSettings *ces, const char *name, float value)
@@ -765,6 +766,7 @@ void BKE_collection_engine_property_value_set_float(CollectionEngineSettings *ce
 	CollectionEnginePropertyFloat *prop;
 	prop = (CollectionEnginePropertyFloat *)BLI_findstring(&ces->properties, name, offsetof(CollectionEngineProperty, name));
 	prop->value = value;
+	prop->data.flag |= COLLECTION_PROP_USE;
 }
 
 /* ---------------------------------------------------------------------- */
