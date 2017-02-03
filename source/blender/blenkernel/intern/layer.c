@@ -425,9 +425,9 @@ static void layer_collection_object_add(SceneLayer *sl, LayerCollection *lc, Obj
 		return;
 	}
 
-	BKE_scene_layer_base_flag_recalculate(sl);
-
 	BLI_addtail(&lc->object_bases, BLI_genericNodeN(base));
+
+	BKE_scene_layer_base_flag_recalculate(sl);
 }
 
 static void layer_collection_object_remove(SceneLayer *sl, LayerCollection *lc, Object *ob)
