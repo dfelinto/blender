@@ -168,7 +168,7 @@ SceneLayer *BKE_scene_layer_find_from_collection(Scene *scene, LayerCollection *
 			return sl;
 		}
 	}
-	return false;
+	return NULL;
 }
 
 /* ObjectBase */
