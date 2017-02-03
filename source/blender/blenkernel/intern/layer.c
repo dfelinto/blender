@@ -739,6 +739,34 @@ CollectionEngineProperty *BKE_collection_engine_property_get(CollectionEngineSet
 	return BLI_findstring(&ces->properties, name, offsetof(CollectionEngineProperty, name));
 }
 
+int BKE_collection_engine_property_value_get_int(CollectionEngineSettings *ces, const char *name)
+{
+	CollectionEnginePropertyInt *prop;
+	prop = (CollectionEnginePropertyInt *)BLI_findstring(&ces->properties, name, offsetof(CollectionEngineProperty, name));
+	return prop->value;
+}
+
+int BKE_collection_engine_property_value_get_float(CollectionEngineSettings *ces, const char *name)
+{
+	CollectionEnginePropertyFloat *prop;
+	prop = (CollectionEnginePropertyFloat *)BLI_findstring(&ces->properties, name, offsetof(CollectionEngineProperty, name));
+	return prop->value;
+}
+
+void BKE_collection_engine_property_value_set_int(CollectionEngineSettings *ces, const char *name, int value)
+{
+	CollectionEnginePropertyInt *prop;
+	prop = (CollectionEnginePropertyInt *)BLI_findstring(&ces->properties, name, offsetof(CollectionEngineProperty, name));
+	prop->value = value;
+}
+
+void BKE_collection_engine_property_value_set_float(CollectionEngineSettings *ces, const char *name, float value)
+{
+	CollectionEnginePropertyFloat *prop;
+	prop = (CollectionEnginePropertyFloat *)BLI_findstring(&ces->properties, name, offsetof(CollectionEngineProperty, name));
+	prop->value = value;
+}
+
 /* ---------------------------------------------------------------------- */
 /* Iterators */
 

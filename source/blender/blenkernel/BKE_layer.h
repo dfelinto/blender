@@ -105,6 +105,10 @@ void BKE_layer_collection_engine_settings_free(struct ListBase *lb);
 void BKE_collection_engine_property_add_float(struct CollectionEngineSettings *ces, const char *name, float value);
 void BKE_collection_engine_property_add_int(struct CollectionEngineSettings *ces, const char *name, int value);
 struct CollectionEngineProperty *BKE_collection_engine_property_get(struct CollectionEngineSettings *ces, const char *name);
+int BKE_collection_engine_property_value_get_int(struct CollectionEngineSettings *ces, const char *name);
+int BKE_collection_engine_property_value_get_float(struct CollectionEngineSettings *ces, const char *name);
+void BKE_collection_engine_property_value_set_int(struct CollectionEngineSettings *ces, const char *name, int value);
+void BKE_collection_engine_property_value_set_float(struct CollectionEngineSettings *ces, const char *name, float value);
 
 /* iterators */
 
