@@ -165,7 +165,6 @@ option_defaults_init(
 	_init_FFTW3
 	_init_GAMEENGINE
 	_init_OPENSUBDIV
-	_init_CLAY_ENGINE
 )
 
 # customize...
@@ -187,7 +186,6 @@ elseif(WIN32)
 elseif(APPLE)
 	set(_init_JACK                           OFF)
 	set(_init_OPENSUBDIV                     OFF)
-	set(_init_CLAY_ENGINE                    OFF)
 endif()
 
 
@@ -244,7 +242,7 @@ endif()
 option(WITH_PLAYER        "Build Player" OFF)
 option(WITH_OPENCOLORIO   "Enable OpenColorIO color management" ${_init_OPENCOLORIO})
 
-option(WITH_CLAY_ENGINE    "Enable New Clay engine (Breaks Mac and Intel compatibility)" _init_CLAY_ENGINE)
+option(WITH_CLAY_ENGINE    "Enable New Clay engine (Breaks Mac and Intel compatibility)" ON)
 
 # Compositor
 option(WITH_COMPOSITOR         "Enable the tile based nodal compositor" ON)
