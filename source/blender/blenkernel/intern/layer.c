@@ -257,6 +257,35 @@ void BKE_scene_layer_base_flag_recalculate(SceneLayer *sl)
 			base->flag &= ~BASE_SELECTED;
 		}
 	}
+
+	BKE_scene_layer_engine_settings_recalculate(sl);
+}
+
+/**
+ * Tag Scene Layer to recalculation
+ *
+ * Temporary function, waiting for real depsgraph
+ */
+void BKE_scene_layer_engine_settings_recalculate(struct SceneLayer *sl)
+{
+	sl->flag |= SCENE_LAYER_ENGINE_DIRTY;
+}
+
+/**
+ * Re-calculate the engine settings for all the objects in SceneLayer
+ *
+ * Temporary function, waiting for real depsgraph
+ */
+void BKE_scene_layer_engine_settings_update(struct SceneLayer *sl)
+{
+	if ((sl->flag & SCENE_LAYER_ENGINE_DIRTY) == 0) {
+		return;
+	}
+
+	/* do the complete settings update */
+	TODO_LAYER_DEPSGRAPH;
+
+	sl->flag &= ~SCENE_LAYER_ENGINE_DIRTY;
 }
 
 /**

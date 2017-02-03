@@ -99,6 +99,7 @@ enum {
 /* SceneLayer->flag */
 enum {
 	SCENE_LAYER_RENDER = (1 << 0),
+	SCENE_LAYER_ENGINE_DIRTY  = (1 << 1),
 };
 
 

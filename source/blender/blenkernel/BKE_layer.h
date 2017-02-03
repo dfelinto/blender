@@ -39,6 +39,7 @@ extern "C" {
 #define TODO_LAYER_CONTEXT /* get/set current (context) SceneLayer */
 #define TODO_LAYER_BASE /* Base to ObjectBase related TODO */
 #define TODO_LAYER_OPERATORS /* collection mamanger and property panel operators */
+#define TODO_LAYER_DEPSGRAPH /* placeholder for real Depsgraph fix */
 #define TODO_LAYER /* generic todo */
 
 struct CollectionEngineSettings;
@@ -68,6 +69,9 @@ struct ObjectBase *BKE_scene_layer_base_find(struct SceneLayer *sl, struct Objec
 void BKE_scene_layer_base_deselect_all(struct SceneLayer *sl);
 void BKE_scene_layer_base_select(struct SceneLayer *sl, struct ObjectBase *selbase);
 void BKE_scene_layer_base_flag_recalculate(struct SceneLayer *sl);
+
+void BKE_scene_layer_engine_settings_recalculate(struct SceneLayer *sl);
+void BKE_scene_layer_engine_settings_update(struct SceneLayer *sl);
 
 void BKE_layer_collection_free(struct SceneLayer *sl, struct LayerCollection *lc);
 
@@ -191,6 +195,9 @@ void BKE_visible_bases_Iterator_end(Iterator *iter);
 /* temporary hacky solution waiting for final depsgraph evaluation */
 #define DEG_OBJECT_ITER(sl_, ob_)                                             \
 {                                                                             \
+	/* temporary solution, waiting for depsgraph update */                    \
+	BKE_scene_layer_engine_settings_update(sl);                               \
+	                                                                          \
 	/* flush all the data to objects*/                                        \
 	ObjectBase *base_;					                                      \
 	for (base_ = sl->object_bases.first; base_; base_ = base_->next) {        \
