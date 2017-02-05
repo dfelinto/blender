@@ -217,7 +217,8 @@ void BlenderSync::sync_data(BL::RenderSettings& b_render,
 	            b_override,
 	            width, height,
 	            python_thread_state);
-
+	sync_light_linking();
+	
 	mesh_synced.clear();
 }
 
