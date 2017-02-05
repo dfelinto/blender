@@ -32,7 +32,8 @@ enum ObjectTransform {
 	OBJECT_INVERSE_TRANSFORM = 4,
 	OBJECT_TRANSFORM_MOTION_POST = 4,
 	OBJECT_PROPERTIES = 8,
-	OBJECT_DUPLI = 9
+	OBJECT_DUPLI = 9,
+	OBJECT_LIGHT_LINKING = 11
 };
 
 enum ObjectVectorTransform {
@@ -232,6 +233,46 @@ ccl_device_inline float object_surface_area(KernelGlobals *kg, int object)
 	float4 f = kernel_tex_fetch(__objects, offset);
 	return f.x;
 }
+
+/* Light Linking bitmask of object */
+
+ccl_device_inline unsigned int object_light_linking(KernelGlobals *kg, int object)
+{
+    if(object == OBJECT_NONE)
+        return 0;
+
+    int offset = object*OBJECT_SIZE + OBJECT_LIGHT_LINKING;
+    float4 f = kernel_tex_fetch(__objects, offset);
+    return __float_as_uint(f.x);
+}
+
+ccl_device_inline unsigned int object_shadow_linking(KernelGlobals *kg, int object)
+{
+    if(object == OBJECT_NONE)
+        return 0;
+
+    int offset = object*OBJECT_SIZE + OBJECT_LIGHT_LINKING;
+    float4 f = kernel_tex_fetch(__objects, offset);
+    return __float_as_uint(f.y);
+}
+
+ccl_device bool object_in_shadow_linking(KernelGlobals *kg, int visibility, int object, int triAddr, unsigned int shadow_linking)
+{
+    /* ignore objects when shadow linking is used */
+    if (visibility & PATH_RAY_SHADOW) {
+        uint tri_object = (object == OBJECT_NONE)? kernel_tex_fetch(__prim_object, triAddr): object;
+
+        int offset = tri_object*OBJECT_SIZE + OBJECT_LIGHT_LINKING;
+        float4 f = kernel_tex_fetch(__objects, offset);
+        unsigned int object_shadow_linking = __float_as_uint(f.y);
+
+        if ((shadow_linking & object_shadow_linking) == 0)
+            return false;
+    }
+
+    return true;
+}
+
 
 /* Pass ID number of object */
 
