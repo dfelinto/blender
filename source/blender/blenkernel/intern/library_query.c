@@ -355,7 +355,7 @@ void BKE_library_foreach_ID_link(Main *bmain, ID *id, LibraryIDLinkCallback call
 				Scene *scene = (Scene *) id;
 				ToolSettings *toolsett = scene->toolsettings;
 				SceneRenderLayer *srl;
-				Base *legacy_base;
+				BaseLegacy *legacy_base;
 
 				CALLBACK_INVOKE(scene->camera, IDWALK_CB_NOP);
 				CALLBACK_INVOKE(scene->world, IDWALK_CB_USER);

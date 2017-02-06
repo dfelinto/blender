@@ -403,7 +403,7 @@ static void do_lasso_select_pose(ViewContext *vc, Object *ob, const int mcords[]
 
 static void object_deselect_all_visible(Scene *scene, View3D *v3d)
 {
-	Base *base;
+	BaseLegacy *base;
 
 	for (base = scene->base.first; base; base = base->next) {
 		if (BASE_SELECTABLE(v3d, base)) {
@@ -415,7 +415,7 @@ static void object_deselect_all_visible(Scene *scene, View3D *v3d)
 static void do_lasso_select_objects(ViewContext *vc, const int mcords[][2], const short moves,
                                     const bool extend, const bool select)
 {
-	Base *base;
+	BaseLegacy *base;
 	
 	if (extend == false && select)
 		object_deselect_all_visible(vc->scene, vc->v3d);
@@ -1075,9 +1075,9 @@ void VIEW3D_OT_select_menu(wmOperatorType *ot)
 	RNA_def_boolean(ot->srna, "toggle", 0, "Toggle", "Toggle selection instead of deselecting everything first");
 }
 
-static void deselectall_except(Scene *scene, Base *b)   /* deselect all except b */
+static void deselectall_except(Scene *scene, BaseLegacy *b)   /* deselect all except b */
 {
-	Base *base;
+	BaseLegacy *base;
 	
 	for (base = FIRSTBASE; base; base = base->next) {
 		if (base->flag_legacy & SELECT) {
@@ -1088,7 +1088,7 @@ static void deselectall_except(Scene *scene, Base *b)   /* deselect all except b
 	}
 }
 
-static Base *object_mouse_select_menu(bContext *C, ViewContext *vc, unsigned int *buffer, int hits, const int mval[2], short toggle)
+static BaseLegacy *object_mouse_select_menu(bContext *C, ViewContext *vc, unsigned int *buffer, int hits, const int mval[2], short toggle)
 {
 	short baseCount = 0;
 	bool ok;
@@ -1293,12 +1293,12 @@ static short mixed_bones_object_selectbuffer(
 }
 
 /* returns basact */
-static Base *mouse_select_eval_buffer(ViewContext *vc, unsigned int *buffer, int hits,
-                                      Base *startbase, bool has_bones, bool do_nearest)
+static BaseLegacy *mouse_select_eval_buffer(ViewContext *vc, unsigned int *buffer, int hits,
+                                      BaseLegacy *startbase, bool has_bones, bool do_nearest)
 {
 	Scene *scene = vc->scene;
 	View3D *v3d = vc->v3d;
-	Base *base, *basact = NULL;
+	BaseLegacy *base, *basact = NULL;
 	int a;
 	
 	if (do_nearest) {
@@ -1376,10 +1376,10 @@ static Base *mouse_select_eval_buffer(ViewContext *vc, unsigned int *buffer, int
 }
 
 /* mval comes from event->mval, only use within region handlers */
-Base *ED_view3d_give_base_under_cursor(bContext *C, const int mval[2])
+BaseLegacy *ED_view3d_give_base_under_cursor(bContext *C, const int mval[2])
 {
 	ViewContext vc;
-	Base *basact = NULL;
+	BaseLegacy *basact = NULL;
 	unsigned int buffer[MAXPICKBUF];
 	int hits;
 	bool do_nearest;
@@ -1426,7 +1426,7 @@ static bool ed_object_select_pick(
 	ARegion *ar = CTX_wm_region(C);
 	View3D *v3d = CTX_wm_view3d(C);
 	Scene *scene = CTX_data_scene(C);
-	Base *base, *startbase = NULL, *basact = NULL, *oldbasact = NULL;
+	BaseLegacy *base, *startbase = NULL, *basact = NULL, *oldbasact = NULL;
 	bool is_obedit;
 	float dist = ED_view3d_select_dist_px() * 1.3333f;
 	bool retval = false;
@@ -2069,7 +2069,7 @@ static int do_object_pose_box_select(bContext *C, ViewContext *vc, rcti *rect, b
 	 */
 
 	if (hits > 0) { /* no need to loop if there's no hit */
-		Base *base;
+		BaseLegacy *base;
 		col = vbuffer + 3;
 		
 		for (base = vc->scene->base.first; base && hits; base = base->next) {
@@ -2811,7 +2811,7 @@ static bool object_circle_select(ViewContext *vc, const bool select, const int m
 	const int select_flag = select ? SELECT : 0;
 
 
-	Base *base;
+	BaseLegacy *base;
 	for (base = FIRSTBASE; base; base = base->next) {
 		if (BASE_SELECTABLE(vc->v3d, base) && ((base->flag_legacy & SELECT) != select_flag)) {
 			float screen_co[2];

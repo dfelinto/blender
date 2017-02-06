@@ -1767,7 +1767,7 @@ static void draw_rotation_guide(RegionView3D *rv3d)
 /* ******************** non-meshes ***************** */
 
 static void view3d_draw_non_mesh(
-Scene *scene, Object *ob, Base *base, View3D *v3d,
+Scene *scene, Object *ob, BaseLegacy *base, View3D *v3d,
 RegionView3D *rv3d, const bool is_boundingbox, const unsigned char color[4])
 {
 	glMatrixMode(GL_PROJECTION);
@@ -1884,7 +1884,7 @@ static void draw_all_objects(const bContext *C, ARegion *ar, const bool only_dep
 		v3d->zbuf = true;
 	}
 
-	for (Base *base = scene->base.first; base; base = base->next) {
+	for (BaseLegacy *base = scene->base.first; base; base = base->next) {
 		if (v3d->lay & base->lay) {
 			/* dupli drawing */
 			if (base->object->transflag & OB_DUPLI)
@@ -1981,7 +1981,7 @@ static void view3d_draw_non_meshes(const bContext *C, ARegion *ar)
 	 * for now let's avoid writing again to zbuffer to prevent glitches
 	 */
 
-	for (Base *base = scene->base.first; base; base = base->next) {
+	for (BaseLegacy *base = scene->base.first; base; base = base->next) {
 		if (v3d->lay & base->lay) {
 			Object *ob = base->object;
 

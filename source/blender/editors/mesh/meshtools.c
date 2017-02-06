@@ -77,7 +77,7 @@
 
 static void join_mesh_single(
         Main *bmain, Scene *scene,
-        Object *ob_dst, Base *base_src, float imat[4][4],
+        Object *ob_dst, BaseLegacy *base_src, float imat[4][4],
         MVert **mvert_pp, MEdge **medge_pp, MLoop **mloop_pp, MPoly **mpoly_pp,
         CustomData *vdata, CustomData *edata, CustomData *ldata, CustomData *pdata,
         int totvert, int totedge, int totloop, int totpoly,
@@ -266,7 +266,7 @@ int join_mesh_exec(bContext *C, wmOperator *op)
 {
 	Main *bmain = CTX_data_main(C);
 	Scene *scene = CTX_data_scene(C);
-	Base *ob_base = CTX_data_active_base(C);
+	BaseLegacy *ob_base = CTX_data_active_base(C);
 	Object *ob = ob_base->object;
 	Material **matar = NULL, *ma;
 	Mesh *me;

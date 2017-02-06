@@ -2710,7 +2710,7 @@ static void write_render_engines_settings(WriteData *wd, ListBase *lb)
 static void write_scenes(WriteData *wd, ListBase *scebase)
 {
 	Scene *sce;
-	Base *base;
+	BaseLegacy *base;
 	Editing *ed;
 	Sequence *seq;
 	MetaStack *ms;
@@ -2738,7 +2738,7 @@ static void write_scenes(WriteData *wd, ListBase *scebase)
 		/* direct data */
 		base = sce->base.first;
 		while (base) {
-			writestruct(wd, DATA, Base, 1, base);
+			writestruct(wd, DATA, BaseLegacy, 1, base);
 			base = base->next;
 		}
 

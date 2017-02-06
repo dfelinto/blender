@@ -1733,7 +1733,7 @@ static void bone_matrix_translate_y(float mat[4][4], float y)
 }
 
 /* assumes object is Armature with pose */
-static void draw_pose_bones(Scene *scene, View3D *v3d, ARegion *ar, Base *base,
+static void draw_pose_bones(Scene *scene, View3D *v3d, ARegion *ar, BaseLegacy *base,
                             const short dt, const unsigned char ob_wire_col[4],
                             const bool do_const_color, const bool is_outline)
 {
@@ -2445,7 +2445,7 @@ static void ghost_poses_tag_unselected(Object *ob, short unset)
 /* draw ghosts that occur within a frame range 
  *  note: object should be in posemode
  */
-static void draw_ghost_poses_range(Scene *scene, View3D *v3d, ARegion *ar, Base *base)
+static void draw_ghost_poses_range(Scene *scene, View3D *v3d, ARegion *ar, BaseLegacy *base)
 {
 	Object *ob = base->object;
 	AnimData *adt = BKE_animdata_from_id(&ob->id);
@@ -2511,7 +2511,7 @@ static void draw_ghost_poses_range(Scene *scene, View3D *v3d, ARegion *ar, Base 
 /* draw ghosts on keyframes in action within range 
  *	- object should be in posemode 
  */
-static void draw_ghost_poses_keys(Scene *scene, View3D *v3d, ARegion *ar, Base *base)
+static void draw_ghost_poses_keys(Scene *scene, View3D *v3d, ARegion *ar, BaseLegacy *base)
 {
 	Object *ob = base->object;
 	AnimData *adt = BKE_animdata_from_id(&ob->id);
@@ -2592,7 +2592,7 @@ static void draw_ghost_poses_keys(Scene *scene, View3D *v3d, ARegion *ar, Base *
 /* draw ghosts around current frame
  *  - object is supposed to be armature in posemode
  */
-static void draw_ghost_poses(Scene *scene, View3D *v3d, ARegion *ar, Base *base)
+static void draw_ghost_poses(Scene *scene, View3D *v3d, ARegion *ar, BaseLegacy *base)
 {
 	Object *ob = base->object;
 	AnimData *adt = BKE_animdata_from_id(&ob->id);
@@ -2686,7 +2686,7 @@ static void draw_ghost_poses(Scene *scene, View3D *v3d, ARegion *ar, Base *base)
 
 /* called from drawobject.c, return true if nothing was drawn
  * (ob_wire_col == NULL) when drawing ghost */
-bool draw_armature(Scene *scene, View3D *v3d, ARegion *ar, Base *base,
+bool draw_armature(Scene *scene, View3D *v3d, ARegion *ar, BaseLegacy *base,
                    const short dt, const short dflag, const unsigned char ob_wire_col[4],
                    const bool is_outline)
 {

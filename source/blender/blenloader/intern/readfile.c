@@ -5660,7 +5660,7 @@ static void lib_link_scene_collection(FileData *fd, Library *lib, SceneCollectio
 static void lib_link_scene(FileData *fd, Main *main)
 {
 	Scene *sce;
-	Base *base_legacy, *base_legacy_next;
+	BaseLegacy *base_legacy, *base_legacy_next;
 	Sequence *seq;
 	SceneLayer *sl;
 	SceneRenderLayer *srl;
@@ -9610,7 +9610,7 @@ static void expand_scene_collection(FileData *fd, Main *mainvar, SceneCollection
 
 static void expand_scene(FileData *fd, Main *mainvar, Scene *sce)
 {
-	Base *base;
+	BaseLegacy *base;
 	SceneRenderLayer *srl;
 	FreestyleModuleConfig *module;
 	FreestyleLineSet *lineset;
@@ -9925,7 +9925,7 @@ static bool object_in_any_scene(Main *mainvar, Object *ob)
 static void give_base_to_objects(Main *mainvar, Scene *scene, View3D *v3d, Library *lib, const short flag)
 {
 	Object *ob;
-	Base *base;
+	BaseLegacy *base;
 	const unsigned int active_lay = (flag & FILE_ACTIVELAY) ? BKE_screen_view3d_layer_active(v3d, scene) : 0;
 	const bool is_link = (flag & FILE_LINK) != 0;
 
@@ -9946,7 +9946,7 @@ static void give_base_to_objects(Main *mainvar, Scene *scene, View3D *v3d, Libra
 			}
 
 			if (do_it) {
-				base = MEM_callocN(sizeof(Base), __func__);
+				base = MEM_callocN(sizeof(BaseLegacy), __func__);
 				BLI_addtail(&scene->base, base);
 
 				if (active_lay) {
@@ -9977,7 +9977,7 @@ static void give_base_to_groups(
         Main *mainvar, Scene *scene, View3D *v3d, Library *UNUSED(lib), const short UNUSED(flag))
 {
 	Group *group;
-	Base *base;
+	BaseLegacy *base;
 	Object *ob;
 	const unsigned int active_lay = BKE_screen_view3d_layer_active(v3d, scene);
 
@@ -10077,10 +10077,10 @@ static ID *link_named_part(
 static void link_object_postprocess(ID *id, Scene *scene, View3D *v3d, const short flag)
 {
 	if (scene) {
-		Base *base;
+		BaseLegacy *base;
 		Object *ob;
 
-		base = MEM_callocN(sizeof(Base), "app_nam_part");
+		base = MEM_callocN(sizeof(BaseLegacy), "app_nam_part");
 		BLI_addtail(&scene->base, base);
 
 		ob = (Object *)id;

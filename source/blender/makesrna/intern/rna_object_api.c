@@ -460,7 +460,7 @@ finally:
 
 /* ObjectBaseLegacy */
 
-static void rna_ObjectBaseLegacy_layers_from_view(Base *base, View3D *v3d)
+static void rna_ObjectBaseLegacy_layers_from_view(BaseLegacy *base, View3D *v3d)
 {
 	base->lay = base->object->lay = v3d->lay;
 }

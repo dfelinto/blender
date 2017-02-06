@@ -216,7 +216,7 @@ Scene *BKE_scene_copy(Main *bmain, Scene *sce, int type)
 	SceneRenderLayer *srl, *new_srl;
 	FreestyleLineSet *lineset;
 	ToolSettings *ts;
-	Base *legacy_base, *olegacy_base;
+	BaseLegacy *legacy_base, *olegacy_base;
 	
 	if (type == SCE_COPY_EMPTY) {
 		ListBase rl, rv;
@@ -944,9 +944,9 @@ Scene *BKE_scene_add(Main *bmain, const char *name)
 	return sce;
 }
 
-Base *BKE_scene_base_find_by_name(struct Scene *scene, const char *name)
+BaseLegacy *BKE_scene_base_find_by_name(struct Scene *scene, const char *name)
 {
-	Base *base;
+	BaseLegacy *base;
 
 	for (base = scene->base.first; base; base = base->next) {
 		if (STREQ(base->object->id.name + 2, name)) {
@@ -957,9 +957,9 @@ Base *BKE_scene_base_find_by_name(struct Scene *scene, const char *name)
 	return base;
 }
 
-Base *BKE_scene_base_find(Scene *scene, Object *ob)
+BaseLegacy *BKE_scene_base_find(Scene *scene, Object *ob)
 {
-	return BLI_findptr(&scene->base, ob, offsetof(Base, object));
+	return BLI_findptr(&scene->base, ob, offsetof(BaseLegacy, object));
 }
 
 /**
@@ -970,7 +970,7 @@ Base *BKE_scene_base_find(Scene *scene, Object *ob)
 void BKE_scene_set_background(Main *bmain, Scene *scene)
 {
 	Scene *sce;
-	Base *base;
+	BaseLegacy *base;
 	Object *ob;
 	Group *group;
 	GroupObject *go;
@@ -1026,7 +1026,7 @@ Scene *BKE_scene_set_name(Main *bmain, const char *name)
 
 /* Used by metaballs, return *all* objects (including duplis) existing in the scene (including scene's sets) */
 int BKE_scene_base_iter_next(EvaluationContext *eval_ctx, SceneBaseIter *iter,
-                             Scene **scene, int val, Base **base, Object **ob)
+                             Scene **scene, int val, BaseLegacy **base, Object **ob)
 {
 	bool run_again = true;
 	
@@ -1154,7 +1154,7 @@ int BKE_scene_base_iter_next(EvaluationContext *eval_ctx, SceneBaseIter *iter,
 
 Object *BKE_scene_camera_find(Scene *sc)
 {
-	Base *base;
+	BaseLegacy *base;
 	
 	for (base = sc->base.first; base; base = base->next)
 		if (base->object->type == OB_CAMERA)
@@ -1266,9 +1266,9 @@ void BKE_scene_remove_rigidbody_object(Scene *scene, Object *ob)
 		BKE_rigidbody_remove_object(scene, ob);
 }
 
-Base *BKE_scene_base_add(Scene *sce, Object *ob)
+BaseLegacy *BKE_scene_base_add(Scene *sce, Object *ob)
 {
-	Base *b = MEM_callocN(sizeof(*b), __func__);
+	BaseLegacy *b = MEM_callocN(sizeof(*b), __func__);
 	BLI_addhead(&sce->base, b);
 
 	b->object = ob;
@@ -1278,7 +1278,7 @@ Base *BKE_scene_base_add(Scene *sce, Object *ob)
 	return b;
 }
 
-void BKE_scene_base_unlink(Scene *sce, Base *base)
+void BKE_scene_base_unlink(Scene *sce, BaseLegacy *base)
 {
 	BKE_scene_remove_rigidbody_object(sce, base->object);
 
@@ -1289,7 +1289,7 @@ void BKE_scene_base_unlink(Scene *sce, Base *base)
 
 void BKE_scene_base_deselect_all(Scene *sce)
 {
-	Base *b;
+	BaseLegacy *b;
 
 	for (b = sce->base.first; b; b = b->next) {
 		b->flag_legacy &= ~SELECT;
@@ -1299,7 +1299,7 @@ void BKE_scene_base_deselect_all(Scene *sce)
 	}
 }
 
-void BKE_scene_base_select(Scene *sce, Base *selbase)
+void BKE_scene_base_select(Scene *sce, BaseLegacy *selbase)
 {
 	selbase->flag_legacy |= SELECT;
 	selbase->object->flag = selbase->flag_legacy;
@@ -1688,7 +1688,7 @@ float get_render_aosss_error(const RenderData *r, float error)
 }
 
 /* helper function for the SETLOOPER macro */
-Base *_setlooper_base_step(Scene **sce_iter, Base *base)
+BaseLegacy *_setlooper_base_step(Scene **sce_iter, BaseLegacy *base)
 {
 	if (base && base->next) {
 		/* common case, step to the next */
@@ -1696,12 +1696,12 @@ Base *_setlooper_base_step(Scene **sce_iter, Base *base)
 	}
 	else if (base == NULL && (*sce_iter)->base.first) {
 		/* first time looping, return the scenes first base */
-		return (Base *)(*sce_iter)->base.first;
+		return (BaseLegacy *)(*sce_iter)->base.first;
 	}
 	else {
 		/* reached the end, get the next base in the set */
 		while ((*sce_iter = (*sce_iter)->set)) {
-			base = (Base *)(*sce_iter)->base.first;
+			base = (BaseLegacy *)(*sce_iter)->base.first;
 			if (base) {
 				return base;
 			}
@@ -1748,7 +1748,7 @@ bool BKE_scene_uses_blender_game(const Scene *scene)
 
 void BKE_scene_base_flag_to_objects(struct Scene *scene)
 {
-	Base *base = scene->base.first;
+	BaseLegacy *base = scene->base.first;
 
 	while (base) {
 		BKE_scene_base_flag_sync_from_base(base);
@@ -1758,7 +1758,7 @@ void BKE_scene_base_flag_to_objects(struct Scene *scene)
 
 void BKE_scene_base_flag_from_objects(struct Scene *scene)
 {
-	Base *base = scene->base.first;
+	BaseLegacy *base = scene->base.first;
 
 	while (base) {
 		BKE_scene_base_flag_sync_from_object(base);
@@ -1766,7 +1766,7 @@ void BKE_scene_base_flag_from_objects(struct Scene *scene)
 	}
 }
 
-void BKE_scene_base_flag_sync_from_base(Base *base)
+void BKE_scene_base_flag_sync_from_base(BaseLegacy *base)
 {
 	Object *ob = base->object;
 
@@ -1777,7 +1777,7 @@ void BKE_scene_base_flag_sync_from_base(Base *base)
 	ob->flag |= flag;
 }
 
-void BKE_scene_base_flag_sync_from_object(Base *base)
+void BKE_scene_base_flag_sync_from_object(BaseLegacy *base)
 {
 	base->flag_legacy = base->object->flag;
 }

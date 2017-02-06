@@ -166,7 +166,7 @@ BlenderStrokeRenderer::~BlenderStrokeRenderer()
 	// compositor has finished.
 
 	// release objects and data blocks
-	for (Base *b = (Base *)freestyle_scene->base.first; b; b = b->next) {
+	for (BaseLegacy *b = (BaseLegacy *)freestyle_scene->base.first; b; b = b->next) {
 		Object *ob = b->object;
 		void *data = ob->data;
 		char *name = ob->id.name;
@@ -922,7 +922,7 @@ void BlenderStrokeRenderer::GenerateStrokeMesh(StrokeGroup *group, bool hasTex)
 Object *BlenderStrokeRenderer::NewMesh() const
 {
 	Object *ob;
-	Base *base;
+	BaseLegacy *base;
 	char name[MAX_ID_NAME];
 	unsigned int mesh_id = get_stroke_mesh_id();
 

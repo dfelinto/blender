@@ -506,7 +506,7 @@ static void copymenu_properties(Scene *scene, View3D *v3d, Object *ob)
 {	
 //XXX no longer used - to be removed - replaced by game_properties_copy_exec
 	bProperty *prop;
-	Base *base;
+	BaseLegacy *base;
 	int nr, tot = 0;
 	char *str;
 	
@@ -566,7 +566,7 @@ static void copymenu_properties(Scene *scene, View3D *v3d, Object *ob)
 static void copymenu_logicbricks(Scene *scene, View3D *v3d, Object *ob)
 {
 //XXX no longer used - to be removed - replaced by logicbricks_copy_exec
-	Base *base;
+	BaseLegacy *base;
 	
 	for (base = FIRSTBASE; base; base = base->next) {
 		if (base->object != ob) {
@@ -652,7 +652,7 @@ static void copy_texture_space(Object *to, Object *ob)
 static void copy_attr(Main *bmain, Scene *scene, View3D *v3d, short event)
 {
 	Object *ob;
-	Base *base;
+	BaseLegacy *base;
 	Curve *cu, *cu1;
 	Nurb *nu;
 	bool do_depgraph_update = false;
@@ -1320,7 +1320,7 @@ void OBJECT_OT_shade_smooth(wmOperatorType *ot)
 static void UNUSED_FUNCTION(image_aspect) (Scene *scene, View3D *v3d)
 {
 	/* all selected objects with an image map: scale in image aspect */
-	Base *base;
+	BaseLegacy *base;
 	Object *ob;
 	Material *ma;
 	Tex *tex;

@@ -413,7 +413,7 @@ static void draw_selected_name(Scene *scene, Object *ob, rcti *rect)
 static void backdrawview3d(Scene *scene, wmWindow *win, ARegion *ar, View3D *v3d)
 {
 	RegionView3D *rv3d = ar->regiondata;
-	struct Base *base = scene->basact;
+	struct BaseLegacy *base = scene->basact;
 	int multisample_enabled;
 
 	BLI_assert(ar->regiontype == RGN_TYPE_WINDOW);
@@ -1029,12 +1029,12 @@ static void view3d_draw_bgpic_test(Scene *scene, ARegion *ar, View3D *v3d,
 
 typedef struct View3DAfter {
 	struct View3DAfter *next, *prev;
-	struct Base *base;
+	struct BaseLegacy *base;
 	short dflag;
 } View3DAfter;
 
 /* temp storage of Objects that need to be drawn as last */
-void ED_view3d_after_add(ListBase *lb, Base *base, const short dflag)
+void ED_view3d_after_add(ListBase *lb, BaseLegacy *base, const short dflag)
 {
 	View3DAfter *v3da = MEM_callocN(sizeof(View3DAfter), "View 3d after");
 	BLI_assert((base->flag_legacy & OB_FROMDUPLI) == 0);
@@ -1131,13 +1131,13 @@ static DupliObject *dupli_step(DupliObject *dob)
 }
 
 static void draw_dupli_objects_color(
-        Scene *scene, ARegion *ar, View3D *v3d, Base *base,
+        Scene *scene, ARegion *ar, View3D *v3d, BaseLegacy *base,
         const short dflag, const int color)
 {
 	RegionView3D *rv3d = ar->regiondata;
 	ListBase *lb;
 	LodLevel *savedlod;
-	Base tbase = {NULL};
+	BaseLegacy tbase = {NULL};
 	BoundBox bb, *bb_tmp; /* use a copy because draw_object, calls clear_mesh_caches */
 	GLuint displist = 0;
 	unsigned char color_rgb[3];
@@ -1291,7 +1291,7 @@ static void draw_dupli_objects_color(
 		glDeleteLists(displist, 1);
 }
 
-void draw_dupli_objects(Scene *scene, ARegion *ar, View3D *v3d, Base *base)
+void draw_dupli_objects(Scene *scene, ARegion *ar, View3D *v3d, BaseLegacy *base)
 {
 	/* define the color here so draw_dupli_objects_color can be called
 	 * from the set loop */
@@ -1443,7 +1443,7 @@ void ED_view3d_draw_depth_gpencil(Scene *scene, ARegion *ar, View3D *v3d)
 void ED_view3d_draw_depth(Scene *scene, ARegion *ar, View3D *v3d, bool alphaoverride)
 {
 	RegionView3D *rv3d = ar->regiondata;
-	Base *base;
+	BaseLegacy *base;
 	short zbuf = v3d->zbuf;
 	short flag = v3d->flag;
 	float glalphaclip = U.glalphaclip;
@@ -1602,7 +1602,7 @@ static void gpu_update_lamps_shadows_world(Scene *scene, View3D *v3d)
 {
 	ListBase shadows;
 	Scene *sce_iter;
-	Base *base;
+	BaseLegacy *base;
 	World *world = scene->world;
 	SceneRenderLayer *srl = v3d->scenelock ? BLI_findlink(&scene->r.layers, scene->r.actlay) : NULL;
 	
@@ -1737,7 +1737,7 @@ static void view3d_draw_objects(
         const bool do_bgpic, const bool draw_offscreen, GPUFX *fx)
 {
 	RegionView3D *rv3d = ar->regiondata;
-	Base *base;
+	BaseLegacy *base;
 	const bool do_camera_frame = !draw_offscreen;
 	const bool draw_grids = !draw_offscreen && (v3d->flag2 & V3D_RENDER_OVERRIDE) == 0;
 	const bool draw_floor = (rv3d->view == RV3D_VIEW_USER) || (rv3d->persp != RV3D_ORTHO);
@@ -2536,7 +2536,7 @@ static void view3d_stereo3d_setup_offscreen(Scene *scene, View3D *v3d, ARegion *
 static void update_lods(Scene *scene, float camera_pos[3])
 {
 	Scene *sce_iter;
-	Base *base;
+	BaseLegacy *base;
 
 	for (SETLOOPER(scene, sce_iter, base)) {
 		Object *ob = base->object;

@@ -832,7 +832,7 @@ static int empty_drop_named_image_invoke(bContext *C, wmOperator *op, const wmEv
 {
 	Scene *scene = CTX_data_scene(C);
 
-	Base *base = NULL;
+	BaseLegacy *base = NULL;
 	Image *ima = NULL;
 	Object *ob = NULL;
 
@@ -1615,7 +1615,7 @@ static int convert_exec(bContext *C, wmOperator *op)
 	/* don't forget multiple users! */
 
 	{
-		Base *base;
+		BaseLegacy *base;
 
 		for (base = scene->base.first; base; base = base->next) {
 			ob = base->object;

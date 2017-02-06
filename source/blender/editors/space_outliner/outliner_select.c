@@ -100,7 +100,7 @@ static eOLDrawState tree_element_active_renderlayer(
  */
 static void do_outliner_object_select_recursive(Scene *scene, Object *ob_parent, bool select)
 {
-	Base *base;
+	BaseLegacy *base;
 
 	for (base = FIRSTBASE; base; base = base->next) {
 		Object *ob = base->object;
@@ -141,7 +141,7 @@ static eOLDrawState tree_element_set_active_object(
 {
 	TreeStoreElem *tselem = TREESTORE(te);
 	Scene *sce;
-	Base *base;
+	BaseLegacy *base;
 	Object *ob = NULL;
 	
 	/* if id is not object, we search back */

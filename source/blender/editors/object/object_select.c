@@ -87,7 +87,7 @@
 /* Note: send a NC_SCENE|ND_OB_SELECT notifier yourself! (or 
  * or a NC_SCENE|ND_OB_VISIBLE in case of visibility toggling */
 
-void ED_base_object_select(Base *base, short mode)
+void ED_base_object_select(BaseLegacy *base, short mode)
 {
 	if (base) {
 		if (mode == BA_SELECT) {
@@ -102,7 +102,7 @@ void ED_base_object_select(Base *base, short mode)
 }
 
 /* also to set active NULL */
-void ED_base_object_activate(bContext *C, Base *base)
+void ED_base_object_activate(bContext *C, BaseLegacy *base)
 {
 	Scene *scene = CTX_data_scene(C);
 	
@@ -634,7 +634,7 @@ static bool select_grouped_object_hooks(bContext *C, Object *ob)
 	View3D *v3d = CTX_wm_view3d(C);
 
 	bool changed = false;
-	Base *base;
+	BaseLegacy *base;
 	ModifierData *md;
 	HookModifierData *hmd;
 
@@ -1087,7 +1087,7 @@ static bool object_select_more_less(bContext *C, const bool select)
 {
 	SceneLayer *sl = CTX_data_scene_layer(C);
 
-	for (Base *base = sl->object_bases.first; base; base = base->next) {
+	for (BaseLegacy *base = sl->object_bases.first; base; base = base->next) {
 		Object *ob = base->object;
 		ob->flag &= ~OB_DONE;
 		ob->id.tag &= ~LIB_TAG_DOIT;

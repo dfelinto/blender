@@ -33,7 +33,7 @@
  *  \author nzc
  */
 
-struct Base;
+struct BaseLegacy;
 struct ObjectBase;
 struct EvaluationContext;
 struct Group;

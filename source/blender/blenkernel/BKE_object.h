@@ -35,7 +35,7 @@ extern "C" {
 
 #include "BLI_compiler_attrs.h"
 
-struct Base;
+struct BaseLegacy;
 struct EvaluationContext;
 struct Scene;
 struct Object;

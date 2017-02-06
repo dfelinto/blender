@@ -447,7 +447,7 @@ static int hook_op_edit_poll(bContext *C)
 
 static Object *add_hook_object_new(Main *bmain, Scene *scene, SceneLayer *sl, Object *obedit)
 {
-	Base *base, *basedit;
+	BaseLegacy *base, *basedit;
 	Object *ob;
 
 	ob = BKE_object_add(bmain, scene, sl, OB_EMPTY, NULL);

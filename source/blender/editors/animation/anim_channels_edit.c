@@ -2683,7 +2683,7 @@ static int mouse_anim_channels(bContext *C, bAnimContext *ac, int channel_index,
 		{
 			bDopeSheet *ads = (bDopeSheet *)ac->data;
 			Scene *sce = (Scene *)ads->source;
-			Base *base = (Base *)ale->data;
+			BaseLegacy *base = (BaseLegacy *)ale->data;
 			Object *ob = base->object;
 			AnimData *adt = ob->adt;
 			
@@ -2696,7 +2696,7 @@ static int mouse_anim_channels(bContext *C, bAnimContext *ac, int channel_index,
 				if (adt) adt->flag ^= ADT_UI_SELECTED;
 			}
 			else {
-				Base *b;
+				BaseLegacy *b;
 				
 				/* deselect all */
 				/* TODO: should this deselect all other types of channels too? */

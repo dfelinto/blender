@@ -299,12 +299,12 @@ static void rna_Object_dependency_update(Main *bmain, Scene *UNUSED(scene), Poin
 /* when changing the selection flag the scene needs updating */
 static void rna_Base_select_update(Main *UNUSED(bmain), Scene *UNUSED(scene), PointerRNA *ptr)
 {
-	Base *base = (Base *)ptr->data;
+	BaseLegacy *base = (BaseLegacy *)ptr->data;
 	short mode = (base->flag_legacy & BA_SELECT) ? BA_SELECT : BA_DESELECT;
 	ED_base_object_select(base, mode);
 }
 
-static void rna_Object_layer_update__internal(Main *bmain, Scene *scene, Base *base, Object *ob)
+static void rna_Object_layer_update__internal(Main *bmain, Scene *scene, BaseLegacy *base, Object *ob)
 {
 	/* try to avoid scene sort */
 	if (scene == NULL) {
@@ -326,7 +326,7 @@ static void rna_Object_layer_update__internal(Main *bmain, Scene *scene, Base *b
 static void rna_Object_layer_update(Main *bmain, Scene *scene, PointerRNA *ptr)
 {
 	Object *ob = (Object *)ptr->id.data;
-	Base *base;
+	BaseLegacy *base;
 
 	base = scene ? BKE_scene_base_find(scene, ob) : NULL;
 	if (!base)
@@ -342,7 +342,7 @@ static void rna_Object_layer_update(Main *bmain, Scene *scene, PointerRNA *ptr)
 
 static void rna_Base_layer_update(Main *bmain, Scene *scene, PointerRNA *ptr)
 {
-	Base *base = (Base *)ptr->data;
+	BaseLegacy *base = (BaseLegacy *)ptr->data;
 	Object *ob = (Object *)base->object;
 
 	rna_Object_layer_update__internal(bmain, scene, base, ob);
@@ -1111,7 +1111,7 @@ static void rna_Object_layer_set(PointerRNA *ptr, const int *values)
 
 static void rna_Base_layer_set(PointerRNA *ptr, const int *values)
 {
-	Base *base = (Base *)ptr->data;
+	BaseLegacy *base = (BaseLegacy *)ptr->data;
 
 	unsigned int lay;
 	lay = rna_Object_layer_validate__internal(values, base->lay);
@@ -2887,7 +2887,7 @@ static void rna_def_object_base_legacy(BlenderRNA *brna)
 	PropertyRNA *prop;
 
 	srna = RNA_def_struct(brna, "ObjectBaseLegacy", NULL);
-	RNA_def_struct_sdna(srna, "Base");
+	RNA_def_struct_sdna(srna, "BaseLegacy");
 	RNA_def_struct_ui_text(srna, "Object Base Legacy", "An object instance in a scene (deprecated)");
 	RNA_def_struct_ui_icon(srna, ICON_OBJECT_DATA);
 

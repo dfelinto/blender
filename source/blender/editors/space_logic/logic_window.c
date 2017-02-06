@@ -460,7 +460,7 @@ static void set_sca_ob(Object *ob)
 
 static ID **get_selected_and_linked_obs(bContext *C, short *count, short scavisflag)
 {
-	Base *base;
+	BaseLegacy *base;
 	Main *bmain= CTX_data_main(C);
 	Scene *scene= CTX_data_scene(C);
 	Object *ob, *obt, *obact= CTX_data_active_object(C);

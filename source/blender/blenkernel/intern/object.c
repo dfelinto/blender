@@ -154,7 +154,7 @@ void BKE_object_workob_clear(Object *workob)
 
 void BKE_object_update_base_layer(struct Scene *scene, Object *ob)
 {
-	Base *base = scene->base.first;
+	BaseLegacy *base = scene->base.first;
 
 	while (base) {
 		if (base->object == ob) base->lay = ob->lay;
@@ -2545,7 +2545,7 @@ void BKE_scene_foreach_display_point(
         Scene *scene, View3D *v3d, const short flag,
         void (*func_cb)(const float[3], void *), void *user_data)
 {
-	Base *base;
+	BaseLegacy *base;
 	Object *ob;
 
 	for (base = FIRSTBASE; base; base = base->next) {
@@ -3354,7 +3354,7 @@ LinkNode *BKE_object_relational_superset(struct Scene *scene, eObjectSet objectS
 {
 	LinkNode *links = NULL;
 
-	Base *base;
+	BaseLegacy *base;
 
 	/* Remove markers from all objects */
 	for (base = scene->base.first; base; base = base->next) {
@@ -3398,7 +3398,7 @@ LinkNode *BKE_object_relational_superset(struct Scene *scene, eObjectSet objectS
 
 				/* child relationship */
 				if (includeFilter & (OB_REL_CHILDREN | OB_REL_CHILDREN_RECURSIVE)) {
-					Base *local_base;
+					BaseLegacy *local_base;
 					for (local_base = scene->base.first; local_base; local_base = local_base->next) {
 						if (BASE_EDITABLE_BGMODE(((View3D *)NULL), scene, local_base)) {
 

@@ -346,7 +346,7 @@ static int make_proxy_exec(bContext *C, wmOperator *op)
 
 	if (ob) {
 		Object *newob;
-		Base *newbase, *oldbase = BASACT;
+		BaseLegacy *newbase, *oldbase = BASACT;
 		char name[MAX_ID_NAME + 4];
 
 		BLI_snprintf(name, sizeof(name), "%s_proxy", ((ID *)(gob ? gob : ob))->name + 2);
@@ -1769,7 +1769,7 @@ static void single_obdata_users(Main *bmain, Scene *scene, const int flag)
 	Lamp *la;
 	Curve *cu;
 	/* Camera *cam; */
-	Base *base;
+	BaseLegacy *base;
 	Mesh *me;
 	Lattice *lat;
 	ID *id;
@@ -2104,7 +2104,7 @@ static bool make_local_all__instance_indirect_unused(Main *bmain, Scene *scene)
 
 	for (ob = bmain->object.first; ob; ob = ob->id.next) {
 		if (ID_IS_LINKED_DATABLOCK(ob) && (ob->id.us == 0)) {
-			Base *base;
+			BaseLegacy *base;
 
 			id_us_plus(&ob->id);
 
@@ -2355,7 +2355,7 @@ void OBJECT_OT_make_single_user(wmOperatorType *ot)
 
 static int drop_named_material_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
-	Base *base = ED_view3d_give_base_under_cursor(C, event->mval);
+	BaseLegacy *base = ED_view3d_give_base_under_cursor(C, event->mval);
 	Material *ma;
 	char name[MAX_ID_NAME - 2];
 

@@ -5353,7 +5353,7 @@ static void set_trans_object_base_flags(TransInfo *t)
 	 * if Base selected and has parent selected:
 	 * base->flag = BA_WAS_SEL
 	 */
-	Base *base;
+	BaseLegacy *base;
 
 	/* don't do it if we're not actually going to recalculate anything */
 	if (t->mode == TFM_DUMMY)
@@ -5383,7 +5383,7 @@ static void set_trans_object_base_flags(TransInfo *t)
 			/* if parent selected, deselect */
 			while (parsel) {
 				if (parsel->flag & SELECT) {
-					Base *parbase = BKE_scene_base_find(scene, parsel);
+					BaseLegacy *parbase = BKE_scene_base_find(scene, parsel);
 					if (parbase) { /* in rare cases this can fail */
 						if (TESTBASELIB_BGMODE(v3d, scene, parbase)) {
 							break;
@@ -5439,7 +5439,7 @@ static int count_proportional_objects(TransInfo *t)
 	int total = 0;
 	Scene *scene = t->scene;
 	View3D *v3d = t->view;
-	Base *base;
+	BaseLegacy *base;
 
 	/* rotations around local centers are allowed to propagate, so we take all objects */
 	if (!((t->around == V3D_AROUND_LOCAL_ORIGINS) &&
@@ -5502,7 +5502,7 @@ static int count_proportional_objects(TransInfo *t)
 static void clear_trans_object_base_flags(TransInfo *t)
 {
 	Scene *sce = t->scene;
-	Base *base;
+	BaseLegacy *base;
 
 	for (base = sce->base.first; base; base = base->next) {
 		if (base->flag_legacy & BA_WAS_SEL)
@@ -6426,7 +6426,7 @@ static void createTransObject(bContext *C, TransInfo *t)
 	
 	if (is_prop_edit) {
 		View3D *v3d = t->view;
-		Base *base;
+		BaseLegacy *base;
 
 		for (base = scene->base.first; base; base = base->next) {
 			Object *ob = base->object;
@@ -8040,7 +8040,7 @@ void createTransData(bContext *C, TransInfo *t)
 		 * lines below just check is also visible */
 		Object *ob_armature = modifiers_isDeformedByArmature(ob);
 		if (ob_armature && ob_armature->mode & OB_MODE_POSE) {
-			Base *base_arm = BKE_scene_base_find(t->scene, ob_armature);
+			BaseLegacy *base_arm = BKE_scene_base_find(t->scene, ob_armature);
 			if (base_arm) {
 				View3D *v3d = t->view;
 				if (BASE_VISIBLE(v3d, base_arm)) {

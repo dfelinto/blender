@@ -243,7 +243,7 @@ static int foreach_libblock_remap_callback(void *user_data, ID *id_self, ID **id
 
 /* Some reamapping unfortunately require extra and/or specific handling, tackle those here. */
 static void libblock_remap_data_preprocess_scene_base_unlink(
-        IDRemap *r_id_remap_data, Scene *sce, Base *base, const bool skip_indirect, const bool is_indirect)
+        IDRemap *r_id_remap_data, Scene *sce, BaseLegacy *base, const bool skip_indirect, const bool is_indirect)
 {
 	if (skip_indirect && is_indirect) {
 		r_id_remap_data->skipped_indirect++;
@@ -298,7 +298,7 @@ static void libblock_remap_data_preprocess(IDRemap *r_id_remap_data)
 					FOREACH_SCENE_OBJECT_END
 
 
-					Base *base, *base_next;
+					BaseLegacy *base, *base_next;
 					for (base = sce->base.first; base; base = base_next) {
 						base_next = base->next;
 						libblock_remap_data_preprocess_scene_base_unlink(
@@ -312,7 +312,7 @@ static void libblock_remap_data_preprocess(IDRemap *r_id_remap_data)
 					libblock_remap_data_preprocess_scene_object_unlink(
 					            r_id_remap_data, sce, old_ob, skip_indirect, is_indirect);
 
-					Base *base = BKE_scene_base_find(sce, old_ob);
+					BaseLegacy *base = BKE_scene_base_find(sce, old_ob);
 					if (base) {
 						libblock_remap_data_preprocess_scene_base_unlink(
 						            r_id_remap_data, sce, base, skip_indirect, is_indirect);
@@ -371,7 +371,7 @@ static void libblock_remap_data_postprocess_group_scene_unlink(Main *UNUSED(bmai
 {
 	/* Note that here we assume no object has no base (i.e. all objects are assumed instanced
 	 * in one scene...). */
-	for (Base *base = sce->base.first; base; base = base->next) {
+	for (BaseLegacy *base = sce->base.first; base; base = base->next) {
 		Object *ob = base->object;
 		if (ob->flag & OB_FROMGROUP) {
 			Group *grp = BKE_group_object_find(NULL, ob);

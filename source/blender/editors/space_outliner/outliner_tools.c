@@ -518,7 +518,7 @@ static void group_linkobs2scene_cb(
 {
 	Group *group = (Group *)tselem->id;
 	GroupObject *gob;
-	Base *base;
+	BaseLegacy *base;
 
 	for (gob = group->gobject.first; gob; gob = gob->next) {
 		base = BKE_scene_base_find(scene, gob->ob);
@@ -818,9 +818,9 @@ static void outliner_do_data_operation(SpaceOops *soops, int type, int event, Li
 	}
 }
 
-static Base *outline_delete_hierarchy(bContext *C, ReportList *reports, Scene *scene, Base *base)
+static BaseLegacy *outline_delete_hierarchy(bContext *C, ReportList *reports, Scene *scene, BaseLegacy *base)
 {
-	Base *child_base, *base_next;
+	BaseLegacy *child_base, *base_next;
 	Object *parent;
 
 	if (!base) {

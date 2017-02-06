@@ -1128,7 +1128,7 @@ static void gp_layer_to_curve(bContext *C, ReportList *reports, bGPdata *gpd, bG
 	Object *ob;
 	Curve *cu;
 	Nurb *nu = NULL;
-	Base *base_orig = BASACT, *base_new = NULL;
+	BaseLegacy *base_orig = BASACT, *base_new = NULL;
 	float minmax_weights[2] = {1.0f, 0.0f};
 	
 	/* camera framing */

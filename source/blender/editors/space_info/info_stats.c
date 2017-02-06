@@ -269,7 +269,7 @@ static void stats_object_sculpt_dynamic_topology(Object *ob, SceneStats *stats)
 	stats->tottri = ob->sculpt->bm->totface;
 }
 
-static void stats_dupli_object(Base *base, Object *ob, SceneStats *stats)
+static void stats_dupli_object(BaseLegacy *base, Object *ob, SceneStats *stats)
 {
 	if (base->flag_legacy & SELECT) stats->totobjsel++;
 
@@ -348,7 +348,7 @@ static void stats_update(Scene *scene)
 {
 	SceneStats stats = {0};
 	Object *ob = (scene->basact) ? scene->basact->object : NULL;
-	Base *base;
+	BaseLegacy *base;
 	
 	if (scene->obedit) {
 		/* Edit Mode */

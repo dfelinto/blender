@@ -126,7 +126,7 @@ static int mouse_nla_channels(bContext *C, bAnimContext *ac, float x, int channe
 		{
 			bDopeSheet *ads = (bDopeSheet *)ac->data;
 			Scene *sce = (Scene *)ads->source;
-			Base *base = (Base *)ale->data;
+			BaseLegacy *base = (BaseLegacy *)ale->data;
 			Object *ob = base->object;
 			AnimData *adt = ob->adt;
 			
@@ -140,7 +140,7 @@ static int mouse_nla_channels(bContext *C, bAnimContext *ac, float x, int channe
 					if (adt) adt->flag ^= ADT_UI_SELECTED;
 				}
 				else {
-					Base *b;
+					BaseLegacy *b;
 					
 					/* deselect all */
 					/* TODO: should this deselect all other types of channels too? */
