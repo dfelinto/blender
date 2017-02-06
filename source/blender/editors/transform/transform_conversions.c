@@ -5374,7 +5374,7 @@ static void set_trans_object_base_flags(TransInfo *t)
 	}
 
 	for (base = scene->base.first; base; base = base->next) {
-		base->flag &= ~BA_WAS_SEL;
+		base->flag_legacy &= ~BA_WAS_SEL;
 
 		if (TESTBASELIB_BGMODE(v3d, scene, base)) {
 			Object *ob = base->object;
@@ -5398,11 +5398,11 @@ static void set_trans_object_base_flags(TransInfo *t)
 				if ((t->around == V3D_AROUND_LOCAL_ORIGINS) &&
 				    (t->mode == TFM_ROTATION || t->mode == TFM_TRACKBALL))
 				{
-					base->flag |= BA_TRANSFORM_CHILD;
+					base->flag_legacy |= BA_TRANSFORM_CHILD;
 				}
 				else {
-					base->flag &= ~SELECT;
-					base->flag |= BA_WAS_SEL;
+					base->flag_legacy &= ~SELECT;
+					base->flag_legacy |= BA_WAS_SEL;
 				}
 			}
 			DAG_id_tag_update(&ob->id, OB_RECALC_OB);
@@ -5413,9 +5413,9 @@ static void set_trans_object_base_flags(TransInfo *t)
 	/* this because after doing updates, the object->recalc is cleared */
 	for (base = scene->base.first; base; base = base->next) {
 		if (base->object->recalc & OB_RECALC_OB)
-			base->flag |= BA_HAS_RECALC_OB;
+			base->flag_legacy |= BA_HAS_RECALC_OB;
 		if (base->object->recalc & OB_RECALC_DATA)
-			base->flag |= BA_HAS_RECALC_DATA;
+			base->flag_legacy |= BA_HAS_RECALC_DATA;
 	}
 }
 
@@ -5491,9 +5491,9 @@ static int count_proportional_objects(TransInfo *t)
 	/* this because after doing updates, the object->recalc is cleared */
 	for (base = scene->base.first; base; base = base->next) {
 		if (base->object->recalc & OB_RECALC_OB)
-			base->flag |= BA_HAS_RECALC_OB;
+			base->flag_legacy |= BA_HAS_RECALC_OB;
 		if (base->object->recalc & OB_RECALC_DATA)
-			base->flag |= BA_HAS_RECALC_DATA;
+			base->flag_legacy |= BA_HAS_RECALC_DATA;
 	}
 
 	return total;
@@ -5505,10 +5505,10 @@ static void clear_trans_object_base_flags(TransInfo *t)
 	Base *base;
 
 	for (base = sce->base.first; base; base = base->next) {
-		if (base->flag & BA_WAS_SEL)
-			base->flag |= SELECT;
+		if (base->flag_legacy & BA_WAS_SEL)
+			base->flag_legacy |= SELECT;
 
-		base->flag &= ~(BA_WAS_SEL | BA_HAS_RECALC_OB | BA_HAS_RECALC_DATA | BA_TEMP_TAG | BA_TRANSFORM_CHILD | BA_TRANSFORM_PARENT);
+		base->flag_legacy &= ~(BA_WAS_SEL | BA_HAS_RECALC_OB | BA_HAS_RECALC_DATA | BA_TEMP_TAG | BA_TRANSFORM_CHILD | BA_TRANSFORM_PARENT);
 	}
 }
 

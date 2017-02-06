@@ -300,7 +300,7 @@ static void rna_Object_dependency_update(Main *bmain, Scene *UNUSED(scene), Poin
 static void rna_Base_select_update(Main *UNUSED(bmain), Scene *UNUSED(scene), PointerRNA *ptr)
 {
 	Base *base = (Base *)ptr->data;
-	short mode = (base->flag & BA_SELECT) ? BA_SELECT : BA_DESELECT;
+	short mode = (base->flag_legacy & BA_SELECT) ? BA_SELECT : BA_DESELECT;
 	ED_base_object_select(base, mode);
 }
 
@@ -2910,7 +2910,7 @@ static void rna_def_object_base_legacy(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Local View Layers", "3D local view layers the object base is on");
 	
 	prop = RNA_def_property(srna, "select", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_sdna(prop, NULL, "flag", BA_SELECT);
+	RNA_def_property_boolean_sdna(prop, NULL, "flag_legacy", BA_SELECT);
 	RNA_def_property_ui_text(prop, "Select", "Object base selection state");
 	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_Base_select_update");
 	

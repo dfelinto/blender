@@ -271,7 +271,7 @@ static void stats_object_sculpt_dynamic_topology(Object *ob, SceneStats *stats)
 
 static void stats_dupli_object(Base *base, Object *ob, SceneStats *stats)
 {
-	if (base->flag & SELECT) stats->totobjsel++;
+	if (base->flag_legacy & SELECT) stats->totobjsel++;
 
 	if (ob->transflag & OB_DUPLIPARTS) {
 		/* Dupli Particles */
@@ -300,7 +300,7 @@ static void stats_dupli_object(Base *base, Object *ob, SceneStats *stats)
 			}
 		}
 		
-		stats_object(ob, base->flag & SELECT, 1, stats);
+		stats_object(ob, base->flag_legacy & SELECT, 1, stats);
 		stats->totobj++;
 	}
 	else if (ob->parent && (ob->parent->transflag & (OB_DUPLIVERTS | OB_DUPLIFACES))) {
@@ -316,23 +316,23 @@ static void stats_dupli_object(Base *base, Object *ob, SceneStats *stats)
 		}
 
 		stats->totobj += tot;
-		stats_object(ob, base->flag & SELECT, tot, stats);
+		stats_object(ob, base->flag_legacy & SELECT, tot, stats);
 	}
 	else if (ob->transflag & OB_DUPLIFRAMES) {
 		/* Dupli Frames */
 		int tot = count_duplilist(ob);
 		stats->totobj += tot;
-		stats_object(ob, base->flag & SELECT, tot, stats);
+		stats_object(ob, base->flag_legacy & SELECT, tot, stats);
 	}
 	else if ((ob->transflag & OB_DUPLIGROUP) && ob->dup_group) {
 		/* Dupli Group */
 		int tot = count_duplilist(ob);
 		stats->totobj += tot;
-		stats_object(ob, base->flag & SELECT, tot, stats);
+		stats_object(ob, base->flag_legacy & SELECT, tot, stats);
 	}
 	else {
 		/* No Dupli */
-		stats_object(ob, base->flag & SELECT, 1, stats);
+		stats_object(ob, base->flag_legacy & SELECT, 1, stats);
 		stats->totobj++;
 	}
 }

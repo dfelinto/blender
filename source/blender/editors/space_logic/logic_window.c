@@ -491,7 +491,7 @@ static ID **get_selected_and_linked_obs(bContext *C, short *count, short scavisf
 	base= FIRSTBASE;
 	while (base) {
 		if (base->lay & lay) {
-			if (base->flag & SELECT) {
+			if (base->flag_legacy & SELECT) {
 				if (scavisflag & BUTS_SENS_SEL) base->object->scavisflag |= OB_VIS_SENS;
 				if (scavisflag & BUTS_CONT_SEL) base->object->scavisflag |= OB_VIS_CONT;
 				if (scavisflag & BUTS_ACT_SEL) base->object->scavisflag |= OB_VIS_ACT;

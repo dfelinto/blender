@@ -2106,7 +2106,7 @@ static void draw_pose_bones(Scene *scene, View3D *v3d, ARegion *ar, Base *base,
 	
 	/* draw DoFs */
 	if (arm->flag & ARM_POSEMODE) {
-		if (((base->flag & OB_FROMDUPLI) == 0) && ((v3d->flag & V3D_HIDE_HELPLINES) == 0)) {
+		if (((base->flag_legacy & OB_FROMDUPLI) == 0) && ((v3d->flag & V3D_HIDE_HELPLINES) == 0)) {
 			draw_pose_dofs(ob);
 		}
 	}
@@ -2114,7 +2114,7 @@ static void draw_pose_bones(Scene *scene, View3D *v3d, ARegion *ar, Base *base,
 	/* finally names and axes */
 	if ((arm->flag & (ARM_DRAWNAMES | ARM_DRAWAXES)) &&
 	    (is_outline == 0) &&
-	    ((base->flag & OB_FROMDUPLI) == 0))
+	    ((base->flag_legacy & OB_FROMDUPLI) == 0))
 	{
 		/* patch for several 3d cards (IBM mostly) that crash on GL_SELECT with text drawing */
 		if ((G.f & G_PICKSEL) == 0) {
@@ -2733,7 +2733,7 @@ bool draw_armature(Scene *scene, View3D *v3d, ARegion *ar, Base *base,
 			}
 
 			/* drawing posemode selection indices or colors only in these cases */
-			if (!(base->flag & OB_FROMDUPLI)) {
+			if (!(base->flag_legacy & OB_FROMDUPLI)) {
 				if (G.f & G_PICKSEL) {
 #if 0
 					/* nifty but actually confusing to allow bone selection out of posemode */

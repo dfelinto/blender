@@ -528,7 +528,7 @@ static void group_linkobs2scene_cb(
 			id_us_plus(&gob->ob->id);
 		}
 		base->object->flag |= SELECT;
-		base->flag |= SELECT;
+		base->flag_legacy |= SELECT;
 	}
 }
 

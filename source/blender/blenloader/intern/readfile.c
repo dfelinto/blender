@@ -9994,7 +9994,7 @@ static void give_base_to_groups(
 
 			/* assign the base */
 			base = BKE_scene_base_add(scene, ob);
-			base->flag |= SELECT;
+			base->flag_legacy |= SELECT;
 			BKE_scene_base_flag_sync_from_base(base);
 			DAG_id_tag_update(&ob->id, OB_RECALC_OB | OB_RECALC_DATA | OB_RECALC_TIME);
 			scene->basact = base;
@@ -10093,11 +10093,11 @@ static void link_object_postprocess(ID *id, Scene *scene, View3D *v3d, const sho
 		ob->mode = OB_MODE_OBJECT;
 		base->lay = ob->lay;
 		base->object = ob;
-		base->flag = ob->flag;
+		base->flag_legacy = ob->flag;
 		id_us_plus_no_lib((ID *)ob);
 
 		if (flag & FILE_AUTOSELECT) {
-			base->flag |= SELECT;
+			base->flag_legacy |= SELECT;
 			BKE_scene_base_flag_sync_from_base(base);
 			/* do NOT make base active here! screws up GUI stuff, if you want it do it on src/ level */
 		}

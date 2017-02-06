@@ -1080,7 +1080,7 @@ static void deselectall_except(Scene *scene, Base *b)   /* deselect all except b
 	Base *base;
 	
 	for (base = FIRSTBASE; base; base = base->next) {
-		if (base->flag & SELECT) {
+		if (base->flag_legacy & SELECT) {
 			if (b != base) {
 				ED_base_object_select(base, BA_DESELECT);
 			}
@@ -1317,7 +1317,7 @@ static Base *mouse_select_eval_buffer(ViewContext *vc, unsigned int *buffer, int
 		}
 		else {
 			/* only exclude active object when it is selected... */
-			if (BASACT && (BASACT->flag & SELECT) && hits > 1) notcol = BASACT->selcol;
+			if (BASACT && (BASACT->flag_legacy & SELECT) && hits > 1) notcol = BASACT->selcol;
 			
 			for (a = 0; a < hits; a++) {
 				if (min > buffer[4 * a + 1] && notcol != (buffer[4 * a + 3] & 0xFFFF)) {
@@ -1538,8 +1538,8 @@ static bool ed_object_select_pick(
 										changed = true;
 								}
 
-								basact->flag |= SELECT;
-								basact->object->flag = basact->flag;
+								basact->flag_legacy |= SELECT;
+								basact->object->flag = basact->flag_legacy;
 
 								retval = true;
 
@@ -1562,8 +1562,8 @@ static bool ed_object_select_pick(
 				
 					/* we make the armature selected: 
 					 * not-selected active object in posemode won't work well for tools */
-					basact->flag |= SELECT;
-					basact->object->flag = basact->flag;
+					basact->flag_legacy |= SELECT;
+					basact->object->flag = basact->flag_legacy;
 					
 					retval = true;
 					WM_event_add_notifier(C, NC_OBJECT | ND_BONE_SELECT, basact->object);
@@ -1604,7 +1604,7 @@ static bool ed_object_select_pick(
 				ED_base_object_select(basact, BA_DESELECT);
 			}
 			else if (toggle) {
-				if (basact->flag & SELECT) {
+				if (basact->flag_legacy & SELECT) {
 					if (basact == oldbasact) {
 						ED_base_object_select(basact, BA_DESELECT);
 					}
@@ -2813,7 +2813,7 @@ static bool object_circle_select(ViewContext *vc, const bool select, const int m
 
 	Base *base;
 	for (base = FIRSTBASE; base; base = base->next) {
-		if (BASE_SELECTABLE(vc->v3d, base) && ((base->flag & SELECT) != select_flag)) {
+		if (BASE_SELECTABLE(vc->v3d, base) && ((base->flag_legacy & SELECT) != select_flag)) {
 			float screen_co[2];
 			if (ED_view3d_project_float_global(vc->ar, base->object->obmat[3], screen_co,
 			                                   V3D_PROJ_TEST_CLIP_BB | V3D_PROJ_TEST_CLIP_WIN | V3D_PROJ_TEST_CLIP_NEAR) == V3D_PROJ_RET_OK)

@@ -1779,7 +1779,7 @@ static void single_obdata_users(Main *bmain, Scene *scene, const int flag)
 
 	for (base = FIRSTBASE; base; base = base->next) {
 		ob = base->object;
-		if (!ID_IS_LINKED_DATABLOCK(ob) && (base->flag & flag) == flag) {
+		if (!ID_IS_LINKED_DATABLOCK(ob) && (base->flag_legacy & flag) == flag) {
 			id = ob->data;
 
 			if (id && id->us > 1 && !ID_IS_LINKED_DATABLOCK(id)) {
@@ -2109,7 +2109,7 @@ static bool make_local_all__instance_indirect_unused(Main *bmain, Scene *scene)
 			id_us_plus(&ob->id);
 
 			base = BKE_scene_base_add(scene, ob);
-			base->flag |= SELECT;
+			base->flag_legacy |= SELECT;
 			BKE_scene_base_flag_sync_from_base(base);
 			DAG_id_tag_update(&ob->id, OB_RECALC_OB | OB_RECALC_DATA | OB_RECALC_TIME);
 

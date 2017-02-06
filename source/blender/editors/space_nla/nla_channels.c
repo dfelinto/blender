@@ -134,7 +134,7 @@ static int mouse_nla_channels(bContext *C, bAnimContext *ac, float x, int channe
 				/* set selection status */
 				if (selectmode == SELECT_INVERT) {
 					/* swap select */
-					base->flag ^= SELECT;
+					base->flag_legacy ^= SELECT;
 					BKE_scene_base_flag_sync_from_base(base);
 					
 					if (adt) adt->flag ^= ADT_UI_SELECTED;
@@ -145,13 +145,13 @@ static int mouse_nla_channels(bContext *C, bAnimContext *ac, float x, int channe
 					/* deselect all */
 					/* TODO: should this deselect all other types of channels too? */
 					for (b = sce->base.first; b; b = b->next) {
-						b->flag &= ~SELECT;
+						b->flag_legacy &= ~SELECT;
 						BKE_scene_base_flag_sync_from_base(b);
 						if (b->object->adt) b->object->adt->flag &= ~(ADT_UI_SELECTED | ADT_UI_ACTIVE);
 					}
 					
 					/* select object now */
-					base->flag |= SELECT;
+					base->flag_legacy |= SELECT;
 					ob->flag |= SELECT;
 					if (adt) adt->flag |= ADT_UI_SELECTED;
 				}

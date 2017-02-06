@@ -325,7 +325,7 @@ bool draw_glsl_material(Scene *scene, Object *ob, View3D *v3d, const char dt)
 
 static bool check_alpha_pass(Base *base)
 {
-	if (base->flag & OB_FROMDUPLI)
+	if (base->flag_legacy & OB_FROMDUPLI)
 		return false;
 
 	if (G.f & G_PICKSEL)
@@ -1247,7 +1247,7 @@ void drawlamp(View3D *v3d, RegionView3D *rv3d, Base *base,
 	                       !(G.f & G_PICKSEL) &&
 	                       (la->type == LA_SPOT) &&
 	                       (la->mode & LA_SHOW_CONE) &&
-	                       !(base->flag & OB_FROMDUPLI) &&
+	                       !(base->flag_legacy & OB_FROMDUPLI) &&
 	                       !is_view);
 
 #ifdef WITH_GAMEENGINE
@@ -1259,7 +1259,7 @@ void drawlamp(View3D *v3d, RegionView3D *rv3d, Base *base,
 	        ((la->mode & LA_SHAD_BUF) || 
 	        (la->mode & LA_SHAD_RAY)) &&
 	        (la->mode & LA_SHOW_SHADOW_BOX) &&
-	        !(base->flag & OB_FROMDUPLI) &&
+	        !(base->flag_legacy & OB_FROMDUPLI) &&
 	        !is_view);
 #else
 	const bool drawshadowbox = false;
@@ -4254,7 +4254,7 @@ static void draw_mesh_fancy(Scene *scene, ARegion *ar, View3D *v3d, RegionView3D
 
 		if ((v3d->flag & V3D_SELECT_OUTLINE) &&
 		    ((v3d->flag2 & V3D_RENDER_OVERRIDE) == 0) &&
-		    (base->flag & SELECT) &&
+		    (base->flag_legacy & SELECT) &&
 		    !(G.f & G_PICKSEL || (draw_flags & DRAW_FACE_SELECT)) &&
 		    (draw_wire == OBDRAW_WIRE_OFF))
 		{
@@ -4325,7 +4325,7 @@ static void draw_mesh_fancy(Scene *scene, ARegion *ar, View3D *v3d, RegionView3D
 				/* draw outline */
 				if ((v3d->flag & V3D_SELECT_OUTLINE) &&
 				    ((v3d->flag2 & V3D_RENDER_OVERRIDE) == 0) &&
-				    (base->flag & SELECT) &&
+				    (base->flag_legacy & SELECT) &&
 				    (draw_wire == OBDRAW_WIRE_OFF) &&
 				    (ob->sculpt == NULL))
 				{
@@ -4349,7 +4349,7 @@ static void draw_mesh_fancy(Scene *scene, ARegion *ar, View3D *v3d, RegionView3D
 
 			if ((v3d->flag & V3D_SELECT_OUTLINE) &&
 			    ((v3d->flag2 & V3D_RENDER_OVERRIDE) == 0) &&
-			    (base->flag & SELECT) &&
+			    (base->flag_legacy & SELECT) &&
 			    (draw_wire == OBDRAW_WIRE_OFF) &&
 			    (ob->sculpt == NULL))
 			{
@@ -4541,7 +4541,7 @@ static bool draw_mesh_object(Scene *scene, ARegion *ar, View3D *v3d, RegionView3
 		}
 	}
 	
-	if ((dflag & DRAW_PICKING) == 0 && (base->flag & OB_FROMDUPLI) == 0 && (v3d->flag2 & V3D_RENDER_SHADOW) == 0) {
+	if ((dflag & DRAW_PICKING) == 0 && (base->flag_legacy & OB_FROMDUPLI) == 0 && (v3d->flag2 & V3D_RENDER_SHADOW) == 0) {
 		/* GPU_begin_object_materials checked if this is needed */
 		if (do_alpha_after) {
 			if (ob->dtx & OB_DRAWXRAY) {
@@ -4731,7 +4731,7 @@ static void draw_mesh_fancy_new(Scene *scene, ARegion *ar, View3D *v3d, RegionVi
 
 		if ((v3d->flag & V3D_SELECT_OUTLINE) &&
 		    ((v3d->flag2 & V3D_RENDER_OVERRIDE) == 0) &&
-		    (base->flag & SELECT) &&
+		    (base->flag_legacy & SELECT) &&
 		    !(G.f & G_PICKSEL || (draw_flags & DRAW_FACE_SELECT)) &&
 		    (draw_wire == OBDRAW_WIRE_OFF))
 		{
@@ -4798,7 +4798,7 @@ static void draw_mesh_fancy_new(Scene *scene, ARegion *ar, View3D *v3d, RegionVi
 				/* TODO: move this into a separate pass */
 				if ((v3d->flag & V3D_SELECT_OUTLINE) &&
 				    ((v3d->flag2 & V3D_RENDER_OVERRIDE) == 0) &&
-				    (base->flag & SELECT) &&
+				    (base->flag_legacy & SELECT) &&
 				    (draw_wire == OBDRAW_WIRE_OFF) &&
 				    (ob->sculpt == NULL))
 				{
@@ -4822,7 +4822,7 @@ static void draw_mesh_fancy_new(Scene *scene, ARegion *ar, View3D *v3d, RegionVi
 
 			if ((v3d->flag & V3D_SELECT_OUTLINE) &&
 			    ((v3d->flag2 & V3D_RENDER_OVERRIDE) == 0) &&
-			    (base->flag & SELECT) &&
+			    (base->flag_legacy & SELECT) &&
 			    (draw_wire == OBDRAW_WIRE_OFF) &&
 			    (ob->sculpt == NULL))
 			{
@@ -7548,7 +7548,7 @@ static bool drawmball(Scene *scene, View3D *v3d, RegionView3D *rv3d, Base *base,
 		ml = mb->editelems->first;
 	}
 	else {
-		if ((base->flag & OB_FROMDUPLI) == 0) {
+		if ((base->flag_legacy & OB_FROMDUPLI) == 0) {
 			drawDispList(scene, v3d, rv3d, base, dt, dflag, ob_wire_col);
 		}
 		ml = mb->elems.first;
@@ -7982,7 +7982,7 @@ static void drawObjectSelect(Scene *scene, View3D *v3d, ARegion *ar, Base *base,
 	}
 	else if (ob->type == OB_MBALL) {
 		if (BKE_mball_is_basis(ob)) {
-			if ((base->flag & OB_FROMDUPLI) == 0) {
+			if ((base->flag_legacy & OB_FROMDUPLI) == 0) {
 				glLineWidth(UI_GetThemeValuef(TH_OUTLINE_WIDTH) * 2.0f);
 				drawDispListwire(&ob->curve_cache->disp, ob->type);
 			}
@@ -8109,19 +8109,19 @@ void draw_object_wire_color(Scene *scene, Base *base, unsigned char r_ob_wire_co
 
 	if ((scene->obedit == NULL) &&
 	    (G.moving & G_TRANSFORM_OBJ) &&
-	    (base->flag & (SELECT + BA_WAS_SEL)))
+	    (base->flag_legacy & (SELECT + BA_WAS_SEL)))
 	{
 		theme_id = TH_TRANSFORM;
 	}
 	else {
 		/* Sets the 'colindex' */
 		if (ID_IS_LINKED_DATABLOCK(ob)) {
-			colindex = (base->flag & (SELECT + BA_WAS_SEL)) ? 2 : 1;
+			colindex = (base->flag_legacy & (SELECT + BA_WAS_SEL)) ? 2 : 1;
 		}
 		/* Sets the 'theme_id' or fallback to wire */
 		else {
 			if ((ob->flag & OB_FROMGROUP) != 0) {
-				if (base->flag & (SELECT + BA_WAS_SEL)) {
+				if (base->flag_legacy & (SELECT + BA_WAS_SEL)) {
 					/* uses darker active color for non-active + selected */
 					theme_id = TH_GROUP_ACTIVE;
 
@@ -8134,7 +8134,7 @@ void draw_object_wire_color(Scene *scene, Base *base, unsigned char r_ob_wire_co
 				}
 			}
 			else {
-				if (base->flag & (SELECT + BA_WAS_SEL)) {
+				if (base->flag_legacy & (SELECT + BA_WAS_SEL)) {
 					theme_id = scene->basact == base ? TH_ACTIVE : TH_SELECT;
 				}
 				else {
@@ -8283,7 +8283,7 @@ void draw_object(Scene *scene, ARegion *ar, View3D *v3d, Base *base, const short
 		}
 	}
 
-	if (((base->flag & OB_FROMDUPLI) == 0) &&
+	if (((base->flag_legacy & OB_FROMDUPLI) == 0) &&
 	    (md = modifiers_findByType(ob, eModifierType_Smoke)) &&
 	    (modifier_isEnabled(scene, md, eModifierMode_Realtime)))
 	{
@@ -8307,7 +8307,7 @@ void draw_object(Scene *scene, ARegion *ar, View3D *v3d, Base *base, const short
 
 
 	/* xray delay? */
-	if ((dflag & DRAW_PICKING) == 0 && (base->flag & OB_FROMDUPLI) == 0 && (v3d->flag2 & V3D_RENDER_SHADOW) == 0) {
+	if ((dflag & DRAW_PICKING) == 0 && (base->flag_legacy & OB_FROMDUPLI) == 0 && (v3d->flag2 & V3D_RENDER_SHADOW) == 0) {
 		/* don't do xray in particle mode, need the z-buffer */
 		if (!(ob->mode & OB_MODE_PARTICLE_EDIT)) {
 			/* xray and transp are set when it is drawing the 2nd/3rd pass */
@@ -8805,7 +8805,7 @@ afterdraw:
 		glDisable(GL_DEPTH_TEST);
 	}
 
-	if ((base->flag & OB_FROMDUPLI) || render_override) {
+	if ((base->flag_legacy & OB_FROMDUPLI) || render_override) {
 		ED_view3d_clear_mats_rv3d(rv3d);
 		return;
 	}
@@ -8819,7 +8819,7 @@ afterdraw:
 		}
 		else if (is_obact)
 			do_draw_center = ACTIVE;
-		else if (base->flag & SELECT)
+		else if (base->flag_legacy & SELECT)
 			do_draw_center = SELECT;
 		else if (empty_object || (v3d->flag & V3D_DRAW_CENTERS))
 			do_draw_center = DESELECT;

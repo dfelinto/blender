@@ -170,7 +170,7 @@ static eOLDrawState tree_element_set_active_object(
 	if (base) {
 		if (set == OL_SETSEL_EXTEND) {
 			/* swap select */
-			if (base->flag & SELECT)
+			if (base->flag_legacy & SELECT)
 				ED_base_object_select(base, BA_DESELECT);
 			else 
 				ED_base_object_select(base, BA_SELECT);

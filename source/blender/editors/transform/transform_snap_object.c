@@ -1824,9 +1824,9 @@ static bool snapObjectsRay(
 	}
 	for (Base *base = sctx->scene->base.first; base != NULL; base = base->next) {
 		if ((BASE_VISIBLE_BGMODE(sctx->v3d_data.v3d, sctx->scene, base)) &&
-		    (base->flag & (BA_HAS_RECALC_OB | BA_HAS_RECALC_DATA)) == 0 &&
+		    (base->flag_legacy & (BA_HAS_RECALC_OB | BA_HAS_RECALC_DATA)) == 0 &&
 
-		    !((ignore_object_selected && (base->flag & (SELECT | BA_WAS_SEL))) ||
+		    !((ignore_object_selected && (base->flag_legacy & (SELECT | BA_WAS_SEL))) ||
 		      (ignore_object_active && base == base_act)))
 		{
 			Object *ob = base->object;

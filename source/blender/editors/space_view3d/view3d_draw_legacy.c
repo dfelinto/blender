@@ -1037,7 +1037,7 @@ typedef struct View3DAfter {
 void ED_view3d_after_add(ListBase *lb, Base *base, const short dflag)
 {
 	View3DAfter *v3da = MEM_callocN(sizeof(View3DAfter), "View 3d after");
-	BLI_assert((base->flag & OB_FROMDUPLI) == 0);
+	BLI_assert((base->flag_legacy & OB_FROMDUPLI) == 0);
 	BLI_addtail(lb, v3da);
 	v3da->base = base;
 	v3da->dflag = dflag;
@@ -1158,7 +1158,7 @@ static void draw_dupli_objects_color(
 		UI_GetThemeColorBlend3ubv(color, TH_BACK, 0.5f, color_rgb);
 	}
 
-	tbase.flag = OB_FROMDUPLI | base->flag;
+	tbase.flag_legacy = OB_FROMDUPLI | base->flag_legacy;
 	lb = object_duplilist(G.main->eval_ctx, scene, base->object);
 	// BLI_listbase_sort(lb, dupli_ob_sort); /* might be nice to have if we have a dupli list with mixed objects. */
 
@@ -1296,7 +1296,7 @@ void draw_dupli_objects(Scene *scene, ARegion *ar, View3D *v3d, Base *base)
 	/* define the color here so draw_dupli_objects_color can be called
 	 * from the set loop */
 	
-	int color = (base->flag & SELECT) ? TH_SELECT : TH_WIRE;
+	int color = (base->flag_legacy & SELECT) ? TH_SELECT : TH_WIRE;
 	/* debug */
 	if (base->object->dup_group && base->object->dup_group->id.us < 1)
 		color = TH_REDALERT;
@@ -1832,7 +1832,7 @@ static void view3d_draw_objects(
 				if (base->object->transflag & OB_DUPLI) {
 					draw_dupli_objects(scene, ar, v3d, base);
 				}
-				if ((base->flag & SELECT) == 0) {
+				if ((base->flag_legacy & SELECT) == 0) {
 					if (base->object != scene->obedit)
 						draw_object(scene, ar, v3d, base, 0);
 				}
@@ -1845,7 +1845,7 @@ static void view3d_draw_objects(
 		/* draw selected and editmode */
 		for (base = scene->base.first; base; base = base->next) {
 			if (v3d->lay & base->lay) {
-				if (base->object == scene->obedit || (base->flag & SELECT)) {
+				if (base->object == scene->obedit || (base->flag_legacy & SELECT)) {
 					draw_object(scene, ar, v3d, base, 0);
 				}
 			}

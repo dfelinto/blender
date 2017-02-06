@@ -1710,7 +1710,7 @@ static bool get_new_constraint_target(bContext *C, int con_type, Object **tar_ob
 
 		/* restore, BKE_object_add sets active */
 		BASACT = base;
-		base->flag |= SELECT;
+		base->flag_legacy |= SELECT;
 		
 		/* make our new target the new object */
 		*tar_ob = obt;

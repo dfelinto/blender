@@ -92,10 +92,10 @@ void ED_base_object_select(Base *base, short mode)
 	if (base) {
 		if (mode == BA_SELECT) {
 			if (!(base->object->restrictflag & OB_RESTRICT_SELECT))
-				base->flag |= SELECT;
+				base->flag_legacy |= SELECT;
 		}
 		else if (mode == BA_DESELECT) {
-			base->flag &= ~SELECT;
+			base->flag_legacy &= ~SELECT;
 		}
 		BKE_scene_base_flag_sync_from_base(base);
 	}

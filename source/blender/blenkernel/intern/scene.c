@@ -1108,7 +1108,7 @@ int BKE_scene_base_iter_next(EvaluationContext *eval_ctx, SceneBaseIter *iter,
 				}
 				/* handle dupli's */
 				if (iter->dupob) {
-					(*base)->flag |= OB_FROMDUPLI;
+					(*base)->flag_legacy |= OB_FROMDUPLI;
 					*ob = iter->dupob->ob;
 					iter->phase = F_DUPLI;
 
@@ -1127,7 +1127,7 @@ int BKE_scene_base_iter_next(EvaluationContext *eval_ctx, SceneBaseIter *iter,
 				}
 				else if (iter->phase == F_DUPLI) {
 					iter->phase = F_SCENE;
-					(*base)->flag &= ~OB_FROMDUPLI;
+					(*base)->flag_legacy &= ~OB_FROMDUPLI;
 					
 					if (iter->dupli_refob) {
 						/* Restore last object's real matrix. */
@@ -1272,7 +1272,7 @@ Base *BKE_scene_base_add(Scene *sce, Object *ob)
 	BLI_addhead(&sce->base, b);
 
 	b->object = ob;
-	b->flag = ob->flag;
+	b->flag_legacy = ob->flag;
 	b->lay = ob->lay;
 
 	return b;
@@ -1292,17 +1292,17 @@ void BKE_scene_base_deselect_all(Scene *sce)
 	Base *b;
 
 	for (b = sce->base.first; b; b = b->next) {
-		b->flag &= ~SELECT;
+		b->flag_legacy &= ~SELECT;
 		int flag = b->object->flag & (OB_FROMGROUP);
-		b->object->flag = b->flag;
+		b->object->flag = b->flag_legacy;
 		b->object->flag |= flag;
 	}
 }
 
 void BKE_scene_base_select(Scene *sce, Base *selbase)
 {
-	selbase->flag |= SELECT;
-	selbase->object->flag = selbase->flag;
+	selbase->flag_legacy |= SELECT;
+	selbase->object->flag = selbase->flag_legacy;
 
 	sce->basact = selbase;
 }
@@ -1773,13 +1773,13 @@ void BKE_scene_base_flag_sync_from_base(Base *base)
 	/* keep the object only flags untouched */
 	int flag = ob->flag & OB_FROMGROUP;
 
-	ob->flag = base->flag;
+	ob->flag = base->flag_legacy;
 	ob->flag |= flag;
 }
 
 void BKE_scene_base_flag_sync_from_object(Base *base)
 {
-	base->flag = base->object->flag;
+	base->flag_legacy = base->object->flag;
 }
 
 void BKE_scene_object_base_flag_sync_from_base(ObjectBase *base)

@@ -477,7 +477,7 @@ static void draw_uvs_other(Scene *scene, Object *obedit, const Image *curimage, 
 	for (base = scene->base.first; base; base = base->next) {
 		Object *ob = base->object;
 
-		if (!(base->flag & SELECT)) continue;
+		if (!(base->flag_legacy & SELECT)) continue;
 		if (!(base->lay & scene->lay)) continue;
 		if (ob->restrictflag & OB_RESTRICT_VIEW) continue;
 

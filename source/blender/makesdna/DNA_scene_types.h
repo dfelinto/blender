@@ -76,7 +76,7 @@ struct SceneCollection;
 typedef struct Base {
 	struct Base *next, *prev;
 	unsigned int lay, selcol;
-	int flag;
+	int flag_legacy;
 	short sx, sy;
 	struct Object *object;
 } Base;
@@ -1968,16 +1968,16 @@ extern const char *RE_engine_id_CYCLES;
 
 /* depricate this! */
 #define TESTBASE(v3d, base)  (                                                \
-	((base)->flag & SELECT) &&                                                \
+	((base)->flag_legacy & SELECT) &&                                         \
 	((base)->lay & v3d->lay) &&                                               \
 	(((base)->object->restrictflag & OB_RESTRICT_VIEW) == 0))
 #define TESTBASELIB(v3d, base)  (                                             \
-	((base)->flag & SELECT) &&                                                \
+	((base)->flag_legacy & SELECT) &&                                         \
 	((base)->lay & v3d->lay) &&                                               \
 	((base)->object->id.lib == NULL) &&                                       \
 	(((base)->object->restrictflag & OB_RESTRICT_VIEW) == 0))
 #define TESTBASELIB_BGMODE(v3d, scene, base)  (                               \
-	((base)->flag & SELECT) &&                                                \
+	((base)->flag_legacy & SELECT) &&                                         \
 	((base)->lay & (v3d ? v3d->lay : scene->lay)) &&                          \
 	((base)->object->id.lib == NULL) &&                                       \
 	(((base)->object->restrictflag & OB_RESTRICT_VIEW) == 0))
@@ -2016,7 +2016,7 @@ extern const char *RE_engine_id_CYCLES;
 #define TIME2FRA(a)     ((((double) scene->r.frs_sec) * (double)(a)) / (double)scene->r.frs_sec_base)
 #define FPS              (((double) scene->r.frs_sec) / (double)scene->r.frs_sec_base)
 
-/* base->flag is in DNA_object_types.h */
+/* base->legacy_flag is in DNA_object_types.h */
 
 /* toolsettings->snap_flag */
 #define SCE_SNAP				1
