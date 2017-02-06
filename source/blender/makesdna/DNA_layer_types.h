@@ -37,8 +37,12 @@ typedef struct ObjectBase {
 	struct ObjectBase *next, *prev;
 	short flag;
 	short refcount;
-	short pad[2];
+	short sx, sy;
 	struct Object *object;
+	unsigned int selcol;
+	unsigned int lay;
+	int flag_legacy;
+	int pad;
 } ObjectBase;
 
 typedef struct CollectionOverride {
