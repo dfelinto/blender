@@ -136,24 +136,30 @@ static struct DRWGlobalState{
 } DST = {NULL};
 
 /* ***************************************** TEXTURES ******************************************/
-static void drw_texture_get_format(DRWTextureFormat format, GPUFormat *data_type, int *channels)
+static void drw_texture_get_format(DRWTextureFormat format, GPUTextureFormat *data_type, int *channels)
 {
 	switch (format) {
 		case DRW_TEX_RGBA_8: *data_type = GPU_RGBA8; break;
 		case DRW_TEX_RGBA_16: *data_type = GPU_RGBA16F; break;
+		case DRW_TEX_RG_16: *data_type = GPU_RG16F; break;
+		case DRW_TEX_RG_32: *data_type = GPU_RG32F; break;
+		case DRW_TEX_R_8: *data_type = GPU_R8; break;
+#if 0
 		case DRW_TEX_RGBA_32: *data_type = GPU_RGBA32F; break;
 		case DRW_TEX_RGB_8: *data_type = GPU_RGB8; break;
 		case DRW_TEX_RGB_16: *data_type = GPU_RGB16F; break;
 		case DRW_TEX_RGB_32: *data_type = GPU_RGB32F; break;
 		case DRW_TEX_RG_8: *data_type = GPU_RG8; break;
-		case DRW_TEX_RG_16: *data_type = GPU_RG16F; break;
-		case DRW_TEX_RG_32: *data_type = GPU_RG32F; break;
-		case DRW_TEX_R_8: *data_type = GPU_R8; break;
 		case DRW_TEX_R_16: *data_type = GPU_R16F; break;
 		case DRW_TEX_R_32: *data_type = GPU_R32F; break;
+#endif
 		case DRW_TEX_DEPTH_16: *data_type = GPU_DEPTH_COMPONENT16; break;
 		case DRW_TEX_DEPTH_24: *data_type = GPU_DEPTH_COMPONENT24; break;
 		case DRW_TEX_DEPTH_32: *data_type = GPU_DEPTH_COMPONENT32F; break;
+		default :
+			/* file type not supported you must uncomment it from above */
+			BLI_assert(false);
+			break;
 	}
 
 	switch (format) {
@@ -190,7 +196,7 @@ static void drw_texture_set_parameters(GPUTexture *tex, DRWTextureFlag flags)
 GPUTexture *DRW_texture_create_1D(int w, DRWTextureFormat format, DRWTextureFlag flags, const float *fpixels)
 {
 	GPUTexture *tex;
-	GPUFormat data_type;
+	GPUTextureFormat data_type;
 	int channels;
 
 	drw_texture_get_format(format, &data_type, &channels);
@@ -203,7 +209,7 @@ GPUTexture *DRW_texture_create_1D(int w, DRWTextureFormat format, DRWTextureFlag
 GPUTexture *DRW_texture_create_2D(int w, int h, DRWTextureFormat format, DRWTextureFlag flags, const float *fpixels)
 {
 	GPUTexture *tex;
-	GPUFormat data_type;
+	GPUTextureFormat data_type;
 	int channels;
 
 	drw_texture_get_format(format, &data_type, &channels);

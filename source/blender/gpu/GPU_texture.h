@@ -55,24 +55,30 @@ typedef struct GPUTexture GPUTexture;
  *  - if created with from_blender, will not free the texture
  */
 
-/* From OpenGl 3.3 specification */
-typedef enum GPUFormat {
+/* Wrapper to supported OpenGL/Vulkan texture internal storage
+ * If you need a type just uncomment it. Be aware that some formats
+ * are not supported by renderbuffers. All of the following formats
+ * are part of the OpenGL 3.3 core
+ * specification. */
+typedef enum GPUTextureFormat {
 	/* Formats texture & renderbuffer */
+	GPU_RGBA16F,
+	GPU_RGBA8,
+	GPU_RG32F,
+	GPU_RG16F,
+	GPU_R8,
+#if 0
 	GPU_RGBA32F,
 	GPU_RGBA32I,
 	GPU_RGBA32UI,
 	GPU_RGBA16,
-	GPU_RGBA16F,
 	GPU_RGBA16I,
 	GPU_RGBA16UI,
-	GPU_RGBA8,
 	GPU_RGBA8I,
 	GPU_RGBA8UI,
-	GPU_RG32F,
 	GPU_RG32I,
 	GPU_RG32UI,
 	GPU_RG16,
-	GPU_RG16F,
 	GPU_RG16I,
 	GPU_RG16UI,
 	GPU_RG8,
@@ -85,18 +91,21 @@ typedef enum GPUFormat {
 	GPU_R16I,
 	GPU_R16UI,
 	GPU_R16,
-	GPU_R8,
 	GPU_R8I,
 	GPU_R8UI,
+#endif
 
 	/* Special formats texture & renderbuffer */
+#if 0
 	GPU_R11F_G11F_B10F,
 	GPU_RGB10_A2,
 	GPU_RGB10_A2UI,
 	GPU_DEPTH32F_STENCIL8,
 	GPU_DEPTH24_STENCIL8,
+#endif
 
 	/* Texture only format */
+#if 0
 	GPU_RGBA16_SNORM,
 	GPU_RGBA8_SNORM,
 	GPU_RGB32F,
@@ -115,8 +124,10 @@ typedef enum GPUFormat {
 	GPU_RG8_SNORM,
 	GPU_R16_SNORM,
 	GPU_R8_SNORM,
+#endif
 
 	/* Special formats texture only */
+#if 0
 	GPU_SRGB8_A8,
 	GPU_SRGB8,
 	GPU_RGB9_E5,
@@ -124,27 +135,27 @@ typedef enum GPUFormat {
 	GPU_COMPRESSED_SIGNED_RG_RGTC2,
 	GPU_COMPRESSED_RED_RGTC1,
 	GPU_COMPRESSED_SIGNED_RED_RGTC1,
+#endif
 
 	/* Depth Formats */
 	GPU_DEPTH_COMPONENT32F,
 	GPU_DEPTH_COMPONENT24,
 	GPU_DEPTH_COMPONENT16,
-} GPUFormat;
+} GPUTextureFormat;
 
 GPUTexture *GPU_texture_create_1D(int w, const float *pixels, char err_out[256]);
 GPUTexture *GPU_texture_create_1D_custom(
-        int w, int channels, GPUFormat data_type, const float *pixels, char err_out[256]);
+        int w, int channels, GPUTextureFormat data_type, const float *pixels, char err_out[256]);
 GPUTexture *GPU_texture_create_2D(int w, int h, const float *pixels, char err_out[256]);
 GPUTexture *GPU_texture_create_2D_custom(
-        int w, int h, int channels, GPUFormat data_type, const float *pixels, char err_out[256]);
+        int w, int h, int channels, GPUTextureFormat data_type, const float *pixels, char err_out[256]);
 GPUTexture *GPU_texture_create_2D_multisample(int w, int h, const float *pixels, int samples, char err_out[256]);
 GPUTexture *GPU_texture_create_2D_array(int w, int h, int d, const float *pixels, char err_out[256]);
 GPUTexture *GPU_texture_create_3D(int w, int h, int d, const float *pixels, char err_out[256]);
 GPUTexture *GPU_texture_create_3D_custom(
-        int w, int h, int d, int channels, GPUFormat data_type, const float *pixels, char err_out[256]);
+        int w, int h, int d, int channels, GPUTextureFormat data_type, const float *pixels, char err_out[256]);
 GPUTexture *GPU_texture_create_depth(int w, int h, char err_out[256]);
 GPUTexture *GPU_texture_create_depth_multisample(int w, int h, int samples, char err_out[256]);
-GPUTexture *GPU_texture_create_vsm_shadow_map(int size, char err_out[256]);
 
 GPUTexture *GPU_texture_from_blender(
         struct Image *ima, struct ImageUser *iuser, int textarget, bool is_data, double time, int mipmap);

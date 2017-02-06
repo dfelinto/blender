@@ -609,7 +609,7 @@ static GPUNodeLink *lamp_get_visibility(GPUMaterial *mat, GPULamp *lamp, GPUNode
 			
 			GPU_link(mat, "lamp_visibility_spot",
 			         GPU_dynamic_uniform(&lamp->spotsi, GPU_DYNAMIC_LAMP_SPOTSIZE, lamp->ob),
-			         GPU_dynamic_uniform(&lamp->spotbl, GPU_DYNAMIC_LAMP_SPOTSIZE, lamp->ob),
+			         GPU_dynamic_uniform(&lamp->spotbl, GPU_DYNAMIC_LAMP_SPOTBLEND, lamp->ob),
 			         inpr, visifac, &visifac);
 		}
 
@@ -2369,6 +2369,11 @@ static void gpu_lamp_shadow_free(GPULamp *lamp)
 	}
 }
 
+static GPUTexture *gpu_lamp_create_vsm_shadow_map(int size)
+{
+	return GPU_texture_create_2D_custom(size, size, 2, GPU_RG32F, NULL, NULL);
+}
+
 GPULamp *GPU_lamp_from_blender(Scene *scene, Object *ob, Object *par)
 {
 	Lamp *la;
@@ -2415,7 +2420,7 @@ GPULamp *GPU_lamp_from_blender(Scene *scene, Object *ob, Object *par)
 			}
 
 			/* Shadow color map */
-			lamp->tex = GPU_texture_create_2D_custom(lamp->size, lamp->size, 2, GPU_RG32F, NULL, NULL);
+			lamp->tex = gpu_lamp_create_vsm_shadow_map(lamp->size);
 			if (!lamp->tex) {
 				gpu_lamp_shadow_free(lamp);
 				return lamp;
@@ -2438,7 +2443,7 @@ GPULamp *GPU_lamp_from_blender(Scene *scene, Object *ob, Object *par)
 				return lamp;
 			}
 
-			lamp->blurtex = GPU_texture_create_2D_custom(lamp->size * 0.5, lamp->size * 0.5, 2, GPU_RG32F, NULL, NULL);
+			lamp->blurtex = gpu_lamp_create_vsm_shadow_map(lamp->size * 0.5);
 			if (!lamp->blurtex) {
 				gpu_lamp_shadow_free(lamp);
 				return lamp;
