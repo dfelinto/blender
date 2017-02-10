@@ -46,6 +46,7 @@ extern "C" {
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
+#include "BKE_layer.h"
 #include "BKE_main.h"
 #include "BKE_node.h"
 
@@ -65,20 +66,6 @@ namespace DEG {
 
 void DepsgraphNodeBuilder::build_scene(Main *bmain, Scene *scene)
 {
-	/* LIB_TAG_DOIT is used to indicate whether node for given ID was already
-	 * created or not. This flag is being set in add_id_node(), so functions
-	 * shouldn't bother with setting it, they only might query this flag when
-	 * needed.
-	 */
-	BKE_main_id_tag_all(bmain, LIB_TAG_DOIT, false);
-	/* XXX nested node trees are not included in tag-clearing above,
-	 * so we need to do this manually.
-	 */
-	FOREACH_NODETREE(bmain, nodetree, id) {
-		if (id != (ID *)nodetree)
-			nodetree->id.tag &= ~LIB_TAG_DOIT;
-	} FOREACH_NODETREE_END
-
 	/* scene ID block */
 	add_id_node(&scene->id);
 
@@ -93,24 +80,25 @@ void DepsgraphNodeBuilder::build_scene(Main *bmain, Scene *scene)
 	}
 
 	/* scene objects */
-	LINKLIST_FOREACH (Base *, base, &scene->base) {
-		Object *ob = base->object;
-
+	Object *ob;
+	FOREACH_SCENE_OBJECT(scene, ob)
+	{
 		/* object itself */
-		build_object(scene, base, ob);
+		build_object(scene, ob);
 
 		/* object that this is a proxy for */
 		// XXX: the way that proxies work needs to be completely reviewed!
 		if (ob->proxy) {
 			ob->proxy->proxy_from = ob;
-			build_object(scene, base, ob->proxy);
+			build_object(scene, ob->proxy);
 		}
 
 		/* Object dupligroup. */
 		if (ob->dup_group) {
-			build_group(scene, base, ob->dup_group);
+			build_group(scene, ob->dup_group);
 		}
 	}
+	FOREACH_SCENE_OBJECT_END
 
 	/* rigidbody */
 	if (scene->rigidbody_world) {

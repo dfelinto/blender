@@ -194,23 +194,21 @@ static int console_draw_string(ConsoleDrawContext *cdc, const char *str, int str
 			unsigned pos = add_attrib(format, "pos", GL_INT, 2, CONVERT_INT_TO_FLOAT);
 			immBindBuiltinProgram(GPU_SHADER_2D_UNIFORM_COLOR);
 
-			immUniformColor4ubv(bg);
+			immUniformColor3ubv(bg);
 			immRecti(pos, 0, cdc->xy[1], cdc->winx, (cdc->xy[1] + (cdc->lheight * tot_lines)));
 
 			immUnbindProgram();
 		}
 
-		glColor3ubv(fg);
-
 		/* last part needs no clipping */
 		BLF_position(cdc->font_id, cdc->xy[0], cdc->lofs + cdc->xy[1], 0);
+		BLF_color3ubv(cdc->font_id, fg);
 		BLF_draw_mono(cdc->font_id, s, len, cdc->cwidth);
 
 		if (cdc->sel[0] != cdc->sel[1]) {
 			console_step_sel(cdc, -initial_offset);
 			// glColor4ub(255, 0, 0, 96); // debug
 			console_draw_sel(s, cdc->sel, cdc->xy, len, cdc->cwidth, cdc->lheight, bg_sel);
-			glColor3ubv(fg);
 		}
 
 		cdc->xy[1] += cdc->lheight;
@@ -226,7 +224,6 @@ static int console_draw_string(ConsoleDrawContext *cdc, const char *str, int str
 				console_step_sel(cdc, len);
 				// glColor4ub(0, 255, 0, 96); // debug
 				console_draw_sel(s, cdc->sel, cdc->xy, len, cdc->cwidth, cdc->lheight, bg_sel);
-				glColor3ubv(fg);
 			}
 
 			cdc->xy[1] += cdc->lheight;
@@ -248,13 +245,11 @@ static int console_draw_string(ConsoleDrawContext *cdc, const char *str, int str
 			unsigned pos = add_attrib(format, "pos", GL_INT, 2, CONVERT_INT_TO_FLOAT);
 			immBindBuiltinProgram(GPU_SHADER_2D_UNIFORM_COLOR);
 
-			immUniformColor4ubv(bg);
+			immUniformColor3ubv(bg);
 			immRecti(pos, 0, cdc->xy[1], cdc->winx, cdc->xy[1] + cdc->lheight);
 
 			immUnbindProgram();
 		}
-
-		glColor3ubv(fg);
 
 		BLF_position(cdc->font_id, cdc->xy[0], cdc->lofs + cdc->xy[1], 0);
 		BLF_draw_mono(cdc->font_id, str, str_len, cdc->cwidth);

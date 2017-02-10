@@ -1855,6 +1855,7 @@ void UI_view2d_scrollers_draw(const bContext *C, View2D *v2d, View2DScrollers *v
 		
 		/* scale indicators */
 		if ((scroll & V2D_SCROLL_SCALE_HORIZONTAL) && (vs->grid)) {
+			const int font_id = BLF_default();
 			View2DGrid *grid = vs->grid;
 			float fac, dfac, fac2, val;
 			
@@ -1869,7 +1870,7 @@ void UI_view2d_scrollers_draw(const bContext *C, View2D *v2d, View2DScrollers *v
 			dfac = dfac * BLI_rcti_size_x(&hor);
 			
 			/* set starting value, and text color */
-			UI_ThemeColor(TH_TEXT);
+			UI_FontThemeColor(font_id, TH_TEXT);
 			val = grid->startx;
 			
 			/* if we're clamping to whole numbers only, make sure entries won't be repeated */
@@ -1978,7 +1979,8 @@ void UI_view2d_scrollers_draw(const bContext *C, View2D *v2d, View2DScrollers *v
 			dfac = dfac     * BLI_rcti_size_y(&vert);
 			
 			/* set starting value, and text color */
-			UI_ThemeColor(TH_TEXT);
+			const int font_id = BLF_default();
+			UI_FontThemeColor(font_id, TH_TEXT);
 			val = grid->starty;
 			
 			/* if vertical clamping (to whole numbers) is used (i.e. in Sequencer), apply correction */
@@ -1987,9 +1989,8 @@ void UI_view2d_scrollers_draw(const bContext *C, View2D *v2d, View2DScrollers *v
 				
 			/* draw vertical steps */
 			if (dfac > 0.0f) {
-				
-				BLF_rotation_default(M_PI_2);
-				BLF_enable_default(BLF_ROTATION);
+				BLF_rotation(font_id, M_PI_2);
+				BLF_enable(font_id, BLF_ROTATION);
 
 				for (; fac < vert.ymax - 10; fac += dfac, val += grid->dy) {
 					
@@ -2000,7 +2001,7 @@ void UI_view2d_scrollers_draw(const bContext *C, View2D *v2d, View2DScrollers *v
 					scroll_printstr(scene, (float)(vert.xmax) - 2.0f, fac, val, grid->powery, vs->yunits, 'v');
 				}
 				
-				BLF_disable_default(BLF_ROTATION);
+				BLF_disable(font_id, BLF_ROTATION);
 			}
 		}
 	}
@@ -2514,7 +2515,8 @@ void UI_view2d_text_cache_draw(ARegion *ar)
 	int col_pack_prev = 0;
 
 	/* investigate using BLF_ascender() */
-	const float default_height = g_v2d_strings ? BLF_height_default("28", 3) : 0.0f;
+	const int font_id = BLF_default();
+	const float default_height = g_v2d_strings ? BLF_height(font_id, "28", 3) : 0.0f;
 
 	wmOrtho2_region_pixelspace(ar);
 
@@ -2525,7 +2527,7 @@ void UI_view2d_text_cache_draw(ARegion *ar)
 		if (yofs < 1) yofs = 1;
 
 		if (col_pack_prev != v2s->col.pack) {
-			glColor3ubv(v2s->col.ub);
+			BLF_color3ubv(font_id, v2s->col.ub);
 			col_pack_prev = v2s->col.pack;
 		}
 
@@ -2533,11 +2535,11 @@ void UI_view2d_text_cache_draw(ARegion *ar)
 			BLF_draw_default((float)(v2s->mval[0] + xofs), (float)(v2s->mval[1] + yofs), 0.0,
 			                  v2s->str, BLF_DRAW_STR_DUMMY_MAX);
 		else {
-			BLF_clipping_default(v2s->rect.xmin - 4, v2s->rect.ymin - 4, v2s->rect.xmax + 4, v2s->rect.ymax + 4);
-			BLF_enable_default(BLF_CLIPPING);
+			BLF_enable(font_id, BLF_CLIPPING);
+			BLF_clipping(font_id, v2s->rect.xmin - 4, v2s->rect.ymin - 4, v2s->rect.xmax + 4, v2s->rect.ymax + 4);
 			BLF_draw_default(v2s->rect.xmin + xofs, v2s->rect.ymin + yofs, 0.0f,
 			                 v2s->str, BLF_DRAW_STR_DUMMY_MAX);
-			BLF_disable_default(BLF_CLIPPING);
+			BLF_disable(font_id, BLF_CLIPPING);
 		}
 	}
 	g_v2d_strings = NULL;

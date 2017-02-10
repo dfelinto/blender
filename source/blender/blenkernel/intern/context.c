@@ -47,6 +47,7 @@
 #include "BLT_translation.h"
 
 #include "BKE_context.h"
+#include "BKE_layer.h"
 #include "BKE_main.h"
 #include "BKE_screen.h"
 #include "BKE_sound.h"
@@ -821,6 +822,14 @@ struct SpaceClip *CTX_wm_space_clip(const bContext *C)
 	return NULL;
 }
 
+struct SpaceCollections *CTX_wm_space_collections(const bContext *C)
+{
+	ScrArea *sa = CTX_wm_area(C);
+	if (sa && sa->spacetype == SPACE_COLLECTIONS)
+		return sa->spacedata.first;
+	return NULL;
+}
+
 void CTX_wm_manager_set(bContext *C, wmWindowManager *wm)
 {
 	C->wm.manager = wm;
@@ -909,6 +918,59 @@ Scene *CTX_data_scene(const bContext *C)
 		return scene;
 	else
 		return C->data.scene;
+}
+
+SceneLayer *CTX_data_scene_layer(const bContext *C)
+{
+	SceneLayer *sl;
+
+	if (ctx_data_pointer_verify(C, "render_layer", (void *)&sl)) {
+		return sl;
+	}
+	else {
+		return BKE_scene_layer_active(CTX_data_scene(C));
+	}
+}
+
+/**
+ * This is tricky. Sometimes the user overrides the render_layer
+ * but not the scene_collection. In this case what to do?
+ *
+ * If the scene_collection is linked to the SceneLayer we use it.
+ * Otherwise we fallback to the active one of the SceneLayer.
+ */
+LayerCollection *CTX_data_layer_collection(const bContext *C)
+{
+	SceneLayer *sl = CTX_data_scene_layer(C);
+	LayerCollection *lc;
+
+	if (ctx_data_pointer_verify(C, "layer_collection", (void *)&lc)) {
+		if (BKE_scene_layer_has_collection(sl, lc->scene_collection)) {
+			return lc;
+		}
+	}
+
+	/* fallback */
+	return BKE_layer_collection_active(sl);
+}
+
+SceneCollection *CTX_data_scene_collection(const bContext *C)
+{
+	SceneCollection *sc;
+	if (ctx_data_pointer_verify(C, "scene_collection", (void *)&sc)) {
+		if (BKE_scene_layer_has_collection(CTX_data_scene_layer(C), sc)) {
+			return sc;
+		}
+	}
+
+	LayerCollection *lc = CTX_data_layer_collection(C);
+	if (lc) {
+		return lc->scene_collection;
+	}
+
+	/* fallback */
+	Scene *scene = CTX_data_scene(C);
+	return BKE_collection_master(scene);
 }
 
 int CTX_data_mode_enum(const bContext *C)

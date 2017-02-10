@@ -49,6 +49,7 @@
 
 #include "BKE_context.h"
 #include "BKE_action.h"
+#include "BKE_layer.h"
 #include "BKE_material.h"
 #include "BKE_modifier.h"
 #include "BKE_paint.h"
@@ -180,7 +181,9 @@ static int buttons_context_path_object(ButsContextPath *path)
 	/* if we have a scene, use the scene's active object */
 	else if (buttons_context_path_scene(path)) {
 		scene = path->ptr[path->len - 1].data;
-		ob = (scene->basact) ? scene->basact->object : NULL;
+		TODO_LAYER_CONTEXT; /* use context, not active one */
+		SceneLayer *sl = BKE_scene_layer_active(scene);
+		ob = (sl->basact) ? sl->basact->object : NULL;
 
 		if (ob) {
 			RNA_id_pointer_create(&ob->id, &path->ptr[path->len]);
@@ -553,6 +556,28 @@ static bool buttons_context_linestyle_pinnable(const bContext *C)
 }
 #endif
 
+static int buttons_context_path_collection(const bContext *C, ButsContextPath *path)
+{
+	PointerRNA *ptr = &path->ptr[path->len - 1];
+
+	/* if we already have a (pinned) Collection, we're done */
+	if (RNA_struct_is_a(ptr->type, &RNA_LayerCollection)) {
+		return 1;
+	}
+
+	SceneLayer *sl = CTX_data_scene_layer(C);
+	LayerCollection *sc = BKE_layer_collection_active(sl);
+
+	if (sc) {
+		RNA_pointer_create(NULL, &RNA_LayerCollection, sc, &path->ptr[path->len]);
+		path->len++;
+		return 1;
+	}
+
+	/* no path to a collection possible */
+	return 0;
+}
+
 static int buttons_context_path(const bContext *C, ButsContextPath *path, int mainb, int flag)
 {
 	SpaceButs *sbuts = CTX_wm_space_buts(C);
@@ -627,7 +652,10 @@ static int buttons_context_path(const bContext *C, ButsContextPath *path, int ma
 		case BCONTEXT_BONE_CONSTRAINT:
 			found = buttons_context_path_pose_bone(path);
 			break;
-		default:
+	    case BCONTEXT_COLLECTION:
+		    found = buttons_context_path_collection(C, path);
+		    break;
+	    default:
 			found = 0;
 			break;
 	}
@@ -744,7 +772,7 @@ const char *buttons_context_dir[] = {
 	"texture", "texture_user", "texture_user_property", "bone", "edit_bone",
 	"pose_bone", "particle_system", "particle_system_editable", "particle_settings",
 	"cloth", "soft_body", "fluid", "smoke", "collision", "brush", "dynamic_paint",
-	"line_style", NULL
+	"line_style", "collection", NULL
 };
 
 int buttons_context(const bContext *C, const char *member, bContextDataResult *result)
@@ -1062,6 +1090,10 @@ int buttons_context(const bContext *C, const char *member, bContextDataResult *r
 	}
 	else if (CTX_data_equals(member, "line_style")) {
 		set_pointer_type(path, result, &RNA_FreestyleLineStyle);
+		return 1;
+	}
+	else if (CTX_data_equals(member, "collection")) {
+		set_pointer_type(path, result, &RNA_LayerCollection);
 		return 1;
 	}
 	else {

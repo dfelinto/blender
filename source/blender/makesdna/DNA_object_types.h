@@ -46,6 +46,7 @@ struct Object;
 struct AnimData;
 struct Ipo;
 struct BoundBox;
+struct CollectionEngineSettings;
 struct Path;
 struct Material;
 struct PartDeflect;
@@ -223,7 +224,10 @@ typedef struct Object {
 	float jump_speed;
 	float fall_speed;
 	unsigned char max_jumps;
-	char pad2[3];
+	char pad2;
+
+	/* Depsgraph */
+	short base_flag; /* used by depsgraph, flushed from base */
 
 	/** Collision mask settings */
 	unsigned short col_group, col_mask;
@@ -299,6 +303,8 @@ typedef struct Object {
 	LodLevel *currentlod;
 
 	struct PreviewImage *preview;
+
+	struct CollectionEngineSettings *collection_settings; /* used by depsgraph, flushed from collection-tree */
 } Object;
 
 /* Warning, this is not used anymore because hooks are now modifiers */

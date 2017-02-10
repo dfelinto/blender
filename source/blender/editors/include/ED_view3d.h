@@ -37,7 +37,7 @@ struct BMEdge;
 struct BMFace;
 struct BMVert;
 struct BPoint;
-struct Base;
+struct BaseLegacy;
 struct BezTriple;
 struct BoundBox;
 struct EditBone;
@@ -49,6 +49,7 @@ struct Nurb;
 struct Object;
 struct RegionView3D;
 struct Scene;
+struct SceneLayer;
 struct ScrArea;
 struct View3D;
 struct ViewContext;
@@ -70,6 +71,7 @@ enum eGPUFXFlags;
 /* for derivedmesh drawing callbacks, for view3d_select, .... */
 typedef struct ViewContext {
 	struct Scene *scene;
+	struct SceneLayer *sl;
 	struct Object *obact;
 	struct Object *obedit;
 	struct ARegion *ar;
@@ -187,7 +189,7 @@ void pose_foreachScreenBone(
 void ED_view3d_project_float_v2_m4(const struct ARegion *ar, const float co[3], float r_co[2], float mat[4][4]);
 void ED_view3d_project_float_v3_m4(const struct ARegion *ar, const float co[3], float r_co[3], float mat[4][4]);
 
-eV3DProjStatus ED_view3d_project_base(const struct ARegion *ar, struct Base *base);
+eV3DProjStatus ED_view3d_project_base(const struct ARegion *ar, struct BaseLegacy *base);
 
 /* *** short *** */
 eV3DProjStatus ED_view3d_project_short_ex(const struct ARegion *ar, float perspmat[4][4], const bool is_local,
@@ -277,6 +279,7 @@ float ED_view3d_radius_to_dist(
         const float radius);
 
 void drawcircball(int mode, const float cent[3], float rad, const float tmat[4][4]);
+void imm_drawcircball(const float cent[3], float rad, const float tmat[4][4], unsigned pos);
 
 /* backbuffer select and draw support */
 void          ED_view3d_backbuf_validate(struct ViewContext *vc);
@@ -352,7 +355,7 @@ struct ImBuf *ED_view3d_draw_offscreen_imbuf_simple(
         int alpha_mode, int samples, bool full_samples, const char *viewname,
         struct GPUFX *fx, struct GPUOffScreen *ofs, char err_out[256]);
 
-struct Base *ED_view3d_give_base_under_cursor(struct bContext *C, const int mval[2]);
+struct BaseLegacy *ED_view3d_give_base_under_cursor(struct bContext *C, const int mval[2]);
 void ED_view3d_quadview_update(struct ScrArea *sa, struct ARegion *ar, bool do_clip);
 void ED_view3d_update_viewmat(struct Scene *scene, struct View3D *v3d, struct ARegion *ar, float viewmat[4][4], float winmat[4][4]);
 bool ED_view3d_quat_from_axis_view(const char view, float quat[4]);

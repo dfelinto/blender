@@ -46,6 +46,7 @@
 #include "BKE_context.h"
 #include "BKE_depsgraph.h"
 #include "BKE_object.h"
+#include "BKE_layer.h"
 #include "BKE_scene.h"
 #include "BKE_sequencer.h"
 #include "BKE_armature.h"
@@ -73,7 +74,7 @@
 /* Outliner Element Selection/Activation on Click */
 
 static eOLDrawState tree_element_active_renderlayer(
-        bContext *C, TreeElement *te, TreeStoreElem *tselem, const eOLSetState set)
+        bContext *C, Scene *UNUSED(scene), SceneLayer *UNUSED(sl), TreeElement *te, TreeStoreElem *tselem, const eOLSetState set)
 {
 	Scene *sce;
 	
@@ -99,7 +100,7 @@ static eOLDrawState tree_element_active_renderlayer(
  */
 static void do_outliner_object_select_recursive(Scene *scene, Object *ob_parent, bool select)
 {
-	Base *base;
+	BaseLegacy *base;
 
 	for (base = FIRSTBASE; base; base = base->next) {
 		Object *ob = base->object;
@@ -135,7 +136,7 @@ static void do_outliner_ebone_select_recursive(bArmature *arm, EditBone *ebone_p
 }
 
 static eOLDrawState tree_element_set_active_object(
-        bContext *C, Scene *scene, SpaceOops *soops,
+        bContext *C, Scene *scene, SceneLayer *sl, SpaceOops *soops,
         TreeElement *te, const eOLSetState set, bool recursive)
 {
 	TreeStoreElem *tselem = TREESTORE(te);
@@ -149,7 +150,7 @@ static eOLDrawState tree_element_set_active_object(
 	}
 	else {
 		ob = (Object *)outliner_search_back(soops, te, ID_OB);
-		if (ob == OBACT) {
+		if (ob == OBACT_NEW) {
 			return OL_DRAWSEL_NONE;
 		}
 	}
@@ -169,15 +170,15 @@ static eOLDrawState tree_element_set_active_object(
 	if (base) {
 		if (set == OL_SETSEL_EXTEND) {
 			/* swap select */
-			if (base->flag & SELECT)
-				ED_base_object_select(base, BA_DESELECT);
+			if (base->flag & BASE_SELECTED)
+				ED_object_base_select(base, BA_DESELECT);
 			else 
-				ED_base_object_select(base, BA_SELECT);
+				ED_object_base_select(base, BA_SELECT);
 		}
 		else {
 			/* deleselect all */
-			BKE_scene_base_deselect_all(scene);
-			ED_base_object_select(base, BA_SELECT);
+			BKE_scene_layer_base_deselect_all(sl);
+			ED_object_base_select(base, BA_SELECT);
 		}
 
 		if (recursive) {
@@ -186,7 +187,7 @@ static eOLDrawState tree_element_set_active_object(
 		}
 
 		if (C) {
-			ED_base_object_activate(C, base); /* adds notifier */
+			ED_object_base_activate(C, base); /* adds notifier */
 			WM_event_add_notifier(C, NC_SCENE | ND_OB_SELECT, scene);
 		}
 	}
@@ -198,7 +199,7 @@ static eOLDrawState tree_element_set_active_object(
 }
 
 static eOLDrawState tree_element_active_material(
-        bContext *C, Scene *scene, SpaceOops *soops,
+        bContext *C, Scene* UNUSED(scene), SceneLayer *sl, SpaceOops *soops,
         TreeElement *te, const eOLSetState set)
 {
 	TreeElement *tes;
@@ -207,7 +208,7 @@ static eOLDrawState tree_element_active_material(
 	/* we search for the object parent */
 	ob = (Object *)outliner_search_back(soops, te, ID_OB);
 	// note: ob->matbits can be NULL when a local object points to a library mesh.
-	if (ob == NULL || ob != OBACT || ob->matbits == NULL) {
+	if (ob == NULL || ob != OBACT_NEW || ob->matbits == NULL) {
 		return OL_DRAWSEL_NONE;  /* just paranoia */
 	}
 	
@@ -251,12 +252,12 @@ static eOLDrawState tree_element_active_material(
 }
 
 static eOLDrawState tree_element_active_texture(
-        bContext *C, Scene *scene, SpaceOops *UNUSED(soops),
+        bContext *C, Scene *scene, SceneLayer *sl, SpaceOops *UNUSED(soops),
         TreeElement *te, const eOLSetState set)
 {
 	TreeElement *tep;
 	TreeStoreElem /* *tselem,*/ *tselemp;
-	Object *ob = OBACT;
+	Object *ob = OBACT_NEW;
 	SpaceButs *sbuts = NULL;
 	
 	if (ob == NULL) {
@@ -338,14 +339,14 @@ static eOLDrawState tree_element_active_texture(
 
 
 static eOLDrawState tree_element_active_lamp(
-        bContext *UNUSED(C), Scene *scene, SpaceOops *soops,
+        bContext *UNUSED(C), Scene *UNUSED(scene), SceneLayer *sl, SpaceOops *soops,
         TreeElement *te, const eOLSetState set)
 {
 	Object *ob;
 	
 	/* we search for the object parent */
 	ob = (Object *)outliner_search_back(soops, te, ID_OB);
-	if (ob == NULL || ob != OBACT) {
+	if (ob == NULL || ob != OBACT_NEW) {
 		/* just paranoia */
 		return OL_DRAWSEL_NONE;
 	}
@@ -361,7 +362,7 @@ static eOLDrawState tree_element_active_lamp(
 }
 
 static eOLDrawState tree_element_active_camera(
-        bContext *UNUSED(C), Scene *scene, SpaceOops *soops,
+        bContext *UNUSED(C), Scene *scene, SceneLayer *UNUSED(sl), SpaceOops *soops,
         TreeElement *te, const eOLSetState set)
 {
 	Object *ob = (Object *)outliner_search_back(soops, te, ID_OB);
@@ -374,7 +375,7 @@ static eOLDrawState tree_element_active_camera(
 }
 
 static eOLDrawState tree_element_active_world(
-        bContext *C, Scene *scene, SpaceOops *UNUSED(soops),
+        bContext *C, Scene *scene, SceneLayer *UNUSED(sl), SpaceOops *UNUSED(soops),
         TreeElement *te, const eOLSetState set)
 {
 	TreeElement *tep;
@@ -407,7 +408,7 @@ static eOLDrawState tree_element_active_world(
 }
 
 static eOLDrawState tree_element_active_defgroup(
-        bContext *C, Scene *scene, TreeElement *te, TreeStoreElem *tselem, const eOLSetState set)
+        bContext *C, SceneLayer *sl, TreeElement *te, TreeStoreElem *tselem, const eOLSetState set)
 {
 	Object *ob;
 	
@@ -421,7 +422,7 @@ static eOLDrawState tree_element_active_defgroup(
 		WM_event_add_notifier(C, NC_OBJECT | ND_TRANSFORM, ob);
 	}
 	else {
-		if (ob == OBACT)
+		if (ob == OBACT_NEW)
 			if (ob->actdef == te->index + 1) {
 				return OL_DRAWSEL_NORMAL;
 			}
@@ -430,7 +431,7 @@ static eOLDrawState tree_element_active_defgroup(
 }
 
 static eOLDrawState tree_element_active_posegroup(
-        bContext *C, Scene *scene, TreeElement *te, TreeStoreElem *tselem, const eOLSetState set)
+        bContext *C, Scene *UNUSED(scene), SceneLayer *sl, TreeElement *te, TreeStoreElem *tselem, const eOLSetState set)
 {
 	Object *ob = (Object *)tselem->id;
 	
@@ -441,7 +442,7 @@ static eOLDrawState tree_element_active_posegroup(
 		}
 	}
 	else {
-		if (ob == OBACT && ob->pose) {
+		if (ob == OBACT_NEW && ob->pose) {
 			if (ob->pose->active_group == te->index + 1) {
 				return OL_DRAWSEL_NORMAL;
 			}
@@ -451,7 +452,7 @@ static eOLDrawState tree_element_active_posegroup(
 }
 
 static eOLDrawState tree_element_active_posechannel(
-        bContext *C, Scene *scene, TreeElement *te, TreeStoreElem *tselem, const eOLSetState set, bool recursive)
+        bContext *C, Scene *UNUSED(scene), SceneLayer *sl, TreeElement *te, TreeStoreElem *tselem, const eOLSetState set, bool recursive)
 {
 	Object *ob = (Object *)tselem->id;
 	bArmature *arm = ob->data;
@@ -485,7 +486,7 @@ static eOLDrawState tree_element_active_posechannel(
 		}
 	}
 	else {
-		if (ob == OBACT && ob->pose) {
+		if (ob == OBACT_NEW && ob->pose) {
 			if (pchan->bone->flag & BONE_SELECTED) {
 				return OL_DRAWSEL_NORMAL;
 			}
@@ -495,14 +496,14 @@ static eOLDrawState tree_element_active_posechannel(
 }
 
 static eOLDrawState tree_element_active_bone(
-        bContext *C, Scene *scene, TreeElement *te, TreeStoreElem *tselem, const eOLSetState set, bool recursive)
+        bContext *C, SceneLayer *sl, TreeElement *te, TreeStoreElem *tselem, const eOLSetState set, bool recursive)
 {
 	bArmature *arm = (bArmature *)tselem->id;
 	Bone *bone = te->directdata;
 	
 	if (set != OL_SETSEL_NONE) {
 		if (!(bone->flag & BONE_HIDDEN_P)) {
-			Object *ob = OBACT;
+			Object *ob = OBACT_NEW;
 			if (ob) {
 				if (set != OL_SETSEL_EXTEND) {
 					/* single select forces all other bones to get unselected */
@@ -531,7 +532,7 @@ static eOLDrawState tree_element_active_bone(
 		}
 	}
 	else {
-		Object *ob = OBACT;
+		Object *ob = OBACT_NEW;
 		
 		if (ob && ob->data == arm) {
 			if (bone->flag & BONE_SELECTED) {
@@ -604,7 +605,7 @@ static eOLDrawState tree_element_active_ebone(
 }
 
 static eOLDrawState tree_element_active_modifier(
-        bContext *C, TreeElement *UNUSED(te), TreeStoreElem *tselem, const eOLSetState set)
+        bContext *C, Scene *UNUSED(scene), SceneLayer *UNUSED(sl), TreeElement *UNUSED(te), TreeStoreElem *tselem, const eOLSetState set)
 {
 	if (set != OL_SETSEL_NONE) {
 		Object *ob = (Object *)tselem->id;
@@ -632,7 +633,7 @@ static eOLDrawState tree_element_active_psys(
 }
 
 static int tree_element_active_constraint(
-        bContext *C, TreeElement *UNUSED(te), TreeStoreElem *tselem, const eOLSetState set)
+        bContext *C, Scene *UNUSED(scene), SceneLayer *UNUSED(sl), TreeElement *UNUSED(te), TreeStoreElem *tselem, const eOLSetState set)
 {
 	if (set != OL_SETSEL_NONE) {
 		Object *ob = (Object *)tselem->id;
@@ -645,7 +646,7 @@ static int tree_element_active_constraint(
 }
 
 static eOLDrawState tree_element_active_text(
-        bContext *UNUSED(C), Scene *UNUSED(scene), SpaceOops *UNUSED(soops),
+        bContext *UNUSED(C), Scene *UNUSED(scene), SceneLayer *UNUSED(sl), SpaceOops *UNUSED(soops),
         TreeElement *UNUSED(te), int UNUSED(set))
 {
 	// XXX removed
@@ -653,10 +654,10 @@ static eOLDrawState tree_element_active_text(
 }
 
 static eOLDrawState tree_element_active_pose(
-        bContext *C, Scene *scene, TreeElement *UNUSED(te), TreeStoreElem *tselem, const eOLSetState set)
+        bContext *C, Scene *scene, SceneLayer *sl, TreeElement *UNUSED(te), TreeStoreElem *tselem, const eOLSetState set)
 {
 	Object *ob = (Object *)tselem->id;
-	Base *base = BKE_scene_base_find(scene, ob);
+	Base *base = BKE_scene_layer_base_find(sl, ob);
 	
 	if (set != OL_SETSEL_NONE) {
 		if (scene->obedit)
@@ -737,7 +738,7 @@ static eOLDrawState tree_element_active_sequence_dup(
 }
 
 static eOLDrawState tree_element_active_keymap_item(
-        bContext *UNUSED(C), TreeElement *te, TreeStoreElem *UNUSED(tselem), const eOLSetState set)
+        bContext *UNUSED(C), Scene *UNUSED(scene), SceneLayer *UNUSED(sl), TreeElement *te, TreeStoreElem *UNUSED(tselem), const eOLSetState set)
 {
 	wmKeyMapItem *kmi = te->directdata;
 	
@@ -753,10 +754,28 @@ static eOLDrawState tree_element_active_keymap_item(
 	return OL_DRAWSEL_NONE;
 }
 
+static eOLDrawState tree_element_active_collection(
+        bContext *C, TreeElement *te, TreeStoreElem *UNUSED(tselem), const eOLSetState set)
+{
+	if (set != OL_SETSEL_NONE) {
+		Scene *scene = CTX_data_scene(C);
+		SceneLayer *slayer = BLI_findlink(&scene->render_layers, scene->active_layer);
+		LayerCollection *collection = te->directdata;
+		const int collection_index = BKE_layer_collection_findindex(slayer, collection);
+
+		BLI_assert(collection_index >= 0);
+		slayer->active_collection = collection_index;
+		WM_main_add_notifier(NC_SCENE | ND_LAYER, NULL);
+		return OL_DRAWSEL_ACTIVE;
+	}
+
+	return OL_DRAWSEL_NONE;
+}
+
 /* ---------------------------------------------- */
 
 /* generic call for ID data check or make/check active in UI */
-eOLDrawState tree_element_active(bContext *C, Scene *scene, SpaceOops *soops, TreeElement *te,
+eOLDrawState tree_element_active(bContext *C, Scene *scene, SceneLayer *sl, SpaceOops *soops, TreeElement *te,
                                  const eOLSetState set, const bool handle_all_types)
 {
 	switch (te->idcode) {
@@ -764,21 +783,21 @@ eOLDrawState tree_element_active(bContext *C, Scene *scene, SpaceOops *soops, Tr
 		 * selection. See do_outliner_item_activate. */
 		case ID_OB:
 			if (handle_all_types) {
-				return tree_element_set_active_object(C, scene, soops, te, set, false);
+				return tree_element_set_active_object(C, scene, sl, soops, te, set, false);
 			}
 			break;
 		case ID_MA:
-			return tree_element_active_material(C, scene, soops, te, set);
+		    return tree_element_active_material(C, scene, sl, soops, te, set);
 		case ID_WO:
-			return tree_element_active_world(C, scene, soops, te, set);
+		    return tree_element_active_world(C, scene, sl, soops, te, set);
 		case ID_LA:
-			return tree_element_active_lamp(C, scene, soops, te, set);
+		    return tree_element_active_lamp(C, scene, sl, soops, te, set);
 		case ID_TE:
-			return tree_element_active_texture(C, scene, soops, te, set);
+		    return tree_element_active_texture(C, scene, sl, soops, te, set);
 		case ID_TXT:
-			return tree_element_active_text(C, scene, soops, te, set);
+		    return tree_element_active_text(C, scene, sl, soops, te, set);
 		case ID_CA:
-			return tree_element_active_camera(C, scene, soops, te, set);
+		    return tree_element_active_camera(C, scene, sl, soops, te, set);
 	}
 	return OL_DRAWSEL_NONE;
 }
@@ -789,48 +808,49 @@ eOLDrawState tree_element_active(bContext *C, Scene *scene, SpaceOops *soops, Tr
  * \note Context can be NULL when ``(set == OL_SETSEL_NONE)``
  */
 eOLDrawState tree_element_type_active(
-        bContext *C, Scene *scene, SpaceOops *soops,
+        bContext *C, Scene *scene, SceneLayer *sl, SpaceOops *soops,
         TreeElement *te, TreeStoreElem *tselem, const eOLSetState set, bool recursive)
 {
 	switch (tselem->type) {
 		case TSE_DEFGROUP:
-			return tree_element_active_defgroup(C, scene, te, tselem, set);
+			return tree_element_active_defgroup(C, sl, te, tselem, set);
 		case TSE_BONE:
-			return tree_element_active_bone(C, scene, te, tselem, set, recursive);
+			return tree_element_active_bone(C, sl, te, tselem, set, recursive);
 		case TSE_EBONE:
 			return tree_element_active_ebone(C, scene, te, tselem, set, recursive);
 		case TSE_MODIFIER:
-			return tree_element_active_modifier(C, te, tselem, set);
+		    return tree_element_active_modifier(C, scene, sl, te, tselem, set);
 		case TSE_LINKED_OB:
 			if (set != OL_SETSEL_NONE) {
-				tree_element_set_active_object(C, scene, soops, te, set, false);
+				tree_element_set_active_object(C, scene, sl, soops, te, set, false);
 			}
-			else if (tselem->id == (ID *)OBACT) {
+			else if (tselem->id == (ID *)OBACT_NEW) {
 				return OL_DRAWSEL_NORMAL;
 			}
 			break;
 		case TSE_LINKED_PSYS:
 			return tree_element_active_psys(C, scene, te, tselem, set);
 		case TSE_POSE_BASE:
-			return tree_element_active_pose(C, scene, te, tselem, set);
+			return tree_element_active_pose(C, scene, sl, te, tselem, set);
 		case TSE_POSE_CHANNEL:
-			return tree_element_active_posechannel(C, scene, te, tselem, set, recursive);
+		    return tree_element_active_posechannel(C, scene, sl, te, tselem, set, recursive);
 		case TSE_CONSTRAINT:
-			return tree_element_active_constraint(C, te, tselem, set);
+		    return tree_element_active_constraint(C, scene, sl, te, tselem, set);
 		case TSE_R_LAYER:
-			return tree_element_active_renderlayer(C, te, tselem, set);
+		    return tree_element_active_renderlayer(C, scene, sl, te, tselem, set);
 		case TSE_POSEGRP:
-			return tree_element_active_posegroup(C, scene, te, tselem, set);
+		    return tree_element_active_posegroup(C, scene, sl, te, tselem, set);
 		case TSE_SEQUENCE:
 			return tree_element_active_sequence(C, scene, te, tselem, set);
 		case TSE_SEQUENCE_DUP:
 			return tree_element_active_sequence_dup(scene, te, tselem, set);
 		case TSE_KEYMAP_ITEM:
-			return tree_element_active_keymap_item(C, te, tselem, set);
+		    return tree_element_active_keymap_item(C, scene, sl, te, tselem, set);
 		case TSE_GP_LAYER:
-			//return tree_element_active_gplayer(C, scene, te, tselem, set);
+		    //return tree_element_active_gplayer(C, scene, s, te, tselem, set);
 			break;
-			
+		case TSE_COLLECTION:
+			return tree_element_active_collection(C, te, tselem, set);
 	}
 	return OL_DRAWSEL_NONE;
 }
@@ -842,13 +862,14 @@ static void outliner_item_activate(
         const bool extend, const bool recursive)
 {
 	Scene *scene = CTX_data_scene(C);
+	SceneLayer *sl = CTX_data_scene_layer(C);
 	TreeStoreElem *tselem = TREESTORE(te);
 
 	/* always makes active object, except for some specific types.
 	 * Note about TSE_EBONE: In case of a same ID_AR datablock shared among several objects, we do not want
 	 * to switch out of edit mode (see T48328 for details). */
-	if (!ELEM(tselem->type, TSE_SEQUENCE, TSE_SEQ_STRIP, TSE_SEQUENCE_DUP, TSE_EBONE)) {
-		tree_element_set_active_object(C, scene, soops, te,
+	if (!ELEM(tselem->type, TSE_SEQUENCE, TSE_SEQ_STRIP, TSE_SEQUENCE_DUP, TSE_EBONE, TSE_COLLECTION)) {
+		tree_element_set_active_object(C, scene, sl, soops, te,
 		                               (extend && tselem->type == 0) ? OL_SETSEL_EXTEND : OL_SETSEL_NORMAL,
 		                               recursive && tselem->type == 0);
 	}
@@ -874,15 +895,17 @@ static void outliner_item_activate(
 				}
 
 				for (gob = gr->gobject.first; gob; gob = gob->next) {
-					ED_base_object_select(BKE_scene_base_find(scene, gob->ob), sel);
+					ED_object_base_select(BKE_scene_layer_base_find(sl, gob->ob), sel);
 				}
 			}
 			else {
-				BKE_scene_base_deselect_all(scene);
+				BKE_scene_layer_base_deselect_all(sl);
 
 				for (gob = gr->gobject.first; gob; gob = gob->next) {
-					if ((gob->ob->flag & SELECT) == 0)
-						ED_base_object_select(BKE_scene_base_find(scene, gob->ob), BA_SELECT);
+					Base *base = BKE_scene_layer_base_find(sl, gob->ob);
+					if ((base->flag & BASE_SELECTED) == 0) {
+						ED_object_base_select(base, BA_SELECT);
+					}
 				}
 			}
 			
@@ -892,12 +915,12 @@ static void outliner_item_activate(
 			WM_operator_name_call(C, "OBJECT_OT_editmode_toggle", WM_OP_INVOKE_REGION_WIN, NULL);
 		}
 		else {  // rest of types
-			tree_element_active(C, scene, soops, te, OL_SETSEL_NORMAL, false);
+			tree_element_active(C, scene, sl, soops, te, OL_SETSEL_NORMAL, false);
 		}
 
 	}
 	else {
-		tree_element_type_active(C, scene, soops, te, tselem,
+		tree_element_type_active(C, scene, sl, soops, te, tselem,
 		                         extend ? OL_SETSEL_EXTEND : OL_SETSEL_NORMAL,
 		                         recursive);
 	}

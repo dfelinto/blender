@@ -536,29 +536,29 @@ static void ui_draw_aligned_panel_header(uiStyle *style, uiBlock *block, const r
 	rcti hrect;
 	int pnl_icons;
 	const char *activename = panel->drawname[0] ? panel->drawname : panel->panelname;
+	unsigned char col_title[4];
 
 	/* + 0.001f to avoid flirting with float inaccuracy */
 	if (panel->control & UI_PNL_CLOSE)
 		pnl_icons = (panel->labelofs + 2 * PNL_ICON + 5) / block->aspect + 0.001f;
 	else
 		pnl_icons = (panel->labelofs + PNL_ICON + 5) / block->aspect + 0.001f;
-	
-	/* active tab */
+
 	/* draw text label */
-	UI_ThemeColor(TH_TITLE);
-	
+	UI_GetThemeColor4ubv(TH_TITLE, col_title);
+
 	hrect = *rect;
 	if (dir == 'h') {
 		hrect.xmin = rect->xmin + pnl_icons;
 		hrect.ymin += 2.0f / block->aspect;
-		UI_fontstyle_draw(&style->paneltitle, &hrect, activename);
+		UI_fontstyle_draw(&style->paneltitle, &hrect, activename, col_title);
 	}
 	else {
 		/* ignore 'pnl_icons', otherwise the text gets offset horizontally 
 		 * + 0.001f to avoid flirting with float inaccuracy
 		 */
 		hrect.xmin = rect->xmin + (PNL_ICON + 5) / block->aspect + 0.001f;
-		UI_fontstyle_draw_rotated(&style->paneltitle, &hrect, activename);
+		UI_fontstyle_draw_rotated(&style->paneltitle, &hrect, activename, col_title);
 	}
 }
 
@@ -569,6 +569,7 @@ void ui_draw_aligned_panel(uiStyle *style, uiBlock *block, const rcti *rect, con
 	rcti headrect;
 	rctf itemrect;
 	int ofsx;
+	float color[4];
 	const bool is_closed_x = (panel->flag & PNL_CLOSEDX) ? true : false;
 	const bool is_closed_y = (panel->flag & PNL_CLOSEDY) ? true : false;
 
@@ -659,8 +660,8 @@ void ui_draw_aligned_panel(uiStyle *style, uiBlock *block, const rcti *rect, con
 			if (panel->control & UI_PNL_SOLID) UI_draw_roundbox_corner_set(UI_CNR_ALL);
 			else UI_draw_roundbox_corner_set(UI_CNR_NONE);
 
-			UI_ThemeColorShade(TH_BACK, -120);
-			UI_draw_roundbox_unfilled(0.5f + rect->xmin, 0.5f + rect->ymin, 0.5f + rect->xmax, 0.5f + headrect.ymax + 1, 8);
+			UI_GetThemeColorShade4fv(TH_BACK, -120, color);
+			UI_draw_roundbox_unfilled(0.5f + rect->xmin, 0.5f + rect->ymin, 0.5f + rect->xmax, 0.5f + headrect.ymax + 1, 8, color);
 		}
 
 		/* panel backdrop */
@@ -1805,7 +1806,7 @@ void UI_panel_category_draw_all(ARegion *ar, const char *category_id_active)
 		/* tab titles */
 
 		/* draw white shadow to give text more depth */
-		glColor3ubv(theme_col_text);
+		BLF_color3ubv(fontid, theme_col_text);
 
 		/* main tab title */
 		BLF_draw(fontid, category_id_draw, category_draw_len);

@@ -32,7 +32,6 @@
 
 #include "intern/depsgraph_types.h"
 
-struct Base;
 struct CacheFile;
 struct bGPdata;
 struct ListBase;
@@ -71,6 +70,8 @@ struct OperationDepsNode;
 struct DepsgraphNodeBuilder {
 	DepsgraphNodeBuilder(Main *bmain, Depsgraph *graph);
 	~DepsgraphNodeBuilder();
+
+	void begin_build(Main *bmain);
 
 	RootDepsNode *add_root_node();
 	IDDepsNode *add_id_node(ID *id);
@@ -124,8 +125,8 @@ struct DepsgraphNodeBuilder {
 
 	void build_scene(Main *bmain, Scene *scene);
 	SubgraphDepsNode *build_subgraph(Group *group);
-	void build_group(Scene *scene, Base *base, Group *group);
-	void build_object(Scene *scene, Base *base, Object *ob);
+	void build_group(Scene *scene, Group *group);
+	void build_object(Scene *scene, Object *ob);
 	void build_object_transform(Scene *scene, Object *ob);
 	void build_object_constraints(Scene *scene, Object *ob);
 	void build_pose_constraints(Object *ob, bPoseChannel *pchan);
@@ -147,10 +148,10 @@ struct DepsgraphNodeBuilder {
 	void build_obdata_geom(Scene *scene, Object *ob);
 	void build_camera(Object *ob);
 	void build_lamp(Object *ob);
-	void build_nodetree(DepsNode *owner_node, bNodeTree *ntree);
-	void build_material(DepsNode *owner_node, Material *ma);
-	void build_texture(DepsNode *owner_node, Tex *tex);
-	void build_texture_stack(DepsNode *owner_node, MTex **texture_stack);
+	void build_nodetree(bNodeTree *ntree);
+	void build_material(Material *ma);
+	void build_texture(Tex *tex);
+	void build_texture_stack(MTex **texture_stack);
 	void build_image(Image *image);
 	void build_world(World *world);
 	void build_compositor(Scene *scene);

@@ -119,24 +119,7 @@ static void foreachObjectLink(
 {
 	MeshDeformModifierData *mmd = (MeshDeformModifierData *) md;
 
-	walk(userData, ob, &mmd->object, IDWALK_NOP);
-}
-
-static void updateDepgraph(ModifierData *md, DagForest *forest,
-                           struct Main *UNUSED(bmain),
-                           struct Scene *UNUSED(scene),
-                           Object *UNUSED(ob),
-                           DagNode *obNode)
-{
-	MeshDeformModifierData *mmd = (MeshDeformModifierData *) md;
-
-	if (mmd->object) {
-		DagNode *curNode = dag_get_node(forest, mmd->object);
-
-		dag_add_relation(forest, curNode, obNode,
-		                 DAG_RL_DATA_DATA | DAG_RL_OB_DATA | DAG_RL_DATA_OB | DAG_RL_OB_OB,
-		                 "Mesh Deform Modifier");
-	}
+	walk(userData, ob, &mmd->object, IDWALK_CB_NOP);
 }
 
 static void updateDepsgraph(ModifierData *md,
@@ -534,7 +517,6 @@ ModifierTypeInfo modifierType_MeshDeform = {
 	/* requiredDataMask */  requiredDataMask,
 	/* freeData */          freeData,
 	/* isDisabled */        isDisabled,
-	/* updateDepgraph */    updateDepgraph,
 	/* updateDepsgraph */   updateDepsgraph,
 	/* dependsOnTime */     NULL,
 	/* dependsOnNormals */  NULL,

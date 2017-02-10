@@ -40,6 +40,7 @@ struct wmOperatorType;
 struct TreeStoreElem;
 struct bContext;
 struct Scene;
+struct SceneLayer;
 struct ID;
 struct Object;
 struct bPoseChannel;
@@ -141,7 +142,7 @@ TreeElement *outliner_find_posechannel(ListBase *lb, const struct bPoseChannel *
 TreeElement *outliner_find_editbone(ListBase *lb, const struct EditBone *ebone);
 struct ID *outliner_search_back(SpaceOops *soops, TreeElement *te, short idcode);
 
-void outliner_build_tree(struct Main *mainvar, struct Scene *scene, struct SpaceOops *soops);
+void outliner_build_tree(struct Main *mainvar, struct Scene *scene, struct SceneLayer *sl, struct SpaceOops *soops);
 
 /* outliner_draw.c ---------------------------------------------- */
 
@@ -150,9 +151,9 @@ void restrictbutton_gr_restrict_flag(void *poin, void *poin2, int flag);
 
 /* outliner_select.c -------------------------------------------- */
 eOLDrawState tree_element_type_active(
-        struct bContext *C, struct Scene *scene, struct SpaceOops *soops,
+        struct bContext *C, struct Scene *scene, struct SceneLayer *sl, struct SpaceOops *soops,
         TreeElement *te, TreeStoreElem *tselem, const eOLSetState set, bool recursive);
-eOLDrawState tree_element_active(struct bContext *C, struct Scene *scene, SpaceOops *soops,
+eOLDrawState tree_element_active(struct bContext *C, struct Scene *scene, struct SceneLayer *sl, SpaceOops *soops,
                                  TreeElement *te, const eOLSetState set, const bool handle_all_types);
 int outliner_item_activate_or_toggle_closed(struct bContext *C, int x, int y, bool extend, bool recursive);
 
@@ -238,10 +239,6 @@ void OUTLINER_OT_selected_toggle(struct wmOperatorType *ot);
 void OUTLINER_OT_expanded_toggle(struct wmOperatorType *ot);
 
 void OUTLINER_OT_scroll_page(struct wmOperatorType *ot);
-
-void OUTLINER_OT_renderability_toggle(struct wmOperatorType *ot);
-void OUTLINER_OT_selectability_toggle(struct wmOperatorType *ot);
-void OUTLINER_OT_visibility_toggle(struct wmOperatorType *ot);
 
 void OUTLINER_OT_keyingset_add_selected(struct wmOperatorType *ot);
 void OUTLINER_OT_keyingset_remove_selected(struct wmOperatorType *ot);

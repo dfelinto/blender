@@ -106,8 +106,8 @@ typedef enum {
 } ModifierTypeFlag;
 
 /* IMPORTANT! Keep ObjectWalkFunc and IDWalkFunc signatures compatible. */
-typedef void (*ObjectWalkFunc)(void *userData, struct Object *ob, struct Object **obpoin, int cd_flag);
-typedef void (*IDWalkFunc)(void *userData, struct Object *ob, struct ID **idpoin, int cd_flag);
+typedef void (*ObjectWalkFunc)(void *userData, struct Object *ob, struct Object **obpoin, int cb_flag);
+typedef void (*IDWalkFunc)(void *userData, struct Object *ob, struct ID **idpoin, int cb_flag);
 typedef void (*TexWalkFunc)(void *userData, struct Object *ob, struct ModifierData *md, const char *propname);
 
 typedef enum ModifierApplyFlag {
@@ -260,20 +260,11 @@ typedef struct ModifierTypeInfo {
 	 */
 	bool (*isDisabled)(struct ModifierData *md, int userRenderParams);
 
-	/* Add the appropriate relations to the DEP graph depending on the
-	 * modifier data. 
-	 *
-	 * This function is optional.
-	 */
-	void (*updateDepgraph)(struct ModifierData *md, struct DagForest *forest,
-	                       struct Main *bmain, struct Scene *scene,
-	                       struct Object *ob, struct DagNode *obNode);
-
 	/* Add the appropriate relations to the dependency graph.
 	 *
 	 * This function is optional.
 	 */
-	/* TODO(sergey): Remove once we finalyl switched to the new depsgraph. */
+	/* TODO(sergey): Remove once we finally switched to the new depsgraph. */
 	void (*updateDepsgraph)(struct ModifierData *md,
 	                        struct Main *bmain,
 	                        struct Scene *scene,

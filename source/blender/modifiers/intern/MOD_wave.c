@@ -111,8 +111,8 @@ static void foreachObjectLink(
 {
 	WaveModifierData *wmd = (WaveModifierData *) md;
 
-	walk(userData, ob, &wmd->objectcenter, IDWALK_NOP);
-	walk(userData, ob, &wmd->map_object, IDWALK_NOP);
+	walk(userData, ob, &wmd->objectcenter, IDWALK_CB_NOP);
+	walk(userData, ob, &wmd->map_object, IDWALK_CB_NOP);
 }
 
 static void foreachIDLink(ModifierData *md, Object *ob,
@@ -120,7 +120,7 @@ static void foreachIDLink(ModifierData *md, Object *ob,
 {
 	WaveModifierData *wmd = (WaveModifierData *) md;
 
-	walk(userData, ob, (ID **)&wmd->texture, IDWALK_USER);
+	walk(userData, ob, (ID **)&wmd->texture, IDWALK_CB_USER);
 
 	foreachObjectLink(md, ob, (ObjectWalkFunc)walk, userData);
 }
@@ -129,29 +129,6 @@ static void foreachTexLink(ModifierData *md, Object *ob,
                            TexWalkFunc walk, void *userData)
 {
 	walk(userData, ob, md, "texture");
-}
-
-static void updateDepgraph(ModifierData *md, DagForest *forest,
-                           struct Main *UNUSED(bmain),
-                           Scene *UNUSED(scene),
-                           Object *UNUSED(ob),
-                           DagNode *obNode)
-{
-	WaveModifierData *wmd = (WaveModifierData *) md;
-
-	if (wmd->objectcenter) {
-		DagNode *curNode = dag_get_node(forest, wmd->objectcenter);
-
-		dag_add_relation(forest, curNode, obNode, DAG_RL_OB_DATA,
-		                 "Wave Modifier");
-	}
-
-	if (wmd->map_object) {
-		DagNode *curNode = dag_get_node(forest, wmd->map_object);
-
-		dag_add_relation(forest, curNode, obNode, DAG_RL_OB_DATA,
-		                 "Wave Modifer");
-	}
 }
 
 static void updateDepsgraph(ModifierData *md,
@@ -397,7 +374,6 @@ ModifierTypeInfo modifierType_Wave = {
 	/* requiredDataMask */  requiredDataMask,
 	/* freeData */          freeData,
 	/* isDisabled */        NULL,
-	/* updateDepgraph */    updateDepgraph,
 	/* updateDepsgraph */   updateDepsgraph,
 	/* dependsOnTime */     dependsOnTime,
 	/* dependsOnNormals */	NULL,

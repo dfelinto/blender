@@ -221,8 +221,8 @@ static void foreachObjectLink(ModifierData *md, Object *ob, ObjectWalkFunc walk,
 {
 	UVWarpModifierData *umd = (UVWarpModifierData *) md;
 
-	walk(userData, ob, &umd->object_dst, IDWALK_NOP);
-	walk(userData, ob, &umd->object_src, IDWALK_NOP);
+	walk(userData, ob, &umd->object_dst, IDWALK_CB_NOP);
+	walk(userData, ob, &umd->object_src, IDWALK_CB_NOP);
 }
 
 static void uv_warp_deps_object_bone(DagForest *forest, DagNode *obNode,
@@ -236,18 +236,6 @@ static void uv_warp_deps_object_bone(DagForest *forest, DagNode *obNode,
 		else
 			dag_add_relation(forest, curNode, obNode, DAG_RL_OB_DATA, "UVWarp Modifier");
 	}
-}
-
-static void updateDepgraph(ModifierData *md, DagForest *forest,
-                           struct Main *UNUSED(bmain),
-                           struct Scene *UNUSED(scene),
-                           Object *UNUSED(ob),
-                           DagNode *obNode)
-{
-	UVWarpModifierData *umd = (UVWarpModifierData *) md;
-
-	uv_warp_deps_object_bone(forest, obNode, umd->object_src, umd->bone_src);
-	uv_warp_deps_object_bone(forest, obNode, umd->object_dst, umd->bone_dst);
 }
 
 static void uv_warp_deps_object_bone_new(struct DepsNodeHandle *node,
@@ -293,7 +281,6 @@ ModifierTypeInfo modifierType_UVWarp = {
 	/* requiredDataMask */  requiredDataMask,
 	/* freeData */          NULL,
 	/* isDisabled */        NULL,
-	/* updateDepgraph */    updateDepgraph,
 	/* updateDepsgraph */   updateDepsgraph,
 	/* dependsOnTime */     NULL,
 	/* dependsOnNormals */  NULL,

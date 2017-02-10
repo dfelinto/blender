@@ -377,7 +377,7 @@ class RENDER_PT_stamp(RenderButtonsPanel, Panel):
         sub.active = rd.use_stamp_note
         sub.prop(rd, "stamp_note_text", text="")
         if rd.use_sequencer:
-            layout.label("Sequencer")
+            layout.label("Sequencer:")
             layout.prop(rd, "use_stamp_strip_meta")
 
 
@@ -582,6 +582,25 @@ class RENDER_PT_bake(RenderButtonsPanel, Panel):
             sub = row.column()
             sub.active = rd.use_bake_user_scale
             sub.prop(rd, "bake_user_scale", text="User Scale")
+
+
+class RENDER_PT_clay(RenderButtonsPanel, Panel):
+    bl_label = "Default Clay"
+    COMPAT_ENGINES = {'BLENDER_CLAY'}
+
+    def draw(self, context):
+        layout = self.layout;
+        settings = context.scene.active_engine_settings
+        layout.template_icon_view(settings, "matcap_icon")
+        layout.prop(settings, "matcap_rotation")
+        layout.prop(settings, "matcap_hue")
+        layout.prop(settings, "matcap_saturation")
+        layout.prop(settings, "matcap_value")
+        layout.prop(settings, "ssao_factor_cavity")
+        layout.prop(settings, "ssao_factor_edge")
+        layout.prop(settings, "ssao_distance")
+        layout.prop(settings, "ssao_attenuation")
+        layout.prop(settings, "ssao_samples")
 
 
 if __name__ == "__main__":  # only for live edit.

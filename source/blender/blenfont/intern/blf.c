@@ -50,7 +50,6 @@
 #include "BLI_math.h"
 #include "BLI_threads.h"
 
-#include "BIF_gl.h"
 #include "BLF_api.h"
 
 #include "IMB_colormanagement.h"
@@ -174,6 +173,12 @@ void BLF_default_set(int fontid)
 	if (font || fontid == -1) {
 		global_font_default = fontid;
 	}
+}
+
+int BLF_default(void)
+{
+	ASSERT_DEFAULT_SET;
+	return global_font_default;
 }
 
 int BLF_load(const char *name)
@@ -359,24 +364,6 @@ void BLF_disable(int fontid, int option)
 	}
 }
 
-void BLF_enable_default(int option)
-{
-	FontBLF *font = blf_get(global_font_default);
-
-	if (font) {
-		font->flags |= option;
-	}
-}
-
-void BLF_disable_default(int option)
-{
-	FontBLF *font = blf_get(global_font_default);
-
-	if (font) {
-		font->flags &= ~option;
-	}
-}
-
 void BLF_aspect(int fontid, float x, float y, float z)
 {
 	FontBLF *font = blf_get(fontid);
@@ -466,6 +453,70 @@ void BLF_blur(int fontid, int size)
 }
 #endif
 
+void BLF_color4ubv(int fontid, const unsigned char rgba[4])
+{
+	FontBLF *font = blf_get(fontid);
+
+	if (font) {
+		font->color[0] = rgba[0];
+		font->color[1] = rgba[1];
+		font->color[2] = rgba[2];
+		font->color[3] = rgba[3];
+	}
+}
+
+void BLF_color3ubv_alpha(int fontid, const unsigned char rgb[3], unsigned char alpha)
+{
+	FontBLF *font = blf_get(fontid);
+
+	if (font) {
+		font->color[0] = rgb[0];
+		font->color[1] = rgb[1];
+		font->color[2] = rgb[2];
+		font->color[3] = alpha;
+	}
+}
+
+void BLF_color3ubv(int fontid, const unsigned char rgb[3])
+{
+	BLF_color3ubv_alpha(fontid, rgb, 255);
+}
+
+void BLF_color3ub(int fontid, unsigned char r, unsigned char g, unsigned char b)
+{
+	FontBLF *font = blf_get(fontid);
+
+	if (font) {
+		font->color[0] = r;
+		font->color[1] = g;
+		font->color[2] = b;
+		font->color[3] = 255;
+	}
+}
+
+void BLF_color4fv(int fontid, const float rgba[4])
+{
+	FontBLF *font = blf_get(fontid);
+
+	if (font) {
+		rgba_float_to_uchar(font->color, rgba);
+	}
+}
+
+void BLF_color3fv_alpha(int fontid, const float rgb[3], float alpha)
+{
+	float rgba[4];
+	copy_v3_v3(rgba, rgb);
+	rgba[3] = alpha;
+	BLF_color4fv(fontid, rgba);
+}
+
+void BLF_color3f(int fontid, float r, float g, float b)
+{
+	float rgba[4] = { r, g, b, 1.0f };
+	BLF_color4fv(fontid, rgba);
+}
+
 void BLF_draw_default(float x, float y, float z, const char *str, size_t len)
 {
 	ASSERT_DEFAULT_SET;
@@ -483,15 +534,6 @@ void BLF_draw_default_ascii(float x, float y, float z, const char *str, size_t l
 	BLF_size(global_font_default, global_font_points, global_font_dpi);
 	BLF_position(global_font_default, x, y, z);
 	BLF_draw_ascii(global_font_default, str, len); /* XXX, use real length */
-}
-
-void BLF_rotation_default(float angle)
-{
-	FontBLF *font = blf_get(global_font_default);
-
-	if (font) {
-		font->angle = angle;
-	}
 }
 
 static void blf_draw_gl__start(FontBLF *font)
@@ -516,10 +558,6 @@ static void blf_draw_gl__start(FontBLF *font)
 
 	if (font->flags & BLF_ROTATION)  /* radians -> degrees */
 		gpuRotateAxis(RAD2DEG(font->angle), 'Z');
-
-	float temp_color[4];
-	glGetFloatv(GL_CURRENT_COLOR, temp_color); /* TODO(merwin): new BLF_color function? */
-	rgba_float_to_uchar(font->color, temp_color);
 
 #ifndef BLF_STANDALONE
 	VertexFormat *format = immVertexFormat();
@@ -698,14 +736,6 @@ void BLF_width_and_height(int fontid, const char *str, size_t len, float *r_widt
 	}
 }
 
-void BLF_width_and_height_default(const char *str, size_t len, float *r_width, float *r_height)
-{
-	ASSERT_DEFAULT_SET;
-
-	BLF_size(global_font_default, global_font_points, global_font_dpi);
-	BLF_width_and_height(global_font_default, str, len, r_width, r_height);
-}
-
 float BLF_width_ex(
         int fontid, const char *str, size_t len,
         struct ResultBLF *r_info)
@@ -734,14 +764,6 @@ float BLF_fixed_width(int fontid)
 	}
 
 	return 0.0f;
-}
-
-float BLF_width_default(const char *str, size_t len)
-{
-	ASSERT_DEFAULT_SET;
-
-	BLF_size(global_font_default, global_font_points, global_font_dpi);
-	return BLF_width(global_font_default, str, len);
 }
 
 float BLF_height_ex(
@@ -807,15 +829,6 @@ float BLF_ascender(int fontid)
 	return 0.0f;
 }
 
-float BLF_height_default(const char *str, size_t len)
-{
-	ASSERT_DEFAULT_SET;
-
-	BLF_size(global_font_default, global_font_points, global_font_dpi);
-
-	return BLF_height(global_font_default, str, len);
-}
-
 void BLF_rotation(int fontid, float angle)
 {
 	FontBLF *font = blf_get(fontid);
@@ -828,18 +841,6 @@ void BLF_rotation(int fontid, float angle)
 void BLF_clipping(int fontid, float xmin, float ymin, float xmax, float ymax)
 {
 	FontBLF *font = blf_get(fontid);
-
-	if (font) {
-		font->clip_rec.xmin = xmin;
-		font->clip_rec.ymin = ymin;
-		font->clip_rec.xmax = xmax;
-		font->clip_rec.ymax = ymax;
-	}
-}
-
-void BLF_clipping_default(float xmin, float ymin, float xmax, float ymax)
-{
-	FontBLF *font = blf_get(global_font_default);
 
 	if (font) {
 		font->clip_rec.xmin = xmin;

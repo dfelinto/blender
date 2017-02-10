@@ -339,7 +339,7 @@ OSL_FORCE_REBUILD=false
 OSL_SKIP=false
 
 # OpenSubdiv needs to be compiled for now
-OSD_VERSION="3.1.0"
+OSD_VERSION="3.1.1"
 OSD_VERSION_MIN=$OSD_VERSION
 OSD_FORCE_BUILD=false
 OSD_FORCE_REBUILD=false
@@ -787,7 +787,7 @@ CXXFLAGS_BACK=$CXXFLAGS
 if [ "$USE_CXX11" = true ]; then
   WARNING "C++11 is now mandatory for blender2.8, this *should* go smoothly with any very recent distribution.
 However, if you are experiencing linking errors (also when building Blender itself), please try the following:
-    * Re-run this script with `--build-all --force-all` options.
+    * Re-run this script with '--build-all --force-all' options.
     * Ensure your gcc version is at the very least 4.8, if possible you should really rather use gcc-5.1 or above.
 
 Please note that until the transition to C++11-built libraries if completed in your distribution, situation will

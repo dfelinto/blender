@@ -1251,6 +1251,7 @@ static void widget_draw_text_ime_underline(
 	int ofs_x, width;
 	int rect_x = BLI_rcti_size_x(rect);
 	int sel_start = ime_data->sel_start, sel_end = ime_data->sel_end;
+	float fcol[4];
 
 	if (drawstr[0] != 0) {
 		if (but->pos >= but->ofs) {
@@ -1263,8 +1264,8 @@ static void widget_draw_text_ime_underline(
 		width = BLF_width(fstyle->uifont_id, drawstr + but->ofs,
 		                  ime_data->composite_len + but->pos - but->ofs);
 
-		glColor4ubv((unsigned char *)wcol->text);
-		UI_draw_text_underline(rect->xmin + ofs_x, rect->ymin + 6 * U.pixelsize, min_ii(width, rect_x - 2) - ofs_x, 1);
+		rgba_uchar_to_float(fcol, wcol->text);
+		UI_draw_text_underline(rect->xmin + ofs_x, rect->ymin + 6 * U.pixelsize, min_ii(width, rect_x - 2) - ofs_x, 1, fcol);
 
 		/* draw the thick line */
 		if (sel_start != -1 && sel_end != -1) {
@@ -1281,7 +1282,7 @@ static void widget_draw_text_ime_underline(
 			width = BLF_width(fstyle->uifont_id, drawstr + but->ofs,
 			                  sel_end + sel_start - but->ofs);
 
-			UI_draw_text_underline(rect->xmin + ofs_x, rect->ymin + 6 * U.pixelsize, min_ii(width, rect_x - 2) - ofs_x, 2);
+			UI_draw_text_underline(rect->xmin + ofs_x, rect->ymin + 6 * U.pixelsize, min_ii(width, rect_x - 2) - ofs_x, 2, fcol);
 		}
 	}
 }
@@ -1457,8 +1458,6 @@ static void widget_draw_text(uiFontStyle *fstyle, uiWidgetColors *wcol, uiBut *b
 	}
 #endif
 
-	glColor4ubv((unsigned char *)wcol->text);
-
 	if (!use_right_only) {
 		/* for underline drawing */
 		float font_xofs, font_yofs;
@@ -1466,7 +1465,8 @@ static void widget_draw_text(uiFontStyle *fstyle, uiWidgetColors *wcol, uiBut *b
 		int drawlen = (drawstr_left_len == INT_MAX) ? strlen(drawstr + but->ofs) : (drawstr_left_len - but->ofs);
 
 		if (drawlen > 0) {
-			UI_fontstyle_draw_ex(fstyle, rect, drawstr + but->ofs, drawlen, &font_xofs, &font_yofs);
+			UI_fontstyle_draw_ex(fstyle, rect, drawstr + but->ofs, (unsigned char *)wcol->text,
+			                     drawlen, &font_xofs, &font_yofs);
 
 			if (but->menu_key != '\0') {
 				char fixedbuf[128];
@@ -1492,6 +1492,7 @@ static void widget_draw_text(uiFontStyle *fstyle, uiWidgetColors *wcol, uiBut *b
 					ul_advance = BLF_width(fstyle->uifont_id, fixedbuf, ul_index);
 
 					BLF_position(fstyle->uifont_id, rect->xmin + font_xofs + ul_advance, rect->ymin + font_yofs, 0.0f);
+					BLF_color4ubv(fstyle->uifont_id, (unsigned char *)wcol->text);
 					BLF_draw(fstyle->uifont_id, "_", 2);
 
 					if (fstyle->kerning == 1) {
@@ -1506,7 +1507,7 @@ static void widget_draw_text(uiFontStyle *fstyle, uiWidgetColors *wcol, uiBut *b
 	if (drawstr_right) {
 		fstyle->align = UI_STYLE_TEXT_RIGHT;
 		rect->xmax -= UI_TEXT_CLIP_MARGIN;
-		UI_fontstyle_draw(fstyle, rect, drawstr_right);
+		UI_fontstyle_draw(fstyle, rect, drawstr_right, (unsigned char *)wcol->text);
 	}
 }
 
@@ -1575,7 +1576,10 @@ static void widget_draw_text_icon(uiFontStyle *fstyle, uiWidgetColors *wcol, uiB
 		}
 	}
 
-	if (but->editstr || (but->drawflag & UI_BUT_TEXT_LEFT)) {
+	if (but->drawflag & UI_BUT_TEXT_NO_MARGIN) {
+		/* skip */
+	}
+	else if (but->editstr || (but->drawflag & UI_BUT_TEXT_LEFT)) {
 		rect->xmin += (UI_TEXT_MARGIN_X * U.widget_unit) / but->block->aspect;
 	}
 	else if ((but->drawflag & UI_BUT_TEXT_RIGHT)) {
@@ -4125,8 +4129,7 @@ void ui_draw_menu_item(uiFontStyle *fstyle, rcti *rect, const char *name, int ic
 			UI_text_clip_middle_ex(fstyle, drawstr, okwidth, minwidth, max_len, '\0');
 		}
 
-		glColor4ubv((unsigned char *)wt->wcol.text);
-		UI_fontstyle_draw(fstyle, rect, drawstr);
+		UI_fontstyle_draw(fstyle, rect, drawstr, (unsigned char *)wt->wcol.text);
 	}
 
 	/* part text right aligned */
@@ -4134,7 +4137,7 @@ void ui_draw_menu_item(uiFontStyle *fstyle, rcti *rect, const char *name, int ic
 		if (cpoin) {
 			fstyle->align = UI_STYLE_TEXT_RIGHT;
 			rect->xmax = _rect.xmax - 5;
-			UI_fontstyle_draw(fstyle, rect, cpoin + 1);
+			UI_fontstyle_draw(fstyle, rect, cpoin + 1, (unsigned char *)wt->wcol.text);
 			*cpoin = UI_SEP_CHAR;
 		}
 	}
@@ -4192,7 +4195,6 @@ void ui_draw_preview_item(uiFontStyle *fstyle, rcti *rect, const char *name, int
 		BLI_strncpy(drawstr, name, sizeof(drawstr));
 		UI_text_clip_middle_ex(fstyle, drawstr, okwidth, minwidth, max_len, '\0');
 
-		glColor4ubv((unsigned char *)wt->wcol.text);
-		UI_fontstyle_draw(fstyle, &trect, drawstr);
+		UI_fontstyle_draw(fstyle, &trect, drawstr, (unsigned char *)wt->wcol.text);
 	}
 }

@@ -212,6 +212,9 @@ enum {
 	UI_BUT_ALIGN_STITCH_TOP  = (1 << 18),
 	UI_BUT_ALIGN_STITCH_LEFT = (1 << 19),
 	UI_BUT_ALIGN_ALL         = (UI_BUT_ALIGN | UI_BUT_ALIGN_STITCH_TOP | UI_BUT_ALIGN_STITCH_LEFT),
+
+	/* Another hack, in some rare cases we don't want any text margin */
+	UI_BUT_TEXT_NO_MARGIN    = (1 << 20),
 };
 
 /* scale fixed button widths by this to account for DPI */
@@ -311,14 +314,14 @@ typedef enum {
 void UI_draw_roundbox(float minx, float miny, float maxx, float maxy, float rad, const float color[4]);
 void UI_draw_roundbox_corner_set(int type);
 int  UI_draw_roundbox_corner_get(void);
-void UI_draw_roundbox_unfilled(float minx, float miny, float maxx, float maxy, float rad);
+void UI_draw_roundbox_unfilled(float minx, float miny, float maxx, float maxy, float rad, const float color[4]);
 void UI_draw_box_shadow(unsigned char alpha, float minx, float miny, float maxx, float maxy);
 void UI_draw_roundbox_gl_mode_3ubAlpha(int mode, float minx, float miny, float maxx, float maxy, float rad, unsigned char col[3], unsigned char alpha);
 void UI_draw_roundbox_gl_mode_3fvAlpha(int mode, float minx, float miny, float maxx, float maxy, float rad, float col[3], float alpha);
 void UI_draw_roundbox_gl_mode(int mode, float minx, float miny, float maxx, float maxy, float rad, float col[4]);
-void UI_draw_roundbox_shade_x(int mode, float minx, float miny, float maxx, float maxy, float rad, float shadetop, float shadedown);
-void UI_draw_roundbox_shade_y(int mode, float minx, float miny, float maxx, float maxy, float rad, float shadeLeft, float shadeRight);
-void UI_draw_text_underline(int pos_x, int pos_y, int len, int height);
+void UI_draw_roundbox_shade_x(int mode, float minx, float miny, float maxx, float maxy, float rad, float shadetop, float shadedown, const float col[4]);
+void UI_draw_roundbox_shade_y(int mode, float minx, float miny, float maxx, float maxy, float rad, float shadeleft, float shaderight, const float col[4]);
+void UI_draw_text_underline(int pos_x, int pos_y, int len, int height, const float color[4]);
 
 void UI_draw_safe_areas(
         unsigned pos, float x1, float x2, float y1, float y2,
@@ -1047,12 +1050,14 @@ void UI_context_active_but_prop_get_templateID(
 
 /* Styled text draw */
 void UI_fontstyle_set(const struct uiFontStyle *fs);
-void UI_fontstyle_draw_ex(
-        const struct uiFontStyle *fs, const struct rcti *rect, const char *str,
-        size_t len, float *r_xofs, float *r_yofs);
-void UI_fontstyle_draw(const struct uiFontStyle *fs, const struct rcti *rect, const char *str);
-void UI_fontstyle_draw_rotated(const struct uiFontStyle *fs, const struct rcti *rect, const char *str);
-void UI_fontstyle_draw_simple(const struct uiFontStyle *fs, float x, float y, const char *str);
+void UI_fontstyle_draw_ex(const struct uiFontStyle *fs, const struct rcti *rect, const char *str,
+                          const unsigned char col[4], size_t len, float *r_xofs, float *r_yofs);
+void UI_fontstyle_draw(const struct uiFontStyle *fs, const struct rcti *rect, const char *str,
+                       const unsigned char col[4]);
+void UI_fontstyle_draw_rotated(const struct uiFontStyle *fs, const struct rcti *rect, const char *str,
+                               const unsigned char col[4]);
+void UI_fontstyle_draw_simple(const struct uiFontStyle *fs, float x, float y, const char *str,
+                              const unsigned char col[4]);
 void UI_fontstyle_draw_simple_backdrop(
         const struct uiFontStyle *fs, float x, float y, const char *str,
         const float col_fg[4], const float col_bg[4]);

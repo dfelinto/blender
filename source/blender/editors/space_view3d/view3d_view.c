@@ -1091,28 +1091,27 @@ void view3d_viewmatrix_set(Scene *scene, const View3D *v3d, RegionView3D *rv3d)
 	}
 }
 
-static void view3d_select_loop(ViewContext *vc, Scene *scene, View3D *v3d, ARegion *ar, bool use_obedit_skip)
+static void view3d_select_loop(ViewContext *vc, Scene *scene, SceneLayer *sl, View3D *v3d, ARegion *ar, bool use_obedit_skip)
 {
 	short code = 1;
 	char dt;
 	short dtx;
 
 	if (vc->obedit && vc->obedit->type == OB_MBALL) {
-		draw_object(scene, ar, v3d, BASACT, DRAW_PICKING | DRAW_CONSTCOLOR);
+		draw_object(scene, sl, ar, v3d, BASACT_NEW, DRAW_PICKING | DRAW_CONSTCOLOR);
 	}
 	else if ((vc->obedit && vc->obedit->type == OB_ARMATURE)) {
 		/* if not drawing sketch, draw bones */
 		if (!BDR_drawSketchNames(vc)) {
-			draw_object(scene, ar, v3d, BASACT, DRAW_PICKING | DRAW_CONSTCOLOR);
+			draw_object(scene, sl, ar, v3d, BASACT_NEW, DRAW_PICKING | DRAW_CONSTCOLOR);
 		}
 	}
 	else {
 		Base *base;
 
 		v3d->xray = true;  /* otherwise it postpones drawing */
-		for (base = scene->base.first; base; base = base->next) {
-			if (base->lay & v3d->lay) {
-
+		for (base = sl->object_bases.first; base; base = base->next) {
+			if ((base->flag & BASE_VISIBLED) != 0) {
 				if ((base->object->restrictflag & OB_RESTRICT_SELECT) ||
 				    (use_obedit_skip && (scene->obedit->data == base->object->data)))
 				{
@@ -1122,7 +1121,7 @@ static void view3d_select_loop(ViewContext *vc, Scene *scene, View3D *v3d, ARegi
 					base->selcol = code;
 
 					if (GPU_select_load_id(code)) {
-						draw_object(scene, ar, v3d, base, DRAW_PICKING | DRAW_CONSTCOLOR);
+						draw_object(scene, sl, ar, v3d, base, DRAW_PICKING | DRAW_CONSTCOLOR);
 
 						/* we draw duplicators for selection too */
 						if ((base->object->transflag & OB_DUPLI)) {
@@ -1130,7 +1129,7 @@ static void view3d_select_loop(ViewContext *vc, Scene *scene, View3D *v3d, ARegi
 							DupliObject *dob;
 							Base tbase;
 
-							tbase.flag = OB_FROMDUPLI;
+							tbase.flag_legacy = OB_FROMDUPLI;
 							lb = object_duplilist(G.main->eval_ctx, scene, base->object);
 
 							for (dob = lb->first; dob; dob = dob->next) {
@@ -1145,7 +1144,7 @@ static void view3d_select_loop(ViewContext *vc, Scene *scene, View3D *v3d, ARegi
 								dt = tbase.object->dt;   tbase.object->dt = MIN2(tbase.object->dt, base->object->dt);
 								dtx = tbase.object->dtx; tbase.object->dtx = base->object->dtx;
 
-								draw_object(scene, ar, v3d, &tbase, DRAW_PICKING | DRAW_CONSTCOLOR);
+								draw_object(scene, sl, ar, v3d, &tbase, DRAW_PICKING | DRAW_CONSTCOLOR);
 
 								tbase.object->dt = dt;
 								tbase.object->dtx = dtx;
@@ -1173,6 +1172,7 @@ static void view3d_select_loop(ViewContext *vc, Scene *scene, View3D *v3d, ARegi
 short view3d_opengl_select(ViewContext *vc, unsigned int *buffer, unsigned int bufsize, const rcti *input, bool do_nearest)
 {
 	Scene *scene = vc->scene;
+	SceneLayer *sl = vc->sl;
 	View3D *v3d = vc->v3d;
 	ARegion *ar = vc->ar;
 	rctf rect;
@@ -1209,7 +1209,7 @@ short view3d_opengl_select(ViewContext *vc, unsigned int *buffer, unsigned int b
 	else
 		GPU_select_begin(buffer, bufsize, &rect, GPU_SELECT_ALL, 0);
 
-	view3d_select_loop(vc, scene, v3d, ar, use_obedit_skip);
+	view3d_select_loop(vc, scene, sl, v3d, ar, use_obedit_skip);
 
 	hits = GPU_select_end();
 	
@@ -1217,7 +1217,7 @@ short view3d_opengl_select(ViewContext *vc, unsigned int *buffer, unsigned int b
 	if (do_passes) {
 		GPU_select_begin(buffer, bufsize, &rect, GPU_SELECT_NEAREST_SECOND_PASS, hits);
 
-		view3d_select_loop(vc, scene, v3d, ar, use_obedit_skip);
+		view3d_select_loop(vc, scene, sl, v3d, ar, use_obedit_skip);
 
 		GPU_select_end();
 	}
@@ -1319,7 +1319,7 @@ static bool view3d_localview_init(
         ReportList *reports)
 {
 	View3D *v3d = sa->spacedata.first;
-	Base *base;
+	BaseLegacy *base;
 	float min[3], max[3], box[3], mid[3];
 	float size = 0.0f;
 	unsigned int locallay;
@@ -1422,7 +1422,7 @@ static bool view3d_localview_init(
 			if (base->lay & locallay) {
 				base->lay -= locallay;
 				if (base->lay == 0) base->lay = v3d->layact;
-				if (base->object != scene->obedit) base->flag |= SELECT;
+				if (base->object != scene->obedit) base->flag_legacy |= SELECT;
 				base->object->lay = base->lay;
 			}
 		}
@@ -1493,7 +1493,7 @@ static bool view3d_localview_exit(
         Main *bmain, Scene *scene, ScrArea *sa, const int smooth_viewtx)
 {
 	View3D *v3d = sa->spacedata.first;
-	struct Base *base;
+	struct BaseLegacy *base;
 	unsigned int locallay;
 	
 	if (v3d->localvd) {
@@ -1510,7 +1510,7 @@ static bool view3d_localview_exit(
 				base->lay -= locallay;
 				if (base->lay == 0) base->lay = v3d->layact;
 				if (base->object != scene->obedit) {
-					base->flag |= SELECT;
+					base->flag_legacy |= SELECT;
 					base->object->flag |= SELECT;
 				}
 				base->object->lay = base->lay;

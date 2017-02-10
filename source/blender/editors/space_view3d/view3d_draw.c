@@ -698,7 +698,7 @@ static void drawviewborder(Scene *scene, ARegion *ar, View3D *v3d)
 
 	/* camera name - draw in highlighted text color */
 	if (ca && (ca->flag & CAM_SHOWNAME)) {
-		UI_ThemeColor(TH_TEXT_HI);
+		UI_FontThemeColor(BLF_default(), TH_TEXT_HI);
 		BLF_draw_default(
 		        x1i, y1i - (0.7f * U.widget_unit), 0.0f,
 		        v3d->camera->id.name + 2, sizeof(v3d->camera->id.name) - 2);
@@ -1644,11 +1644,11 @@ static void draw_view_axis(RegionView3D *rv3d, rcti *rect)
 		int i = axis_order[axis_i];
 
 		const char axis_text[2] = {'x' + i, '\0'};
-		glColor4ubv(axis_col[i]); /* text shader still uses gl_Color */
+		BLF_color4ubv(BLF_default(), axis_col[i]);
 		BLF_draw_default_ascii(axis_pos[i][0] + 2, axis_pos[i][1] + 2, 0.0f, axis_text, 1);
 	}
 
-	/* BLF_draw_default disabled blending for us */
+	/* BLF_draw disabled blending for us */
 }
 
 #ifdef WITH_INPUT_NDOF
@@ -1767,7 +1767,7 @@ static void draw_rotation_guide(RegionView3D *rv3d)
 /* ******************** non-meshes ***************** */
 
 static void view3d_draw_non_mesh(
-Scene *scene, Object *ob, Base *base, View3D *v3d,
+Scene *scene, SceneLayer *sl, Object *ob, Base *base, View3D *v3d,
 RegionView3D *rv3d, const bool is_boundingbox, const unsigned char color[4])
 {
 	glMatrixMode(GL_PROJECTION);
@@ -1793,7 +1793,7 @@ RegionView3D *rv3d, const bool is_boundingbox, const unsigned char color[4])
 			drawaxes(rv3d->viewmatob, ob->empty_drawsize, ob->empty_drawtype, color);
 			break;
 		case OB_LAMP:
-			drawlamp(v3d, rv3d, base, OB_SOLID, DRAW_CONSTCOLOR, color, ob == OBACT);
+			drawlamp(v3d, rv3d, base, OB_SOLID, DRAW_CONSTCOLOR, color, ob == OBACT_NEW);
 			break;
 		case OB_CAMERA:
 			drawcamera(scene, v3d, rv3d, base, DRAW_CONSTCOLOR, color);
@@ -1872,6 +1872,7 @@ static void view3d_draw_setup_view(const bContext *C, ARegion *ar)
 static void draw_all_objects(const bContext *C, ARegion *ar, const bool only_depth, const bool use_depth)
 {
 	Scene *scene = CTX_data_scene(C);
+	SceneLayer *sl = CTX_data_scene_layer(C);
 	View3D *v3d = CTX_wm_view3d(C);
 
 	if (only_depth)
@@ -1884,13 +1885,13 @@ static void draw_all_objects(const bContext *C, ARegion *ar, const bool only_dep
 		v3d->zbuf = true;
 	}
 
-	for (Base *base = scene->base.first; base; base = base->next) {
-		if (v3d->lay & base->lay) {
+	for (Base *base = sl->object_bases.first; base; base = base->next) {
+		if ((base->flag & BASE_VISIBLED) != 0) {
 			/* dupli drawing */
 			if (base->object->transflag & OB_DUPLI)
-				draw_dupli_objects(scene, ar, v3d, base);
+				draw_dupli_objects(scene, sl, ar, v3d, base);
 
-			draw_object(scene, ar, v3d, base, 0);
+			draw_object(scene, sl, ar, v3d, base, 0);
 		}
 	}
 
@@ -1968,6 +1969,7 @@ static void view3d_draw_non_meshes(const bContext *C, ARegion *ar)
 	 * we filter them based on the plates/layers
 	 */
 	Scene *scene = CTX_data_scene(C);
+	SceneLayer *sl = CTX_data_scene_layer(C);
 	View3D *v3d = CTX_wm_view3d(C);
 	RegionView3D *rv3d = ar->regiondata;
 
@@ -1981,13 +1983,13 @@ static void view3d_draw_non_meshes(const bContext *C, ARegion *ar)
 	 * for now let's avoid writing again to zbuffer to prevent glitches
 	 */
 
-	for (Base *base = scene->base.first; base; base = base->next) {
-		if (v3d->lay & base->lay) {
+	for (Base *base = sl->object_bases.first; base; base = base->next) {
+		if ((base->flag & BASE_VISIBLED) != 0) {
 			Object *ob = base->object;
 
 			unsigned char ob_wire_col[4];
-			draw_object_wire_color(scene, base, ob_wire_col);
-			view3d_draw_non_mesh(scene, ob, base, v3d, rv3d, is_boundingbox, ob_wire_col);
+			draw_object_wire_color(scene, sl, base, ob_wire_col);
+			view3d_draw_non_mesh(scene, sl, ob, base, v3d, rv3d, is_boundingbox, ob_wire_col);
 		}
 	}
 
@@ -2096,12 +2098,42 @@ static void view3d_draw_view(const bContext *C, ARegion *ar, DrawData *draw_data
 #endif
 }
 
+static void view3d_render_pass(const bContext *C, ARegion *UNUSED(ar))
+{
+	Scene *scene = CTX_data_scene(C);
+	RenderEngineType *type = RE_engines_find(scene->r.engine); /* In the future we should get that from Layers */
+
+	if (type->flag & RE_USE_OGL_PIPELINE) {
+		type->view_draw(NULL, C);
+	}
+	else {
+		// Offline Render engine
+	}
+}
+
+static void view3d_draw_view_new(const bContext *C, ARegion *ar, DrawData *UNUSED(draw_data))
+{
+
+	view3d_draw_setup_view(C, ar);
+
+	/* Only 100% compliant on new spec goes bellow */
+	view3d_render_pass(C, ar);
+
+	view3d_draw_grid(C, ar);
+	view3d_draw_manipulator(C);
+	view3d_draw_region_info(C, ar);
+}
+
+
 void view3d_main_region_draw(const bContext *C, ARegion *ar)
 {
+	Scene *scene = CTX_data_scene(C);
 	View3D *v3d = CTX_wm_view3d(C);
 	RegionView3D *rv3d = ar->regiondata;
+	/* TODO layers - In the future we should get RE from Layers */
+	RenderEngineType *type = RE_engines_find(scene->r.engine);
 
-	if (IS_VIEWPORT_LEGACY(v3d)) {
+	if (IS_VIEWPORT_LEGACY(v3d) && ((type->flag & RE_USE_OGL_PIPELINE) == 0)) {
 		view3d_main_region_draw_legacy(C, ar);
 		return;
 	}
@@ -2109,12 +2141,20 @@ void view3d_main_region_draw(const bContext *C, ARegion *ar)
 	if (!rv3d->viewport)
 		rv3d->viewport = GPU_viewport_create();
 
+	GPU_viewport_bind(rv3d->viewport, &ar->winrct, scene->r.engine);
+
 	/* TODO viewport - there is so much to be done, in fact a lot will need to happen in the space_view3d.c
 	 * before we even call the drawing routine, but let's move on for now (dfelinto)
 	 * but this is a provisory way to start seeing things in the viewport */
 	DrawData draw_data;
 	view3d_draw_data_init(C, ar, rv3d, &draw_data);
-	view3d_draw_view(C, ar, &draw_data);
+
+	if (type->flag & RE_USE_OGL_PIPELINE)
+		view3d_draw_view_new(C, ar, &draw_data);
+	else
+		view3d_draw_view(C, ar, &draw_data);
+
+	GPU_viewport_unbind(rv3d->viewport);
 
 	v3d->flag |= V3D_INVALID_BACKBUF;
 }

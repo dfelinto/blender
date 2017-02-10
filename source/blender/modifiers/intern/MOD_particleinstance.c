@@ -110,24 +110,6 @@ static bool isDisabled(ModifierData *md, int useRenderParams)
 	return false;
 }
 
-
-static void updateDepgraph(ModifierData *md, DagForest *forest,
-                           struct Main *UNUSED(bmain),
-                           struct Scene *UNUSED(scene),
-                           Object *UNUSED(ob),
-                           DagNode *obNode)
-{
-	ParticleInstanceModifierData *pimd = (ParticleInstanceModifierData *) md;
-
-	if (pimd->ob) {
-		DagNode *curNode = dag_get_node(forest, pimd->ob);
-
-		dag_add_relation(forest, curNode, obNode,
-		                 DAG_RL_DATA_DATA | DAG_RL_OB_DATA,
-		                 "Particle Instance Modifier");
-	}
-}
-
 static void updateDepsgraph(ModifierData *md,
                             struct Main *UNUSED(bmain),
                             struct Scene *UNUSED(scene),
@@ -145,7 +127,7 @@ static void foreachObjectLink(ModifierData *md, Object *ob,
 {
 	ParticleInstanceModifierData *pimd = (ParticleInstanceModifierData *) md;
 
-	walk(userData, ob, &pimd->ob, IDWALK_NOP);
+	walk(userData, ob, &pimd->ob, IDWALK_CB_NOP);
 }
 
 static int particle_skip(ParticleInstanceModifierData *pimd, ParticleSystem *psys, int p)
@@ -460,7 +442,6 @@ ModifierTypeInfo modifierType_ParticleInstance = {
 	/* requiredDataMask */  NULL,
 	/* freeData */          NULL,
 	/* isDisabled */        isDisabled,
-	/* updateDepgraph */    updateDepgraph,
 	/* updateDepsgraph */   updateDepsgraph,
 	/* dependsOnTime */     NULL,
 	/* dependsOnNormals */  NULL,

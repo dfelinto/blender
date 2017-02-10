@@ -581,6 +581,9 @@ static void ui_item_enum_expand(
 			UI_block_layout_set_current(block, layout_radial);
 		}
 		else {
+			if (layout->item.type == ITEM_LAYOUT_RADIAL) {
+				layout_radial = layout;
+			}
 			UI_block_layout_set_current(block, layout);
 		}
 	}
@@ -593,8 +596,9 @@ static void ui_item_enum_expand(
 
 	for (item = item_array; item->identifier; item++) {
 		if (!item->identifier[0]) {
-			if (radial)
+			if (radial && layout_radial) {
 				uiItemS(layout_radial);
+			}
 			continue;
 		}
 
@@ -1995,15 +1999,7 @@ static void ui_litem_estimate_row(uiLayout *litem)
 	for (item = litem->items.first; item; item = item->next) {
 		ui_item_size(item, &itemw, &itemh);
 
-		if (item->type == ITEM_BUTTON) {
-			const uiBut *but = ((uiButtonItem *)item)->but;
-			const bool icon_only = (but->flag & UI_HAS_ICON) && (but->str == NULL || but->str[0] == '\0');
-
-			min_size_flag = min_size_flag && icon_only;
-		}
-		else {
-			min_size_flag = min_size_flag && (item->flag & UI_ITEM_MIN);
-		}
+		min_size_flag = min_size_flag && (item->flag & UI_ITEM_MIN);
 
 		litem->w += itemw;
 		litem->h = MAX2(itemh, litem->h);
@@ -2149,15 +2145,7 @@ static void ui_litem_estimate_column(uiLayout *litem)
 	for (item = litem->items.first; item; item = item->next) {
 		ui_item_size(item, &itemw, &itemh);
 
-		if (item->type == ITEM_BUTTON) {
-			const uiBut *but = ((uiButtonItem *)item)->but;
-			const bool icon_only = (but->flag & UI_HAS_ICON) && (but->str == NULL || but->str[0] == '\0');
-			
-			min_size_flag = min_size_flag && icon_only;
-		}
-		else {
-			min_size_flag = min_size_flag && (item->flag & UI_ITEM_MIN);
-		}
+		min_size_flag = min_size_flag && (item->flag & UI_ITEM_MIN);
 
 		litem->w = MAX2(litem->w, itemw);
 		litem->h += itemh;
@@ -3253,6 +3241,14 @@ void ui_layout_add_but(uiLayout *layout, uiBut *but)
 	bitem = MEM_callocN(sizeof(uiButtonItem), "uiButtonItem");
 	bitem->item.type = ITEM_BUTTON;
 	bitem->but = but;
+
+	int w, h;
+	ui_item_size((uiItem *)bitem, &w, &h);
+	/* XXX uiBut hasn't scaled yet
+	 * we can flag the button as not expandable, depending on its size */
+	if (w <= 2 * UI_UNIT_X)
+		bitem->item.flag |= UI_ITEM_MIN;
+
 	BLI_addtail(&layout->items, bitem);
 
 	if (layout->context) {

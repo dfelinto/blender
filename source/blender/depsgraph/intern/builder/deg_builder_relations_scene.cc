@@ -46,6 +46,7 @@ extern "C" {
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
+#include "BKE_layer.h"
 #include "BKE_main.h"
 #include "BKE_node.h"
 
@@ -69,26 +70,14 @@ namespace DEG {
 
 void DepsgraphRelationBuilder::build_scene(Main *bmain, Scene *scene)
 {
-	/* LIB_TAG_DOIT is used to indicate whether node for given ID was already
-	 * created or not.
-	 */
-	BKE_main_id_tag_all(bmain, LIB_TAG_DOIT, false);
-	/* XXX nested node trees are not included in tag-clearing above,
-	 * so we need to do this manually.
-	 */
-	FOREACH_NODETREE(bmain, nodetree, id) {
-		if (id != (ID *)nodetree)
-			nodetree->id.tag &= ~LIB_TAG_DOIT;
-	} FOREACH_NODETREE_END
-
 	if (scene->set) {
-		// TODO: link set to scene, especially our timesource...
+		build_scene(bmain, scene->set);
 	}
 
 	/* scene objects */
-	LINKLIST_FOREACH (Base *, base, &scene->base) {
-		Object *ob = base->object;
-
+	Object *ob;
+	FOREACH_SCENE_OBJECT(scene, ob)
+	{
 		/* object itself */
 		build_object(bmain, scene, ob);
 
@@ -109,6 +98,7 @@ void DepsgraphRelationBuilder::build_scene(Main *bmain, Scene *scene)
 			build_group(bmain, scene, ob, ob->dup_group);
 		}
 	}
+	FOREACH_SCENE_OBJECT_END
 
 	/* rigidbody */
 	if (scene->rigidbody_world) {
@@ -132,7 +122,7 @@ void DepsgraphRelationBuilder::build_scene(Main *bmain, Scene *scene)
 
 	/* grease pencil */
 	if (scene->gpd) {
-		build_gpencil(&scene->id, scene->gpd);
+		build_gpencil(scene->gpd);
 	}
 
 	/* Masks. */

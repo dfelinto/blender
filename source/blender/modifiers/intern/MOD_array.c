@@ -95,44 +95,10 @@ static void foreachObjectLink(
 {
 	ArrayModifierData *amd = (ArrayModifierData *) md;
 
-	walk(userData, ob, &amd->start_cap, IDWALK_NOP);
-	walk(userData, ob, &amd->end_cap, IDWALK_NOP);
-	walk(userData, ob, &amd->curve_ob, IDWALK_NOP);
-	walk(userData, ob, &amd->offset_ob, IDWALK_NOP);
-}
-
-static void updateDepgraph(ModifierData *md, DagForest *forest,
-                           struct Main *UNUSED(bmain),
-                           struct Scene *UNUSED(scene),
-                           Object *UNUSED(ob), DagNode *obNode)
-{
-	ArrayModifierData *amd = (ArrayModifierData *) md;
-
-	if (amd->start_cap) {
-		DagNode *curNode = dag_get_node(forest, amd->start_cap);
-
-		dag_add_relation(forest, curNode, obNode,
-		                 DAG_RL_DATA_DATA | DAG_RL_OB_DATA, "Array Modifier");
-	}
-	if (amd->end_cap) {
-		DagNode *curNode = dag_get_node(forest, amd->end_cap);
-
-		dag_add_relation(forest, curNode, obNode,
-		                 DAG_RL_DATA_DATA | DAG_RL_OB_DATA, "Array Modifier");
-	}
-	if (amd->curve_ob) {
-		DagNode *curNode = dag_get_node(forest, amd->curve_ob);
-		curNode->eval_flags |= DAG_EVAL_NEED_CURVE_PATH;
-
-		dag_add_relation(forest, curNode, obNode,
-		                 DAG_RL_DATA_DATA | DAG_RL_OB_DATA, "Array Modifier");
-	}
-	if (amd->offset_ob) {
-		DagNode *curNode = dag_get_node(forest, amd->offset_ob);
-
-		dag_add_relation(forest, curNode, obNode,
-		                 DAG_RL_DATA_DATA | DAG_RL_OB_DATA, "Array Modifier");
-	}
+	walk(userData, ob, &amd->start_cap, IDWALK_CB_NOP);
+	walk(userData, ob, &amd->end_cap, IDWALK_CB_NOP);
+	walk(userData, ob, &amd->curve_ob, IDWALK_CB_NOP);
+	walk(userData, ob, &amd->offset_ob, IDWALK_CB_NOP);
 }
 
 static void updateDepsgraph(ModifierData *md,
@@ -797,7 +763,6 @@ ModifierTypeInfo modifierType_Array = {
 	/* requiredDataMask */  NULL,
 	/* freeData */          NULL,
 	/* isDisabled */        NULL,
-	/* updateDepgraph */    updateDepgraph,
 	/* updateDepsgraph */   updateDepsgraph,
 	/* dependsOnTime */     NULL,
 	/* dependsOnNormals */	NULL,

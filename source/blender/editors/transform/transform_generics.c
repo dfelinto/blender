@@ -62,8 +62,7 @@
 
 #include "RNA_access.h"
 
-#include "BIF_gl.h"
-#include "BIF_glutil.h"
+#include "GPU_immediate.h"
 
 #include "BIK_api.h"
 
@@ -315,7 +314,7 @@ static bool fcu_test_selected(FCurve *fcu)
 /* helper for recalcData() - for Action Editor transforms */
 static void recalcData_actedit(TransInfo *t)
 {
-	Scene *scene = t->scene;
+	SceneLayer *sl= t->sl;
 	SpaceAction *saction = (SpaceAction *)t->sa->spacedata.first;
 	
 	bAnimContext ac = {NULL};
@@ -326,7 +325,7 @@ static void recalcData_actedit(TransInfo *t)
 	/* initialize relevant anim-context 'context' data from TransInfo data */
 	/* NOTE: sync this with the code in ANIM_animdata_get_context() */
 	ac.scene = t->scene;
-	ac.obact = OBACT;
+	ac.obact = OBACT_NEW;
 	ac.sa = t->sa;
 	ac.ar = t->ar;
 	ac.sl = (t->sa) ? t->sa->spacedata.first : NULL;
@@ -363,7 +362,7 @@ static void recalcData_actedit(TransInfo *t)
 static void recalcData_graphedit(TransInfo *t)
 {
 	SpaceIpo *sipo = (SpaceIpo *)t->sa->spacedata.first;
-	Scene *scene;
+	SceneLayer *sl = t->sl;
 	
 	ListBase anim_data = {NULL, NULL};
 	bAnimContext ac = {NULL};
@@ -374,8 +373,8 @@ static void recalcData_graphedit(TransInfo *t)
 
 	/* initialize relevant anim-context 'context' data from TransInfo data */
 	/* NOTE: sync this with the code in ANIM_animdata_get_context() */
-	scene = ac.scene = t->scene;
-	ac.obact = OBACT;
+	ac.scene = t->scene;
+	ac.obact = OBACT_NEW;
 	ac.sa = t->sa;
 	ac.ar = t->ar;
 	ac.sl = (t->sa) ? t->sa->spacedata.first : NULL;
@@ -709,7 +708,7 @@ static void recalcData_spaceclip(TransInfo *t)
 /* helper for recalcData() - for object transforms, typically in the 3D view */
 static void recalcData_objects(TransInfo *t)
 {
-	Base *base = t->scene->basact;
+	BaseLegacy *base = t->scene->basact;
 
 	if (t->obedit) {
 		if (ELEM(t->obedit->type, OB_CURVE, OB_SURF)) {
@@ -1050,14 +1049,19 @@ void drawLine(TransInfo *t, const float center[3], const float dir[3], char axis
 			UI_GetThemeColor3ubv(TH_GRID, col);
 		}
 		UI_make_axis_color(col, col2, axis);
-		glColor3ubv(col2);
-		
-		setlinestyle(0);
-		glBegin(GL_LINES);
-		glVertex3fv(v1);
-		glVertex3fv(v2);
-		glEnd();
-		
+
+		unsigned pos = add_attrib(immVertexFormat(), "pos", GL_FLOAT, 3, KEEP_FLOAT);
+
+		immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
+		immUniformColor3ubv(col2);
+
+		immBegin(GL_LINES, 2);
+		immVertex3fv(pos, v1);
+		immVertex3fv(pos, v2);
+		immEnd();
+
+		immUnbindProgram();
+
 		glPopMatrix();
 	}
 }
@@ -1104,6 +1108,7 @@ static int initTransInfo_edit_pet_to_flag(const int proportional)
 void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *event)
 {
 	Scene *sce = CTX_data_scene(C);
+	SceneLayer *sl = CTX_data_scene_layer(C);
 	ToolSettings *ts = CTX_data_tool_settings(C);
 	ARegion *ar = CTX_wm_region(C);
 	ScrArea *sa = CTX_wm_area(C);
@@ -1113,6 +1118,7 @@ void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
 	PropertyRNA *prop;
 	
 	t->scene = sce;
+	t->sl = sl;
 	t->sa = sa;
 	t->ar = ar;
 	t->obedit = obedit;
@@ -1767,8 +1773,8 @@ bool calculateCenterActive(TransInfo *t, bool select_only, float r_center[3])
 		}
 	}
 	else if (t->flag & T_POSE) {
-		Scene *scene = t->scene;
-		Object *ob = OBACT;
+		SceneLayer *sl = t->sl;
+		Object *ob = OBACT_NEW;
 		if (ob) {
 			bPoseChannel *pchan = BKE_pose_channel_active(ob);
 			if (pchan && (!select_only || (pchan->bone->flag & BONE_SELECTED))) {
@@ -1787,9 +1793,10 @@ bool calculateCenterActive(TransInfo *t, bool select_only, float r_center[3])
 	}
 	else {
 		/* object mode */
-		Scene *scene = t->scene;
-		Object *ob = OBACT;
-		if (ob && (!select_only || (ob->flag & SELECT))) {
+		SceneLayer *sl = t->sl;
+		Object *ob = OBACT_NEW;
+		Base *base = BASACT_NEW;
+		if (ob && ((!select_only) || ((base->flag & BASE_SELECTED) != 0))) {
 			copy_v3_v3(r_center, ob->obmat[3]);
 			ok = true;
 		}

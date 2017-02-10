@@ -260,12 +260,6 @@ static CustomData *dm_getPolyCData(DerivedMesh *dm)
 	return &dm->polyData;
 }
 
-static DMCleanupBatchCache cleanupBatchCache = NULL;
-void DM_set_batch_cleanup_callback(DMCleanupBatchCache func)
-{
-	cleanupBatchCache = func;
-}
-
 /**
  * Utility function to initialize a DerivedMesh's function pointers to
  * the default implementation (for those functions which have a default)
@@ -323,8 +317,6 @@ void DM_init(
 	dm->numPolyData = numPolys;
 
 	DM_init_funcs(dm);
-
-	dm->batchCache = NULL; /* necessary? dm->drawObject is not set to NULL yet it works fine */
 
 	dm->needsFree = 1;
 	dm->auto_bump_scale = -1.0f;
@@ -385,10 +377,7 @@ int DM_release(DerivedMesh *dm)
 	if (dm->needsFree) {
 		bvhcache_free(&dm->bvhCache);
 		GPU_drawobject_free(dm);
-		if (dm->batchCache && cleanupBatchCache) {
-			cleanupBatchCache(dm->batchCache);
-			dm->batchCache = NULL;
-		}
+
 		CustomData_free(&dm->vertData, dm->numVertData);
 		CustomData_free(&dm->edgeData, dm->numEdgeData);
 		CustomData_free(&dm->faceData, dm->numTessFaceData);
@@ -2227,6 +2216,12 @@ static void mesh_calc_modifiers(
 		}
 	}
 
+	/* Some modifiers, like datatransfer, may generate those data as temp layer, we do not want to keep them,
+	 * as they are used by display code when available (i.e. even if autosmooth is disabled). */
+	if (!do_loop_normals && CustomData_has_layer(&finaldm->loopData, CD_NORMAL)) {
+		CustomData_free_layers(&finaldm->loopData, CD_NORMAL, finaldm->numLoopData);
+	}
+
 #ifdef WITH_GAMEENGINE
 	/* NavMesh - this is a hack but saves having a NavMesh modifier */
 	if ((ob->gameflag & OB_NAVMESH) && (finaldm->type == DM_TYPE_CDDM)) {
@@ -2562,6 +2557,15 @@ static void editbmesh_calc_modifiers(
 	/* same as mesh_calc_modifiers (if using loop normals, poly nors have already been computed). */
 	if (!do_loop_normals) {
 		dm_ensure_display_normals(*r_final);
+
+		/* Some modifiers, like datatransfer, may generate those data, we do not want to keep them,
+		 * as they are used by display code when available (i.e. even if autosmooth is disabled). */
+		if (CustomData_has_layer(&(*r_final)->loopData, CD_NORMAL)) {
+			CustomData_free_layers(&(*r_final)->loopData, CD_NORMAL, (*r_final)->numLoopData);
+		}
+		if (r_cage && CustomData_has_layer(&(*r_cage)->loopData, CD_NORMAL)) {
+			CustomData_free_layers(&(*r_cage)->loopData, CD_NORMAL, (*r_cage)->numLoopData);
+		}
 	}
 
 	/* add an orco layer if needed */

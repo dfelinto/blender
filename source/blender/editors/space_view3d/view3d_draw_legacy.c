@@ -60,6 +60,7 @@
 #include "BKE_DerivedMesh.h"
 #include "BKE_image.h"
 #include "BKE_key.h"
+#include "BKE_layer.h"
 #include "BKE_main.h"
 #include "BKE_object.h"
 #include "BKE_global.h"
@@ -291,7 +292,7 @@ static void draw_viewport_name(ARegion *ar, View3D *v3d, rcti *rect)
 		name = tmpstr;
 	}
 
-	UI_ThemeColor(TH_TEXT_HI);
+	UI_FontThemeColor(BLF_default(), TH_TEXT_HI);
 #ifdef WITH_INTERNATIONAL
 	BLF_draw_default(U.widget_unit + rect->xmin,  rect->ymax - U.widget_unit, 0.0f, name, sizeof(tmpstr));
 #else
@@ -308,6 +309,8 @@ static void draw_selected_name(Scene *scene, Object *ob, rcti *rect)
 	const int cfra = CFRA;
 	const char *msg_pin = " (Pinned)";
 	const char *msg_sep = " : ";
+
+	const int font_id = BLF_default();
 
 	char info[300];
 	char *s = info;
@@ -384,18 +387,18 @@ static void draw_selected_name(Scene *scene, Object *ob, rcti *rect)
 		
 		/* color depends on whether there is a keyframe */
 		if (id_frame_has_keyframe((ID *)ob, /* BKE_scene_frame_get(scene) */ (float)cfra, ANIMFILTER_KEYS_LOCAL))
-			UI_ThemeColor(TH_TIME_KEYFRAME);
+			UI_FontThemeColor(font_id, TH_TIME_KEYFRAME);
 		else if (ED_gpencil_has_keyframe_v3d(scene, ob, cfra))
-			UI_ThemeColor(TH_TIME_GP_KEYFRAME);
+			UI_FontThemeColor(font_id, TH_TIME_GP_KEYFRAME);
 		else
-			UI_ThemeColor(TH_TEXT_HI);
+			UI_FontThemeColor(font_id, TH_TEXT_HI);
 	}
 	else {
 		/* no object */
 		if (ED_gpencil_has_keyframe_v3d(scene, NULL, cfra))
-			UI_ThemeColor(TH_TIME_GP_KEYFRAME);
+			UI_FontThemeColor(font_id, TH_TIME_GP_KEYFRAME);
 		else
-			UI_ThemeColor(TH_TEXT_HI);
+			UI_FontThemeColor(font_id, TH_TEXT_HI);
 	}
 
 	if (markern) {
@@ -410,10 +413,10 @@ static void draw_selected_name(Scene *scene, Object *ob, rcti *rect)
 
 /* *********************** backdraw for selection *************** */
 
-static void backdrawview3d(Scene *scene, wmWindow *win, ARegion *ar, View3D *v3d)
+static void backdrawview3d(Scene *scene, SceneLayer *sl, wmWindow *win, ARegion *ar, View3D *v3d)
 {
 	RegionView3D *rv3d = ar->regiondata;
-	struct Base *base = scene->basact;
+	struct Base *base = sl->basact;
 	int multisample_enabled;
 
 	BLI_assert(ar->regiontype == RGN_TYPE_WINDOW);
@@ -510,7 +513,7 @@ static void backdrawview3d(Scene *scene, wmWindow *win, ARegion *ar, View3D *v3d
 	
 	G.f |= G_BACKBUFSEL;
 	
-	if (base && (base->lay & v3d->lay))
+	if (base && ((base->flag & BASE_VISIBLED) != 0))
 		draw_object_backbufsel(scene, v3d, rv3d, base->object);
 	
 	if (rv3d->gpuoffscreen)
@@ -555,7 +558,7 @@ static void view3d_opengl_read_Z_pixels(ARegion *ar, int x, int y, int w, int h,
 void ED_view3d_backbuf_validate(ViewContext *vc)
 {
 	if (vc->v3d->flag & V3D_INVALID_BACKBUF)
-		backdrawview3d(vc->scene, vc->win, vc->ar, vc->v3d);
+		backdrawview3d(vc->scene, vc->sl, vc->win, vc->ar, vc->v3d);
 }
 
 /**
@@ -1029,22 +1032,22 @@ static void view3d_draw_bgpic_test(Scene *scene, ARegion *ar, View3D *v3d,
 
 typedef struct View3DAfter {
 	struct View3DAfter *next, *prev;
-	struct Base *base;
+	struct BaseLegacy *base;
 	short dflag;
 } View3DAfter;
 
 /* temp storage of Objects that need to be drawn as last */
-void ED_view3d_after_add(ListBase *lb, Base *base, const short dflag)
+void ED_view3d_after_add(ListBase *lb, BaseLegacy *base, const short dflag)
 {
 	View3DAfter *v3da = MEM_callocN(sizeof(View3DAfter), "View 3d after");
-	BLI_assert((base->flag & OB_FROMDUPLI) == 0);
+	BLI_assert((base->flag_legacy & OB_FROMDUPLI) == 0);
 	BLI_addtail(lb, v3da);
 	v3da->base = base;
 	v3da->dflag = dflag;
 }
 
 /* disables write in zbuffer and draws it over */
-static void view3d_draw_transp(Scene *scene, ARegion *ar, View3D *v3d)
+static void view3d_draw_transp(Scene *scene, SceneLayer *sl, ARegion *ar, View3D *v3d)
 {
 	View3DAfter *v3da;
 	
@@ -1052,7 +1055,7 @@ static void view3d_draw_transp(Scene *scene, ARegion *ar, View3D *v3d)
 	v3d->transp = true;
 	
 	while ((v3da = BLI_pophead(&v3d->afterdraw_transp))) {
-		draw_object(scene, ar, v3d, v3da->base, v3da->dflag);
+		draw_object(scene, sl, ar, v3d, v3da->base, v3da->dflag);
 		MEM_freeN(v3da);
 	}
 	v3d->transp = false;
@@ -1062,7 +1065,7 @@ static void view3d_draw_transp(Scene *scene, ARegion *ar, View3D *v3d)
 }
 
 /* clears zbuffer and draws it over */
-static void view3d_draw_xray(Scene *scene, ARegion *ar, View3D *v3d, bool *clear)
+static void view3d_draw_xray(Scene *scene, SceneLayer *sl, ARegion *ar, View3D *v3d, bool *clear)
 {
 	if (*clear && v3d->zbuf) {
 		glClear(GL_DEPTH_BUFFER_BIT);
@@ -1072,7 +1075,7 @@ static void view3d_draw_xray(Scene *scene, ARegion *ar, View3D *v3d, bool *clear
 	v3d->xray = true;
 	View3DAfter *v3da;
 	while ((v3da = BLI_pophead(&v3d->afterdraw_xray))) {
-		draw_object(scene, ar, v3d, v3da->base, v3da->dflag);
+		draw_object(scene, sl, ar, v3d, v3da->base, v3da->dflag);
 		MEM_freeN(v3da);
 	}
 	v3d->xray = false;
@@ -1080,7 +1083,7 @@ static void view3d_draw_xray(Scene *scene, ARegion *ar, View3D *v3d, bool *clear
 
 
 /* clears zbuffer and draws it over */
-static void view3d_draw_xraytransp(Scene *scene, ARegion *ar, View3D *v3d, const bool clear)
+static void view3d_draw_xraytransp(Scene *scene, SceneLayer *sl, ARegion *ar, View3D *v3d, const bool clear)
 {
 	if (clear && v3d->zbuf)
 		glClear(GL_DEPTH_BUFFER_BIT);
@@ -1092,7 +1095,7 @@ static void view3d_draw_xraytransp(Scene *scene, ARegion *ar, View3D *v3d, const
 
 	View3DAfter *v3da;
 	while ((v3da = BLI_pophead(&v3d->afterdraw_xraytransp))) {
-		draw_object(scene, ar, v3d, v3da->base, v3da->dflag);
+		draw_object(scene, sl, ar, v3d, v3da->base, v3da->dflag);
 		MEM_freeN(v3da);
 	}
 
@@ -1131,7 +1134,7 @@ static DupliObject *dupli_step(DupliObject *dob)
 }
 
 static void draw_dupli_objects_color(
-        Scene *scene, ARegion *ar, View3D *v3d, Base *base,
+        Scene *scene, SceneLayer *sl, ARegion *ar, View3D *v3d, BaseLegacy *base,
         const short dflag, const int color)
 {
 	RegionView3D *rv3d = ar->regiondata;
@@ -1148,7 +1151,7 @@ static void draw_dupli_objects_color(
 	short dtx;
 	DupliApplyData *apply_data;
 
-	if (base->object->restrictflag & OB_RESTRICT_VIEW) return;
+	if ((base->flag & BASE_VISIBLED) == 0) return;
 	if ((base->object->restrictflag & OB_RESTRICT_RENDER) && (v3d->flag2 & V3D_RENDER_OVERRIDE)) return;
 
 	if (dflag & DRAW_CONSTCOLOR) {
@@ -1158,7 +1161,8 @@ static void draw_dupli_objects_color(
 		UI_GetThemeColorBlend3ubv(color, TH_BACK, 0.5f, color_rgb);
 	}
 
-	tbase.flag = OB_FROMDUPLI | base->flag;
+	tbase.flag_legacy = OB_FROMDUPLI | base->flag_legacy;
+	tbase.flag = base->flag;
 	lb = object_duplilist(G.main->eval_ctx, scene, base->object);
 	// BLI_listbase_sort(lb, dupli_ob_sort); /* might be nice to have if we have a dupli list with mixed objects. */
 
@@ -1252,7 +1256,7 @@ static void draw_dupli_objects_color(
 					
 					displist = glGenLists(1);
 					glNewList(displist, GL_COMPILE);
-					draw_object(scene, ar, v3d, &tbase, dflag_dupli);
+					draw_object(scene, sl, ar, v3d, &tbase, dflag_dupli);
 					glEndList();
 					
 					use_displist = true;
@@ -1269,7 +1273,7 @@ static void draw_dupli_objects_color(
 			else {
 				copy_m4_m4(dob->ob->obmat, dob->mat);
 				GPU_begin_dupli_object(dob);
-				draw_object(scene, ar, v3d, &tbase, dflag_dupli);
+				draw_object(scene, sl, ar, v3d, &tbase, dflag_dupli);
 				GPU_end_dupli_object();
 			}
 		}
@@ -1291,17 +1295,17 @@ static void draw_dupli_objects_color(
 		glDeleteLists(displist, 1);
 }
 
-void draw_dupli_objects(Scene *scene, ARegion *ar, View3D *v3d, Base *base)
+void draw_dupli_objects(Scene *scene, SceneLayer *sl, ARegion *ar, View3D *v3d, BaseLegacy *base)
 {
 	/* define the color here so draw_dupli_objects_color can be called
 	 * from the set loop */
 	
-	int color = (base->flag & SELECT) ? TH_SELECT : TH_WIRE;
+	int color = (base->flag & BASE_SELECTED) ? TH_SELECT : TH_WIRE;
 	/* debug */
 	if (base->object->dup_group && base->object->dup_group->id.us < 1)
 		color = TH_REDALERT;
 	
-	draw_dupli_objects_color(scene, ar, v3d, base, 0, color);
+	draw_dupli_objects_color(scene, sl, ar, v3d, base, 0, color);
 }
 
 /* XXX warning, not using gpu offscreen here */
@@ -1448,10 +1452,11 @@ void ED_view3d_draw_depth(Scene *scene, ARegion *ar, View3D *v3d, bool alphaover
 	short flag = v3d->flag;
 	float glalphaclip = U.glalphaclip;
 	int obcenter_dia = U.obcenter_dia;
+	TODO_LAYER_CONTEXT; /* we should pass context, really */
+	SceneLayer *sl = BKE_scene_layer_active(scene);
 	/* no need for color when drawing depth buffer */
 	const short dflag_depth = DRAW_CONSTCOLOR;
 	/* temp set drawtype to solid */
-	
 	/* Setting these temporarily is not nice */
 	v3d->flag &= ~V3D_SELECT_OUTLINE;
 	U.glalphaclip = alphaoverride ? 0.5f : glalphaclip; /* not that nice but means we wont zoom into billboards */
@@ -1482,21 +1487,21 @@ void ED_view3d_draw_depth(Scene *scene, ARegion *ar, View3D *v3d, bool alphaover
 		Scene *sce_iter;
 		for (SETLOOPER(scene->set, sce_iter, base)) {
 			if (v3d->lay & base->lay) {
-				draw_object(scene, ar, v3d, base, 0);
+				draw_object(scene, sl, ar, v3d, base, 0);
 				if (base->object->transflag & OB_DUPLI) {
-					draw_dupli_objects_color(scene, ar, v3d, base, dflag_depth, TH_UNDEFINED);
+					draw_dupli_objects_color(scene, sl, ar, v3d, base, dflag_depth, TH_UNDEFINED);
 				}
 			}
 		}
 	}
 	
-	for (base = scene->base.first; base; base = base->next) {
-		if (v3d->lay & base->lay) {
+	for (base = sl->object_bases.first; base; base = base->next) {
+		if ((base->flag & BASE_VISIBLED) != 0) {
 			/* dupli drawing */
 			if (base->object->transflag & OB_DUPLI) {
-				draw_dupli_objects_color(scene, ar, v3d, base, dflag_depth, TH_UNDEFINED);
+				draw_dupli_objects_color(scene, sl, ar, v3d, base, dflag_depth, TH_UNDEFINED);
 			}
-			draw_object(scene, ar, v3d, base, dflag_depth);
+			draw_object(scene, sl, ar, v3d, base, dflag_depth);
 		}
 	}
 	
@@ -1517,7 +1522,7 @@ void ED_view3d_draw_depth(Scene *scene, ARegion *ar, View3D *v3d, bool alphaover
 		if (v3d->afterdraw_xray.first || v3d->afterdraw_xraytransp.first) {
 			glDepthFunc(GL_ALWAYS); /* always write into the depth bufer, overwriting front z values */
 			for (v3da = v3d->afterdraw_xray.first; v3da; v3da = v3da->next) {
-				draw_object(scene, ar, v3d, v3da->base, dflag_depth);
+				draw_object(scene, sl, ar, v3d, v3da->base, dflag_depth);
 			}
 			glDepthFunc(GL_LEQUAL); /* Now write the depth buffer normally */
 		}
@@ -1526,21 +1531,21 @@ void ED_view3d_draw_depth(Scene *scene, ARegion *ar, View3D *v3d, bool alphaover
 		v3d->xray = false;
 		v3d->transp = true;
 		while ((v3da = BLI_pophead(&v3d->afterdraw_transp))) {
-			draw_object(scene, ar, v3d, v3da->base, dflag_depth);
+			draw_object(scene, sl, ar, v3d, v3da->base, dflag_depth);
 			MEM_freeN(v3da);
 		}
 
 		v3d->xray = true;
 		v3d->transp = false;
 		while ((v3da = BLI_pophead(&v3d->afterdraw_xray))) {
-			draw_object(scene, ar, v3d, v3da->base, dflag_depth);
+			draw_object(scene, sl, ar, v3d, v3da->base, dflag_depth);
 			MEM_freeN(v3da);
 		}
 
 		v3d->xray = true;
 		v3d->transp = true;
 		while ((v3da = BLI_pophead(&v3d->afterdraw_xraytransp))) {
-			draw_object(scene, ar, v3d, v3da->base, dflag_depth);
+			draw_object(scene, sl, ar, v3d, v3da->base, dflag_depth);
 			MEM_freeN(v3da);
 		}
 
@@ -1602,7 +1607,7 @@ static void gpu_update_lamps_shadows_world(Scene *scene, View3D *v3d)
 {
 	ListBase shadows;
 	Scene *sce_iter;
-	Base *base;
+	BaseLegacy *base;
 	World *world = scene->world;
 	SceneRenderLayer *srl = v3d->scenelock ? BLI_findlink(&scene->r.layers, scene->r.actlay) : NULL;
 	
@@ -1735,8 +1740,9 @@ static void view3d_draw_objects(
         const char **grid_unit,
         const bool do_bgpic, const bool draw_offscreen, GPUFX *fx)
 {
+	SceneLayer *sl = C ? CTX_data_scene_layer(C) : BKE_scene_layer_active(scene);
 	RegionView3D *rv3d = ar->regiondata;
-	Base *base;
+	BaseLegacy *base;
 	const bool do_camera_frame = !draw_offscreen;
 	const bool draw_grids = !draw_offscreen && (v3d->flag2 & V3D_RENDER_OVERRIDE) == 0;
 	const bool draw_floor = (rv3d->view == RV3D_VIEW_USER) || (rv3d->persp != RV3D_ORTHO);
@@ -1796,10 +1802,10 @@ static void view3d_draw_objects(
 		for (SETLOOPER(scene->set, sce_iter, base)) {
 			if (v3d->lay & base->lay) {
 				UI_ThemeColorBlend(TH_WIRE, TH_BACK, 0.6f);
-				draw_object(scene, ar, v3d, base, dflag);
+				draw_object(scene, sl, ar, v3d, base, dflag);
 
 				if (base->object->transflag & OB_DUPLI) {
-					draw_dupli_objects_color(scene, ar, v3d, base, dflag, TH_UNDEFINED);
+					draw_dupli_objects_color(scene, sl, ar, v3d, base, dflag, TH_UNDEFINED);
 				}
 			}
 		}
@@ -1808,13 +1814,13 @@ static void view3d_draw_objects(
 	}
 
 	if (draw_offscreen) {
-		for (base = scene->base.first; base; base = base->next) {
-			if (v3d->lay & base->lay) {
+		for (base = sl->object_bases.first; base; base = base->next) {
+			if ((base->flag & BASE_VISIBLED) != 0) {
 				/* dupli drawing */
 				if (base->object->transflag & OB_DUPLI)
-					draw_dupli_objects(scene, ar, v3d, base);
+					draw_dupli_objects(scene, sl, ar, v3d, base);
 
-				draw_object(scene, ar, v3d, base, 0);
+				draw_object(scene, sl, ar, v3d, base, 0);
 			}
 		}
 	}
@@ -1822,18 +1828,18 @@ static void view3d_draw_objects(
 		unsigned int lay_used = 0;
 
 		/* then draw not selected and the duplis, but skip editmode object */
-		for (base = scene->base.first; base; base = base->next) {
+		for (base = sl->object_bases.first; base; base = base->next) {
 			lay_used |= base->lay;
 
-			if (v3d->lay & base->lay) {
+			if ((base->flag & BASE_VISIBLED) != 0) {
 
 				/* dupli drawing */
 				if (base->object->transflag & OB_DUPLI) {
-					draw_dupli_objects(scene, ar, v3d, base);
+					draw_dupli_objects(scene, sl, ar, v3d, base);
 				}
-				if ((base->flag & SELECT) == 0) {
+				if ((base->flag & BASE_SELECTED) == 0) {
 					if (base->object != scene->obedit)
-						draw_object(scene, ar, v3d, base, 0);
+						draw_object(scene, sl, ar, v3d, base, 0);
 				}
 			}
 		}
@@ -1842,10 +1848,10 @@ static void view3d_draw_objects(
 		v3d->lay_used = lay_used & ((1 << 20) - 1);
 
 		/* draw selected and editmode */
-		for (base = scene->base.first; base; base = base->next) {
-			if (v3d->lay & base->lay) {
-				if (base->object == scene->obedit || (base->flag & SELECT)) {
-					draw_object(scene, ar, v3d, base, 0);
+		for (base = sl->object_bases.first; base; base = base->next) {
+			if ((base->flag & BASE_VISIBLED) != 0) {
+				if (base->object == scene->obedit || (base->flag & BASE_SELECTED)) {
+					draw_object(scene, sl, ar, v3d, base, 0);
 				}
 			}
 		}
@@ -1867,7 +1873,7 @@ static void view3d_draw_objects(
 	}
 
 	/* transp and X-ray afterdraw stuff */
-	if (v3d->afterdraw_transp.first)     view3d_draw_transp(scene, ar, v3d);
+	if (v3d->afterdraw_transp.first)     view3d_draw_transp(scene, sl, ar, v3d);
 
 	/* always do that here to cleanup depth buffers if none needed */
 	if (fx) {
@@ -1875,8 +1881,8 @@ static void view3d_draw_objects(
 		GPU_fx_compositor_setup_XRay_pass(fx, do_composite_xray);
 	}
 
-	if (v3d->afterdraw_xray.first)       view3d_draw_xray(scene, ar, v3d, &xrayclear);
-	if (v3d->afterdraw_xraytransp.first) view3d_draw_xraytransp(scene, ar, v3d, xrayclear);
+	if (v3d->afterdraw_xray.first)       view3d_draw_xray(scene, sl, ar, v3d, &xrayclear);
+	if (v3d->afterdraw_xraytransp.first) view3d_draw_xraytransp(scene, sl, ar, v3d, xrayclear);
 
 	if (fx && do_composite_xray) {
 		GPU_fx_compositor_XRay_resolve(fx);
@@ -2347,13 +2353,15 @@ void ED_scene_draw_fps(Scene *scene, const rcti *rect)
 	}
 #endif
 
+	const int font_id = BLF_default();
+
 	/* is this more than half a frame behind? */
 	if (fps + 0.5f < (float)(FPS)) {
-		UI_ThemeColor(TH_REDALERT);
+		UI_FontThemeColor(font_id, TH_REDALERT);
 		BLI_snprintf(printable, sizeof(printable), IFACE_("fps: %.2f"), fps);
 	}
 	else {
-		UI_ThemeColor(TH_TEXT_HI);
+		UI_FontThemeColor(font_id, TH_TEXT_HI);
 		BLI_snprintf(printable, sizeof(printable), IFACE_("fps: %i"), (int)(fps + 0.5f));
 	}
 
@@ -2535,7 +2543,7 @@ static void view3d_stereo3d_setup_offscreen(Scene *scene, View3D *v3d, ARegion *
 static void update_lods(Scene *scene, float camera_pos[3])
 {
 	Scene *sce_iter;
-	Base *base;
+	BaseLegacy *base;
 
 	for (SETLOOPER(scene, sce_iter, base)) {
 		Object *ob = base->object;
@@ -2661,7 +2669,8 @@ static void view3d_main_region_draw_info(const bContext *C, Scene *scene,
 			draw_view_icon(rv3d, &rect);
 
 		if (U.uiflag & USER_DRAWVIEWINFO) {
-			Object *ob = OBACT;
+			SceneLayer *sl = CTX_data_scene_layer(C);
+			Object *ob = OBACT_NEW;
 			draw_selected_name(scene, ob, &rect);
 		}
 	}
@@ -2682,7 +2691,7 @@ static void view3d_main_region_draw_info(const bContext *C, Scene *scene,
 		if (grid_unit) { /* draw below the viewport name */
 			char numstr[32] = "";
 
-			UI_ThemeColor(TH_TEXT_HI);
+			UI_FontThemeColor(BLF_default(), TH_TEXT_HI);
 			if (v3d->grid != 1.0f) {
 				BLI_snprintf(numstr, sizeof(numstr), "%s x %.4g", grid_unit, v3d->grid);
 			}

@@ -373,41 +373,37 @@ static void region_draw_azone_tab_plus(AZone *az)
 
 static void region_draw_azone_tab(AZone *az)
 {
-	float col[3];
+	float col[4], black[4] = {0.0f, 0.0f, 0.0f, 1.0f};
 	
 	glEnable(GL_BLEND);
 	UI_GetThemeColor3fv(TH_HEADER, col);
-	glColor4f(col[0], col[1], col[2], 0.5f);
-	
+	col[3] = 0.5f;
+
 	/* add code to draw region hidden as 'too small' */
 	switch (az->edge) {
 		case AE_TOP_TO_BOTTOMRIGHT:
 			UI_draw_roundbox_corner_set(UI_CNR_TOP_LEFT | UI_CNR_TOP_RIGHT | UI_RB_ALPHA);
 			
-			UI_draw_roundbox_shade_x(GL_POLYGON, (float)az->x1, (float)az->y1, (float)az->x2, (float)az->y2, 4.0f, -0.3f, 0.05f);
-			glColor4ub(0, 0, 0, 255);
-			UI_draw_roundbox_unfilled((float)az->x1, 0.3f + (float)az->y1, (float)az->x2, 0.3f + (float)az->y2, 4.0f);
+			UI_draw_roundbox_shade_x(GL_TRIANGLE_FAN, (float)az->x1, (float)az->y1, (float)az->x2, (float)az->y2, 4.0f, -0.3f, 0.05f, col);
+			UI_draw_roundbox_unfilled((float)az->x1, 0.3f + (float)az->y1, (float)az->x2, 0.3f + (float)az->y2, 4.0f, black);
 			break;
 		case AE_BOTTOM_TO_TOPLEFT:
 			UI_draw_roundbox_corner_set(UI_CNR_BOTTOM_RIGHT | UI_CNR_BOTTOM_LEFT | UI_RB_ALPHA);
 			
-			UI_draw_roundbox_shade_x(GL_POLYGON, (float)az->x1, (float)az->y1, (float)az->x2, (float)az->y2, 4.0f, -0.3f, 0.05f);
-			glColor4ub(0, 0, 0, 255);
-			UI_draw_roundbox_unfilled((float)az->x1, 0.3f + (float)az->y1, (float)az->x2, 0.3f + (float)az->y2, 4.0f);
+			UI_draw_roundbox_shade_x(GL_TRIANGLE_FAN, (float)az->x1, (float)az->y1, (float)az->x2, (float)az->y2, 4.0f, -0.3f, 0.05f, col);
+			UI_draw_roundbox_unfilled((float)az->x1, 0.3f + (float)az->y1, (float)az->x2, 0.3f + (float)az->y2, 4.0f, black);
 			break;
 		case AE_LEFT_TO_TOPRIGHT:
 			UI_draw_roundbox_corner_set(UI_CNR_TOP_LEFT | UI_CNR_BOTTOM_LEFT | UI_RB_ALPHA);
 			
-			UI_draw_roundbox_shade_x(GL_POLYGON, (float)az->x1, (float)az->y1, (float)az->x2, (float)az->y2, 4.0f, -0.3f, 0.05f);
-			glColor4ub(0, 0, 0, 255);
-			UI_draw_roundbox_unfilled((float)az->x1, (float)az->y1, (float)az->x2, (float)az->y2, 4.0f);
+			UI_draw_roundbox_shade_x(GL_TRIANGLE_FAN, (float)az->x1, (float)az->y1, (float)az->x2, (float)az->y2, 4.0f, -0.3f, 0.05f, col);
+			UI_draw_roundbox_unfilled((float)az->x1, (float)az->y1, (float)az->x2, (float)az->y2, 4.0f, black);
 			break;
 		case AE_RIGHT_TO_TOPLEFT:
 			UI_draw_roundbox_corner_set(UI_CNR_TOP_RIGHT | UI_CNR_BOTTOM_RIGHT | UI_RB_ALPHA);
 			
-			UI_draw_roundbox_shade_x(GL_POLYGON, (float)az->x1, (float)az->y1, (float)az->x2, (float)az->y2, 4.0f, -0.3f, 0.05f);
-			glColor4ub(0, 0, 0, 255);
-			UI_draw_roundbox_unfilled((float)az->x1, (float)az->y1, (float)az->x2, (float)az->y2, 4.0f);
+			UI_draw_roundbox_shade_x(GL_TRIANGLE_FAN, (float)az->x1, (float)az->y1, (float)az->x2, (float)az->y2, 4.0f, -0.3f, 0.05f, col);
+			UI_draw_roundbox_unfilled((float)az->x1, (float)az->y1, (float)az->x2, (float)az->y2, 4.0f, black);
 			break;
 	}
 	
@@ -557,7 +553,7 @@ void ED_region_do_draw(bContext *C, ARegion *ar)
 		UI_ThemeClearColor(TH_HEADER);
 		glClear(GL_COLOR_BUFFER_BIT);
 		
-		UI_ThemeColor(TH_TEXT);
+		UI_FontThemeColor(BLF_default(), TH_TEXT);
 		BLF_draw_default(UI_UNIT_X, 0.4f * UI_UNIT_Y, 0.0f, ar->headerstr, BLF_DRAW_STR_DUMMY_MAX);
 	}
 	else if (at->draw) {
@@ -2166,7 +2162,7 @@ void ED_region_info_draw(ARegion *ar, const char *text, float fill_color[4], con
 	glDisable(GL_BLEND);
 
 	/* text */
-	UI_ThemeColor(TH_TEXT_HI);
+	UI_FontThemeColor(fontid, TH_TEXT_HI);
 	BLF_clipping(fontid, rect.xmin, rect.ymin, rect.xmax, rect.ymax);
 	BLF_enable(fontid, BLF_CLIPPING);
 	BLF_position(fontid, rect.xmin + 0.6f * U.widget_unit, rect.ymin + 0.3f * U.widget_unit, 0.0f);
@@ -2374,7 +2370,7 @@ void ED_region_image_metadata_draw(int x, int y, ImBuf *ibuf, const rctf *frame,
 		BLF_clipping(blf_mono_font, rect.xmin, rect.ymin, rect.xmax, rect.ymax);
 		BLF_enable(blf_mono_font, BLF_CLIPPING);
 
-		UI_ThemeColor(TH_METADATA_TEXT);
+		UI_FontThemeColor(blf_mono_font, TH_METADATA_TEXT);
 		metadata_draw_imbuf(ibuf, &rect, blf_mono_font, true);
 
 		BLF_disable(blf_mono_font, BLF_CLIPPING);
@@ -2399,7 +2395,7 @@ void ED_region_image_metadata_draw(int x, int y, ImBuf *ibuf, const rctf *frame,
 		BLF_clipping(blf_mono_font, rect.xmin, rect.ymin, rect.xmax, rect.ymax);
 		BLF_enable(blf_mono_font, BLF_CLIPPING);
 
-		UI_ThemeColor(TH_METADATA_TEXT);
+		UI_FontThemeColor(blf_mono_font, TH_METADATA_TEXT);
 		metadata_draw_imbuf(ibuf, &rect, blf_mono_font, false);
 
 		BLF_disable(blf_mono_font, BLF_CLIPPING);
@@ -2552,7 +2548,7 @@ void ED_region_cache_draw_curfra_label(const int framenr, const float x, const f
 	immRecti(pos, x, y, x + font_dims[0] + 6.0f, y + font_dims[1] + 4.0f);
 	immUnbindProgram();
 
-	UI_ThemeColor(TH_TEXT);
+	UI_FontThemeColor(fontid, TH_TEXT);
 	BLF_position(fontid, x + 2.0f, y + 2.0f, 0.0f);
 	BLF_draw(fontid, numstr, sizeof(numstr));
 }

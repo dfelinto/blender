@@ -91,6 +91,7 @@
 #include "BKE_icons.h"
 #include "BKE_key.h"
 #include "BKE_lamp.h"
+#include "BKE_layer.h"
 #include "BKE_lattice.h"
 #include "BKE_library.h"
 #include "BKE_library_query.h"
@@ -153,7 +154,7 @@ void BKE_object_workob_clear(Object *workob)
 
 void BKE_object_update_base_layer(struct Scene *scene, Object *ob)
 {
-	Base *base = scene->base.first;
+	BaseLegacy *base = scene->base.first;
 
 	while (base) {
 		if (base->object == ob) base->lay = ob->lay;
@@ -458,6 +459,11 @@ void BKE_object_free(Object *ob)
 	}
 
 	BKE_previewimg_free(&ob->preview);
+
+	if (ob->collection_settings) {
+		BKE_layer_collection_engine_settings_free(ob->collection_settings);
+		MEM_freeN(ob->collection_settings);
+	}
 }
 
 /* actual check for internal data, not context or flags */
@@ -677,23 +683,25 @@ Object *BKE_object_add_only_object(Main *bmain, int type, const char *name)
 /* general add: to scene, with layer from area and default name */
 /* creates minimum required data, but without vertices etc. */
 Object *BKE_object_add(
-        Main *bmain, Scene *scene,
+        Main *bmain, Scene *scene, SceneLayer *sl,
         int type, const char *name)
 {
 	Object *ob;
 	Base *base;
+	LayerCollection *lc;
 
 	ob = BKE_object_add_only_object(bmain, type, name);
 
 	ob->data = BKE_object_obdata_add_from_type(bmain, type, name);
 
-	ob->lay = scene->lay;
-	
-	base = BKE_scene_base_add(scene, ob);
-	BKE_scene_base_deselect_all(scene);
-	BKE_scene_base_select(scene, base);
-	DAG_id_tag_update_ex(bmain, &ob->id, OB_RECALC_OB | OB_RECALC_DATA | OB_RECALC_TIME);
+	lc = BKE_layer_collection_active(sl);
+	BKE_collection_object_add(scene, lc->scene_collection, ob);
 
+	base = BKE_scene_layer_base_find(sl, ob);
+	BKE_scene_layer_base_deselect_all(sl);
+	BKE_scene_layer_base_select(sl, base);
+
+	DAG_id_tag_update_ex(bmain, &ob->id, OB_RECALC_OB | OB_RECALC_DATA | OB_RECALC_TIME);
 	return ob;
 }
 
@@ -1204,7 +1212,7 @@ void BKE_object_make_local_ex(Main *bmain, Object *ob, const bool lib_local, con
 	if (lib_local || is_local) {
 		if (!is_lib) {
 			id_clear_lib_data(bmain, &ob->id);
-			BKE_id_expand_local(&ob->id);
+			BKE_id_expand_local(bmain, &ob->id);
 			if (clear_proxy) {
 				if (ob->proxy_from != NULL) {
 					ob->proxy_from->proxy = NULL;
@@ -2236,18 +2244,6 @@ void BKE_boundbox_minmax(const BoundBox *bb, float obmat[4][4], float r_min[3], 
 	}
 }
 
-void BKE_boundbox_scale(struct BoundBox *bb_dst, const struct BoundBox *bb_src, float scale)
-{
-	float cent[3];
-	BKE_boundbox_calc_center_aabb(bb_src, cent);
-
-	for (int i = 0; i < ARRAY_SIZE(bb_dst->vec); i++) {
-		bb_dst->vec[i][0] = ((bb_src->vec[i][0] - cent[0]) * scale) + cent[0];
-		bb_dst->vec[i][1] = ((bb_src->vec[i][1] - cent[1]) * scale) + cent[1];
-		bb_dst->vec[i][2] = ((bb_src->vec[i][2] - cent[2]) * scale) + cent[2];
-	}
-}
-
 /**
  * Returns a BBox which each dimensions are at least epsilon.
  * \note In case a given dimension needs to be enlarged, its final value will be in [epsilon, 3 * epsilon] range.
@@ -2554,11 +2550,11 @@ void BKE_scene_foreach_display_point(
         Scene *scene, View3D *v3d, const short flag,
         void (*func_cb)(const float[3], void *), void *user_data)
 {
-	Base *base;
+	BaseLegacy *base;
 	Object *ob;
 
 	for (base = FIRSTBASE; base; base = base->next) {
-		if (BASE_VISIBLE_BGMODE(v3d, scene, base) && (base->flag & flag) == flag) {
+		if (BASE_VISIBLE_BGMODE(v3d, scene, base) && (base->flag_legacy & flag) == flag) {
 			ob = base->object;
 
 			if ((ob->transflag & OB_DUPLI) == 0) {
@@ -2814,45 +2810,6 @@ int BKE_object_obdata_texspace_get(Object *ob, short **r_texflag, float **r_loc,
 			return 0;
 	}
 	return 1;
-}
-
-/*
- * Test a bounding box for ray intersection
- * assumes the ray is already local to the boundbox space
- */
-bool BKE_boundbox_ray_hit_check(
-        const struct BoundBox *bb,
-        const float ray_start[3], const float ray_normal[3],
-        float *r_lambda)
-{
-	const int triangle_indexes[12][3] = {
-	    {0, 1, 2}, {0, 2, 3},
-	    {3, 2, 6}, {3, 6, 7},
-	    {1, 2, 6}, {1, 6, 5},
-	    {5, 6, 7}, {4, 5, 7},
-	    {0, 3, 7}, {0, 4, 7},
-	    {0, 1, 5}, {0, 4, 5}};
-
-	bool result = false;
-	int i;
-
-	for (i = 0; i < 12 && (!result || r_lambda); i++) {
-		float lambda;
-		int v1, v2, v3;
-		v1 = triangle_indexes[i][0];
-		v2 = triangle_indexes[i][1];
-		v3 = triangle_indexes[i][2];
-		if (isect_ray_tri_v3(ray_start, ray_normal, bb->vec[v1], bb->vec[v2], bb->vec[v3], &lambda, NULL) &&
-		    (!r_lambda || *r_lambda > lambda))
-		{
-			result = true;
-			if (r_lambda) {
-				*r_lambda = lambda;
-			}
-		}
-	}
-
-	return result;
 }
 
 static int pc_cmp(const void *a, const void *b)
@@ -3402,7 +3359,7 @@ LinkNode *BKE_object_relational_superset(struct Scene *scene, eObjectSet objectS
 {
 	LinkNode *links = NULL;
 
-	Base *base;
+	BaseLegacy *base;
 
 	/* Remove markers from all objects */
 	for (base = scene->base.first; base; base = base->next) {
@@ -3446,7 +3403,7 @@ LinkNode *BKE_object_relational_superset(struct Scene *scene, eObjectSet objectS
 
 				/* child relationship */
 				if (includeFilter & (OB_REL_CHILDREN | OB_REL_CHILDREN_RECURSIVE)) {
-					Base *local_base;
+					BaseLegacy *local_base;
 					for (local_base = scene->base.first; local_base; local_base = local_base->next) {
 						if (BASE_EDITABLE_BGMODE(((View3D *)NULL), scene, local_base)) {
 
@@ -3492,18 +3449,11 @@ struct LinkNode *BKE_object_groups(Object *ob)
 	return group_linknode;
 }
 
-void BKE_object_groups_clear(Scene *scene, Base *base, Object *object)
+void BKE_object_groups_clear(Object *ob)
 {
 	Group *group = NULL;
-
-	BLI_assert((base == NULL) || (base->object == object));
-
-	if (scene && base == NULL) {
-		base = BKE_scene_base_find(scene, object);
-	}
-
-	while ((group = BKE_group_object_find(group, base->object))) {
-		BKE_group_object_unlink(group, object, scene, base);
+	while ((group = BKE_group_object_find(group, ob))) {
+		BKE_group_object_unlink(group, ob);
 	}
 }
 

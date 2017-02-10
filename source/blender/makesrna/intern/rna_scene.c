@@ -32,6 +32,7 @@
 #include "DNA_particle_types.h"
 #include "DNA_rigidbody_types.h"
 #include "DNA_scene_types.h"
+#include "DNA_layer_types.h"
 #include "DNA_linestyle_types.h"
 #include "DNA_userdef_types.h"
 #include "DNA_world_types.h"
@@ -47,7 +48,11 @@
 #include "BKE_editmesh.h"
 #include "BKE_paint.h"
 
+#include "ED_object.h"
+
 #include "GPU_extensions.h"
+
+#include "DRW_engine.h"
 
 #include "RNA_define.h"
 #include "RNA_enum_types.h"
@@ -76,6 +81,8 @@
 #include "WM_types.h"
 
 #include "BLI_threads.h"
+
+#define NO_ENGINE "NO_ENGINE"
 
 #ifdef WITH_OPENEXR
 EnumPropertyItem rna_enum_exr_codec_items[] = {
@@ -445,10 +452,12 @@ EnumPropertyItem rna_enum_gpencil_interpolation_mode_items[] = {
 #include "MEM_guardedalloc.h"
 
 #include "BKE_brush.h"
+#include "BKE_collection.h"
 #include "BKE_colortools.h"
 #include "BKE_context.h"
 #include "BKE_global.h"
 #include "BKE_image.h"
+#include "BKE_layer.h"
 #include "BKE_main.h"
 #include "BKE_node.h"
 #include "BKE_pointcache.h"
@@ -606,11 +615,11 @@ static void rna_SpaceImageEditor_uv_sculpt_update(Main *bmain, Scene *scene, Poi
 static int rna_Scene_object_bases_lookup_string(PointerRNA *ptr, const char *key, PointerRNA *r_ptr)
 {
 	Scene *scene = (Scene *)ptr->data;
-	Base *base;
+	BaseLegacy *base;
 
 	for (base = scene->base.first; base; base = base->next) {
 		if (STREQLEN(base->object->id.name + 2, key, sizeof(base->object->id.name) - 2)) {
-			*r_ptr = rna_pointer_inherit_refine(ptr, &RNA_ObjectBase, base);
+			*r_ptr = rna_pointer_inherit_refine(ptr, &RNA_ObjectBaseLegacy, base);
 			return true;
 		}
 	}
@@ -623,13 +632,13 @@ static PointerRNA rna_Scene_objects_get(CollectionPropertyIterator *iter)
 	ListBaseIterator *internal = &iter->internal.listbase;
 
 	/* we are actually iterating a Base list, so override get */
-	return rna_pointer_inherit_refine(&iter->parent, &RNA_Object, ((Base *)internal->link)->object);
+	return rna_pointer_inherit_refine(&iter->parent, &RNA_Object, ((BaseLegacy *)internal->link)->object);
 }
 
-static Base *rna_Scene_object_link(Scene *scene, bContext *C, ReportList *reports, Object *ob)
+static BaseLegacy *rna_Scene_object_link(Scene *scene, bContext *C, ReportList *reports, Object *ob)
 {
 	Scene *scene_act = CTX_data_scene(C);
-	Base *base;
+	BaseLegacy *base;
 
 	if (BKE_scene_base_find(scene, ob)) {
 		BKE_reportf(reports, RPT_ERROR, "Object '%s' is already in scene '%s'", ob->id.name + 2, scene->id.name + 2);
@@ -660,7 +669,7 @@ static Base *rna_Scene_object_link(Scene *scene, bContext *C, ReportList *report
 
 static void rna_Scene_object_unlink(Scene *scene, ReportList *reports, Object *ob)
 {
-	Base *base = BKE_scene_base_find(scene, ob);
+	BaseLegacy *base = BKE_scene_base_find(scene, ob);
 	if (!base) {
 		BKE_reportf(reports, RPT_ERROR, "Object '%s' is not in this scene '%s'", ob->id.name + 2, scene->id.name + 2);
 		return;
@@ -1709,7 +1718,7 @@ static void rna_Scene_use_nodes_update(bContext *C, PointerRNA *ptr)
 static void rna_Physics_update(Main *UNUSED(bmain), Scene *UNUSED(scene), PointerRNA *ptr)
 {
 	Scene *scene = (Scene *)ptr->id.data;
-	Base *base;
+	BaseLegacy *base;
 
 	for (base = scene->base.first; base; base = base->next)
 		BKE_ptcache_object_reset(scene, base->object, PTCACHE_RESET_DEPSGRAPH);
@@ -1780,7 +1789,7 @@ static void rna_Scene_use_simplify_update(Main *bmain, Scene *UNUSED(scene), Poi
 {
 	Scene *sce = ptr->id.data;
 	Scene *sce_iter;
-	Base *base;
+	BaseLegacy *base;
 
 	BKE_main_id_tag_listbase(&bmain->object, LIB_TAG_DOIT, true);
 	for (SETLOOPER(sce, sce_iter, base))
@@ -1867,6 +1876,43 @@ static void rna_GameSettings_exit_key_set(PointerRNA *ptr, int value)
 
 	if (ISKEYBOARD(value))
 		gm->exitkey = value;
+}
+
+static StructRNA *rna_RenderEngineSettings_refine(PointerRNA *ptr)
+{
+#ifdef WITH_CLAY_ENGINE
+	RenderEngineSettings *res = (RenderEngineSettings *)ptr->data;
+
+	if (STREQ(res->name, RE_engine_id_BLENDER_CLAY)) {
+		return  &RNA_RenderEngineSettingsClay;
+	}
+#endif
+	return &RNA_RenderEngineSettings;
+}
+
+static PointerRNA rna_RenderEngineSettings_active_get(PointerRNA *ptr)
+{
+	Scene *scene = (Scene *)ptr->data;
+	RenderEngineSettings *res;
+
+	/* Ensure settings exists */
+	DRW_render_settings_get(scene, scene->r.engine);
+
+	res = BLI_findstring(&scene->engines_settings, scene->r.engine, offsetof(RenderEngineSettings, name));
+
+	return rna_pointer_inherit_refine(ptr, &RNA_RenderEngineSettings, res);
+}
+
+static void rna_RenderEngineSettings_update(Main *UNUSED(bmain), Scene *UNUSED(scene), PointerRNA *ptr)
+{
+	Scene *sce = (Scene *)ptr->id.data;
+	MaterialEngineSettingsClay *res;
+
+	res = (MaterialEngineSettingsClay *)DRW_render_settings_get(sce, sce->r.engine);
+
+	res->flag = CLAY_OUTDATED;
+
+	WM_main_add_notifier(NC_SPACE | ND_SPACE_VIEW3D, NULL);
 }
 
 static TimeMarker *rna_TimeLine_add(Scene *scene, const char name[], int frame)
@@ -2185,6 +2231,540 @@ static void rna_Stereo3dFormat_update(Main *UNUSED(bmain), Scene *UNUSED(scene),
 static int rna_gpu_is_hq_supported_get(PointerRNA *UNUSED(ptr))
 {
 	return GPU_instanced_drawing_support() && GPU_geometry_shader_support();
+}
+
+static void rna_SceneCollection_name_set(PointerRNA *ptr, const char *value)
+{
+	Scene *scene = (Scene *)ptr->id.data;
+	SceneCollection *sc = (SceneCollection *)ptr->data;
+	SceneCollection *sc_master = BKE_collection_master(scene);
+
+	BLI_strncpy_utf8(sc->name, value, sizeof(sc->name));
+	BLI_uniquename(&sc_master->scene_collections, sc, DATA_("SceneCollection"), '.', offsetof(SceneCollection, name), sizeof(sc->name));
+}
+
+static void rna_SceneCollection_filter_set(PointerRNA *ptr, const char *value)
+{
+	Scene *scene = (Scene *)ptr->id.data;
+	SceneCollection *sc = (SceneCollection *)ptr->data;
+	BLI_strncpy_utf8(sc->filter, value, sizeof(sc->filter));
+
+	TODO_LAYER_SYNC_FILTER;
+	(void)scene;
+}
+
+static PointerRNA rna_SceneCollection_objects_get(CollectionPropertyIterator *iter)
+{
+	ListBaseIterator *internal = &iter->internal.listbase;
+
+	/* we are actually iterating a LinkData list, so override get */
+	return rna_pointer_inherit_refine(&iter->parent, &RNA_Object, ((LinkData *)internal->link)->data);
+}
+
+static SceneCollection *rna_SceneCollection_new(ID *id, SceneCollection *sc_parent, const char *name)
+{
+	Scene *scene = (Scene *)id;
+	SceneCollection *sc = BKE_collection_add(scene, sc_parent, name);
+
+	DAG_id_tag_update(&scene->id, 0);
+	WM_main_add_notifier(NC_SCENE | ND_LAYER, NULL);
+
+	return sc;
+}
+
+static void rna_SceneCollection_remove(
+        ID *id, SceneCollection *sc_parent, ReportList *reports, PointerRNA *sc_ptr)
+{
+	Scene *scene = (Scene *)id;
+	SceneCollection *sc = sc_ptr->data;
+
+	const int index = BLI_findindex(&sc_parent->scene_collections, sc);
+	if (index == -1) {
+		BKE_reportf(reports, RPT_ERROR, "Collection '%s' is not a sub-collection of '%s'",
+		            sc->name, sc_parent->name);
+		return;
+	}
+
+	if (!BKE_collection_remove(scene, sc)) {
+		BKE_reportf(reports, RPT_ERROR, "Collection '%s' could not be removed from collection '%s'",
+		            sc->name, sc_parent->name);
+		return;
+	}
+
+	RNA_POINTER_INVALIDATE(sc_ptr);
+
+	DAG_id_tag_update(&scene->id, 0);
+	WM_main_add_notifier(NC_SCENE | ND_LAYER, NULL);
+}
+
+static int rna_SceneCollection_objects_active_index_get(PointerRNA *ptr)
+{
+	SceneCollection *sc = (SceneCollection *)ptr->data;
+	return sc->active_object_index;
+}
+
+static void rna_SceneCollection_objects_active_index_set(PointerRNA *ptr, int value)
+{
+	SceneCollection *sc = (SceneCollection *)ptr->data;
+	sc->active_object_index = value;
+}
+
+static void rna_SceneCollection_objects_active_index_range(
+        PointerRNA *ptr, int *min, int *max, int *UNUSED(softmin), int *UNUSED(softmax))
+{
+	SceneCollection *sc = (SceneCollection *)ptr->data;
+	*min = 0;
+	*max = max_ii(0, BLI_listbase_count(&sc->objects) - 1);
+}
+
+void rna_SceneCollection_object_link(
+        ID *id, SceneCollection *sc, Main *bmain, ReportList *reports, Object *ob)
+{
+	Scene *scene = (Scene *)id;
+
+	if (BLI_findptr(&sc->objects, ob, offsetof(LinkData, data))) {
+		BKE_reportf(reports, RPT_ERROR, "Object '%s' is already in collection '%s'", ob->id.name + 2, sc->name);
+		return;
+	}
+
+	BKE_collection_object_add(scene, sc, ob);
+
+	/* TODO(sergey): Only update relations for the current scene. */
+	DAG_relations_tag_update(bmain);
+	DAG_id_tag_update(&ob->id, OB_RECALC_OB | OB_RECALC_DATA | OB_RECALC_TIME);
+
+	WM_main_add_notifier(NC_SCENE | ND_LAYER | ND_OB_ACTIVE, scene);
+}
+
+static void rna_SceneCollection_object_unlink(
+        ID *id, SceneCollection *sc, Main *bmain, ReportList *reports, Object *ob)
+{
+	Scene *scene = (Scene *)id;
+
+	if (!BLI_findptr(&sc->objects, ob, offsetof(LinkData, data))) {
+		BKE_reportf(reports, RPT_ERROR, "Object '%s' is not in collection '%s'", ob->id.name + 2, sc->name);
+		return;
+	}
+
+	BKE_collection_object_remove(bmain, scene, sc, ob, false);
+
+	/* needed otherwise the depgraph will contain freed objects which can crash, see [#20958] */
+	DAG_relations_tag_update(bmain);
+
+	WM_main_add_notifier(NC_SCENE | ND_LAYER | ND_OB_ACTIVE, scene);
+}
+
+/****** layer collection engine settings *******/
+
+static StructRNA *rna_CollectionEngineSettings_refine(struct PointerRNA *ptr)
+{
+	CollectionEngineSettings *ces = (CollectionEngineSettings *)ptr->data;
+
+	if (STREQ(ces->name, "BLENDER_CLAY")) {
+		return &RNA_CollectionEngineSettingsClay;
+	}
+
+	/* TODO - handle other engines */
+	TODO_LAYER;
+	(void) ces;
+
+	return &RNA_CollectionEngineSettings;
+}
+
+/****** clay engine settings *******/
+
+#define RNA_LAYER_ENGINE_USE_GET_SET(_NAME_)                                           \
+	static int rna_LayerEngineSettings_##_NAME_##_use_get(PointerRNA *ptr)             \
+    {                                                                                  \
+	    CollectionEngineSettings *ces = (CollectionEngineSettings *)ptr->data;         \
+	    return BKE_collection_engine_property_use_get(ces, #_NAME_) ? 1 : 0;           \
+	}                                                                                  \
+	                                                                                   \
+	static void rna_LayerEngineSettings_##_NAME_##_use_set(PointerRNA *ptr, int value) \
+    {                                                                                  \
+	    CollectionEngineSettings *ces = (CollectionEngineSettings *)ptr->data;         \
+	    BKE_collection_engine_property_use_set(ces, #_NAME_, value? true : false);     \
+	}
+
+#define RNA_LAYER_ENGINE_GET_SET(_TYPE_, _NAME_)                                   \
+static _TYPE_ rna_LayerEngineSettings_##_NAME_##_get(PointerRNA *ptr)              \
+{                                                                                  \
+	CollectionEngineSettings *ces = (CollectionEngineSettings *)ptr->data;         \
+	return BKE_collection_engine_property_value_get_##_TYPE_(ces, #_NAME_);        \
+}                                                                                  \
+	                                                                               \
+static void rna_LayerEngineSettings_##_NAME_##_set(PointerRNA *ptr, _TYPE_ value)  \
+{                                                                                  \
+	CollectionEngineSettings *ces = (CollectionEngineSettings *)ptr->data;         \
+	BKE_collection_engine_property_value_set_##_TYPE_(ces, #_NAME_, value);        \
+}                                                                                  \
+	RNA_LAYER_ENGINE_USE_GET_SET(_NAME_)
+
+#define RNA_LAYER_ENGINE_GET_SET_FLOAT(_NAME_) \
+	RNA_LAYER_ENGINE_GET_SET(float, _NAME_)
+
+#define RNA_LAYER_ENGINE_GET_SET_INT(_NAME_) \
+	RNA_LAYER_ENGINE_GET_SET(int, _NAME_)
+
+
+RNA_LAYER_ENGINE_GET_SET_INT(type)
+RNA_LAYER_ENGINE_GET_SET_INT(matcap_icon)
+RNA_LAYER_ENGINE_GET_SET_FLOAT(matcap_rotation)
+RNA_LAYER_ENGINE_GET_SET_FLOAT(matcap_hue)
+RNA_LAYER_ENGINE_GET_SET_FLOAT(matcap_saturation)
+RNA_LAYER_ENGINE_GET_SET_FLOAT(matcap_value)
+RNA_LAYER_ENGINE_GET_SET_FLOAT(ssao_factor_cavity)
+RNA_LAYER_ENGINE_GET_SET_FLOAT(ssao_factor_edge)
+RNA_LAYER_ENGINE_GET_SET_FLOAT(ssao_distance)
+RNA_LAYER_ENGINE_GET_SET_FLOAT(ssao_attenuation)
+
+#undef RNA_LAYER_ENGINE_GET_SET_INT
+#undef RNA_LAYER_ENGINE_GET_SET_FLOAT
+#undef RNA_LAYER_ENGINE_GET_SET
+#undef RNA_LAYER_ENGINE_USE_GET_SET
+
+static void rna_CollectionEngineSettings_update(bContext *C, PointerRNA *UNUSED(ptr))
+{
+	SceneLayer *sl = CTX_data_scene_layer(C);
+	LayerCollection *lc = CTX_data_layer_collection(C);
+	BKE_scene_layer_engine_settings_collection_recalculate(sl, lc);
+}
+
+/***********************************/
+
+static void rna_LayerCollection_name_get(PointerRNA *ptr, char *value)
+{
+	SceneCollection *sc = ((LayerCollection *)ptr->data)->scene_collection;
+	strcpy(value, sc->name);
+}
+
+static int rna_LayerCollection_name_length(PointerRNA *ptr)
+{
+	SceneCollection *sc = ((LayerCollection *)ptr->data)->scene_collection;
+	return strnlen(sc->name, sizeof(sc->name));
+}
+
+static void rna_LayerCollection_name_set(PointerRNA *ptr, const char *value)
+{
+	Scene *scene = (Scene *)ptr->id.data;
+	SceneCollection *sc = ((LayerCollection *)ptr->data)->scene_collection;
+	SceneCollection *sc_master = BKE_collection_master(scene);
+
+	BLI_strncpy_utf8(sc->name, value, sizeof(sc->name));
+	BLI_uniquename(&sc_master->scene_collections, sc, DATA_("SceneCollection"), '.', offsetof(SceneCollection, name), sizeof(sc->name));
+}
+
+static PointerRNA rna_LayerCollection_objects_get(CollectionPropertyIterator *iter)
+{
+	ListBaseIterator *internal = &iter->internal.listbase;
+	Base *base = ((LinkData *)internal->link)->data;
+	return rna_pointer_inherit_refine(&iter->parent, &RNA_Object, base->object);
+}
+
+static PointerRNA rna_LayerCollection_engine_settings_get(ID *UNUSED(id), LayerCollection *lc, bContext *C, const char *engine)
+{
+	Scene *scene = CTX_data_scene(C);
+	const char *engine_name;
+
+	if (STREQ(engine, NO_ENGINE)) {
+		RenderData *rd = &scene->r;
+		engine_name = rd->engine;
+	}
+	else {
+		engine_name = engine;
+	}
+
+	PointerRNA ptr;
+	CollectionEngineSettings *ces = BKE_layer_collection_engine_get(lc, engine_name);
+	RNA_pointer_create(NULL, &RNA_CollectionEngineSettings, ces, &ptr);
+	return rna_pointer_inherit_refine(&ptr, &RNA_CollectionEngineSettings, ces);
+}
+
+static void rna_LayerCollection_hide_update(bContext *C, PointerRNA *ptr)
+{
+	Scene *scene = CTX_data_scene(C);
+	LayerCollection *lc = ptr->data;
+	SceneLayer *sl = BKE_scene_layer_find_from_collection(scene, lc);
+
+	/* hide and deselect bases that are directly influenced by this LayerCollection */
+	BKE_scene_layer_base_flag_recalculate(sl);
+	BKE_scene_layer_engine_settings_collection_recalculate(sl, lc);
+	WM_event_add_notifier(C, NC_SCENE | ND_OB_SELECT, scene);
+}
+
+static void rna_LayerCollection_hide_select_update(bContext *C, PointerRNA *ptr)
+{
+	LayerCollection *lc = ptr->data;
+
+	if ((lc->flag & COLLECTION_SELECTABLE) == 0) {
+		Scene *scene = CTX_data_scene(C);
+		SceneLayer *sl = BKE_scene_layer_find_from_collection(scene, lc);
+
+		/* deselect bases that are directly influenced by this LayerCollection */
+		BKE_scene_layer_base_flag_recalculate(sl);
+		WM_event_add_notifier(C, NC_SCENE | ND_OB_SELECT, CTX_data_scene(C));
+	}
+}
+
+static int rna_LayerCollections_active_collection_index_get(PointerRNA *ptr)
+{
+	SceneLayer *sl = (SceneLayer *)ptr->data;
+	return sl->active_collection;
+}
+
+static void rna_LayerCollections_active_collection_index_set(PointerRNA *ptr, int value)
+{
+	SceneLayer *sl = (SceneLayer *)ptr->data;
+	int num_collections = BKE_layer_collection_count(sl);
+	sl->active_collection = min_ff(value, num_collections - 1);
+}
+
+static void rna_LayerCollections_active_collection_index_range(
+        PointerRNA *ptr, int *min, int *max, int *UNUSED(softmin), int *UNUSED(softmax))
+{
+	SceneLayer *sl = (SceneLayer *)ptr->data;
+	*min = 0;
+	*max = max_ii(0, BKE_layer_collection_count(sl) - 1);
+}
+
+static PointerRNA rna_LayerCollections_active_collection_get(PointerRNA *ptr)
+{
+	SceneLayer *sl = (SceneLayer *)ptr->data;
+	LayerCollection *lc = BKE_layer_collection_active(sl);
+	return rna_pointer_inherit_refine(ptr, &RNA_LayerCollection, lc);
+}
+
+static void rna_LayerCollections_active_collection_set(PointerRNA *ptr, PointerRNA value)
+{
+	SceneLayer *sl = (SceneLayer *)ptr->data;
+	LayerCollection *lc = (LayerCollection *)value.data;
+	const int index = BKE_layer_collection_findindex(sl, lc);
+	if (index != -1) sl->active_collection = index;
+}
+
+LayerCollection * rna_SceneLayer_collection_link(
+        ID *id, SceneLayer *sl, Main *bmain, SceneCollection *sc)
+{
+	Scene *scene = (Scene *)id;
+	LayerCollection *lc = BKE_collection_link(sl, sc);
+
+	/* TODO(sergey/dfelinto): Only update relations for the current scenelayer. */
+	DAG_relations_tag_update(bmain);
+	WM_main_add_notifier(NC_SCENE | ND_LAYER, scene);
+
+	return lc;
+}
+
+static void rna_SceneLayer_collection_unlink(
+        ID *id, SceneLayer *sl, Main *bmain, ReportList *reports, LayerCollection *lc)
+{
+	Scene *scene = (Scene *)id;
+
+	if (BLI_findindex(&sl->layer_collections, lc) == -1) {
+		BKE_reportf(reports, RPT_ERROR, "Layer collection '%s' is not in '%s'", lc->scene_collection->name, sl->name);
+		return;
+	}
+
+	BKE_collection_unlink(sl, lc);
+
+	/* needed otherwise the depgraph will contain freed objects which can crash, see [#20958] */
+	/* TODO(sergey/dfelinto): Only update relations for the current scenelayer. */
+	DAG_relations_tag_update(bmain);
+
+	WM_main_add_notifier(NC_SCENE | ND_LAYER | ND_OB_ACTIVE, scene);
+}
+
+static PointerRNA rna_LayerObjects_active_object_get(PointerRNA *ptr)
+{
+	SceneLayer *sl = (SceneLayer *)ptr->data;
+	return rna_pointer_inherit_refine(ptr, &RNA_Object, sl->basact ? sl->basact->object : NULL);
+}
+
+static void rna_LayerObjects_active_object_set(PointerRNA *ptr, PointerRNA value)
+{
+	SceneLayer *sl = (SceneLayer *)ptr->data;
+	if (value.data)
+		sl->basact = BKE_scene_layer_base_find(sl, (Object *)value.data);
+	else
+		sl->basact = NULL;
+}
+
+static void rna_SceneLayer_name_set(PointerRNA *ptr, const char *value)
+{
+	Scene *scene = (Scene *)ptr->id.data;
+	SceneLayer *sl = (SceneLayer *)ptr->data;
+	char oldname[sizeof(sl->name)];
+
+	BLI_strncpy(oldname, sl->name, sizeof(sl->name));
+
+	BLI_strncpy_utf8(sl->name, value, sizeof(sl->name));
+	BLI_uniquename(&scene->render_layers, sl, DATA_("SceneLayer"), '.', offsetof(SceneLayer, name), sizeof(sl->name));
+
+	if (scene->nodetree) {
+		bNode *node;
+		int index = BLI_findindex(&scene->render_layers, sl);
+
+		for (node = scene->nodetree->nodes.first; node; node = node->next) {
+			if (node->type == CMP_NODE_R_LAYERS && node->id == NULL) {
+				if (node->custom1 == index)
+					BLI_strncpy(node->name, sl->name, NODE_MAXSTR);
+			}
+		}
+	}
+}
+
+static PointerRNA rna_SceneLayer_objects_get(CollectionPropertyIterator *iter)
+{
+	ListBaseIterator *internal = &iter->internal.listbase;
+
+	/* we are actually iterating a ObjectBase list, so override get */
+	Base *base = (Base *)internal->link;
+	return rna_pointer_inherit_refine(&iter->parent, &RNA_Object, base->object);
+}
+
+static int rna_SceneLayer_objects_selected_skip(CollectionPropertyIterator *iter, void *UNUSED(data))
+{
+	ListBaseIterator *internal = &iter->internal.listbase;
+	Base *base = (Base *)internal->link;
+
+	if ((base->flag & BASE_SELECTED) != 0) {
+			return 0;
+	}
+
+	return 1;
+};
+
+static void rna_LayerObjects_selected_begin(CollectionPropertyIterator *iter, PointerRNA *ptr)
+{
+	SceneLayer *sl = (SceneLayer *)ptr->data;
+	rna_iterator_listbase_begin(iter, &sl->object_bases, rna_SceneLayer_objects_selected_skip);
+}
+
+static void rna_SceneLayer_engine_set(PointerRNA *ptr, int value)
+{
+	SceneLayer *sl = (SceneLayer *)ptr->data;
+	RenderEngineType *type = BLI_findlink(&R_engines, value);
+
+	if (type)
+		BKE_scene_layer_engine_set(sl, type->idname);
+}
+
+static EnumPropertyItem *rna_SceneLayer_engine_itemf(
+        bContext *UNUSED(C), PointerRNA *UNUSED(ptr), PropertyRNA *UNUSED(prop), bool *r_free)
+{
+	RenderEngineType *type;
+	EnumPropertyItem *item = NULL;
+	EnumPropertyItem tmp = {0, "", 0, "", ""};
+	int a = 0, totitem = 0;
+
+	for (type = R_engines.first; type; type = type->next, a++) {
+		tmp.value = a;
+		tmp.identifier = type->idname;
+		tmp.name = type->name;
+		RNA_enum_item_add(&item, &totitem, &tmp);
+	}
+
+	RNA_enum_item_end(&item, &totitem);
+	*r_free = true;
+
+	return item;
+}
+
+static int rna_SceneLayer_engine_get(PointerRNA *ptr)
+{
+	SceneLayer *sl = (SceneLayer *)ptr->data;
+	RenderEngineType *type;
+	int a = 0;
+
+	for (type = R_engines.first; type; type = type->next, a++)
+		if (STREQ(type->idname, sl->engine))
+			return a;
+
+	return 0;
+}
+
+static void rna_SceneLayer_engine_update(Main *bmain, Scene *UNUSED(unused), PointerRNA *UNUSED(ptr))
+{
+	ED_render_engine_changed(bmain);
+}
+
+static int rna_SceneLayer_multiple_engines_get(PointerRNA *UNUSED(ptr))
+{
+	return (BLI_listbase_count(&R_engines) > 1);
+}
+
+static int rna_SceneLayer_active_layer_index_get(PointerRNA *ptr)
+{
+	Scene *scene = (Scene *)ptr->data;
+	return scene->active_layer;
+}
+
+static void rna_SceneLayer_active_layer_index_set(PointerRNA *ptr, int value)
+{
+	Scene *scene = (Scene *)ptr->data;
+	int num_layers = BLI_listbase_count(&scene->render_layers);
+	scene->active_layer = min_ff(value, num_layers - 1);
+}
+
+static void rna_SceneLayer_active_layer_index_range(
+        PointerRNA *ptr, int *min, int *max, int *UNUSED(softmin), int *UNUSED(softmax))
+{
+	Scene *scene = (Scene *)ptr->data;
+
+	*min = 0;
+	*max = max_ii(0, BLI_listbase_count(&scene->render_layers) - 1);
+}
+
+static PointerRNA rna_SceneLayer_active_layer_get(PointerRNA *ptr)
+{
+	Scene *scene = (Scene *)ptr->data;
+	SceneLayer *sl = BLI_findlink(&scene->render_layers, scene->active_layer);
+
+	return rna_pointer_inherit_refine(ptr, &RNA_SceneLayer, sl);
+}
+
+static void rna_SceneLayer_active_layer_set(PointerRNA *ptr, PointerRNA value)
+{
+	Scene *scene = (Scene *)ptr->data;
+	SceneLayer *sl = (SceneLayer *)value.data;
+	const int index = BLI_findindex(&scene->render_layers, sl);
+	if (index != -1) scene->active_layer = index;
+}
+
+static SceneLayer *rna_SceneLayer_new(ID *id, Scene *UNUSED(sce), const char *name)
+{
+	Scene *scene = (Scene *)id;
+	SceneLayer *sl = BKE_scene_layer_add(scene, name);
+
+	DAG_id_tag_update(&scene->id, 0);
+	WM_main_add_notifier(NC_SCENE | ND_LAYER, NULL);
+
+	return sl;
+}
+
+static void rna_SceneLayer_remove(
+        ID *id, Scene *UNUSED(sce), Main *bmain, ReportList *reports, PointerRNA *sl_ptr)
+{
+	Scene *scene = (Scene *)id;
+	SceneLayer *sl = sl_ptr->data;
+
+	if (!BKE_scene_layer_remove(bmain, scene, sl)) {
+		BKE_reportf(reports, RPT_ERROR, "Render layer '%s' could not be removed from scene '%s'",
+		            sl->name, scene->id.name + 2);
+		return;
+	}
+
+	RNA_POINTER_INVALIDATE(sl_ptr);
+
+	DAG_id_tag_update(&scene->id, 0);
+	WM_main_add_notifier(NC_SCENE | ND_LAYER, NULL);
+}
+
+static void rna_ObjectBase_select_update(Main *UNUSED(bmain), Scene *UNUSED(scene), PointerRNA *ptr)
+{
+	Base *base = (Base *)ptr->data;
+	short mode = (base->flag & BASE_SELECTED) ? BA_SELECT : BA_DESELECT;
+	ED_object_base_select(base, mode);
 }
 
 #else
@@ -5048,6 +5628,545 @@ static void rna_def_gpu_fx(BlenderRNA *brna)
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, "rna_GPUFXSettings_fx_update");
 }
 
+/* Render Layers and Collections */
+
+static void rna_def_scene_collections(BlenderRNA *brna, PropertyRNA *cprop)
+{
+	StructRNA *srna;
+	FunctionRNA *func;
+	PropertyRNA *parm;
+
+	RNA_def_property_srna(cprop, "SceneCollections");
+	srna = RNA_def_struct(brna, "SceneCollections", NULL);
+	RNA_def_struct_sdna(srna, "SceneCollection");
+	RNA_def_struct_ui_text(srna, "Scene Collection", "Collection of scene collections");
+
+	func = RNA_def_function(srna, "new", "rna_SceneCollection_new");
+	RNA_def_function_ui_description(func, "Add a collection to scene");
+	RNA_def_function_flag(func, FUNC_USE_SELF_ID);
+	parm = RNA_def_string(func, "name", "SceneCollection", 0, "", "New name for the collection (not unique)");
+	RNA_def_parameter_flags(parm, 0, PARM_REQUIRED);
+	parm = RNA_def_pointer(func, "result", "SceneCollection", "", "Newly created collection");
+	RNA_def_function_return(func, parm);
+
+	func = RNA_def_function(srna, "remove", "rna_SceneCollection_remove");
+	RNA_def_function_ui_description(func, "Remove a collection layer");
+	RNA_def_function_flag(func, FUNC_USE_REPORTS | FUNC_USE_SELF_ID);
+	parm = RNA_def_pointer(func, "layer", "SceneCollection", "", "Collection to remove");
+	RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED | PARM_RNAPTR);
+	RNA_def_parameter_clear_flags(parm, PROP_THICK_WRAP, 0);
+}
+
+static void rna_def_collection_objects(BlenderRNA *brna, PropertyRNA *cprop)
+{
+	StructRNA *srna;
+	FunctionRNA *func;
+	PropertyRNA *parm;
+	PropertyRNA *prop;
+
+	RNA_def_property_srna(cprop, "CollectionObjects");
+	srna = RNA_def_struct(brna, "CollectionObjects", NULL);
+	RNA_def_struct_sdna(srna, "SceneCollection");
+	RNA_def_struct_ui_text(srna, "Collection Objects", "Objects of a collection");
+
+	prop = RNA_def_property(srna, "active_index", PROP_INT, PROP_UNSIGNED);
+	RNA_def_property_int_funcs(prop, "rna_SceneCollection_objects_active_index_get",
+	                           "rna_SceneCollection_objects_active_index_set",
+	                           "rna_SceneCollection_objects_active_index_range");
+	RNA_def_property_ui_text(prop, "Active Object Index", "Active index in collection objects array");
+	RNA_def_property_update(prop, NC_SCENE | ND_LAYER_CONTENT, NULL);
+
+	func = RNA_def_function(srna, "link", "rna_SceneCollection_object_link");
+	RNA_def_function_ui_description(func, "Link an object to collection");
+	RNA_def_function_flag(func, FUNC_USE_SELF_ID | FUNC_USE_MAIN | FUNC_USE_REPORTS);
+	parm = RNA_def_pointer(func, "object", "Object", "", "Object to add to collection");
+	RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED);
+
+	func = RNA_def_function(srna, "unlink", "rna_SceneCollection_object_unlink");
+	RNA_def_function_ui_description(func, "Unlink object from collection");
+	RNA_def_function_flag(func, FUNC_USE_SELF_ID | FUNC_USE_MAIN | FUNC_USE_REPORTS);
+	parm = RNA_def_pointer(func, "object", "Object", "", "Object to remove from collection");
+	RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED);
+}
+
+static void rna_def_scene_collection(BlenderRNA *brna)
+{
+	StructRNA *srna;
+	PropertyRNA *prop;
+
+	srna = RNA_def_struct(brna, "SceneCollection", NULL);
+	RNA_def_struct_ui_text(srna, "Scene Collection", "Collection");
+
+	prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
+	RNA_def_property_string_funcs(prop, NULL, NULL, "rna_SceneCollection_name_set");
+	RNA_def_property_ui_text(prop, "Name", "Collection name");
+	RNA_def_struct_name_property(srna, prop);
+	RNA_def_property_update(prop, NC_SCENE | ND_LAYER_CONTENT, NULL);
+
+	prop = RNA_def_property(srna, "filter", PROP_STRING, PROP_NONE);
+	RNA_def_property_string_funcs(prop, NULL, NULL, "rna_SceneCollection_filter_set");
+	RNA_def_property_ui_text(prop, "Filter", "Filter to dynamically include objects based on their names (e.g., CHAR_*)");
+	RNA_def_property_update(prop, NC_SCENE | ND_LAYER_CONTENT, NULL);
+
+	prop = RNA_def_property(srna, "collections", PROP_COLLECTION, PROP_NONE);
+	RNA_def_property_collection_sdna(prop, NULL, "scene_collections", NULL);
+	RNA_def_property_struct_type(prop, "SceneCollection");
+	RNA_def_property_ui_text(prop, "SceneCollections", "");
+	rna_def_scene_collections(brna, prop);
+
+	prop = RNA_def_property(srna, "objects", PROP_COLLECTION, PROP_NONE);
+	RNA_def_property_collection_sdna(prop, NULL, "objects", NULL);
+	RNA_def_property_struct_type(prop, "Object");
+	RNA_def_property_collection_funcs(prop, NULL, NULL, NULL, "rna_SceneCollection_objects_get", NULL, NULL, NULL, NULL);
+	RNA_def_property_ui_text(prop, "Objects", "All the objects directly added to this collection (not including sub-collection objects)");
+	rna_def_collection_objects(brna, prop);
+
+	prop = RNA_def_property(srna, "filters_objects", PROP_COLLECTION, PROP_NONE);
+	RNA_def_property_collection_sdna(prop, NULL, "filter_objects", NULL);
+	RNA_def_property_struct_type(prop, "Object");
+	RNA_def_property_collection_funcs(prop, NULL, NULL, NULL, "rna_SceneCollection_objects_get", NULL, NULL, NULL, NULL);
+	RNA_def_property_ui_text(prop, "Filter Objects", "All the objects dynamically added to this collection via the filter");
+}
+
+static void rna_def_layer_collection_override(BlenderRNA *brna)
+{
+	StructRNA *srna;
+	PropertyRNA *prop;
+
+	srna = RNA_def_struct(brna, "LayerCollectionOverride", NULL);
+	RNA_def_struct_sdna(srna, "CollectionOverride");
+	RNA_def_struct_ui_text(srna, "Collection Override", "Collection Override");
+
+	prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
+	RNA_def_property_ui_text(prop, "Name", "Collection name");
+	RNA_def_struct_name_property(srna, prop);
+	RNA_def_property_update(prop, NC_SCENE | ND_LAYER_CONTENT, NULL);
+}
+
+#define RNA_LAYER_ENGINE_USE(_NAME_)                                          \
+	prop = RNA_def_property(srna, #_NAME_"_use", PROP_BOOLEAN, PROP_NONE);    \
+	RNA_def_property_boolean_funcs(prop,                                      \
+	    "rna_LayerEngineSettings_"#_NAME_"_use_get",                          \
+	    "rna_LayerEngineSettings_"#_NAME_"_use_set");                         \
+	RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);                         \
+	RNA_def_property_update(prop, NC_SCENE | ND_LAYER_CONTENT, "rna_CollectionEngineSettings_update");
+
+static void rna_def_layer_collection_engine_settings_clay(BlenderRNA *brna)
+{
+	StructRNA *srna;
+	PropertyRNA *prop;
+
+	static EnumPropertyItem clay_matcap_items[] = {
+	    {ICON_MATCAP_01, "01", ICON_MATCAP_01, "", ""},
+	    {ICON_MATCAP_02, "02", ICON_MATCAP_02, "", ""},
+	    {ICON_MATCAP_03, "03", ICON_MATCAP_03, "", ""},
+	    {ICON_MATCAP_04, "04", ICON_MATCAP_04, "", ""},
+	    {ICON_MATCAP_05, "05", ICON_MATCAP_05, "", ""},
+	    {ICON_MATCAP_06, "06", ICON_MATCAP_06, "", ""},
+	    {ICON_MATCAP_07, "07", ICON_MATCAP_07, "", ""},
+	    {ICON_MATCAP_08, "08", ICON_MATCAP_08, "", ""},
+	    {ICON_MATCAP_09, "09", ICON_MATCAP_09, "", ""},
+	    {ICON_MATCAP_10, "10", ICON_MATCAP_10, "", ""},
+	    {ICON_MATCAP_11, "11", ICON_MATCAP_11, "", ""},
+	    {ICON_MATCAP_12, "12", ICON_MATCAP_12, "", ""},
+	    {ICON_MATCAP_13, "13", ICON_MATCAP_13, "", ""},
+	    {ICON_MATCAP_14, "14", ICON_MATCAP_14, "", ""},
+	    {ICON_MATCAP_15, "15", ICON_MATCAP_15, "", ""},
+	    {ICON_MATCAP_16, "16", ICON_MATCAP_16, "", ""},
+	    {ICON_MATCAP_17, "17", ICON_MATCAP_17, "", ""},
+	    {ICON_MATCAP_18, "18", ICON_MATCAP_18, "", ""},
+	    {ICON_MATCAP_19, "19", ICON_MATCAP_19, "", ""},
+	    {ICON_MATCAP_20, "20", ICON_MATCAP_20, "", ""},
+	    {ICON_MATCAP_21, "21", ICON_MATCAP_21, "", ""},
+	    {ICON_MATCAP_22, "22", ICON_MATCAP_22, "", ""},
+	    {ICON_MATCAP_23, "23", ICON_MATCAP_23, "", ""},
+	    {ICON_MATCAP_24, "24", ICON_MATCAP_24, "", ""},
+	    {0, NULL, 0, NULL, NULL}
+	};
+
+	static EnumPropertyItem clay_matcap_type[] = {
+	    {CLAY_MATCAP_NONE, "NONE", 0, "Scene", "Use default scene matcap"},
+	    {CLAY_MATCAP_SIMPLE, "SIMPLE", 0, "Simple", "Let you choose the texture to use with the default settings"},
+	    {CLAY_MATCAP_COMPLETE, "COMPLETE", 0, "Complete", "Expose all settings"},
+	    {0, NULL, 0, NULL, NULL}
+	};
+
+	srna = RNA_def_struct(brna, "CollectionEngineSettingsClay", NULL);
+	RNA_def_struct_sdna(srna, "CollectionEngineSettings");
+	RNA_def_struct_ui_text(srna, "Collections Clay Engine Settings", "Engine specific settings for this collection");
+
+	prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
+	RNA_def_property_ui_text(prop, "Name", "Engine name");
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+	RNA_def_struct_name_property(srna, prop);
+
+	/* see RNA_LAYER_ENGINE_GET_SET macro */
+
+	prop = RNA_def_property(srna, "type", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_funcs(prop, "rna_LayerEngineSettings_type_get", "rna_LayerEngineSettings_type_set", NULL);
+	RNA_def_property_enum_items(prop, clay_matcap_type);
+	RNA_def_property_ui_text(prop, "Settings Type", "What settings to use for this material");
+	RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
+	RNA_def_property_update(prop, NC_SCENE | ND_LAYER_CONTENT, "rna_CollectionEngineSettings_update");
+	RNA_LAYER_ENGINE_USE(type)
+
+	prop = RNA_def_property(srna, "matcap_icon", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_funcs(prop, "rna_LayerEngineSettings_matcap_icon_get", "rna_LayerEngineSettings_matcap_icon_set", NULL);
+	RNA_def_property_enum_items(prop, clay_matcap_items);
+	RNA_def_property_ui_text(prop, "Matcap", "Image to use for Material Capture by this material");
+	RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
+	RNA_def_property_update(prop, NC_SCENE | ND_LAYER_CONTENT, "rna_CollectionEngineSettings_update");
+	RNA_LAYER_ENGINE_USE(matcap_icon)
+
+	prop = RNA_def_property(srna, "matcap_rotation", PROP_FLOAT, PROP_FACTOR);
+	RNA_def_property_float_funcs(prop, "rna_LayerEngineSettings_matcap_rotation_get", "rna_LayerEngineSettings_matcap_rotation_set", NULL);
+	RNA_def_property_range(prop, 0.0f, 1.0f);
+	RNA_def_property_ui_text(prop, "Matcap Rotation", "Orientation of the matcap on the model");
+	RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
+	RNA_def_property_update(prop, NC_SCENE | ND_LAYER_CONTENT, "rna_CollectionEngineSettings_update");
+	RNA_LAYER_ENGINE_USE(matcap_rotation)
+
+	prop = RNA_def_property(srna, "matcap_hue", PROP_FLOAT, PROP_FACTOR);
+	RNA_def_property_float_funcs(prop, "rna_LayerEngineSettings_matcap_hue_get", "rna_LayerEngineSettings_matcap_hue_set", NULL);
+	RNA_def_property_range(prop, 0.0f, 1.0f);
+	RNA_def_property_ui_text(prop, "Matcap Hue shift", "Hue correction of the matcap");
+	RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
+	RNA_def_property_update(prop, NC_SCENE | ND_LAYER_CONTENT, "rna_CollectionEngineSettings_update");
+	RNA_LAYER_ENGINE_USE(matcap_hue)
+
+	prop = RNA_def_property(srna, "matcap_saturation", PROP_FLOAT, PROP_FACTOR);
+	RNA_def_property_float_funcs(prop, "rna_LayerEngineSettings_matcap_saturation_get", "rna_LayerEngineSettings_matcap_saturation_set", NULL);
+	RNA_def_property_range(prop, 0.0f, 1.0f);
+	RNA_def_property_ui_text(prop, "Matcap Saturation", "Saturation correction of the matcap");
+	RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
+	RNA_def_property_update(prop, NC_SCENE | ND_LAYER_CONTENT, "rna_CollectionEngineSettings_update");
+	RNA_LAYER_ENGINE_USE(matcap_saturation)
+
+	prop = RNA_def_property(srna, "matcap_value", PROP_FLOAT, PROP_FACTOR);
+	RNA_def_property_float_funcs(prop, "rna_LayerEngineSettings_matcap_value_get", "rna_LayerEngineSettings_matcap_value_set", NULL);
+	RNA_def_property_range(prop, 0.0f, 1.0f);
+	RNA_def_property_ui_text(prop, "Matcap Value", "Value correction of the matcap");
+	RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
+	RNA_def_property_update(prop, NC_SCENE | ND_LAYER_CONTENT, "rna_CollectionEngineSettings_update");
+	RNA_LAYER_ENGINE_USE(matcap_value)
+
+	prop = RNA_def_property(srna, "ssao_factor_cavity", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_float_funcs(prop, "rna_LayerEngineSettings_ssao_factor_cavity_get", "rna_LayerEngineSettings_ssao_factor_cavity_set", NULL);
+	RNA_def_property_ui_text(prop, "Cavity Strength", "Strength of the Cavity effect");
+	RNA_def_property_range(prop, 0.0f, 250.0f);
+	RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
+	RNA_def_property_update(prop, NC_SCENE | ND_LAYER_CONTENT, "rna_CollectionEngineSettings_update");
+	RNA_LAYER_ENGINE_USE(ssao_factor_cavity)
+
+	prop = RNA_def_property(srna, "ssao_factor_edge", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_float_funcs(prop, "rna_LayerEngineSettings_ssao_factor_edge_get", "rna_LayerEngineSettings_ssao_factor_edge_set", NULL);
+	RNA_def_property_ui_text(prop, "Edge Strength", "Strength of the Edge effect");
+	RNA_def_property_range(prop, 0.0f, 250.0f);
+	RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
+	RNA_def_property_update(prop, NC_SCENE | ND_LAYER_CONTENT, "rna_CollectionEngineSettings_update");
+	RNA_LAYER_ENGINE_USE(ssao_factor_edge)
+
+	prop = RNA_def_property(srna, "ssao_distance", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_float_funcs(prop, "rna_LayerEngineSettings_ssao_distance_get", "rna_LayerEngineSettings_ssao_distance_set", NULL);
+	RNA_def_property_ui_text(prop, "Distance", "Distance of object that contribute to the Cavity/Edge effect");
+	RNA_def_property_range(prop, 0.0f, 100000.0f);
+	RNA_def_property_ui_range(prop, 0.0f, 100.0f, 1, 3);
+	RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
+	RNA_def_property_update(prop, NC_SCENE | ND_LAYER_CONTENT, "rna_CollectionEngineSettings_update");
+	RNA_LAYER_ENGINE_USE(ssao_distance)
+
+	prop = RNA_def_property(srna, "ssao_attenuation", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_float_funcs(prop, "rna_LayerEngineSettings_ssao_attenuation_get", "rna_LayerEngineSettings_ssao_attenuation_set", NULL);
+	RNA_def_property_ui_text(prop, "Attenuation", "Attenuation constant");
+	RNA_def_property_range(prop, 1.0f, 100000.0f);
+	RNA_def_property_ui_range(prop, 1.0f, 100.0f, 1, 3);
+	RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
+	RNA_def_property_update(prop, NC_SCENE | ND_LAYER_CONTENT, "rna_CollectionEngineSettings_update");
+	RNA_LAYER_ENGINE_USE(ssao_attenuation)
+}
+
+static void rna_def_layer_collection_engine_settings(BlenderRNA *brna)
+{
+	StructRNA *srna;
+	PropertyRNA *prop;
+
+	srna = RNA_def_struct(brna, "CollectionEngineSettings", NULL);
+	RNA_def_struct_ui_text(srna, "Collections Engine Settings", "Engine specific settings for this collection");
+	RNA_def_struct_refine_func(srna, "rna_CollectionEngineSettings_refine");
+
+	prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
+	RNA_def_property_ui_text(prop, "Name", "Engine name");
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+	RNA_def_struct_name_property(srna, prop);
+
+	/* the engine specific structs */
+	rna_def_layer_collection_engine_settings_clay(brna);
+}
+
+#undef RNA_LAYER_ENGINE_USE
+
+static void rna_def_layer_collection(BlenderRNA *brna)
+{
+	StructRNA *srna;
+	PropertyRNA *prop;
+
+	FunctionRNA *func;
+	PropertyRNA *parm;
+
+	srna = RNA_def_struct(brna, "LayerCollection", NULL);
+	RNA_def_struct_ui_text(srna, "Layer Collection", "Layer collection");
+
+	prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
+	RNA_def_property_string_funcs(prop, "rna_LayerCollection_name_get", "rna_LayerCollection_name_length", "rna_LayerCollection_name_set");
+	RNA_def_property_ui_text(prop, "Name", "Collection name");
+	RNA_def_struct_name_property(srna, prop);
+	RNA_def_property_update(prop, NC_SCENE | ND_LAYER_CONTENT, NULL);
+
+	prop = RNA_def_property(srna, "collection", PROP_POINTER, PROP_NONE);
+	RNA_def_property_flag(prop, PROP_NEVER_NULL);
+	RNA_def_property_pointer_sdna(prop, NULL, "scene_collection");
+	RNA_def_property_struct_type(prop, "SceneCollection");
+	RNA_def_property_ui_text(prop, "Collection", "Collection this layer collection is wrapping");
+
+	prop = RNA_def_property(srna, "collections", PROP_COLLECTION, PROP_NONE);
+	RNA_def_property_collection_sdna(prop, NULL, "layer_collections", NULL);
+	RNA_def_property_struct_type(prop, "LayerCollection");
+	RNA_def_property_ui_text(prop, "Layer Collections", "");
+
+	prop = RNA_def_property(srna, "objects", PROP_COLLECTION, PROP_NONE);
+	RNA_def_property_collection_sdna(prop, NULL, "object_bases", NULL);
+	RNA_def_property_struct_type(prop, "Object");
+	RNA_def_property_collection_funcs(prop, NULL, NULL, NULL, "rna_LayerCollection_objects_get", NULL, NULL, NULL, NULL);
+	RNA_def_property_ui_text(prop, "Objects", "All the objects directly or indirectly added to this collection (not including sub-collection objects)");
+
+	prop = RNA_def_property(srna, "overrides", PROP_COLLECTION, PROP_NONE);
+	RNA_def_property_collection_sdna(prop, NULL, "overrides", NULL);
+	RNA_def_property_struct_type(prop, "LayerCollectionOverride");
+	RNA_def_property_ui_text(prop, "Collection Overrides", "");
+
+	func = RNA_def_function(srna, "get_engine_settings", "rna_LayerCollection_engine_settings_get");
+	RNA_def_function_ui_description(func, "Return the engine settings for this collection");
+	RNA_def_function_flag(func, FUNC_USE_SELF_ID | FUNC_USE_CONTEXT);
+	parm = RNA_def_string(func, "engine", NO_ENGINE, MAX_NAME, "Engine", "use context one by default");
+	RNA_def_parameter_clear_flags(parm, 0, PARM_REQUIRED);
+	parm = RNA_def_pointer(func, "result", "CollectionEngineSettings", "", "");
+	RNA_def_parameter_flags(parm, 0, PARM_RNAPTR);
+	RNA_def_function_return(func, parm);
+
+	/* Flags */
+	prop = RNA_def_property(srna, "hide", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_negative_sdna(prop, NULL, "flag", COLLECTION_VISIBLE);
+	RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
+	RNA_def_property_ui_icon(prop, ICON_RESTRICT_VIEW_OFF, 1);
+	RNA_def_property_ui_text(prop, "Hide", "Restrict visiblity");
+	RNA_def_property_update(prop, NC_SCENE | ND_LAYER_CONTENT, "rna_LayerCollection_hide_update");
+
+	prop = RNA_def_property(srna, "hide_select", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_negative_sdna(prop, NULL, "flag", COLLECTION_SELECTABLE);
+	RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
+	RNA_def_property_ui_icon(prop, ICON_RESTRICT_SELECT_OFF, 1);
+	RNA_def_property_ui_text(prop, "Hide Selectable", "Restrict selection");
+	RNA_def_property_update(prop, NC_SCENE | ND_LAYER_CONTENT, "rna_LayerCollection_hide_select_update");
+
+	prop = RNA_def_property(srna, "is_unfolded", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_negative_sdna(prop, NULL, "flag", COLLECTION_FOLDED);
+	RNA_def_property_ui_icon(prop, ICON_RIGHTARROW, 1);
+	RNA_def_property_ui_text(prop, "Folded", "Folded collection");
+	RNA_def_property_update(prop, NC_SCENE | ND_LAYER_CONTENT, NULL);
+
+	/* TODO_LAYER_OVERRIDE */
+}
+
+static void rna_def_layer_collections(BlenderRNA *brna, PropertyRNA *cprop)
+{
+	StructRNA *srna;
+	FunctionRNA *func;
+	PropertyRNA *prop;
+	PropertyRNA *parm;
+
+	RNA_def_property_srna(cprop, "LayerCollections");
+	srna = RNA_def_struct(brna, "LayerCollections", NULL);
+	RNA_def_struct_sdna(srna, "SceneLayer");
+	RNA_def_struct_ui_text(srna, "Layer Collections", "Collections of render layer");
+
+	prop = RNA_def_property(srna, "active_index", PROP_INT, PROP_UNSIGNED);
+	RNA_def_property_int_sdna(prop, NULL, "active_collection");
+	RNA_def_property_int_funcs(prop, "rna_LayerCollections_active_collection_index_get",
+	                           "rna_LayerCollections_active_collection_index_set",
+	                           "rna_LayerCollections_active_collection_index_range");
+	RNA_def_property_ui_text(prop, "Active Collection Index", "Active index in layer collection array");
+	RNA_def_property_update(prop, NC_SCENE | ND_LAYER, NULL);
+
+	prop = RNA_def_property(srna, "active", PROP_POINTER, PROP_NONE);
+	RNA_def_property_struct_type(prop, "LayerCollection");
+	RNA_def_property_pointer_funcs(prop, "rna_LayerCollections_active_collection_get",
+	                               "rna_LayerCollections_active_collection_set", NULL, NULL);
+	RNA_def_property_flag(prop, PROP_EDITABLE | PROP_NEVER_NULL);
+	RNA_def_property_ui_text(prop, "Active Layer Collection", "Active Layer Collection");
+	RNA_def_property_update(prop, NC_SCENE | ND_LAYER, NULL);
+
+	func = RNA_def_function(srna, "link", "rna_SceneLayer_collection_link");
+	RNA_def_function_ui_description(func, "Link a collection to render layer");
+	RNA_def_function_flag(func, FUNC_USE_SELF_ID | FUNC_USE_MAIN);
+	parm = RNA_def_pointer(func, "scene_collection", "SceneCollection", "", "Collection to add to render layer");
+	RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED);
+	parm = RNA_def_pointer(func, "result", "LayerCollection", "", "Newly created layer collection");
+	RNA_def_function_return(func, parm);
+
+	func = RNA_def_function(srna, "unlink", "rna_SceneLayer_collection_unlink");
+	RNA_def_function_ui_description(func, "Unlink a collection from render layer");
+	RNA_def_function_flag(func, FUNC_USE_SELF_ID | FUNC_USE_MAIN | FUNC_USE_REPORTS);
+	parm = RNA_def_pointer(func, "layer_collection", "LayerCollection", "", "Layer collection to remove from render layer");
+	RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED);
+}
+
+static void rna_def_layer_objects(BlenderRNA *brna, PropertyRNA *cprop)
+{
+	StructRNA *srna;
+	PropertyRNA *prop;
+
+	RNA_def_property_srna(cprop, "LayerObjects");
+	srna = RNA_def_struct(brna, "LayerObjects", NULL);
+	RNA_def_struct_sdna(srna, "SceneLayer");
+	RNA_def_struct_ui_text(srna, "Layer Objects", "Collections of objects");
+
+	prop = RNA_def_property(srna, "active", PROP_POINTER, PROP_NONE);
+	RNA_def_property_struct_type(prop, "Object");
+	RNA_def_property_pointer_funcs(prop, "rna_LayerObjects_active_object_get", "rna_LayerObjects_active_object_set", NULL, NULL);
+	RNA_def_property_flag(prop, PROP_EDITABLE | PROP_NEVER_UNLINK);
+	RNA_def_property_ui_text(prop, "Active Object", "Active object for this layer");
+	/* Could call: ED_base_object_activate(C, rl->basact);
+	 * but would be a bad level call and it seems the notifier is enough */
+	RNA_def_property_update(prop, NC_SCENE | ND_OB_ACTIVE, NULL);
+
+	prop = RNA_def_property(srna, "selected", PROP_COLLECTION, PROP_NONE);
+	RNA_def_property_collection_sdna(prop, NULL, "object_bases", NULL);
+	RNA_def_property_struct_type(prop, "Object");
+	RNA_def_property_collection_funcs(prop, "rna_LayerObjects_selected_begin", "rna_iterator_listbase_next",
+	                                  "rna_iterator_listbase_end", "rna_SceneLayer_objects_get",
+	                                  NULL, NULL, NULL, NULL);
+	RNA_def_property_ui_text(prop, "Selected Objects", "All the selected objects of this layer");
+}
+
+static void rna_def_scene_layer(BlenderRNA *brna)
+{
+	StructRNA *srna;
+	PropertyRNA *prop;
+
+	static EnumPropertyItem engine_items[] = {
+	    {0, "BLENDER_RENDER", 0, "Blender Render", "Use the Blender internal rendering engine for rendering"},
+	    {0, NULL, 0, NULL, NULL}
+	};
+
+	srna = RNA_def_struct(brna, "SceneLayer", NULL);
+	RNA_def_struct_ui_text(srna, "Render Layer", "Render layer");
+	RNA_def_struct_ui_icon(srna, ICON_RENDERLAYERS);
+
+	prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
+	RNA_def_property_string_funcs(prop, NULL, NULL, "rna_SceneLayer_name_set");
+	RNA_def_property_ui_text(prop, "Name", "Render layer name");
+	RNA_def_struct_name_property(srna, prop);
+	RNA_def_property_update(prop, NC_SCENE | ND_LAYER_CONTENT, NULL);
+
+	prop = RNA_def_property(srna, "collections", PROP_COLLECTION, PROP_NONE);
+	RNA_def_property_collection_sdna(prop, NULL, "layer_collections", NULL);
+	RNA_def_property_struct_type(prop, "LayerCollection");
+	RNA_def_property_ui_text(prop, "Layer Collections", "");
+	rna_def_layer_collections(brna, prop);
+
+	prop = RNA_def_property(srna, "objects", PROP_COLLECTION, PROP_NONE);
+	RNA_def_property_collection_sdna(prop, NULL, "object_bases", NULL);
+	RNA_def_property_struct_type(prop, "Object");
+	RNA_def_property_collection_funcs(prop, NULL, NULL, NULL, "rna_SceneLayer_objects_get", NULL, NULL, NULL, NULL);
+	RNA_def_property_ui_text(prop, "Objects", "All the objects in this layer");
+	rna_def_layer_objects(brna, prop);
+
+	/* layer options */
+	prop = RNA_def_property(srna, "use", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "flag", SCENE_LAYER_RENDER);
+	RNA_def_property_ui_text(prop, "Enabled", "Disable or enable the render layer");
+	RNA_def_property_update(prop, NC_SCENE | ND_LAYER, NULL);
+
+	/* engine */
+	prop = RNA_def_property(srna, "engine", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_items(prop, engine_items);
+	RNA_def_property_enum_funcs(prop, "rna_SceneLayer_engine_get", "rna_SceneLayer_engine_set",
+	                            "rna_SceneLayer_engine_itemf");
+	RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+	RNA_def_property_ui_text(prop, "Engine", "Engine to use for rendering");
+	RNA_def_property_update(prop, NC_WINDOW, "rna_SceneLayer_engine_update");
+
+	prop = RNA_def_property(srna, "has_multiple_engines", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_funcs(prop, "rna_SceneLayer_multiple_engines_get", NULL);
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+	RNA_def_property_ui_text(prop, "Multiple Engines", "More than one rendering engine is available");
+}
+
+static void rna_def_scene_layers(BlenderRNA *brna, PropertyRNA *cprop)
+{
+	StructRNA *srna;
+	FunctionRNA *func;
+	PropertyRNA *parm;
+	PropertyRNA *prop;
+
+	RNA_def_property_srna(cprop, "SceneLayers");
+	srna = RNA_def_struct(brna, "SceneLayers", NULL);
+	RNA_def_struct_sdna(srna, "Scene");
+	RNA_def_struct_ui_text(srna, "Render Layers", "Collection of render layers");
+
+	prop = RNA_def_property(srna, "active_index", PROP_INT, PROP_UNSIGNED);
+	RNA_def_property_int_sdna(prop, NULL, "active_layer");
+	RNA_def_property_int_funcs(prop, "rna_SceneLayer_active_layer_index_get",
+	                           "rna_SceneLayer_active_layer_index_set",
+	                           "rna_SceneLayer_active_layer_index_range");
+	RNA_def_property_ui_text(prop, "Active Layer Index", "Active index in render layer array");
+	RNA_def_property_update(prop, NC_SCENE | ND_LAYER, NULL);
+
+	prop = RNA_def_property(srna, "active", PROP_POINTER, PROP_NONE);
+	RNA_def_property_struct_type(prop, "SceneLayer");
+	RNA_def_property_pointer_funcs(prop, "rna_SceneLayer_active_layer_get",
+	                               "rna_SceneLayer_active_layer_set", NULL, NULL);
+	RNA_def_property_flag(prop, PROP_EDITABLE | PROP_NEVER_NULL);
+	RNA_def_property_ui_text(prop, "Active Render Layer", "Active Render Layer");
+	RNA_def_property_update(prop, NC_SCENE | ND_LAYER, NULL);
+
+	func = RNA_def_function(srna, "new", "rna_SceneLayer_new");
+	RNA_def_function_ui_description(func, "Add a render layer to scene");
+	RNA_def_function_flag(func, FUNC_USE_SELF_ID);
+	parm = RNA_def_string(func, "name", "SceneLayer", 0, "", "New name for the render layer (not unique)");
+	RNA_def_parameter_flags(parm, 0, PARM_REQUIRED);
+	parm = RNA_def_pointer(func, "result", "SceneLayer", "", "Newly created render layer");
+	RNA_def_function_return(func, parm);
+
+	func = RNA_def_function(srna, "remove", "rna_SceneLayer_remove");
+	RNA_def_function_ui_description(func, "Remove a render layer");
+	RNA_def_function_flag(func, FUNC_USE_MAIN | FUNC_USE_REPORTS | FUNC_USE_SELF_ID);
+	parm = RNA_def_pointer(func, "layer", "SceneLayer", "", "Render layer to remove");
+	RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED | PARM_RNAPTR);
+	RNA_def_parameter_clear_flags(parm, PROP_THICK_WRAP, 0);
+}
+
+static void rna_def_object_base(BlenderRNA *brna)
+{
+	StructRNA *srna;
+	PropertyRNA *prop;
+
+	srna = RNA_def_struct(brna, "ObjectBase", NULL);
+	RNA_def_struct_sdna(srna, "Base");
+	RNA_def_struct_ui_text(srna, "Object Base", "An object instance in a render layer");
+	RNA_def_struct_ui_icon(srna, ICON_OBJECT_DATA);
+
+	prop = RNA_def_property(srna, "object", PROP_POINTER, PROP_NONE);
+	RNA_def_property_pointer_sdna(prop, NULL, "object");
+	RNA_def_property_ui_text(prop, "Object", "Object this base links to");
+
+	prop = RNA_def_property(srna, "select", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "flag", BASE_SELECTED);
+	RNA_def_property_ui_text(prop, "Select", "Object base selection state");
+	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_ObjectBase_select_update");
+}
+
+/* TODO LAYERS: legacy SceneRenderLayers, to be removed */
 
 static void rna_def_scene_render_layer(BlenderRNA *brna)
 {
@@ -5775,6 +6894,115 @@ static void rna_def_scene_quicktime_settings(BlenderRNA *brna)
 	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
 }
 #endif
+
+#ifdef WITH_CLAY_ENGINE
+static void rna_def_render_engine_settings_clay(BlenderRNA *brna)
+{
+	StructRNA *srna;
+	PropertyRNA *prop;
+	static EnumPropertyItem clay_matcap_items[] = {
+		{ICON_MATCAP_01, "01", ICON_MATCAP_01, "", ""},
+		{ICON_MATCAP_02, "02", ICON_MATCAP_02, "", ""},
+		{ICON_MATCAP_03, "03", ICON_MATCAP_03, "", ""},
+		{ICON_MATCAP_04, "04", ICON_MATCAP_04, "", ""},
+		{ICON_MATCAP_05, "05", ICON_MATCAP_05, "", ""},
+		{ICON_MATCAP_06, "06", ICON_MATCAP_06, "", ""},
+		{ICON_MATCAP_07, "07", ICON_MATCAP_07, "", ""},
+		{ICON_MATCAP_08, "08", ICON_MATCAP_08, "", ""},
+		{ICON_MATCAP_09, "09", ICON_MATCAP_09, "", ""},
+		{ICON_MATCAP_10, "10", ICON_MATCAP_10, "", ""},
+		{ICON_MATCAP_11, "11", ICON_MATCAP_11, "", ""},
+		{ICON_MATCAP_12, "12", ICON_MATCAP_12, "", ""},
+		{ICON_MATCAP_13, "13", ICON_MATCAP_13, "", ""},
+		{ICON_MATCAP_14, "14", ICON_MATCAP_14, "", ""},
+		{ICON_MATCAP_15, "15", ICON_MATCAP_15, "", ""},
+		{ICON_MATCAP_16, "16", ICON_MATCAP_16, "", ""},
+		{ICON_MATCAP_17, "17", ICON_MATCAP_17, "", ""},
+		{ICON_MATCAP_18, "18", ICON_MATCAP_18, "", ""},
+		{ICON_MATCAP_19, "19", ICON_MATCAP_19, "", ""},
+		{ICON_MATCAP_20, "20", ICON_MATCAP_20, "", ""},
+		{ICON_MATCAP_21, "21", ICON_MATCAP_21, "", ""},
+		{ICON_MATCAP_22, "22", ICON_MATCAP_22, "", ""},
+		{ICON_MATCAP_23, "23", ICON_MATCAP_23, "", ""},
+		{ICON_MATCAP_24, "24", ICON_MATCAP_24, "", ""},
+		{0, NULL, 0, NULL, NULL}
+	};
+
+	srna = RNA_def_struct(brna, "RenderEngineSettingsClay", "RenderEngineSettings");
+	RNA_def_struct_ui_text(srna, "Material Clay Settings", "Clay Engine settings for a Material data-block");
+	RNA_def_struct_sdna_from(srna, "RenderEngineSettingsClay", "data");
+
+	prop = RNA_def_property(srna, "matcap_icon", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_items(prop, clay_matcap_items);
+	RNA_def_property_ui_text(prop, "Matcap", "Image to use for Material Capture by this material");
+	RNA_def_property_update(prop, 0, "rna_RenderEngineSettings_update");
+
+	prop = RNA_def_property(srna, "matcap_rotation", PROP_FLOAT, PROP_FACTOR);
+	RNA_def_property_float_sdna(prop, NULL, "matcap_rot");
+	RNA_def_property_range(prop, 0.0f, 1.0f);
+	RNA_def_property_ui_text(prop, "Matcap Rotation", "Orientation of the matcap on the model");
+	RNA_def_property_update(prop, 0, "rna_RenderEngineSettings_update");
+
+	prop = RNA_def_property(srna, "matcap_hue", PROP_FLOAT, PROP_FACTOR);
+	RNA_def_property_range(prop, 0.0f, 1.0f);
+	RNA_def_property_ui_text(prop, "Matcap Hue shift", "Hue correction of the matcap");
+	RNA_def_property_update(prop, 0, "rna_RenderEngineSettings_update");
+
+	prop = RNA_def_property(srna, "matcap_saturation", PROP_FLOAT, PROP_FACTOR);
+	RNA_def_property_float_sdna(prop, NULL, "matcap_sat");
+	RNA_def_property_range(prop, 0.0f, 1.0f);
+	RNA_def_property_ui_text(prop, "Matcap Saturation", "Saturation correction of the matcap");
+	RNA_def_property_update(prop, 0, "rna_RenderEngineSettings_update");
+
+	prop = RNA_def_property(srna, "matcap_value", PROP_FLOAT, PROP_FACTOR);
+	RNA_def_property_float_sdna(prop, NULL, "matcap_val");
+	RNA_def_property_range(prop, 0.0f, 1.0f);
+	RNA_def_property_ui_text(prop, "Matcap Value", "Value correction of the matcap");
+	RNA_def_property_update(prop, 0, "rna_RenderEngineSettings_update");
+
+	prop = RNA_def_property(srna, "ssao_factor_cavity", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_ui_text(prop, "Cavity Strength", "Strength of the Cavity effect");
+	RNA_def_property_range(prop, 0.0f, 250.0f);
+	RNA_def_property_update(prop, 0, "rna_RenderEngineSettings_update");
+
+	prop = RNA_def_property(srna, "ssao_factor_edge", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_ui_text(prop, "Edge Strength", "Strength of the Edge effect");
+	RNA_def_property_range(prop, 0.0f, 250.0f);
+	RNA_def_property_update(prop, 0, "rna_RenderEngineSettings_update");
+
+	prop = RNA_def_property(srna, "ssao_distance", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_ui_text(prop, "Distance", "Distance of object that contribute to the Cavity/Edge effect");
+	RNA_def_property_range(prop, 0.0f, 100000.0f);
+	RNA_def_property_ui_range(prop, 0.0f, 100.0f, 1, 3);
+	RNA_def_property_update(prop, 0, "rna_RenderEngineSettings_update");
+
+	prop = RNA_def_property(srna, "ssao_attenuation", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_ui_text(prop, "Attenuation", "Attenuation constant");
+	RNA_def_property_range(prop, 1.0f, 100000.0f);
+	RNA_def_property_ui_range(prop, 1.0f, 100.0f, 1, 3);
+	RNA_def_property_update(prop, 0, "rna_RenderEngineSettings_update");
+
+	/* Clay settings */
+	prop = RNA_def_property(srna, "ssao_samples", PROP_INT, PROP_NONE);
+	RNA_def_property_ui_text(prop, "Samples", "Number of samples");
+	RNA_def_property_range(prop, 1, 500);
+	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
+}
+#endif
+
+static void rna_def_scene_render_engine(BlenderRNA *brna)
+{
+	StructRNA *srna;
+
+	srna = RNA_def_struct(brna, "RenderEngineSettings", NULL);
+	RNA_def_struct_ui_text(srna, "Render Engine Settings", "Engine specific render settings");
+	RNA_def_struct_sdna(srna, "RenderEngineSettings");
+	RNA_def_struct_refine_func(srna, "rna_RenderEngineSettings_refine");
+
+#ifdef WITH_CLAY_ENGINE
+	rna_def_render_engine_settings_clay(brna);
+#endif
+}
 
 static void rna_def_scene_render_data(BlenderRNA *brna)
 {
@@ -6762,7 +7990,7 @@ static void rna_def_scene_objects(BlenderRNA *brna, PropertyRNA *cprop)
 	RNA_def_function_flag(func, FUNC_USE_CONTEXT | FUNC_USE_REPORTS);
 	parm = RNA_def_pointer(func, "object", "Object", "", "Object to add to scene");
 	RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED);
-	parm = RNA_def_pointer(func, "base", "ObjectBase", "", "The newly created base");
+	parm = RNA_def_pointer(func, "base", "ObjectBaseLegacy", "", "The newly created base");
 	RNA_def_function_return(func, parm);
 
 	func = RNA_def_function(srna, "unlink", "rna_Scene_object_unlink");
@@ -6797,7 +8025,7 @@ static void rna_def_scene_bases(BlenderRNA *brna, PropertyRNA *cprop)
 	RNA_def_struct_ui_text(srna, "Scene Bases", "Collection of scene bases");
 
 	prop = RNA_def_property(srna, "active", PROP_POINTER, PROP_NONE);
-	RNA_def_property_struct_type(prop, "ObjectBase");
+	RNA_def_property_struct_type(prop, "ObjectBaseLegacy");
 	RNA_def_property_pointer_sdna(prop, NULL, "basact");
 	RNA_def_property_flag(prop, PROP_EDITABLE);
 	RNA_def_property_ui_text(prop, "Active Base", "Active object base in the scene");
@@ -7041,7 +8269,7 @@ void RNA_def_scene(BlenderRNA *brna)
 	/* Bases/Objects */
 	prop = RNA_def_property(srna, "object_bases", PROP_COLLECTION, PROP_NONE);
 	RNA_def_property_collection_sdna(prop, NULL, "base", NULL);
-	RNA_def_property_struct_type(prop, "ObjectBase");
+	RNA_def_property_struct_type(prop, "ObjectBaseLegacy");
 	RNA_def_property_ui_text(prop, "Bases", "");
 	RNA_def_property_collection_funcs(prop, NULL, NULL, NULL, NULL, NULL, NULL,
 	                                  "rna_Scene_object_bases_lookup_string", NULL);
@@ -7271,7 +8499,17 @@ void RNA_def_scene(BlenderRNA *brna)
 	RNA_def_property_pointer_sdna(prop, NULL, "r");
 	RNA_def_property_struct_type(prop, "RenderSettings");
 	RNA_def_property_ui_text(prop, "Render Data", "");
-	
+
+	/* Render Engine Data */
+	prop = RNA_def_property(srna, "engines_settings", PROP_COLLECTION, PROP_NONE);
+	RNA_def_property_struct_type(prop, "RenderEngineSettings");
+	RNA_def_property_ui_text(prop, "Render Engine Settings", "Engine specific render settings");
+
+	prop = RNA_def_property(srna, "active_engine_settings", PROP_POINTER, PROP_NONE);
+	RNA_def_property_struct_type(prop, "RenderEngineSettings");
+	RNA_def_property_pointer_funcs(prop, "rna_RenderEngineSettings_active_get", NULL, NULL, NULL);
+	RNA_def_property_ui_text(prop, "Active Render Engine Settings", "Active Engine specific render settings for this scene");
+
 	/* Safe Areas */
 	prop = RNA_def_property(srna, "safe_areas", PROP_POINTER, PROP_NONE);
 	RNA_def_property_pointer_sdna(prop, NULL, "safe_areas");
@@ -7387,6 +8625,19 @@ void RNA_def_scene(BlenderRNA *brna)
 	RNA_def_property_struct_type(prop, "Depsgraph");
 	RNA_def_property_ui_text(prop, "Dependency Graph", "Dependencies in the scene data");
 
+	/* Layer and Collections */
+	prop = RNA_def_property(srna, "render_layers", PROP_COLLECTION, PROP_NONE);
+	RNA_def_property_collection_sdna(prop, NULL, "render_layers", NULL);
+	RNA_def_property_struct_type(prop, "SceneLayer");
+	RNA_def_property_ui_text(prop, "Render Layers", "");
+	rna_def_scene_layers(brna, prop);
+
+	prop = RNA_def_property(srna, "master_collection", PROP_POINTER, PROP_NONE);
+	RNA_def_property_flag(prop, PROP_NEVER_NULL);
+	RNA_def_property_pointer_sdna(prop, NULL, "collection");
+	RNA_def_property_struct_type(prop, "SceneCollection");
+	RNA_def_property_ui_text(prop, "Master Collection", "Collection that contains all other collections");
+
 	/* Nestled Data  */
 	/* *** Non-Animated *** */
 	RNA_define_animate_sdna(false);
@@ -7402,9 +8653,16 @@ void RNA_def_scene(BlenderRNA *brna)
 	rna_def_transform_orientation(brna);
 	rna_def_selected_uv_element(brna);
 	rna_def_display_safe_areas(brna);
+	rna_def_scene_collection(brna);
+	rna_def_layer_collection(brna);
+	rna_def_layer_collection_override(brna);
+	rna_def_layer_collection_engine_settings(brna);
+	rna_def_scene_layer(brna);
+	rna_def_object_base(brna);
 	RNA_define_animate_sdna(true);
 	/* *** Animated *** */
 	rna_def_scene_render_data(brna);
+	rna_def_scene_render_engine(brna);
 	rna_def_scene_render_layer(brna);
 	rna_def_gpu_fx(brna);
 	rna_def_scene_render_view(brna);
@@ -7414,3 +8672,5 @@ void RNA_def_scene(BlenderRNA *brna)
 }
 
 #endif
+
+#undef NO_ENGINE

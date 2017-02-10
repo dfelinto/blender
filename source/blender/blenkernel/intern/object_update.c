@@ -51,6 +51,7 @@
 #include "BKE_key.h"
 #include "BKE_lamp.h"
 #include "BKE_lattice.h"
+#include "BKE_mesh_render.h"
 #include "BKE_editmesh.h"
 #include "BKE_object.h"
 #include "BKE_particle.h"
@@ -60,11 +61,7 @@
 
 #include "DEG_depsgraph.h"
 
-#ifdef WITH_LEGACY_DEPSGRAPH
-#  define DEBUG_PRINT if (!DEG_depsgraph_use_legacy() && G.debug & G_DEBUG_DEPSGRAPH) printf
-#else
-#  define DEBUG_PRINT if (G.debug & G_DEBUG_DEPSGRAPH) printf
-#endif
+#define DEBUG_PRINT if (G.debug & G_DEBUG_DEPSGRAPH) printf
 
 static ThreadMutex material_lock = BLI_MUTEX_INITIALIZER;
 
@@ -346,4 +343,12 @@ void BKE_object_eval_uber_data(EvaluationContext *eval_ctx,
 	BKE_object_handle_data_update(eval_ctx, scene, ob);
 
 	ob->recalc &= ~(OB_RECALC_DATA | OB_RECALC_TIME);
+}
+
+void BKE_object_eval_shading(EvaluationContext *UNUSED(eval_ctx), Object *ob)
+{
+	DEBUG_PRINT("%s on %s\n", __func__, ob->id.name);
+	if (ob->type == OB_MESH) {
+		BKE_mesh_batch_cache_dirty(ob->data);
+	}
 }

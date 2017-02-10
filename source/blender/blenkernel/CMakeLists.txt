@@ -85,6 +85,7 @@ set(SRC
 	intern/camera.c
 	intern/cdderivedmesh.c
 	intern/cloth.c
+	intern/collection.c
 	intern/collision.c
 	intern/colortools.c
 	intern/constraint.c
@@ -133,6 +134,7 @@ set(SRC
 	intern/mesh_evaluate.c
 	intern/mesh_mapping.c
 	intern/mesh_remap.c
+	intern/mesh_render.c
 	intern/mesh_validate.c
 	intern/modifier.c
 	intern/modifiers_bmesh.c
@@ -156,6 +158,7 @@ set(SRC
 	intern/pbvh_bmesh.c
 	intern/pointcache.c
 	intern/property.c
+	intern/layer.c
 	intern/report.c
 	intern/rigidbody.c
 	intern/sca.c
@@ -214,6 +217,7 @@ set(SRC
 	BKE_ccg.h
 	BKE_cdderivedmesh.h
 	BKE_cloth.h
+	BKE_collection.h
 	BKE_collision.h
 	BKE_colortools.h
 	BKE_constraint.h
@@ -258,6 +262,7 @@ set(SRC
 	BKE_mesh.h
 	BKE_mesh_mapping.h
 	BKE_mesh_remap.h
+	BKE_mesh_render.h
 	BKE_modifier.h
 	BKE_movieclip.h
 	BKE_multires.h
@@ -273,6 +278,7 @@ set(SRC
 	BKE_pbvh.h
 	BKE_pointcache.h
 	BKE_property.h
+	BKE_layer.h
 	BKE_report.h
 	BKE_rigidbody.h
 	BKE_sca.h
@@ -536,9 +542,5 @@ endif()
 #if(MSVC)
 #	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /WX")
 #endif()
-
-if(WITH_LEGACY_DEPSGRAPH)
-	add_definitions(-DWITH_LEGACY_DEPSGRAPH)
-endif()
 
 blender_add_lib(bf_blenkernel "${SRC}" "${INC}" "${INC_SYS}")

@@ -142,7 +142,7 @@ void BIF_makeListTemplates(const bContext *C)
 	Object *obedit = CTX_data_edit_object(C);
 	Scene *scene = CTX_data_scene(C);
 	ToolSettings *ts = CTX_data_tool_settings(C);
-	Base *base;
+	BaseLegacy *base;
 	int index = 0;
 
 	if (TEMPLATES_HASH != NULL) {
@@ -970,6 +970,9 @@ static int sk_getStrokeSnapPoint(bContext *C, SK_Point *pt, SK_Sketch *sketch, S
 	ToolSettings *ts = CTX_data_tool_settings(C);
 	int point_added = 0;
 
+	/* TODO: Since the function `ED_transform_snap_object_context_create_view3d` creates a cache,
+	 * the ideal would be to call this function only at the beginning of the snap operation,
+	 * or at the beginning of the operator itself */
 	struct SnapObjectContext *snap_context = ED_transform_snap_object_context_create_view3d(
 	        CTX_data_main(C), CTX_data_scene(C), 0,
 	        CTX_wm_region(C), CTX_wm_view3d(C));
@@ -1038,6 +1041,8 @@ static int sk_getStrokeSnapPoint(bContext *C, SK_Point *pt, SK_Sketch *sketch, S
 		}
 	}
 
+	/* TODO: The ideal would be to call this function only once.
+	 * At the end of the operator */
 	ED_transform_snap_object_context_destroy(snap_context);
 	return point_added;
 }
