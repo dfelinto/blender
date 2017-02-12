@@ -19,20 +19,25 @@ extern bool gpuMatricesDirty(void); // how best to use this here?
 
 Batch* Batch_create(PrimitiveType prim_type, VertexBuffer* verts, ElementList* elem)
 	{
+	Batch* batch = calloc(1, sizeof(Batch));
+
+	Batch_init(batch, prim_type, verts, elem);
+
+	return batch;
+	}
+
+void Batch_init(Batch* batch, PrimitiveType prim_type, VertexBuffer* verts, ElementList* elem)
+	{
 #if TRUST_NO_ONE
 	assert(verts != NULL);
 	assert(prim_type == PRIM_POINTS || prim_type == PRIM_LINES || prim_type == PRIM_TRIANGLES);
 	// we will allow other primitive types in a future update
 #endif
 
-	Batch* batch = calloc(1, sizeof(Batch));
-
 	batch->verts = verts;
 	batch->elem = elem;
 	batch->prim_type = prim_type;
 	batch->phase = READY_TO_DRAW;
-
-	return batch;
 	}
 
 void Batch_discard(Batch* batch)
@@ -248,7 +253,9 @@ void Batch_draw(Batch* batch)
 	glBindVertexArray(0);
 	}
 
-/* clement : temp stuff */
+
+
+// clement : temp stuff
 void Batch_draw_stupid(Batch* batch)
 {
 	if (batch->vao_id)
@@ -283,8 +290,9 @@ void Batch_draw_stupid(Batch* batch)
 	glBindVertexArray(0);
 }
 
-/* clement : temp stuff */
-void Batch_draw_stupid_instanced(Batch* batch, unsigned int instance_vbo, int instance_count)
+// clement : temp stuff
+void Batch_draw_stupid_instanced(Batch* batch, unsigned int instance_vbo, int instance_count,
+                                 int attrib_nbr, int attrib_stride, int attrib_size[16], int attrib_loc[16])
 {
 	if (batch->vao_id)
 		glBindVertexArray(batch->vao_id);
@@ -294,27 +302,24 @@ void Batch_draw_stupid_instanced(Batch* batch, unsigned int instance_vbo, int in
 	if (batch->program_dirty)
 		Batch_update_program_bindings(batch);
 
-	const GLint loc = glGetAttribLocation(batch->program, "InstanceModelMatrix");
-
-#if TRUST_NO_ONE
-	assert(loc != -1);
-#endif
-
 	glBindBuffer(GL_ARRAY_BUFFER, instance_vbo);
-	glEnableVertexAttribArray(loc);
-	glVertexAttribPointer(loc + 0, 4, GL_FLOAT, GL_FALSE, sizeof(float)*4*4, (GLvoid*)0);
-	glEnableVertexAttribArray(loc + 1);
-	glVertexAttribPointer(loc + 1, 4, GL_FLOAT, GL_FALSE, sizeof(float)*4*4, (GLvoid*)(sizeof(float)*4));
-	glEnableVertexAttribArray(loc + 2);
-	glVertexAttribPointer(loc + 2, 4, GL_FLOAT, GL_FALSE, sizeof(float)*4*4, (GLvoid*)(2 * sizeof(float)*4));
-	glEnableVertexAttribArray(loc + 3);
-	glVertexAttribPointer(loc + 3, 4, GL_FLOAT, GL_FALSE, sizeof(float)*4*4, (GLvoid*)(3 * sizeof(float)*4));
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	int ptr_ofs = 0;
+	for (int i = 0; i < attrib_nbr; ++i) {
+		int size = attrib_size[i];
+		int loc = attrib_loc[i];
+		int atr_ofs = 0;
 
-	glVertexAttribDivisor(loc + 0, 1);
-	glVertexAttribDivisor(loc + 1, 1);
-	glVertexAttribDivisor(loc + 2, 1);
-	glVertexAttribDivisor(loc + 3, 1);
+		while (size > 0) {
+			glEnableVertexAttribArray(loc + atr_ofs);
+			glVertexAttribPointer(loc + atr_ofs, (size > 4) ? 4 : size, GL_FLOAT, GL_FALSE,
+			                      sizeof(float) * attrib_stride, (GLvoid*)(sizeof(float) * ptr_ofs));
+			glVertexAttribDivisor(loc + atr_ofs, 1);
+			atr_ofs++;
+			ptr_ofs += (size > 4) ? 4 : size;
+			size -= 4;
+		}
+	}
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
 
 	// Batch_use_program(batch);
 

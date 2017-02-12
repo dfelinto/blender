@@ -38,6 +38,7 @@ typedef struct Batch{
 } Batch;
 
 Batch* Batch_create(PrimitiveType, VertexBuffer*, ElementList*);
+void Batch_init(Batch*, PrimitiveType, VertexBuffer*, ElementList*);
 
 void Batch_discard(Batch*); // verts & elem are not discarded
 void Batch_discard_all(Batch*); // including verts & elem
@@ -57,8 +58,12 @@ void Batch_Uniform3fv(Batch*, const char* name, const float data[3]);
 void Batch_Uniform4fv(Batch*, const char* name, const float data[4]);
 
 void Batch_draw(Batch*);
-void Batch_draw_stupid(Batch* batch);
-void Batch_draw_stupid_instanced(Batch* batch, unsigned int instance_vbo, int instance_count);
+
+
+// clement : temp stuff
+void Batch_draw_stupid(Batch*);
+void Batch_draw_stupid_instanced(Batch*, unsigned int instance_vbo, int instance_count,
+                                 int attrib_nbr, int attrib_stride, int attrib_loc[16], int attrib_size[16]);
 
 
 

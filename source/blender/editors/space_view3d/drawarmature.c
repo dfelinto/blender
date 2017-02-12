@@ -63,6 +63,8 @@
 #include "ED_keyframes_draw.h"
 
 #include "GPU_basic_shader.h"
+#include "GPU_batch.h"
+#include "GPU_matrix.h"
 
 #include "UI_resources.h"
 
@@ -74,6 +76,7 @@
 
 /* global here is reset before drawing each bone */
 static ThemeWireColor *bcolor = NULL;
+static float fcolor[4] = {0.0f};
 
 /* values of colCode for set_pchan_glcolor */
 enum {
@@ -148,11 +151,12 @@ static void cp_shade_color3ub(unsigned char cp[3], const int offset)
 /* This function sets the gl-color for coloring a certain bone (based on bcolor) */
 static bool set_pchan_glColor(short colCode, int boneflag, short constflag)
 {
+	/* TODO remove glColor/UI_ThemeColor functions when no longer needed */
 	switch (colCode) {
 		case PCHAN_COLOR_NORMAL:
 		{
 			if (bcolor) {
-				unsigned char cp[3];
+				unsigned char cp[4] = {255};
 			
 				if (boneflag & BONE_DRAW_ACTIVE) {
 					copy_v3_v3_char((char *)cp, bcolor->active);
@@ -170,19 +174,24 @@ static bool set_pchan_glColor(short colCode, int boneflag, short constflag)
 				}
 			
 				glColor3ubv(cp);
+				rgb_uchar_to_float(fcolor, cp);
 			}
 			else {
 				if ((boneflag & BONE_DRAW_ACTIVE) && (boneflag & BONE_SELECTED)) {
 					UI_ThemeColor(TH_BONE_POSE_ACTIVE);
+					UI_GetThemeColor4fv(TH_BONE_POSE_ACTIVE, fcolor);
 				}
 				else if (boneflag & BONE_DRAW_ACTIVE) {
 					UI_ThemeColorBlend(TH_WIRE, TH_BONE_POSE, 0.15f); /* unselected active */
+					UI_GetThemeColorBlendShade4fv(TH_WIRE, TH_BONE_POSE, 0.15f, 0, fcolor);
 				}
 				else if (boneflag & BONE_SELECTED) {
 					UI_ThemeColor(TH_BONE_POSE);
+					UI_GetThemeColor4fv(TH_BONE_POSE, fcolor);
 				}
 				else {
 					UI_ThemeColor(TH_WIRE);
+					UI_GetThemeColor4fv(TH_WIRE, fcolor);
 				}
 			}
 	
@@ -192,20 +201,27 @@ static bool set_pchan_glColor(short colCode, int boneflag, short constflag)
 		{
 			if (bcolor) {
 				glColor3ubv((unsigned char *)bcolor->solid);
+				rgb_uchar_to_float(fcolor, (unsigned char *)bcolor->solid);
 			}
-			else
+			else {
 				UI_ThemeColor(TH_BONE_SOLID);
+				UI_GetThemeColor4fv(TH_BONE_SOLID, fcolor);
+			}
 			
 			return true;
 		}
 		case PCHAN_COLOR_CONSTS:
 		{
 			if ((bcolor == NULL) || (bcolor->flag & TH_WIRECOLOR_CONSTCOLS)) {
-				if (constflag & PCHAN_HAS_TARGET) glColor4ub(255, 150, 0, 80);
-				else if (constflag & PCHAN_HAS_IK) glColor4ub(255, 255, 0, 80);
-				else if (constflag & PCHAN_HAS_SPLINEIK) glColor4ub(200, 255, 0, 80);
-				else if (constflag & PCHAN_HAS_CONST) glColor4ub(0, 255, 120, 80);
-			
+				unsigned char cp[4];
+				if (constflag & PCHAN_HAS_TARGET) rgba_char_args_set((char *)cp, 255, 150, 0, 80);
+				else if (constflag & PCHAN_HAS_IK) rgba_char_args_set((char *)cp, 255, 255, 0, 80);
+				else if (constflag & PCHAN_HAS_SPLINEIK) rgba_char_args_set((char *)cp, 200, 255, 0, 80);
+				else if (constflag & PCHAN_HAS_CONST) rgba_char_args_set((char *)cp, 0, 255, 120, 80);
+
+				glColor4ubv(cp);
+				rgba_uchar_to_float(fcolor, cp);
+
 				return true;
 			}
 			return false;
@@ -213,7 +229,7 @@ static bool set_pchan_glColor(short colCode, int boneflag, short constflag)
 		case PCHAN_COLOR_SPHEREBONE_BASE:
 		{
 			if (bcolor) {
-				unsigned char cp[3];
+				unsigned char cp[4] = {255};
 
 				if (boneflag & BONE_DRAW_ACTIVE) {
 					copy_v3_v3_char((char *)cp, bcolor->active);
@@ -226,11 +242,21 @@ static bool set_pchan_glColor(short colCode, int boneflag, short constflag)
 				}
 
 				glColor3ubv(cp);
+				rgb_uchar_to_float(fcolor, cp);
 			}
 			else {
-				if (boneflag & BONE_DRAW_ACTIVE) UI_ThemeColorShade(TH_BONE_POSE, 40);
-				else if (boneflag & BONE_SELECTED) UI_ThemeColor(TH_BONE_POSE);
-				else UI_ThemeColor(TH_BONE_SOLID);
+				if (boneflag & BONE_DRAW_ACTIVE) {
+					UI_ThemeColorShade(TH_BONE_POSE, 40);
+					UI_GetThemeColorShade4fv(TH_BONE_POSE, 40, fcolor);
+				}
+				else if (boneflag & BONE_SELECTED) {
+					UI_ThemeColor(TH_BONE_POSE);
+					UI_GetThemeColor4fv(TH_BONE_POSE, fcolor);
+				}
+				else {
+					UI_ThemeColor(TH_BONE_SOLID);
+					UI_GetThemeColor4fv(TH_BONE_SOLID, fcolor);
+				}
 			}
 			
 			return true;
@@ -238,7 +264,7 @@ static bool set_pchan_glColor(short colCode, int boneflag, short constflag)
 		case PCHAN_COLOR_SPHEREBONE_END:
 		{
 			if (bcolor) {
-				unsigned char cp[3];
+				unsigned char cp[4] = {255};
 
 				if (boneflag & BONE_DRAW_ACTIVE) {
 					copy_v3_v3_char((char *)cp, bcolor->active);
@@ -254,11 +280,21 @@ static bool set_pchan_glColor(short colCode, int boneflag, short constflag)
 				}
 			
 				glColor3ubv(cp);
+				rgb_uchar_to_float(fcolor, cp);
 			}
 			else {
-				if (boneflag & BONE_DRAW_ACTIVE) UI_ThemeColorShade(TH_BONE_POSE, 10);
-				else if (boneflag & BONE_SELECTED) UI_ThemeColorShade(TH_BONE_POSE, -30);
-				else UI_ThemeColorShade(TH_BONE_SOLID, -30);
+				if (boneflag & BONE_DRAW_ACTIVE) {
+					UI_ThemeColorShade(TH_BONE_POSE, 10);
+					UI_GetThemeColorShade4fv(TH_BONE_POSE, 10, fcolor);
+				}
+				else if (boneflag & BONE_SELECTED) {
+					UI_ThemeColorShade(TH_BONE_POSE, -30);
+					UI_GetThemeColorShade4fv(TH_BONE_POSE, -30, fcolor);
+				}
+				else {
+					UI_ThemeColorShade(TH_BONE_SOLID, -30);
+					UI_GetThemeColorShade4fv(TH_BONE_SOLID, -30, fcolor);
+				}
 			}
 			break;
 		}
@@ -266,19 +302,27 @@ static bool set_pchan_glColor(short colCode, int boneflag, short constflag)
 		{
 			/* inner part in background color or constraint */
 			if ((constflag) && ((bcolor == NULL) || (bcolor->flag & TH_WIRECOLOR_CONSTCOLS))) {
-				if (constflag & PCHAN_HAS_TARGET) glColor3ub(255, 150, 0);
-				else if (constflag & PCHAN_HAS_IK) glColor3ub(255, 255, 0);
-				else if (constflag & PCHAN_HAS_SPLINEIK) glColor3ub(200, 255, 0);
-				else if (constflag & PCHAN_HAS_CONST) glColor3ub(0, 255, 120);
-				else if (constflag) UI_ThemeColor(TH_BONE_POSE);  /* PCHAN_HAS_ACTION */
+				unsigned char cp[4];
+				if (constflag & PCHAN_HAS_TARGET) rgba_char_args_set((char *)cp, 255, 150, 0, 255);
+				else if (constflag & PCHAN_HAS_IK) rgba_char_args_set((char *)cp, 255, 255, 0, 255);
+				else if (constflag & PCHAN_HAS_SPLINEIK) rgba_char_args_set((char *)cp, 200, 255, 0, 255);
+				else if (constflag & PCHAN_HAS_CONST) rgba_char_args_set((char *)cp, 0, 255, 120, 255);
+				else if (constflag) UI_GetThemeColor4ubv(TH_BONE_POSE, cp);  /* PCHAN_HAS_ACTION */
+
+				glColor4ubv(cp);
+				rgb_uchar_to_float(fcolor, cp);
 			}
 			else {
 				if (bcolor) {
 					const char *cp = bcolor->solid;
 					glColor4ub(cp[0], cp[1], cp[2], 204);
+					rgb_uchar_to_float(fcolor, (unsigned char *)cp);
+					fcolor[3] = 204.f / 255.f;
 				}
-				else
+				else {
 					UI_ThemeColorShade(TH_BACK, -30);
+					UI_GetThemeColorShade4fv(TH_BACK, -30, fcolor);
+				}
 			}
 		
 			return true;
@@ -290,24 +334,29 @@ static bool set_pchan_glColor(short colCode, int boneflag, short constflag)
 
 static void set_ebone_glColor(const unsigned int boneflag)
 {
+	/* TODO remove glColor/UI_ThemeColor functions when no longer needed */
 	if ((boneflag & BONE_DRAW_ACTIVE) && (boneflag & BONE_SELECTED)) {
 		UI_ThemeColor(TH_EDGE_SELECT);
+		UI_GetThemeColor4fv(TH_EDGE_SELECT, fcolor);
 	}
 	else if (boneflag & BONE_DRAW_ACTIVE) {
 		UI_ThemeColorBlend(TH_WIRE_EDIT, TH_EDGE_SELECT, 0.15f); /* unselected active */
+		UI_GetThemeColorBlendShade4fv(TH_WIRE_EDIT, TH_EDGE_SELECT, 0.15f, 0, fcolor);
 	}
 	else if (boneflag & BONE_SELECTED) {
 		UI_ThemeColorShade(TH_EDGE_SELECT, -20);
+		UI_GetThemeColorShade4fv(TH_EDGE_SELECT, -20, fcolor);
 	}
 	else {
 		UI_ThemeColor(TH_WIRE_EDIT);
+		UI_GetThemeColor4fv(TH_WIRE_EDIT, fcolor);
 	}
 }
 
 /* *************** Armature drawing, helper calls for parts ******************* */
 
 /* half the cube, in Y */
-static const float cube[8][3] = {
+static const float cube_vert[8][3] = {
 	{-1.0,  0.0, -1.0},
 	{-1.0,  0.0,  1.0},
 	{-1.0,  1.0,  1.0},
@@ -316,6 +365,12 @@ static const float cube[8][3] = {
 	{ 1.0,  0.0,  1.0},
 	{ 1.0,  1.0,  1.0},
 	{ 1.0,  1.0, -1.0},
+};
+
+static const float cube_wire[24] = {
+	0, 1, 1, 2, 2, 3, 3, 0,
+	4, 5, 5, 6, 6, 7, 7, 4,
+	0, 4, 1, 5, 2, 6, 3, 7,
 };
 
 static void drawsolidcube_size(float xsize, float ysize, float zsize)
@@ -332,26 +387,26 @@ static void drawsolidcube_size(float xsize, float ysize, float zsize)
 		glBegin(GL_QUADS);
 		n[0] = -1.0;
 		glNormal3fv(n); 
-		glVertex3fv(cube[0]); glVertex3fv(cube[1]); glVertex3fv(cube[2]); glVertex3fv(cube[3]);
+		glVertex3fv(cube_vert[0]); glVertex3fv(cube_vert[1]); glVertex3fv(cube_vert[2]); glVertex3fv(cube_vert[3]);
 		n[0] = 0;
 		n[1] = -1.0;
 		glNormal3fv(n); 
-		glVertex3fv(cube[0]); glVertex3fv(cube[4]); glVertex3fv(cube[5]); glVertex3fv(cube[1]);
+		glVertex3fv(cube_vert[0]); glVertex3fv(cube_vert[4]); glVertex3fv(cube_vert[5]); glVertex3fv(cube_vert[1]);
 		n[1] = 0;
 		n[0] = 1.0;
 		glNormal3fv(n); 
-		glVertex3fv(cube[4]); glVertex3fv(cube[7]); glVertex3fv(cube[6]); glVertex3fv(cube[5]);
+		glVertex3fv(cube_vert[4]); glVertex3fv(cube_vert[7]); glVertex3fv(cube_vert[6]); glVertex3fv(cube_vert[5]);
 		n[0] = 0;
 		n[1] = 1.0;
 		glNormal3fv(n); 
-		glVertex3fv(cube[7]); glVertex3fv(cube[3]); glVertex3fv(cube[2]); glVertex3fv(cube[6]);
+		glVertex3fv(cube_vert[7]); glVertex3fv(cube_vert[3]); glVertex3fv(cube_vert[2]); glVertex3fv(cube_vert[6]);
 		n[1] = 0;
 		n[2] = 1.0;
 		glNormal3fv(n); 
-		glVertex3fv(cube[1]); glVertex3fv(cube[5]); glVertex3fv(cube[6]); glVertex3fv(cube[2]);
+		glVertex3fv(cube_vert[1]); glVertex3fv(cube_vert[5]); glVertex3fv(cube_vert[6]); glVertex3fv(cube_vert[2]);
 		n[2] = -1.0;
 		glNormal3fv(n); 
-		glVertex3fv(cube[7]); glVertex3fv(cube[4]); glVertex3fv(cube[0]); glVertex3fv(cube[3]);
+		glVertex3fv(cube_vert[7]); glVertex3fv(cube_vert[4]); glVertex3fv(cube_vert[0]); glVertex3fv(cube_vert[3]);
 		glEnd();
 
 		glEndList();
@@ -362,30 +417,42 @@ static void drawsolidcube_size(float xsize, float ysize, float zsize)
 
 static void drawcube_size(float xsize, float ysize, float zsize)
 {
-	static GLuint displist = 0;
-	
-	if (displist == 0) {
-		displist = glGenLists(1);
-		glNewList(displist, GL_COMPILE);
-		
-		glBegin(GL_LINE_STRIP);
-		glVertex3fv(cube[0]); glVertex3fv(cube[1]); glVertex3fv(cube[2]); glVertex3fv(cube[3]);
-		glVertex3fv(cube[0]); glVertex3fv(cube[4]); glVertex3fv(cube[5]); glVertex3fv(cube[6]);
-		glVertex3fv(cube[7]); glVertex3fv(cube[4]);
-		glEnd();
-		
-		glBegin(GL_LINES);
-		glVertex3fv(cube[1]); glVertex3fv(cube[5]);
-		glVertex3fv(cube[2]); glVertex3fv(cube[6]);
-		glVertex3fv(cube[3]); glVertex3fv(cube[7]);
-		glEnd();
-		
-		glEndList();
+	static VertexFormat format = {0};
+	static VertexBuffer vbo = {0};
+	static ElementListBuilder elb = {0};
+	static ElementList el = {0};
+	static Batch batch = {0};
+
+	if (format.attrib_ct == 0) {
+		/* Vertex format */
+		unsigned int pos = add_attrib(&format, "pos", GL_FLOAT, 3, KEEP_FLOAT);
+
+		/* Elements */
+		ElementListBuilder_init(&elb, GL_LINES, 12, 8);
+		for (int i = 0; i < 12; ++i) {
+			add_line_vertices(&elb, cube_wire[i*2], cube_wire[i*2+1]);
+		}
+		ElementList_build_in_place(&elb, &el);
+
+		/* Vertices */
+		VertexBuffer_init_with_format(&vbo, &format);
+		VertexBuffer_allocate_data(&vbo, 8);
+		for (int i = 0; i < 8; ++i) {
+			setAttrib(&vbo, pos, i, cube_vert[i]);
+		}
+
+		Batch_init(&batch, GL_LINES, &vbo, &el);
+		Batch_set_builtin_program(&batch, GPU_SHADER_3D_UNIFORM_COLOR);
 	}
 
-	glScalef(xsize, ysize, zsize);
-	glCallList(displist);
-	
+	gpuMatrixBegin3D_legacy();
+	gpuScale3f(xsize, ysize, zsize);
+
+	Batch_use_program(&batch);
+	Batch_Uniform4fv(&batch, "color", fcolor);
+	Batch_draw(&batch);
+
+	gpuMatrixEnd();
 }
 
 
@@ -451,8 +518,11 @@ static const float bone_octahedral_verts[6][3] = {
 	{ 0.0f, 1.0f,  0.0f}
 };
 
-static const unsigned int bone_octahedral_wire_sides[8] = {0, 1, 5, 3, 0, 4, 5, 2};
-static const unsigned int bone_octahedral_wire_square[8] = {1, 2, 3, 4, 1};
+static const unsigned int bone_octahedral_wire[24] = {
+	0, 1,  1, 5,  5, 3,  3, 0,
+	0, 4,  4, 5,  5, 2,  2, 0,
+	1, 2,  2, 3,  3, 4,  4, 1,
+};
 
 static const unsigned int bone_octahedral_solid_tris[8][3] = {
 	{2, 1, 0}, /* bottom */
@@ -480,31 +550,41 @@ static const float bone_octahedral_solid_normals[8][3] = {
 
 static void draw_bone_octahedral(void)
 {
-	static GLuint displist = 0;
-	
-	if (displist == 0) {
-		displist = glGenLists(1);
-		glNewList(displist, GL_COMPILE);
+	static VertexFormat format = {0};
+	static VertexBuffer vbo = {0};
+	static ElementListBuilder elb = {0};
+	static ElementList el = {0};
+	static Batch batch = {0};
 
-		/*	Section 1, sides */
-		glEnableClientState(GL_VERTEX_ARRAY);
-		glVertexPointer(3, GL_FLOAT, 0, bone_octahedral_verts);
-		glDrawElements(GL_LINE_LOOP,
-		               sizeof(bone_octahedral_wire_sides) / sizeof(*bone_octahedral_wire_sides),
-		               GL_UNSIGNED_INT,
-		               bone_octahedral_wire_sides);
+	if (format.attrib_ct == 0) {
+		/* Vertex format */
+		unsigned int pos = add_attrib(&format, "pos", GL_FLOAT, 3, KEEP_FLOAT);
 
-		/*	Section 1, square */
-		glDrawElements(GL_LINE_LOOP,
-		               sizeof(bone_octahedral_wire_square) / sizeof(*bone_octahedral_wire_square),
-		               GL_UNSIGNED_INT,
-		               bone_octahedral_wire_square);
-		glDisableClientState(GL_VERTEX_ARRAY);
-		
-		glEndList();
+		/* Elements */
+		ElementListBuilder_init(&elb, GL_LINES, 12, 6);
+		for (int i = 0; i < 12; ++i) {
+			add_line_vertices(&elb, bone_octahedral_wire[i*2], bone_octahedral_wire[i*2+1]);
+		}
+		ElementList_build_in_place(&elb, &el);
+
+		/* Vertices */
+		VertexBuffer_init_with_format(&vbo, &format);
+		VertexBuffer_allocate_data(&vbo, 6);
+		for (int i = 0; i < 6; ++i) {
+			setAttrib(&vbo, pos, i, bone_octahedral_verts[i]);
+		}
+
+		Batch_init(&batch, GL_LINES, &vbo, &el);
+		Batch_set_builtin_program(&batch, GPU_SHADER_3D_UNIFORM_COLOR);
 	}
 
-	glCallList(displist);
+	gpuMatrixBegin3D_legacy();
+
+	Batch_use_program(&batch);
+	Batch_Uniform4fv(&batch, "color", fcolor);
+	Batch_draw(&batch);
+
+	gpuMatrixEnd();
 }	
 
 static void draw_bone_solid_octahedral(void)
@@ -1753,6 +1833,10 @@ static void draw_pose_bones(Scene *scene, View3D *v3d, ARegion *ar, BaseLegacy *
 	bool draw_wire = false;
 	int flag;
 	bool is_cull_enabled;
+
+	/* TODO find a way to overcome this.
+	 * used in case do_const_color is true */
+	glGetFloatv(GL_CURRENT_COLOR, fcolor);
 	
 	/* being set below */
 	arm->layer_used = 0;
@@ -1938,6 +2022,7 @@ static void draw_pose_bones(Scene *scene, View3D *v3d, ARegion *ar, BaseLegacy *
 								set_pchan_colorset(ob, pchan);
 							else {
 								glColor3ubv(ob_wire_col);
+								rgba_uchar_to_float(fcolor, ob_wire_col);
 							}
 								
 							/* catch exception for bone with hidden parent */
