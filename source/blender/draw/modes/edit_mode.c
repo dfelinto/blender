@@ -61,35 +61,21 @@ void EDIT_cache_init(void)
 
 void EDIT_cache_populate(Object *ob)
 {
-	struct Batch *geom;
-
-	CollectionEngineSettings *ces_mode_ed = BKE_object_collection_engine_get(ob, COLLECTION_MODE_EDIT, "");
-	bool do_occlude_wire = BKE_collection_engine_property_value_get_bool(ces_mode_ed, "show_occlude_wire");
+	CollectionEngineSettings *ces_mode_ed;
 
 	switch (ob->type) {
-		case OB_MESH:
-			geom = DRW_cache_surface_get(ob);
+	    case OB_MESH:
+		    ces_mode_ed = BKE_object_collection_engine_get(ob, COLLECTION_MODE_EDIT, NULL);
+			bool do_occlude_wire = BKE_collection_engine_property_value_get_bool(ces_mode_ed, "show_occlude_wire");
+
 			if (do_occlude_wire) {
-				DRW_shgroup_call_add(depth_shgrp_hidden_wire, geom, ob->obmat);
+				DRW_shgroup_call_add(depth_shgrp_hidden_wire, DRW_cache_surface_get(ob), ob->obmat);
 				DRW_shgroup_wire_outline(ob, true, false, true);
 			}
 			break;
-		case OB_LAMP:
-			DRW_shgroup_lamp(ob);
-			break;
-		case OB_CAMERA:
-		case OB_EMPTY:
-			DRW_shgroup_empty(ob);
-			break;
-		case OB_SPEAKER:
-			DRW_shgroup_speaker(ob);
-			break;
 		default:
-			break;
+		    break;
 	}
-
-	DRW_shgroup_object_center(ob);
-	DRW_shgroup_relationship_lines(ob);
 }
 
 void EDIT_cache_finish(void)

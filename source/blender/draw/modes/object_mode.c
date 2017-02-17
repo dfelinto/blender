@@ -50,7 +50,8 @@ void OBJECT_cache_init(void)
 
 void OBJECT_cache_populate(Object *ob)
 {
-	CollectionEngineSettings *ces_mode_ob = BKE_object_collection_engine_get(ob, COLLECTION_MODE_OBJECT, "");
+	CollectionEngineSettings *ces_mode_ob;
+	ces_mode_ob = BKE_object_collection_engine_get(ob, COLLECTION_MODE_OBJECT, NULL);
 
 	bool do_wire = BKE_collection_engine_property_value_get_bool(ces_mode_ob, "show_wire");
 	bool do_outlines = ((ob->base_flag & BASE_SELECTED) != 0) || do_wire;
@@ -62,15 +63,24 @@ void OBJECT_cache_populate(Object *ob)
 		case OB_LAMP:
 			DRW_shgroup_lamp(ob);
 			break;
-		case OB_CAMERA:
 		case OB_EMPTY:
 			DRW_shgroup_empty(ob);
 			break;
 		case OB_SPEAKER:
 			DRW_shgroup_speaker(ob);
 			break;
-		default:
-			break;
+
+		/* TODO: following cases still need implementation */
+	    case OB_CAMERA:
+	    case OB_MBALL:
+	    case OB_CURVE:
+	    case OB_SURF:
+	    case OB_FONT:
+	    case OB_LATTICE:
+	    case OB_ARMATURE:
+	    default:
+		    DRW_shgroup_empty(ob);
+		    break;
 	}
 
 	DRW_shgroup_object_center(ob);

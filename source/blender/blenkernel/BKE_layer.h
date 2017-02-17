@@ -215,9 +215,9 @@ void BKE_visible_bases_Iterator_end(Iterator *iter);
 	/* flush all the data to objects*/                                        \
 	Base *base_;                                                              \
 	for (base_ = (sl_)->object_bases.first; base_; base_ = base_->next) {     \
-	if ((base_->flag & BASE_VISIBLED) == 0) {                             \
-		continue;                                                         \
-	}                                                                     \
+		if ((base_->flag & BASE_VISIBLED) == 0) {                             \
+			continue;                                                         \
+		}                                                                     \
 	                                                                          \
 	    instance_ = base_->object;			                                  \
 	    instance_->base_flag = base_->flag;
