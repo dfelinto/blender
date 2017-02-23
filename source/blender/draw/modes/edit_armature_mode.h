@@ -1,5 +1,5 @@
 /*
- * ***** BEGIN GPL LICENSE BLOCK *****
+ * Copyright 2016, Blender Foundation.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -15,21 +15,23 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  *
- * ***** END GPL LICENSE BLOCK *****
+ * Contributor(s): Blender Institute
+ *
  */
 
-/** \file blender/editors/space_collections/collections_intern.h
- *  \ingroup spcollections
+/** \file blender/draw/modes/edit_armature_mode.h
+ *  \ingroup draw
  */
 
-#ifndef __COLLECTIONS_INTERN_H__
-#define __COLLECTIONS_INTERN_H__
+#ifndef __EDIT_ARMATURE_MODE_H__
+#define __EDIT_ARMATURE_MODE_H__
 
-struct wmKeyConfig;
+struct Object;
 
-/* collections_ops.c */
-void collections_operatortypes(void);
-void collections_keymap(struct wmKeyConfig *keyconf);
+void EDIT_ARMATURE_cache_init(void);
+void EDIT_ARMATURE_cache_populate(struct Object *ob);
+void EDIT_ARMATURE_cache_finish(void);
 
-#endif  /* __COLLECTIONS_INTERN_H__ */
+void EDIT_ARMATURE_draw(void);
 
+#endif /* __EDIT_ARMATURE_MODE_H__ */

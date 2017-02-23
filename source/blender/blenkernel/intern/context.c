@@ -822,14 +822,6 @@ struct SpaceClip *CTX_wm_space_clip(const bContext *C)
 	return NULL;
 }
 
-struct SpaceCollections *CTX_wm_space_collections(const bContext *C)
-{
-	ScrArea *sa = CTX_wm_area(C);
-	if (sa && sa->spacetype == SPACE_COLLECTIONS)
-		return sa->spacedata.first;
-	return NULL;
-}
-
 void CTX_wm_manager_set(bContext *C, wmWindowManager *wm)
 {
 	C->wm.manager = wm;
@@ -928,7 +920,7 @@ SceneLayer *CTX_data_scene_layer(const bContext *C)
 		return sl;
 	}
 	else {
-		return BKE_scene_layer_active(CTX_data_scene(C));
+		return BKE_scene_layer_context_active(CTX_data_scene(C));
 	}
 }
 

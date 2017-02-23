@@ -49,7 +49,6 @@ struct ColorManagedDisplaySettings;
 
 void fdrawline(float x1, float y1, float x2, float y2); /* DEPRECATED */
 void fdrawbox(float x1, float y1, float x2, float y2); /* DEPRECATED */
-void fdrawbox_filled(float x1, float y1, float x2, float y2);
 void sdrawline(int x1, int y1, int x2, int y2); /* DEPRECATED */
 void sdrawbox(int x1, int y1, int x2, int y2); /* DEPRECATED */
 
@@ -129,13 +128,29 @@ void imm_draw_line_box(unsigned pos, float x1, float y1, float x2, float y2);
 /* use this version when VertexFormat has a vec3 position */
 void imm_draw_line_box_3D(unsigned pos, float x1, float y1, float x2, float y2);
 
-void imm_draw_line(unsigned pos, float x1, float y1, float x2, float y2);
+/* Draw a standard checkerboard to indicate transparent backgrounds */
+void imm_draw_checker_box(float x1, float y1, float x2, float y2);
+
 /**
 * Pack color into 3 bytes
 *
 * \param x color.
 */
 void imm_cpack(unsigned int x);
+
+/**
+* Draw a cylinder. Replacement for gluCylinder.
+* _warning_ : Slow, better use it only if you no other choices.
+*
+* \param pos The vertex attribute number for position.
+* \param nor The vertex attribute number for normal.
+* \param base Specifies the radius of the cylinder at z = 0.
+* \param top Specifies the radius of the cylinder at z = height.
+* \param height Specifies the height of the cylinder.
+* \param slices Specifies the number of subdivisions around the z axis.
+* \param stacks Specifies the number of subdivisions along the z axis.
+*/
+void imm_cylinder(unsigned int pos, unsigned int nor, float base, float top, float height, int slices, int stacks);
 
 /**
  * Returns a float value as obtained by glGetFloatv.

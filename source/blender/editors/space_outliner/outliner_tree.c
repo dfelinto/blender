@@ -84,6 +84,9 @@
 #  include "BLI_math_base.h" /* M_PI */
 #endif
 
+/* prototypes */
+static void outliner_make_hierarchy(ListBase *lb);
+
 /* ********************************************************* */
 /* Persistent Data */
 
@@ -1374,22 +1377,37 @@ static void outliner_add_orphaned_datablocks(Main *mainvar, SpaceOops *soops)
 	}
 }
 
-static void outliner_add_collections_recursive(SpaceOops *soops, ListBase *tree, ListBase *layer_collections,
-                                               TreeElement *parent_ten)
+static void outliner_collections_reorder(const Scene *scene, TreeElement *insert_element, TreeElement *insert_after)
+{
+	SceneLayer *sl = BKE_scene_layer_render_active(scene);
+	LayerCollection *insert_coll = insert_element->directdata;
+	LayerCollection *insert_after_coll = insert_after ? insert_after->directdata : NULL;
+
+	BKE_layer_collection_reinsert_after(scene, sl, insert_coll, insert_after_coll);
+}
+
+static void outliner_add_collections_recursive(SpaceOops *soops, ListBase *tree, Scene *scene,
+                                               ListBase *layer_collections, TreeElement *parent_ten)
 {
 	for (LayerCollection *collection = layer_collections->first; collection; collection = collection->next) {
-		TreeElement *ten = outliner_add_element(soops, tree, NULL, parent_ten, TSE_COLLECTION, 0);
+		TreeElement *ten = outliner_add_element(soops, tree, scene, parent_ten, TSE_COLLECTION, 0);
 
 		ten->name = collection->scene_collection->name;
 		ten->directdata = collection;
+		ten->reinsert = outliner_collections_reorder;
 
-		outliner_add_collections_recursive(soops, &ten->subtree, &collection->layer_collections, ten);
+		for (LinkData *link = collection->object_bases.first; link; link = link->next) {
+			outliner_add_element(soops, &ten->subtree, ((Base *)link->data)->object, NULL, 0, 0);
+		}
+		outliner_make_hierarchy(&ten->subtree);
+
+		outliner_add_collections_recursive(soops, &ten->subtree, scene, &collection->layer_collections, ten);
 	}
 }
 
-static void outliner_add_collections(SpaceOops *soops, SceneLayer *layer)
+static void outliner_add_collections(SpaceOops *soops, SceneLayer *layer, Scene *scene)
 {
-	outliner_add_collections_recursive(soops, &soops->tree, &layer->layer_collections, NULL);
+	outliner_add_collections_recursive(soops, &soops->tree, scene, &layer->layer_collections, NULL);
 }
 
 /* ======================================================= */
@@ -1505,18 +1523,15 @@ static void outliner_sort(ListBase *lb)
 {
 	TreeElement *te;
 	TreeStoreElem *tselem;
-	int totelem = 0;
 
 	te = lb->last;
 	if (te == NULL) return;
 	tselem = TREESTORE(te);
-	
+
 	/* sorting rules; only object lists, ID lists, or deformgroups */
-	if ( ELEM(tselem->type, TSE_DEFGROUP, TSE_ID_BASE) || (tselem->type == 0 && te->idcode == ID_OB)) {
-		
-		/* count first */
-		for (te = lb->first; te; te = te->next) totelem++;
-		
+	if (ELEM(tselem->type, TSE_DEFGROUP, TSE_ID_BASE) || (tselem->type == 0 && te->idcode == ID_OB)) {
+		int totelem = BLI_listbase_count(lb);
+
 		if (totelem > 1) {
 			tTreeSort *tear = MEM_mallocN(totelem * sizeof(tTreeSort), "tree sort array");
 			tTreeSort *tp = tear;
@@ -1724,7 +1739,6 @@ void outliner_build_tree(Main *mainvar, Scene *scene, SceneLayer *sl, SpaceOops 
 			if (sce == scene && show_opened)
 				tselem->flag &= ~TSE_CLOSED;
 
-			Object *ob;
 			FOREACH_SCENE_OBJECT(scene, ob)
 			{
 				ten = outliner_add_element(soops, &te->subtree, ob, te, 0, 0);
@@ -1745,7 +1759,6 @@ void outliner_build_tree(Main *mainvar, Scene *scene, SceneLayer *sl, SpaceOops 
 		
 		outliner_add_scene_contents(soops, &soops->tree, scene, NULL);
 
-		Object *ob;
 		FOREACH_SCENE_OBJECT(scene, ob)
 		{
 			ten = outliner_add_element(soops, &soops->tree, ob, NULL, 0, 0);
@@ -1754,7 +1767,6 @@ void outliner_build_tree(Main *mainvar, Scene *scene, SceneLayer *sl, SpaceOops 
 		outliner_make_hierarchy(&soops->tree);
 	}
 	else if (soops->outlinevis == SO_VISIBLE) {
-		Object *ob;
 		FOREACH_VISIBLE_OBJECT(sl, ob)
 		{
 			outliner_add_element(soops, &soops->tree, ob, NULL, 0, 0);
@@ -1782,7 +1794,6 @@ void outliner_build_tree(Main *mainvar, Scene *scene, SceneLayer *sl, SpaceOops 
 	else if (soops->outlinevis == SO_SAME_TYPE) {
 		Object *ob_active = OBACT_NEW;
 		if (ob_active) {
-			Object *ob;
 			FOREACH_SCENE_OBJECT(scene, ob)
 			{
 				if (ob->type == ob_active->type) {
@@ -1794,10 +1805,9 @@ void outliner_build_tree(Main *mainvar, Scene *scene, SceneLayer *sl, SpaceOops 
 		}
 	}
 	else if (soops->outlinevis == SO_SELECTED) {
-		Object *ob;
 		FOREACH_SELECTED_OBJECT(sl, ob)
 		{
-			    ten = outliner_add_element(soops, &soops->tree, ob, NULL, 0, 0);
+			ten = outliner_add_element(soops, &soops->tree, ob, NULL, 0, 0);
 		}
 		FOREACH_SELECTED_OBJECT_END
 		outliner_make_hierarchy(&soops->tree);
@@ -1854,15 +1864,13 @@ void outliner_build_tree(Main *mainvar, Scene *scene, SceneLayer *sl, SpaceOops 
 		outliner_add_orphaned_datablocks(mainvar, soops);
 	}
 	else if (soops->outlinevis == SO_COLLECTIONS) {
-		outliner_add_collections(soops, BLI_findlink(&scene->render_layers, scene->active_layer));
+		outliner_add_collections(soops, BKE_scene_layer_context_active(scene), scene);
 	}
 	else {
 		ten = outliner_add_element(soops, &soops->tree, OBACT_NEW, NULL, 0, 0);
 	}
 
-	if ((soops->flag & SO_SKIP_SORT_ALPHA) == 0) {
-		outliner_sort(&soops->tree);
-	}
+	outliner_sort(&soops->tree);
 	outliner_filter_tree(soops, &soops->tree);
 
 	BKE_main_id_clear_newpoins(mainvar);

@@ -427,9 +427,9 @@ if BLENDER_REVISION != "Unknown":
     BLENDER_VERSION_DOTS += " " + BLENDER_REVISION          # '2.62.1 SHA1'
 
 BLENDER_VERSION_PATH = "_".join(blender_version_strings)    # '2_62_1'
-if bpy.app.version_cycle == "release":
-    BLENDER_VERSION_PATH = "%s%s_release" % ("_".join(blender_version_strings[:2]),
-                                             bpy.app.version_char)   # '2_62_release'
+if bpy.app.version_cycle in {"rc", "release"}:
+    # '2_62a_release'
+    BLENDER_VERSION_PATH = "%s%s_release" % ("_".join(blender_version_strings[:2]), bpy.app.version_char)
 
 # --------------------------DOWNLOADABLE FILES----------------------------------
 
@@ -1024,6 +1024,7 @@ context_type_map = {
     "brush": ("Brush", False),
     "camera": ("Camera", False),
     "cloth": ("ClothModifier", False),
+    "collection": ("LayerCollection", False),
     "collision": ("CollisionModifier", False),
     "curve": ("Curve", False),
     "dynamic_paint": ("DynamicPaintModifier", False),
@@ -1055,6 +1056,7 @@ context_type_map = {
     "particle_system": ("ParticleSystem", False),
     "particle_system_editable": ("ParticleSystem", False),
     "pose_bone": ("PoseBone", False),
+    "render_layer": ("SceneLayer", False),
     "scene": ("Scene", False),
     "sculpt_object": ("Object", False),
     "selectable_bases": ("ObjectBase", True),

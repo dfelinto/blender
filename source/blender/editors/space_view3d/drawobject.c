@@ -7459,7 +7459,7 @@ static void drawtube(const float vec[3], float radius, float height, float tmat[
 }
 
 /* needs fixing if non-identity matrix used */
-static void imm_drawtube(const float vec[3], float radius, float height, float tmat[4][4], unsigned pos)
+static void UNUSED_FUNCTION(imm_drawtube)(const float vec[3], float radius, float height, float tmat[4][4], unsigned pos)
 {
 	float cur[3];
 	imm_drawcircball(vec, radius, tmat, pos);
@@ -7505,7 +7505,7 @@ static void drawcone(const float vec[3], float radius, float height, float tmat[
 }
 
 /* needs fixing if non-identity matrix used */
-static void imm_drawcone(const float vec[3], float radius, float height, float tmat[4][4], unsigned pos)
+static void UNUSED_FUNCTION(imm_drawcone)(const float vec[3], float radius, float height, float tmat[4][4], unsigned pos)
 {
 	float cur[3];
 
@@ -8551,8 +8551,18 @@ void draw_object(Scene *scene, SceneLayer *sl, ARegion *ar, View3D *v3d, Base *b
 						draw_bounding_volume(ob, ob->boundtype);
 					}
 					else {
+						unsigned char arm_col[4];
 						glLineWidth(1.0f);
-						empty_object = draw_armature(scene, sl, v3d, ar, base, dt, dflag, ob_wire_col, false);
+
+						if (ob_wire_col == NULL) {
+							float fcol[4];
+							glGetFloatv(GL_CURRENT_COLOR, fcol);
+							rgba_float_to_uchar(arm_col, fcol);
+						}
+						else
+							copy_v4_v4_uchar(arm_col, ob_wire_col);
+
+						empty_object = draw_armature(scene, sl, v3d, ar, base, dt, dflag, arm_col, false);
 					}
 				}
 				break;
@@ -8743,7 +8753,13 @@ afterdraw:
 		if (dtx && (G.f & G_RENDER_OGL) == 0) {
 
 			if (dtx & OB_AXIS) {
-				drawaxes(rv3d->viewmatob, 1.0f, OB_ARROWS, NULL);
+				if ((dflag & DRAW_CONSTCOLOR) == 0) {
+					/* prevent random colors being used */
+					drawaxes(rv3d->viewmatob, 1.0f, OB_ARROWS, ob_wire_col);
+				}
+				else {
+					drawaxes(rv3d->viewmatob, 1.0f, OB_ARROWS, NULL);
+				}
 			}
 			if (dtx & OB_DRAWBOUNDOX) {
 				draw_bounding_volume(ob, ob->boundtype);
@@ -9280,10 +9296,12 @@ static void draw_object_mesh_instance(Scene *scene, View3D *v3d, RegionView3D *r
 	if (dm) dm->release(dm);
 }
 
-void draw_object_instance(Scene *scene, View3D *v3d, RegionView3D *rv3d, Object *ob, const char dt, int outline)
+void draw_object_instance(Scene *scene, View3D *v3d, RegionView3D *rv3d, Object *ob, const char dt, int outline, float wire_col[4])
 {
 	if (ob == NULL)
 		return;
+
+	glColor4fv(wire_col);
 
 	switch (ob->type) {
 		case OB_MESH:

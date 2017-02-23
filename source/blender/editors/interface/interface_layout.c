@@ -2137,7 +2137,6 @@ static void ui_litem_estimate_column(uiLayout *litem)
 {
 	uiItem *item;
 	int itemw, itemh;
-	bool min_size_flag = true;
 
 	litem->w = 0;
 	litem->h = 0;
@@ -2145,17 +2144,11 @@ static void ui_litem_estimate_column(uiLayout *litem)
 	for (item = litem->items.first; item; item = item->next) {
 		ui_item_size(item, &itemw, &itemh);
 
-		min_size_flag = min_size_flag && (item->flag & UI_ITEM_MIN);
-
 		litem->w = MAX2(litem->w, itemw);
 		litem->h += itemh;
 
 		if (item->next)
 			litem->h += litem->space;
-	}
-
-	if (min_size_flag) {
-		litem->item.flag |= UI_ITEM_MIN;
 	}
 }
 
@@ -3055,8 +3048,6 @@ static void ui_item_align(uiLayout *litem, short nr)
 		else if (item->type == ITEM_LAYOUT_BOX) {
 			box = (uiLayoutItemBx *)item;
 			box->roundbox->alignnr = nr;
-			BLI_remlink(&litem->root->block->buttons, box->roundbox);
-			BLI_addhead(&litem->root->block->buttons, box->roundbox);
 		}
 		else if (((uiLayout *)item)->align) {
 			ui_item_align((uiLayout *)item, nr);

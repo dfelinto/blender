@@ -294,6 +294,12 @@ void gpuMultMatrix2D(const float m[3][3])
 	state.dirty = true;
 }
 
+void gpuRotate3f(float deg, float x, float y, float z)
+{
+	const float axis[3] = {x, y, z};
+	gpuRotate3fv(deg, axis);
+}
+
 void gpuRotate3fv(float deg, const float axis[3])
 {
 	Mat4 m;
@@ -589,27 +595,22 @@ const float *gpuGetProjectionMatrix3D(float m[4][4])
 
 const float *gpuGetModelViewProjectionMatrix3D(float m[4][4])
 {
+	if (m == NULL) {
+		static Mat4 temp;
+		m = temp;
+	}
+
 #if SUPPORT_LEGACY_MATRIX
 	if (state.mode == MATRIX_MODE_INACTIVE) {
-		if (m == NULL) {
-			static Mat4 temp;
-			m = temp;
-		}
-
 		Mat4 proj;
-		glGetFloatv(GL_MODELVIEW_MATRIX, (float*)proj);
-		glGetFloatv(GL_PROJECTION_MATRIX, (float*)m);
-		mul_m4_m4_post(m, proj);
+		glGetFloatv(GL_MODELVIEW_MATRIX, (float*)m);
+		glGetFloatv(GL_PROJECTION_MATRIX, (float*)proj);
+		mul_m4_m4_pre(m, proj);
 		return (const float*)m;
 	}
 #endif
 
 	BLI_assert(state.mode == MATRIX_MODE_3D);
-
-	if (m == NULL) {
-		static Mat4 temp;
-		m = temp;
-	}
 
 	mul_m4_m4m4(m, Projection3D, ModelView3D);
 	return (const float*)m;

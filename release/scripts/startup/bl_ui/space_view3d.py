@@ -1722,6 +1722,7 @@ class VIEW3D_MT_brush_paint_modes(Menu):
         layout.prop(brush, "use_paint_weight", text="Weight Paint")
         layout.prop(brush, "use_paint_image", text="Texture Paint")
 
+
 # ********** Vertex paint menu **********
 
 
@@ -1791,6 +1792,7 @@ class VIEW3D_MT_vertex_group(Menu):
             layout.operator("object.vertex_group_remove", text="Remove Active Group").all = False
             layout.operator("object.vertex_group_remove", text="Remove All Groups").all = True
 
+
 # ********** Weight paint menu **********
 
 
@@ -1828,6 +1830,7 @@ class VIEW3D_MT_paint_weight(Menu):
         layout.separator()
 
         layout.operator("paint.weight_set")
+
 
 # ********** Sculpt menu **********
 
@@ -1981,6 +1984,7 @@ class VIEW3D_MT_particle_specials(Menu):
 
 class VIEW3D_MT_particle_showhide(ShowHideMenu, Menu):
     _operator_name = "particle"
+
 
 # ********** Pose Menu **********
 
@@ -2255,6 +2259,7 @@ class VIEW3D_MT_bone_options_disable(Menu, BoneOptions):
     bl_label = "Disable Bone Options"
     type = 'DISABLE'
 
+
 # ********** Edit Menus, suffix from ob.type **********
 
 
@@ -2422,6 +2427,7 @@ class VIEW3D_MT_edit_mesh_vertices(Menu):
         with_bullet = bpy.app.build_options.bullet
 
         layout.operator("mesh.merge")
+        layout.operator("mesh.remove_doubles")
         layout.operator("mesh.rip_move")
         layout.operator("mesh.rip_move_fill")
         layout.operator("mesh.rip_edge_move")
@@ -2444,7 +2450,6 @@ class VIEW3D_MT_edit_mesh_vertices(Menu):
         if with_bullet:
             layout.operator("mesh.convex_hull")
         layout.operator("mesh.vertices_smooth")
-        layout.operator("mesh.remove_doubles")
 
         layout.operator("mesh.blend_from_shape")
 
@@ -2601,6 +2606,7 @@ class VIEW3D_MT_edit_mesh_clean(Menu):
         layout.operator("mesh.face_make_planar")
         layout.operator("mesh.vert_connect_nonplanar")
         layout.operator("mesh.vert_connect_concave")
+        layout.operator("mesh.remove_doubles")
         layout.operator("mesh.fill_holes")
 
 
@@ -3144,74 +3150,6 @@ class VIEW3D_PT_viewport_debug(Panel):
 
         col.label(text="Background:")
         col.row(align=True).prop(view, "debug_background", expand=True)
-
-
-class VIEW3D_PT_collections_editor(Panel):
-    bl_space_type = 'VIEW_3D'
-    bl_region_type = 'UI'
-    bl_label = "Collections"
-    bl_options = {'DEFAULT_CLOSED'}
-
-    @classmethod
-    def poll(cls, context):
-        return context.space_data
-
-    def draw(self, context):
-        layout = self.layout
-        layer = context.render_layer
-        active_collection = context.layer_collection
-
-        col = layout.column()
-        box = col.box()
-
-        index = -1
-        for collection in layer.collections:
-            index = self._draw_layer_collection(box, index, active_collection, collection, True, True)
-
-        row = layout.row(align=True)
-        row.operator("collections.collection_new", text="", icon='NEW')
-        row.operator("collections.override_new", text="", icon='LINK_AREA')
-        row.operator("collections.collection_link", text="", icon='LINKED')
-        row.operator("collections.collection_unlink", text="", icon='UNLINKED')
-        row.operator("collections.delete", text="", icon='X')
-
-    def _draw_layer_collection(self, box, index, active_collection, collection, is_active, is_draw, depth=0):
-        index += 1
-        nested_collections = collection.collections
-
-        if is_draw:
-            row = box.row()
-            row.active = is_active
-            is_collection_selected = (collection == active_collection)
-
-            if is_collection_selected:
-                sub_box = row.box()
-                row = sub_box.row()
-
-            row.label(text="{0}{1}{2}".format(
-                "  " * depth,
-                u'\u21b3 ' if depth else "",
-                collection.name))
-
-            row.prop(collection, "hide", text="", emboss=False)
-            row.prop(collection, "hide_select", text="", emboss=False)
-
-            row.operator("collections.select", text="", icon='BLANK1' if is_collection_selected else 'HAND', emboss=False).collection_index=index
-
-            if nested_collections:
-                row.prop(collection, "is_unfolded", text="", emboss=False)
-            else:
-                row.label(icon='BLANK1')
-
-            if not collection.is_unfolded:
-                is_draw = False
-
-            is_active &= not collection.hide
-
-        for nested_collection in nested_collections:
-            index = self._draw_layer_collection(box, index, active_collection, nested_collection, is_active, is_draw, depth + 1)
-
-        return index
 
 
 class VIEW3D_PT_grease_pencil(GreasePencilDataPanel, Panel):

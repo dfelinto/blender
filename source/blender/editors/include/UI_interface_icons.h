@@ -66,6 +66,7 @@ void UI_id_icon_render(
 int UI_preview_render_size(enum eIconSizes size);
 
 void UI_icon_draw(float x, float y, int icon_id);
+void UI_icon_draw_alpha(float x, float y, int icon_id, float alpha);
 void UI_icon_draw_preview(float x, float y, int icon_id);
 void UI_icon_draw_preview_aspect(float x, float y, int icon_id, float aspect);
 void UI_icon_draw_preview_aspect_size(float x, float y, int icon_id, float aspect, float alpha, int size);
@@ -83,6 +84,5 @@ struct PreviewImage *UI_icon_to_preview(int icon_id);
 
 int UI_rnaptr_icon_get(struct bContext *C, struct PointerRNA *ptr, int rnaicon, const bool big);
 int UI_idcode_icon_get(const int idcode);
-int UI_colorset_icon_get(const int set_idx);
 
 #endif /*  __UI_INTERFACE_ICONS_H__ */

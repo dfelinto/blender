@@ -134,6 +134,7 @@ set(SRC
 data_to_c_simple(shaders/gpu_shader_depth_only_frag.glsl SRC)
 data_to_c_simple(shaders/gpu_shader_uniform_color_frag.glsl SRC)
 data_to_c_simple(shaders/gpu_shader_checker_frag.glsl SRC)
+data_to_c_simple(shaders/gpu_shader_diag_stripes_frag.glsl SRC)
 data_to_c_simple(shaders/gpu_shader_simple_lighting_frag.glsl SRC)
 data_to_c_simple(shaders/gpu_shader_flat_color_frag.glsl SRC)
 data_to_c_simple(shaders/gpu_shader_flat_color_alpha_test_0_frag.glsl SRC)
@@ -157,7 +158,9 @@ data_to_c_simple(shaders/gpu_shader_3D_passthrough_vert.glsl SRC)
 
 data_to_c_simple(shaders/gpu_shader_instance_vert.glsl SRC)
 data_to_c_simple(shaders/gpu_shader_instance_variying_size_variying_color_vert.glsl SRC)
+data_to_c_simple(shaders/gpu_shader_instance_objectspace_variying_color_vert.glsl SRC)
 data_to_c_simple(shaders/gpu_shader_instance_screenspace_variying_color_vert.glsl SRC)
+data_to_c_simple(shaders/gpu_shader_instance_screen_aligned_axis_name_vert.glsl SRC)
 
 data_to_c_simple(shaders/gpu_shader_3D_groundline_geom.glsl SRC)
 data_to_c_simple(shaders/gpu_shader_3D_groundpoint_vert.glsl SRC)

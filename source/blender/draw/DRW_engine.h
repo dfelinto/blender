@@ -26,8 +26,7 @@
 #ifndef __DRW_ENGINE_H__
 #define __DRW_ENGINE_H__
 
-//#define WITH_VIEWPORT_CACHE_TEST
-
+struct CollectionEngineSettings;
 struct DRWPass;
 struct Material;
 struct Scene;
@@ -41,5 +40,10 @@ void DRW_pass_free(struct DRWPass *pass);
 /* Settings */
 void *DRW_material_settings_get(struct Material *ma, const char *engine_name);
 void *DRW_render_settings_get(struct Scene *scene, const char *engine_name);
+
+/* Mode engines initialization */
+void OBJECT_collection_settings_create(struct CollectionEngineSettings *ces);
+void EDIT_MESH_collection_settings_create(struct CollectionEngineSettings *ces);
+void EDIT_ARMATURE_collection_settings_create(struct CollectionEngineSettings *ces);
 
 #endif /* __DRW_ENGINE_H__ */

@@ -1051,9 +1051,9 @@ static void icon_draw_texture(
 	glTexEnvf(GL_TEXTURE_FILTER_CONTROL, GL_TEXTURE_LOD_BIAS, -0.5f);
 
 	glBindTexture(GL_TEXTURE_2D, icongltex.id);
-	VertexFormat* format = immVertexFormat();
-	unsigned pos = add_attrib(format, "pos", GL_FLOAT, 2, KEEP_FLOAT);
-	unsigned texCoord = add_attrib(format, "texCoord", GL_FLOAT, 2, KEEP_FLOAT);
+	VertexFormat *format = immVertexFormat();
+	unsigned int pos = add_attrib(format, "pos", GL_FLOAT, 2, KEEP_FLOAT);
+	unsigned int texCoord = add_attrib(format, "texCoord", GL_FLOAT, 2, KEEP_FLOAT);
 
 	immBindBuiltinProgram(GPU_SHADER_2D_IMAGE_COLOR);
 	if (rgb) immUniformColor3fvAlpha(rgb, alpha);
@@ -1407,14 +1407,6 @@ int UI_idcode_icon_get(const int idcode)
 	}
 }
 
-/**
- * \param set_idx: A value from #rna_enum_color_sets_items.
- */
-int UI_colorset_icon_get(const int set_idx)
-{
-	return (set_idx < 1) ? ICON_NONE : VICO_COLORSET_01_VEC - 1 + set_idx;
-}
-
 static void icon_draw_at_size(
         float x, float y, int icon_id, float aspect, float alpha,
         enum eIconSizes size, const bool nocreate)
@@ -1438,6 +1430,11 @@ void UI_icon_draw_aspect_color(float x, float y, int icon_id, float aspect, cons
 void UI_icon_draw(float x, float y, int icon_id)
 {
 	UI_icon_draw_aspect(x, y, icon_id, 1.0f / UI_DPI_FAC, 1.0f);
+}
+
+void UI_icon_draw_alpha(float x, float y, int icon_id, float alpha)
+{
+	UI_icon_draw_aspect(x, y, icon_id, 1.0f / UI_DPI_FAC, alpha);
 }
 
 void UI_icon_draw_size(float x, float y, int size, int icon_id, float alpha)

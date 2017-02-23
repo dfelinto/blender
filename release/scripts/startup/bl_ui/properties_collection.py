@@ -18,7 +18,7 @@
 
 # <pep8 compliant>
 import bpy
-from bpy.types import Panel, UIList
+from bpy.types import Panel
 
 
 class CollectionButtonsPanel:
@@ -41,38 +41,6 @@ class COLLECTION_PT_context_collection(CollectionButtonsPanel, Panel):
             layout.label(text=name, icon='COLLAPSEMENU')
         else:
             layout.prop(collection, "name", text="", icon='COLLAPSEMENU')
-
-
-class COLLECTION_UL_objects(UIList):
-    def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
-        # assert(isinstance(item, bpy.types.Object)
-        ob = item
-        if self.layout_type in {'DEFAULT', 'COMPACT'}:
-            layout.label(ob.name, icon_value=icon)
-
-        elif self.layout_type == 'GRID':
-            layout.alignment = 'CENTER'
-            layout.label("", icon_value=icon)
-
-
-class COLLECTION_PT_objects(CollectionButtonsPanel, Panel):
-    bl_label = "Objects"
-
-    def draw(self, context):
-        layout = self.layout
-        scene = context.scene
-        collection = context.scene_collection
-
-        row = layout.row()
-        row.template_list("COLLECTION_UL_objects", "name", collection, "objects", collection.objects, "active_index", rows=2)
-
-        col = row.column(align=True)
-        col.operator("collections.objects_add", icon='ZOOMIN', text="")
-        col.operator("collections.objects_remove", icon='ZOOMOUT', text="")
-
-        row = layout.row(align=True)
-        row.operator("collections.objects_select", text="Select")
-        row.operator("collections.objects_deselect", text="Deselect")
 
 
 def template_engine_settings(col, settings, name, use_icon_view=False):
@@ -122,6 +90,43 @@ class COLLECTION_PT_clay_settings(CollectionButtonsPanel, Panel):
         template_engine_settings(col, settings, "ssao_factor_edge")
         template_engine_settings(col, settings, "ssao_distance")
         template_engine_settings(col, settings, "ssao_attenuation")
+
+
+class COLLECTION_PT_object_mode_settings(CollectionButtonsPanel, Panel):
+    bl_label = "Object Mode Settings"
+
+    @classmethod
+    def poll(cls, context):
+        ob = context.object
+        return ob and (ob.mode == 'OBJECT')
+
+    def draw(self, context):
+        layout = self.layout
+
+        collection = context.layer_collection
+        settings = collection.get_mode_settings('OBJECT')
+
+        col = layout.column()
+        template_engine_settings(col, settings, "show_wire")
+        template_engine_settings(col, settings, "show_backface_culling")
+
+
+class COLLECTION_PT_edit_mode_settings(CollectionButtonsPanel, Panel):
+    bl_label = "Edit Mode Settings"
+
+    @classmethod
+    def poll(cls, context):
+        ob = context.object
+        return ob and (ob.mode == 'EDIT')
+
+    def draw(self, context):
+        layout = self.layout
+
+        collection = context.layer_collection
+        settings = collection.get_mode_settings('EDIT')
+
+        col = layout.column()
+        template_engine_settings(col, settings, "show_occlude_wire")
 
 
 if __name__ == "__main__":  # only for live edit.

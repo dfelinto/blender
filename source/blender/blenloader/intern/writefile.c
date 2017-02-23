@@ -78,7 +78,7 @@
  * - write #TEST (#RenderInfo struct. 128x128 blend file preview is optional).
  * - write #GLOB (#FileGlobal struct) (some global vars).
  * - write #DNA1 (#SDNA struct)
- * - write #USER (#UserDef struct) if filename is ``~/X.XX/config/startup.blend``.
+ * - write #USER (#UserDef struct) if filename is ``~/.config/blender/X.XX/config/startup.blend``.
  */
 
 
@@ -1027,6 +1027,25 @@ static void write_nodetree(WriteData *wd, bNodeTree *ntree)
 			         (node->type == CMP_NODE_MOVIEDISTORTION))
 			{
 				/* pass */
+			}
+			else if ((ntree->type == NTREE_COMPOSIT) && (node->type == CMP_NODE_GLARE)) {
+				/* Simple forward compat for fix for T50736.
+				 * Not ideal (there is no ideal solution here), but should do for now. */
+				NodeGlare *ndg = node->storage;
+				/* Not in undo case. */
+				if (!wd->current) {
+					switch (ndg->type) {
+						case 2:  /* Grrrr! magic numbers :( */
+							ndg->angle = ndg->streaks;
+							break;
+						case 0:
+							ndg->angle = ndg->star_45;
+							break;
+						default:
+							break;
+					}
+				}
+				writestruct_id(wd, DATA, node->typeinfo->storagename, 1, node->storage);
 			}
 			else {
 				writestruct_id(wd, DATA, node->typeinfo->storagename, 1, node->storage);
@@ -2581,6 +2600,9 @@ static void write_collection_engine_settings(WriteData *wd, ListBase *lb)
 			    case COLLECTION_PROP_TYPE_INT:
 				    writestruct(wd, DATA, CollectionEnginePropertyInt, 1, prop);
 				    break;
+			    case COLLECTION_PROP_TYPE_BOOL:
+				    writestruct(wd, DATA, CollectionEnginePropertyBool, 1, prop);
+				    break;
 			    default:
 				    ; /* error: don't know how to write this file */
 			}
@@ -2597,6 +2619,8 @@ static void write_layer_collections(WriteData *wd, ListBase *lb)
 		writelist(wd, DATA, CollectionOverride, &lc->overrides);
 
 		write_collection_engine_settings(wd, &lc->engine_settings);
+
+		write_collection_engine_settings(wd, &lc->mode_settings);
 
 		write_layer_collections(wd, &lc->layer_collections);
 	}
@@ -3136,9 +3160,6 @@ static void write_screens(WriteData *wd, ListBase *scrbase)
 				}
 				else if (sl->spacetype == SPACE_INFO) {
 					writestruct(wd, DATA, SpaceInfo, 1, sl);
-				}
-				else if (sl->spacetype == SPACE_COLLECTIONS) {
-					writestruct(wd, DATA, SpaceCollections, 1, sl);
 				}
 			}
 		}

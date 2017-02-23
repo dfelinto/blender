@@ -44,6 +44,7 @@
 
 #include "MEM_guardedalloc.h"
 
+
 /**
  * Add a collection to a collection ListBase and syncronize all render layers
  * The ListBase is NULL when the collection is to be added to the master collection
@@ -93,12 +94,11 @@ static void collection_free(SceneCollection *sc)
 
 /**
  * Unlink the collection recursively
- * return true if unlinked
+ * \return true if unlinked.
  */
 static bool collection_remlink(SceneCollection *sc_parent, SceneCollection *sc_gone)
 {
-	for (SceneCollection *sc = sc_parent->scene_collections.first; sc; sc = sc->next)
-	{
+	for (SceneCollection *sc = sc_parent->scene_collections.first; sc; sc = sc->next) {
 		if (sc == sc_gone) {
 			BLI_remlink(&sc_parent->scene_collections, sc_gone);
 			return true;
@@ -117,7 +117,7 @@ static bool collection_remlink(SceneCollection *sc_parent, SceneCollection *sc_g
 static void layer_collection_remove(SceneLayer *sl, ListBase *lb, const SceneCollection *sc)
 {
 	LayerCollection *lc = lb->first;
-	while(lc) {
+	while (lc) {
 		if (lc->scene_collection == sc) {
 			BKE_scene_layer_engine_settings_collection_recalculate(sl, lc);
 			BKE_layer_collection_free(sl, lc);
@@ -176,7 +176,7 @@ bool BKE_collection_remove(Scene *scene, SceneCollection *sc)
 /**
  * Returns the master collection
  */
-SceneCollection *BKE_collection_master(Scene *scene)
+SceneCollection *BKE_collection_master(const Scene *scene)
 {
 	return scene->collection;
 }
@@ -185,7 +185,8 @@ SceneCollection *BKE_collection_master(Scene *scene)
  * Free (or release) any data used by the master collection (does not free the master collection itself).
  * Used only to clear the entire scene data since it's not doing re-syncing of the LayerCollection tree
  */
-void BKE_collection_master_free(Scene *scene){
+void BKE_collection_master_free(Scene *scene)
+{
 	collection_free(BKE_collection_master(scene));
 }
 
@@ -214,7 +215,6 @@ void BKE_collection_object_add(Scene *scene, SceneCollection *sc, Object *ob)
  */
 void BKE_collection_object_add_from(Scene *scene, Object *ob_src, Object *ob_dst)
 {
-	SceneCollection *sc;
 	FOREACH_SCENE_COLLECTION(scene, sc)
 	{
 		if (BLI_findptr(&sc->objects, ob_src, offsetof(LinkData, data))) {
@@ -257,7 +257,6 @@ void BKE_collections_object_remove(Main *bmain, Scene *scene, Object *ob, const 
 {
 	BKE_scene_remove_rigidbody_object(scene, ob);
 
-	SceneCollection *sc;
 	FOREACH_SCENE_COLLECTION(scene, sc)
 	{
 		BKE_collection_object_remove(bmain, scene, sc, ob, free_us);
@@ -273,7 +272,7 @@ typedef struct SceneCollectionsIteratorData {
 	Scene *scene;
 	void **array;
 	int tot, cur;
- } SceneCollectionsIteratorData;
+} SceneCollectionsIteratorData;
 
 static void scene_collection_callback(SceneCollection *sc, BKE_scene_collections_Cb callback, void *data)
 {

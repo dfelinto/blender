@@ -121,7 +121,7 @@ void do_versions_after_linking_280(Main *main)
 					}
 				}
 
-				SceneLayer *sl = BKE_scene_layer_add(scene, "Render Layer");
+				SceneLayer *sl = BKE_scene_layer_add(scene, "Viewport");
 
 				/* In this particular case we can safely assume the data struct */
 				LayerCollection *lc = ((LayerCollection *)sl->layer_collections.first)->layer_collections.first;
@@ -173,6 +173,11 @@ void do_versions_after_linking_280(Main *main)
 	}
 }
 
+static void blo_do_version_temporary(Main *main)
+{
+	BKE_scene_layer_doversion_update(main);
+}
+
 void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *main)
 {
 	if (!MAIN_VERSION_ATLEAST(main, 280, 0)) {
@@ -183,5 +188,9 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *main)
 				BLI_strncpy(scene->collection->name, "Master Collection", sizeof(scene->collection->name));
 			}
 		}
+
+		/* temporary validation of 280 files for layers */
+		blo_do_version_temporary(main);
 	}
+
 }

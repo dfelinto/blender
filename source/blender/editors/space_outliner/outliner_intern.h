@@ -37,6 +37,7 @@
 /* internal exports only */
 
 struct wmOperatorType;
+struct TreeElement;
 struct TreeStoreElem;
 struct bContext;
 struct Scene;
@@ -45,6 +46,13 @@ struct ID;
 struct Object;
 struct bPoseChannel;
 struct EditBone;
+
+/**
+ * Callback type for reinserting elements at a different position, used to allow user customizable element order.
+ * Passing scene right now, may be better to allow some custom data.
+ */
+typedef void (*TreeElementReinsertFunc)(const struct Scene *scene, struct TreeElement *insert_element,
+                                        struct TreeElement *insert_after);
 
 typedef struct TreeElement {
 	struct TreeElement *next, *prev, *parent;
@@ -58,7 +66,15 @@ typedef struct TreeElement {
 	const char *name;
 	void *directdata;          // Armature Bones, Base, Sequence, Strip...
 	PointerRNA rnaptr;         // RNA Pointer
-}  TreeElement;
+
+	/* callbacks */
+	TreeElementReinsertFunc reinsert;
+
+	struct {
+		/* the element after which we may insert the dragged one (NULL to insert at top) */
+		struct TreeElement *insert_te;
+	} *drag_data;
+} TreeElement;
 
 #define TREESTORE_ID_TYPE(_id) \
 	(ELEM(GS((_id)->name), ID_SCE, ID_LI, ID_OB, ID_ME, ID_CU, ID_MB, ID_NT, ID_MA, ID_TE, ID_IM, ID_LT, ID_LA, ID_CA) || \
@@ -268,10 +284,25 @@ void OUTLINER_OT_animdata_operation(struct wmOperatorType *ot);
 void OUTLINER_OT_action_set(struct wmOperatorType *ot);
 void OUTLINER_OT_constraint_operation(struct wmOperatorType *ot);
 void OUTLINER_OT_modifier_operation(struct wmOperatorType *ot);
+void OUTLINER_OT_collection_operation(struct wmOperatorType *ot);
 /* ---------------------------------------------------------------- */
 
 /* outliner_ops.c */
 void outliner_operatortypes(void);
 void outliner_keymap(struct wmKeyConfig *keyconf);
+
+/* outliner_collections.c */
+
+void OUTLINER_OT_collection_delete(struct wmOperatorType *ot);
+void OUTLINER_OT_collection_select(struct wmOperatorType *ot);
+void OUTLINER_OT_collection_link(struct wmOperatorType *ot);
+void OUTLINER_OT_collection_unlink(struct wmOperatorType *ot);
+void OUTLINER_OT_collection_new(struct wmOperatorType *ot);
+void OUTLINER_OT_collection_override_new(struct wmOperatorType *ot);
+void OUTLINER_OT_collection_objects_add(struct wmOperatorType *ot);
+void OUTLINER_OT_collection_objects_remove(struct wmOperatorType *ot);
+void OUTLINER_OT_collection_objects_select(struct wmOperatorType *ot);
+void OUTLINER_OT_collection_objects_deselect(struct wmOperatorType *ot);
+
 
 #endif /* __OUTLINER_INTERN_H__ */

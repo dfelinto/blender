@@ -128,6 +128,7 @@
 #include "BKE_fcurve.h"
 #include "BKE_global.h" // for G
 #include "BKE_group.h"
+#include "BKE_layer.h"
 #include "BKE_library.h" // for which_libbase
 #include "BKE_library_idmap.h"
 #include "BKE_library_query.h"
@@ -5599,7 +5600,7 @@ static void direct_link_object(FileData *fd, Object *ob)
 	ob->bb = NULL;
 	ob->derivedDeform = NULL;
 	ob->derivedFinal = NULL;
-	ob->collection_settings = NULL;
+	BLI_listbase_clear(&ob->collection_settings);
 	BLI_listbase_clear(&ob->gpulamp);
 	link_list(fd, &ob->pc_ids);
 
@@ -5852,9 +5853,12 @@ static void lib_link_scene(FileData *fd, Main *main)
 			lib_link_scene_collection(fd, sce->id.lib, sce->collection);
 
 			for (sl = sce->render_layers.first; sl; sl = sl->next) {
+				/* tag scene layer to update for collection tree evaluation */
+				sl->flag |= SCENE_LAYER_ENGINE_DIRTY;
 				for (Base *base = sl->object_bases.first; base; base = base->next) {
 					/* we only bump the use count for the collection objects */
 					base->object = newlibadr(fd, sce->id.lib, base->object);
+					base->flag |= BASE_DIRTY_ENGINE_SETTINGS;
 				}
 			}
 
@@ -5995,6 +5999,8 @@ static void direct_link_layer_collections(FileData *fd, ListBase *lb)
 		link_list(fd, &lc->overrides);
 
 		direct_link_engine_settings(fd, &lc->engine_settings);
+
+		direct_link_engine_settings(fd, &lc->mode_settings);
 
 		direct_link_layer_collections(fd, &lc->layer_collections);
 	}
@@ -6296,6 +6302,8 @@ static void direct_link_scene(FileData *fd, Scene *sce, Main *bmain)
 		link_list(fd, &sl->object_bases);
 		sl->basact = newdataadr(fd, sl->basact);
 		direct_link_layer_collections(fd, &sl->layer_collections);
+		/* tag scene layer to update for collection tree evaluation */
+		BKE_scene_layer_base_flag_recalculate(sl);
 	}
 
 	link_list(fd, &sce->engines_settings);
@@ -6647,10 +6655,6 @@ static void lib_link_screen(FileData *fd, Main *main)
 						SpaceLogic *slogic = (SpaceLogic *)sl;
 						
 						slogic->gpd = newlibadr_us(fd, sc->id.lib, slogic->gpd);
-					}
-					else if (sl->spacetype == SPACE_COLLECTIONS) {
-						SpaceCollections *slayer = (SpaceCollections *)sl;
-						slayer->flag |= SC_COLLECTION_DATA_REFRESH;
 					}
 				}
 			}
@@ -7448,10 +7452,6 @@ static bool direct_link_screen(FileData *fd, bScreen *sc)
 				sclip->scopes.track_search = NULL;
 				sclip->scopes.track_preview = NULL;
 				sclip->scopes.ok = 0;
-			}
-			else if (sl->spacetype == SPACE_COLLECTIONS) {
-				SpaceCollections *slayer = (SpaceCollections *)sl;
-				slayer->flag |= SC_COLLECTION_DATA_REFRESH;
 			}
 		}
 		
@@ -10637,6 +10637,9 @@ static void read_libraries(FileData *basefd, ListBase *mainlist)
 					else {
 						mainptr->curlib->filedata = NULL;
 						mainptr->curlib->id.tag |= LIB_TAG_MISSING;
+						/* Set lib version to current main one... Makes assert later happy. */
+						mainptr->versionfile = mainptr->curlib->versionfile = mainl->versionfile;
+						mainptr->subversionfile = mainptr->curlib->subversionfile = mainl->subversionfile;
 					}
 					
 					if (fd == NULL) {

@@ -460,10 +460,7 @@ void BKE_object_free(Object *ob)
 
 	BKE_previewimg_free(&ob->preview);
 
-	if (ob->collection_settings) {
-		BKE_layer_collection_engine_settings_free(ob->collection_settings);
-		MEM_freeN(ob->collection_settings);
-	}
+	BKE_layer_collection_engine_settings_list_free(&ob->collection_settings);
 }
 
 /* actual check for internal data, not context or flags */
@@ -2242,66 +2239,6 @@ void BKE_boundbox_minmax(const BoundBox *bb, float obmat[4][4], float r_min[3], 
 		mul_v3_m4v3(vec, obmat, bb->vec[i]);
 		minmax_v3v3_v3(r_min, r_max, vec);
 	}
-}
-
-/**
- * Returns a BBox which each dimensions are at least epsilon.
- * \note In case a given dimension needs to be enlarged, its final value will be in [epsilon, 3 * epsilon] range.
- *
- * \param bb the input bbox to check.
- * \param bb_temp the temp bbox to modify (\a bb content is never changed).
- * \param epsilon the minimum dimension to ensure.
- * \return either bb (if nothing needed to be changed) or bb_temp.
- */
-BoundBox *BKE_boundbox_ensure_minimum_dimensions(BoundBox *bb, BoundBox *bb_temp, const float epsilon)
-{
-	if (fabsf(bb->vec[0][0] - bb->vec[4][0]) < epsilon) {
-		/* Flat along X axis... */
-		*bb_temp = *bb;
-		bb = bb_temp;
-		bb->vec[0][0] -= epsilon;
-		bb->vec[1][0] -= epsilon;
-		bb->vec[2][0] -= epsilon;
-		bb->vec[3][0] -= epsilon;
-		bb->vec[4][0] += epsilon;
-		bb->vec[5][0] += epsilon;
-		bb->vec[6][0] += epsilon;
-		bb->vec[7][0] += epsilon;
-	}
-
-	if (fabsf(bb->vec[0][1] - bb->vec[3][1]) < epsilon) {
-		/* Flat along Y axis... */
-		if (bb != bb_temp) {
-			*bb_temp = *bb;
-			bb = bb_temp;
-		}
-		bb->vec[0][1] -= epsilon;
-		bb->vec[1][1] -= epsilon;
-		bb->vec[4][1] -= epsilon;
-		bb->vec[5][1] -= epsilon;
-		bb->vec[2][1] += epsilon;
-		bb->vec[3][1] += epsilon;
-		bb->vec[6][1] += epsilon;
-		bb->vec[7][1] += epsilon;
-	}
-
-	if (fabsf(bb->vec[0][2] - bb->vec[1][2]) < epsilon) {
-		/* Flat along Z axis... */
-		if (bb != bb_temp) {
-			*bb_temp = *bb;
-			bb = bb_temp;
-		}
-		bb->vec[0][2] -= epsilon;
-		bb->vec[3][2] -= epsilon;
-		bb->vec[4][2] -= epsilon;
-		bb->vec[7][2] -= epsilon;
-		bb->vec[1][2] += epsilon;
-		bb->vec[2][2] += epsilon;
-		bb->vec[5][2] += epsilon;
-		bb->vec[6][2] += epsilon;
-	}
-
-	return bb;
 }
 
 BoundBox *BKE_object_boundbox_get(Object *ob)

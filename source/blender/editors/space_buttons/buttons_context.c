@@ -181,8 +181,8 @@ static int buttons_context_path_object(ButsContextPath *path)
 	/* if we have a scene, use the scene's active object */
 	else if (buttons_context_path_scene(path)) {
 		scene = path->ptr[path->len - 1].data;
-		TODO_LAYER_CONTEXT; /* use context, not active one */
-		SceneLayer *sl = BKE_scene_layer_active(scene);
+
+		SceneLayer *sl = BKE_scene_layer_context_active(scene);
 		ob = (sl->basact) ? sl->basact->object : NULL;
 
 		if (ob) {
@@ -571,6 +571,14 @@ static int buttons_context_path_collection(const bContext *C, ButsContextPath *p
 	if (sc) {
 		RNA_pointer_create(NULL, &RNA_LayerCollection, sc, &path->ptr[path->len]);
 		path->len++;
+
+		/* temporary object in context path to get edit mode */
+		Object *ob = CTX_data_active_object(C);
+		if (ob) {
+			RNA_id_pointer_create(&ob->id, &path->ptr[path->len]);
+			path->len++;
+		}
+
 		return 1;
 	}
 
