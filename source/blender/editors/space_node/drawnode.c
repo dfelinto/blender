@@ -353,6 +353,7 @@ static void node_draw_frame_label(bNodeTree *ntree, bNode *node, const float asp
 	const int font_size = data->label_size / aspect;
 	const float margin = (float)(NODE_DY / 4);
 	int label_height;
+	unsigned char color[3];
 
 	nodeLabel(ntree, node, label, sizeof(label));
 
@@ -361,7 +362,8 @@ static void node_draw_frame_label(bNodeTree *ntree, bNode *node, const float asp
 	BLF_size(fontid, MIN2(24, font_size), U.dpi); /* clamp otherwise it can suck up a LOT of memory */
 	
 	/* title color */
-	UI_ThemeColorBlendShade(TH_TEXT, color_id, 0.4f, 10);
+	UI_GetThemeColorBlendShade3ubv(TH_TEXT, color_id, 0.4f, 10, color);
+	BLF_color3ubv(fontid, color);
 
 	width = BLF_width(fontid, label, sizeof(label));
 	ascender = BLF_ascender(fontid);
@@ -3178,6 +3180,7 @@ void ED_init_node_socket_type_virtual(bNodeSocketType *stype)
 void draw_nodespace_back_pix(const bContext *C, ARegion *ar, SpaceNode *snode, bNodeInstanceKey parent_key)
 {
 	bNodeInstanceKey active_viewer_key = (snode->nodetree ? snode->nodetree->active_viewer_key : NODE_INSTANCE_KEY_NONE);
+	float shuffle[4] = {0.0f, 0.0f, 0.0f, 0.0f};
 	Image *ima;
 	void *lock;
 	ImBuf *ibuf;
@@ -3210,60 +3213,37 @@ void draw_nodespace_back_pix(const bContext *C, ARegion *ar, SpaceNode *snode, b
 			unsigned char *display_buffer = NULL;
 			void *cache_handle = NULL;
 			
-			if (snode->flag & (SNODE_SHOW_R | SNODE_SHOW_G | SNODE_SHOW_B)) {
-				int ofs;
+			if (snode->flag & (SNODE_SHOW_R | SNODE_SHOW_G | SNODE_SHOW_B | SNODE_SHOW_ALPHA)) {
 				
 				display_buffer = IMB_display_buffer_acquire_ctx(C, ibuf, &cache_handle);
-				
-#ifdef __BIG_ENDIAN__
-				if      (snode->flag & SNODE_SHOW_R) ofs = 0;
-				else if (snode->flag & SNODE_SHOW_G) ofs = 1;
-				else                                 ofs = 2;
-#else
-				if      (snode->flag & SNODE_SHOW_R) ofs = 1;
-				else if (snode->flag & SNODE_SHOW_G) ofs = 2;
-				else                                 ofs = 3;
-#endif
-				
-				glPixelZoom(snode->zoom, snode->zoom);
-				/* swap bytes, so alpha is most significant one, then just draw it as luminance int */
-				
-				glaDrawPixelsSafe(x, y, ibuf->x, ibuf->y, ibuf->x, GL_LUMINANCE, GL_UNSIGNED_INT,
-				                  display_buffer - (4 - ofs));
-				
-				glPixelZoom(1.0f, 1.0f);
-			}
-			else if (snode->flag & SNODE_SHOW_ALPHA) {
-				display_buffer = IMB_display_buffer_acquire_ctx(C, ibuf, &cache_handle);
-				
-				glPixelZoom(snode->zoom, snode->zoom);
-				/* swap bytes, so alpha is most significant one, then just draw it as luminance int */
-#ifdef __BIG_ENDIAN__
-				glPixelStorei(GL_UNPACK_SWAP_BYTES, 1);
-#endif
-				glaDrawPixelsSafe(x, y, ibuf->x, ibuf->y, ibuf->x, GL_LUMINANCE, GL_UNSIGNED_INT, display_buffer);
-				
-#ifdef __BIG_ENDIAN__
-				glPixelStorei(GL_UNPACK_SWAP_BYTES, 0);
-#endif
-				glPixelZoom(1.0f, 1.0f);
+
+				if (snode->flag & SNODE_SHOW_R)
+					shuffle[0] = 1.0f;
+				else if (snode->flag & SNODE_SHOW_G)
+					shuffle[1] = 1.0f;
+				else if (snode->flag & SNODE_SHOW_B)
+					shuffle[2] = 1.0f;
+				else
+					shuffle[3] = 1.0f;
+
+				GPUShader *shader = immDrawPixelsTexSetup(GPU_SHADER_2D_IMAGE_SHUFFLE_COLOR);
+				GPU_shader_uniform_vector(shader, GPU_shader_get_uniform(shader, "shuffle"), 4, 1, shuffle);
+
+				immDrawPixelsTex(x, y, ibuf->x, ibuf->y, GL_RGBA, GL_UNSIGNED_BYTE, GL_NEAREST,
+				                 display_buffer, snode->zoom, snode->zoom, NULL);
+
+				GPU_shader_unbind();
 			}
 			else if (snode->flag & SNODE_USE_ALPHA) {
 				glEnable(GL_BLEND);
 				glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-				glPixelZoom(snode->zoom, snode->zoom);
-				
-				glaDrawImBuf_glsl_ctx(C, ibuf, x, y, GL_NEAREST);
-				
-				glPixelZoom(1.0f, 1.0f);
+
+				glaDrawImBuf_glsl_ctx(C, ibuf, x, y, GL_NEAREST, snode->zoom, snode->zoom);
+
 				glDisable(GL_BLEND);
 			}
 			else {
-				glPixelZoom(snode->zoom, snode->zoom);
-				
-				glaDrawImBuf_glsl_ctx(C, ibuf, x, y, GL_NEAREST);
-				
-				glPixelZoom(1.0f, 1.0f);
+				glaDrawImBuf_glsl_ctx(C, ibuf, x, y, GL_NEAREST, snode->zoom, snode->zoom);
 			}
 			
 			if (cache_handle)
@@ -3288,13 +3268,19 @@ void draw_nodespace_back_pix(const bContext *C, ARegion *ar, SpaceNode *snode, b
 			    viewer_border->ymin < viewer_border->ymax)
 			{
 				rcti pixel_border;
-				UI_ThemeColor(TH_ACTIVE);
 				BLI_rcti_init(&pixel_border,
 				              x + snode->zoom * viewer_border->xmin * ibuf->x,
 				              x + snode->zoom * viewer_border->xmax * ibuf->x,
 				              y + snode->zoom * viewer_border->ymin * ibuf->y,
 				              y + snode->zoom * viewer_border->ymax * ibuf->y);
-				glaDrawBorderCorners(&pixel_border, 1.0f, 1.0f);
+
+				unsigned int pos = add_attrib(immVertexFormat(), "pos", GL_FLOAT, 2, KEEP_FLOAT);
+				immBindBuiltinProgram(GPU_SHADER_2D_UNIFORM_COLOR);
+				immUniformThemeColor(TH_ACTIVE);
+
+				immDrawBorderCorners(pos, &pixel_border, 1.0f, 1.0f);
+
+				immUnbindProgram();
 			}
 		}
 		
@@ -3414,6 +3400,7 @@ void node_draw_link_bezier(View2D *v2d, SpaceNode *snode, bNodeLink *link,
 		float arrow[2], arrow1[2], arrow2[2];
 		const float px_fac = UI_DPI_WINDOW_FAC;
 		glGetFloatv(GL_LINE_WIDTH, &linew);
+		unsigned int pos;
 		
 		/* we can reuse the dist variable here to increment the GL curve eval amount*/
 		dist = 1.0f / (float)LINK_RESOL;
@@ -3437,57 +3424,84 @@ void node_draw_link_bezier(View2D *v2d, SpaceNode *snode, bNodeLink *link,
 			arrow[0] = coord_array[LINK_ARROW][0];
 			arrow[1] = coord_array[LINK_ARROW][1];
 		}
+
+		if (do_triple || drawarrow || (!do_shaded)) {
+			pos = add_attrib(immVertexFormat(), "pos", GL_FLOAT, 2, KEEP_FLOAT);
+			immBindBuiltinProgram(GPU_SHADER_2D_UNIFORM_COLOR);
+		}
+
 		if (do_triple) {
-			UI_ThemeColorShadeAlpha(th_col3, -80, -120);
+			immUniformThemeColorShadeAlpha(th_col3, -80, -120);
 			glLineWidth(4.0f * px_fac);
-			
-			glBegin(GL_LINE_STRIP);
+
+			immBegin(GL_LINE_STRIP, (LINK_RESOL + 1));
+
 			for (i = 0; i <= LINK_RESOL; i++) {
-				glVertex2fv(coord_array[i]);
+				immVertex2fv(pos, coord_array[i]);
 			}
-			glEnd();
+
+			immEnd();
+
 			if (drawarrow) {
-				glBegin(GL_LINE_STRIP);
-				glVertex2fv(arrow1);
-				glVertex2fv(arrow);
-				glVertex2fv(arrow2);
-				glEnd();
+				immBegin(GL_LINE_STRIP, 3);
+				immVertex2fv(pos, arrow1);
+				immVertex2fv(pos, arrow);
+				immVertex2fv(pos, arrow2);
+				immEnd();
 			}
 		}
-		
-		/* XXX using GL_LINES for shaded node lines is a workaround
-		 * for Intel hardware, this breaks with GL_LINE_STRIP and
-		 * changing color in begin/end blocks.
-		 */
+
 		glLineWidth(1.5f * px_fac);
+
+		if (drawarrow) {
+			immUniformThemeColorBlend(th_col1, th_col2, 0.5f);
+
+			immBegin(GL_LINE_STRIP, 3);
+			immVertex2fv(pos, arrow1);
+			immVertex2fv(pos, arrow);
+			immVertex2fv(pos, arrow2);
+			immEnd();
+		}
+
+		if (!do_shaded) {
+			immUniformThemeColor(th_col1);
+
+			immBegin(GL_LINE_STRIP, (LINK_RESOL + 1));
+
+			for (i = 0; i <= LINK_RESOL; i++) {
+				immVertex2fv(pos, coord_array[i]);
+			}
+
+			immEnd();
+		}
+
+		if (do_triple || drawarrow || (!do_shaded)) {
+			immUnbindProgram();
+		}
+
 		if (do_shaded) {
-			glBegin(GL_LINES);
-			for (i = 0; i < LINK_RESOL; i++) {
-				UI_ThemeColorBlend(th_col1, th_col2, spline_step);
-				glVertex2fv(coord_array[i]);
-				
-				UI_ThemeColorBlend(th_col1, th_col2, spline_step + dist);
-				glVertex2fv(coord_array[i + 1]);
-				
+			unsigned char col[3];
+
+			VertexFormat *format = immVertexFormat();
+			pos = add_attrib(format, "pos", GL_FLOAT, 2, KEEP_FLOAT);
+			unsigned int color = add_attrib(format, "color", GL_UNSIGNED_BYTE, 3, NORMALIZE_INT_TO_FLOAT);
+
+			immBindBuiltinProgram(GPU_SHADER_2D_SMOOTH_COLOR);
+
+			immBegin(GL_LINE_STRIP, (LINK_RESOL + 1));
+
+			for (i = 0; i <= LINK_RESOL; i++) {
+				UI_GetThemeColorBlend3ubv(th_col1, th_col2, spline_step, col);
+				immAttrib3ubv(color, col);
+
+				immVertex2fv(pos, coord_array[i]);
+
 				spline_step += dist;
 			}
-			glEnd();
-		}
-		else {
-			UI_ThemeColor(th_col1);
-			glBegin(GL_LINE_STRIP);
-			for (i = 0; i <= LINK_RESOL; i++) {
-				glVertex2fv(coord_array[i]);
-			}
-			glEnd();
-		}
-		
-		if (drawarrow) {
-			glBegin(GL_LINE_STRIP);
-			glVertex2fv(arrow1);
-			glVertex2fv(arrow);
-			glVertex2fv(arrow2);
-			glEnd();
+
+			immEnd();
+
+			immUnbindProgram();
 		}
 		
 		glDisable(GL_LINE_SMOOTH);

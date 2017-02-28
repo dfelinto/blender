@@ -569,7 +569,7 @@ static void outliner_draw_restrictbuts(uiBlock *block, Scene *scene, ARegion *ar
 				
 				UI_block_emboss_set(block, UI_EMBOSS);
 			}
-			else if (tselem->type == TSE_COLLECTION) {
+			else if (tselem->type == TSE_LAYER_COLLECTION) {
 				LayerCollection *collection = te->directdata;
 
 				UI_block_emboss_set(block, UI_EMBOSS_NONE);
@@ -944,6 +944,7 @@ static void tselem_draw_icon(uiBlock *block, int xmax, float x, float y, TreeSto
 						ICON_DRAW(ICON_MOD_CAST);
 						break;
 					case eModifierType_MeshDeform:
+					case eModifierType_SurfaceDeform:
 						ICON_DRAW(ICON_MOD_MESHDEFORM);
 						break;
 					case eModifierType_Bevel:
@@ -1236,7 +1237,7 @@ static void outliner_draw_iconrow(bContext *C, uiBlock *block, Scene *scene, Sce
 				}
 			}
 			else {
-				active = tree_element_type_active(NULL, scene, sl, soops, te, tselem, OL_SETSEL_NONE, false);
+				active = tree_element_type_active(C, scene, sl, soops, te, tselem, OL_SETSEL_NONE, false);
 			}
 
 			if (active != OL_DRAWSEL_NONE) {
@@ -1365,9 +1366,7 @@ static void outliner_draw_tree_element(
 			}
 		}
 		else {
-			if (tree_element_type_active(NULL, scene, sl, soops, te, tselem, OL_SETSEL_NONE, false) != OL_DRAWSEL_NONE) {
-				active = OL_DRAWSEL_ACTIVE;
-			}
+			active = tree_element_type_active(C, scene, sl, soops, te, tselem, OL_SETSEL_NONE, false);
 			rgba_float_args_set(color, 0.85f, 0.85f, 1.0f, alpha);
 		}
 		

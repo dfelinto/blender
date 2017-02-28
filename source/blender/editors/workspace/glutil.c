@@ -352,6 +352,7 @@ static int get_cached_work_texture(int *r_w, int *r_h)
 	return texid;
 }
 
+#if 0 /* Obsolete / unused */
 /* DEPRECATED: use immDrawPixelsTexScaled_clipping instead */
 void glaDrawPixelsTexScaled_clipping(float x, float y, int img_w, int img_h,
                                      int format, int type, int zoomfilter, void *rect,
@@ -617,9 +618,36 @@ void glaDrawPixelsAuto(float x, float y, int img_w, int img_h, int format, int t
 	glaDrawPixelsAuto_clipping(x, y, img_w, img_h, format, type, zoomfilter, rect,
 	                           0.0f, 0.0f, 0.0f, 0.0f);
 }
+#endif
 
-/* TODO this is utterly slow and need some love
- * but in the meantime it's not using deprecated api */
+/* To be used before calling immDrawPixelsTex
+ * Default shader is GPU_SHADER_2D_IMAGE_COLOR
+ * You can still set uniforms with :
+ * GPU_shader_uniform_int(shader, GPU_shader_get_uniform(shader, "name"), 0);
+ * */
+GPUShader *immDrawPixelsTexSetup(int builtin)
+{
+	GPUShader *shader = GPU_shader_get_builtin_shader(builtin);
+	/* Shader will be unbind by immUnbindProgram in immDrawPixelsTexScaled_clipping */
+	GPU_shader_bind(shader);
+	GPU_shader_uniform_int(shader, GPU_shader_get_uniform(shader, "image"), 0);
+
+	return shader;
+}
+
+/* Use the currently bound shader.
+ *
+ * Use immDrawPixelsTexSetup to bind the shader you
+ * want before calling immDrawPixelsTex.
+ *
+ * If using a special shader double check it uses the same
+ * attributes "pos" "texCoord" and uniform "image".
+ *
+ * If color is NULL then use white by default
+ *
+ * Be also aware that this function unbinds the shader when
+ * it's finished.
+ * */
 void immDrawPixelsTexScaled_clipping(float x, float y, int img_w, int img_h,
                                      int format, int type, int zoomfilter, void *rect,
                                      float scaleX, float scaleY,
@@ -634,10 +662,8 @@ void immDrawPixelsTexScaled_clipping(float x, float y, int img_w, int img_h,
 	int texid = get_cached_work_texture(&tex_w, &tex_h);
 	int components;
 	const bool use_clipping = ((clip_min_x < clip_max_x) && (clip_min_y < clip_max_y));
+	float white[4] = {1.0f, 1.0f, 1.0f, 1.0f};
 
-	/* Specify the color outside this function, and tex will modulate it.
-	 * This is useful for changing alpha without using glPixelTransferf()
-	 */
 	glPixelStorei(GL_UNPACK_ROW_LENGTH, img_w);
 	glBindTexture(GL_TEXTURE_2D, texid);
 
@@ -687,9 +713,21 @@ void immDrawPixelsTexScaled_clipping(float x, float y, int img_w, int img_h,
 	unsigned int pos = add_attrib(vert_format, "pos", GL_FLOAT, 2, KEEP_FLOAT);
 	unsigned int texco = add_attrib(vert_format, "texCoord", GL_FLOAT, 2, KEEP_FLOAT);
 
-	immBindBuiltinProgram(GPU_SHADER_2D_IMAGE_COLOR);
-	immUniform4fv("color", color);
-	immUniform1i("image", 0);
+	unsigned int program = glaGetOneInt(GL_CURRENT_PROGRAM);
+
+	/* This is needed for the OCIO case.
+	 * Shader program is set outside of blender and
+	 * we need it in imm module to do all attrib /
+	 * uniform bindings. */
+
+	/* A program is already bound.
+	 * set it in imm.bound_program to be able to use imm functions */
+	BLI_assert(program);
+	immBindProgram(program);
+
+	/* optionnal */
+	if (glGetUniformLocation(program, "color") != -1)
+		immUniform4fv("color", (color) ? color : white);
 
 	for (subpart_y = 0; subpart_y < nsubparts_y; subpart_y++) {
 		for (subpart_x = 0; subpart_x < nsubparts_x; subpart_x++) {
@@ -931,33 +969,6 @@ void glaEnd2DDraw(gla2DDrawInfo *di)
 #endif /* UNUSED */
 
 
-/* Uses current OpenGL state to get view matrices for gluProject/gluUnProject */
-void bgl_get_mats(bglMats *mats)
-{
-	const double badvalue = 1.0e-6;
-
-	glGetDoublev(GL_MODELVIEW_MATRIX, mats->modelview);
-	glGetDoublev(GL_PROJECTION_MATRIX, mats->projection);
-	glGetIntegerv(GL_VIEWPORT, (GLint *)mats->viewport);
-	
-	/* Very strange code here - it seems that certain bad values in the
-	 * modelview matrix can cause gluUnProject to give bad results. */
-	if (mats->modelview[0] < badvalue &&
-	    mats->modelview[0] > -badvalue)
-	{
-		mats->modelview[0] = 0;
-	}
-	if (mats->modelview[5] < badvalue &&
-	    mats->modelview[5] > -badvalue)
-	{
-		mats->modelview[5] = 0;
-	}
-	
-	/* Set up viewport so that gluUnProject will give correct values */
-	mats->viewport[0] = 0;
-	mats->viewport[1] = 0;
-}
-
 /* *************** glPolygonOffset hack ************* */
 
 /**
@@ -1026,7 +1037,8 @@ void glaDrawImBuf_glsl_clipping(ImBuf *ibuf, float x, float y, int zoomfilter,
                                 ColorManagedViewSettings *view_settings,
                                 ColorManagedDisplaySettings *display_settings,
                                 float clip_min_x, float clip_min_y,
-                                float clip_max_x, float clip_max_y)
+                                float clip_max_x, float clip_max_y,
+                                float zoom_x, float zoom_y)
 {
 	bool force_fallback = false;
 	bool need_fallback = true;
@@ -1063,8 +1075,6 @@ void glaDrawImBuf_glsl_clipping(ImBuf *ibuf, float x, float y, int zoomfilter,
 		}
 
 		if (ok) {
-			glColor4f(1.0, 1.0, 1.0, 1.0);
-
 			if (ibuf->rect_float) {
 				int format = 0;
 
@@ -1076,16 +1086,18 @@ void glaDrawImBuf_glsl_clipping(ImBuf *ibuf, float x, float y, int zoomfilter,
 					BLI_assert(!"Incompatible number of channels for GLSL display");
 
 				if (format != 0) {
-					glaDrawPixelsTex_clipping(x, y, ibuf->x, ibuf->y, format, GL_FLOAT,
+					immDrawPixelsTex_clipping(x, y, ibuf->x, ibuf->y, format, GL_FLOAT,
 					                          zoomfilter, ibuf->rect_float,
-					                          clip_min_x, clip_min_y, clip_max_x, clip_max_y);
+					                          clip_min_x, clip_min_y, clip_max_x, clip_max_y,
+					                          zoom_x, zoom_y, NULL);
 				}
 			}
 			else if (ibuf->rect) {
 				/* ibuf->rect is always RGBA */
-				glaDrawPixelsTex_clipping(x, y, ibuf->x, ibuf->y, GL_RGBA, GL_UNSIGNED_BYTE,
+				immDrawPixelsTex_clipping(x, y, ibuf->x, ibuf->y, GL_RGBA, GL_UNSIGNED_BYTE,
 				                          zoomfilter, ibuf->rect,
-				                          clip_min_x, clip_min_y, clip_max_x, clip_max_y);
+				                          clip_min_x, clip_min_y, clip_max_x, clip_max_y,
+				                          zoom_x, zoom_y, NULL);
 			}
 
 			IMB_colormanagement_finish_glsl_draw();
@@ -1102,9 +1114,11 @@ void glaDrawImBuf_glsl_clipping(ImBuf *ibuf, float x, float y, int zoomfilter,
 		display_buffer = IMB_display_buffer_acquire(ibuf, view_settings, display_settings, &cache_handle);
 
 		if (display_buffer) {
-			glaDrawPixelsAuto_clipping(x, y, ibuf->x, ibuf->y, GL_RGBA, GL_UNSIGNED_BYTE,
-			                           zoomfilter, display_buffer,
-			                           clip_min_x, clip_min_y, clip_max_x, clip_max_y);
+			immDrawPixelsTexSetup(GPU_SHADER_2D_IMAGE_COLOR);
+			immDrawPixelsTex_clipping(x, y, ibuf->x, ibuf->y, GL_RGBA, GL_UNSIGNED_BYTE,
+			                          zoomfilter, display_buffer,
+			                          clip_min_x, clip_min_y, clip_max_x, clip_max_y,
+			                          zoom_x, zoom_y, NULL);
 		}
 
 		IMB_display_buffer_release(cache_handle);
@@ -1113,10 +1127,11 @@ void glaDrawImBuf_glsl_clipping(ImBuf *ibuf, float x, float y, int zoomfilter,
 
 void glaDrawImBuf_glsl(ImBuf *ibuf, float x, float y, int zoomfilter,
                        ColorManagedViewSettings *view_settings,
-                       ColorManagedDisplaySettings *display_settings)
+                       ColorManagedDisplaySettings *display_settings,
+                       float zoom_x, float zoom_y)
 {
 	glaDrawImBuf_glsl_clipping(ibuf, x, y, zoomfilter, view_settings, display_settings,
-	                           0.0f, 0.0f, 0.0f, 0.0f);
+	                           0.0f, 0.0f, 0.0f, 0.0f, zoom_x, zoom_y);
 }
 
 void glaDrawImBuf_glsl_ctx_clipping(const bContext *C,
@@ -1124,7 +1139,8 @@ void glaDrawImBuf_glsl_ctx_clipping(const bContext *C,
                                     float x, float y,
                                     int zoomfilter,
                                     float clip_min_x, float clip_min_y,
-                                    float clip_max_x, float clip_max_y)
+                                    float clip_max_x, float clip_max_y,
+                                    float zoom_x, float zoom_y)
 {
 	ColorManagedViewSettings *view_settings;
 	ColorManagedDisplaySettings *display_settings;
@@ -1132,12 +1148,14 @@ void glaDrawImBuf_glsl_ctx_clipping(const bContext *C,
 	IMB_colormanagement_display_settings_from_ctx(C, &view_settings, &display_settings);
 
 	glaDrawImBuf_glsl_clipping(ibuf, x, y, zoomfilter, view_settings, display_settings,
-	                           clip_min_x, clip_min_y, clip_max_x, clip_max_y);
+	                           clip_min_x, clip_min_y, clip_max_x, clip_max_y,
+	                           zoom_x, zoom_y);
 }
 
-void glaDrawImBuf_glsl_ctx(const bContext *C, ImBuf *ibuf, float x, float y, int zoomfilter)
+void glaDrawImBuf_glsl_ctx(const bContext *C, ImBuf *ibuf, float x, float y, int zoomfilter,
+                           float zoom_x, float zoom_y)
 {
-	glaDrawImBuf_glsl_ctx_clipping(C, ibuf, x, y, zoomfilter, 0.0f, 0.0f, 0.0f, 0.0f);
+	glaDrawImBuf_glsl_ctx_clipping(C, ibuf, x, y, zoomfilter, 0.0f, 0.0f, 0.0f, 0.0f, zoom_x, zoom_y);
 }
 
 void cpack(unsigned int x)
@@ -1150,6 +1168,7 @@ void cpack(unsigned int x)
 
 void glaDrawBorderCorners(const rcti *border, float zoomx, float zoomy)
 {
+	/* DEPRECATED: use immDrawBorderCorners */
 	float delta_x = 4.0f * UI_DPI_FAC / zoomx;
 	float delta_y = 4.0f * UI_DPI_FAC / zoomy;
 
@@ -1183,4 +1202,41 @@ void glaDrawBorderCorners(const rcti *border, float zoomx, float zoomy)
 	glVertex2f(border->xmax, border->ymax);
 	glVertex2f(border->xmax, border->ymax - delta_y);
 	glEnd();
+}
+
+void immDrawBorderCorners(unsigned int pos, const rcti *border, float zoomx, float zoomy)
+{
+	float delta_x = 4.0f * UI_DPI_FAC / zoomx;
+	float delta_y = 4.0f * UI_DPI_FAC / zoomy;
+
+	delta_x = min_ff(delta_x, border->xmax - border->xmin);
+	delta_y = min_ff(delta_y, border->ymax - border->ymin);
+
+	/* left bottom corner */
+	immBegin(GL_LINE_STRIP, 3);
+	immVertex2f(pos, border->xmin, border->ymin + delta_y);
+	immVertex2f(pos, border->xmin, border->ymin);
+	immVertex2f(pos, border->xmin + delta_x, border->ymin);
+	immEnd();
+
+	/* left top corner */
+	immBegin(GL_LINE_STRIP, 3);
+	immVertex2f(pos, border->xmin, border->ymax - delta_y);
+	immVertex2f(pos, border->xmin, border->ymax);
+	immVertex2f(pos, border->xmin + delta_x, border->ymax);
+	immEnd();
+
+	/* right bottom corner */
+	immBegin(GL_LINE_STRIP, 3);
+	immVertex2f(pos, border->xmax - delta_x, border->ymin);
+	immVertex2f(pos, border->xmax, border->ymin);
+	immVertex2f(pos, border->xmax, border->ymin + delta_y);
+	immEnd();
+
+	/* right top corner */
+	immBegin(GL_LINE_STRIP, 3);
+	immVertex2f(pos, border->xmax - delta_x, border->ymax);
+	immVertex2f(pos, border->xmax, border->ymax);
+	immVertex2f(pos, border->xmax, border->ymax - delta_y);
+	immEnd();
 }

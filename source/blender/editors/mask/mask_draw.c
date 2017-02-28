@@ -54,6 +54,7 @@
 
 #include "GPU_immediate.h"
 #include "GPU_draw.h"
+#include "GPU_shader.h"
 
 #include "UI_resources.h"
 #include "UI_view2d.h"
@@ -158,7 +159,7 @@ static void draw_single_handle(const MaskLayer *mask_layer, const MaskSplinePoin
 	immUnbindProgram();
 
 	/* draw handle points */
-	immBindBuiltinProgram(GPU_SHADER_2D_POINT_UNIFORM_SIZE_UNIFORM_COLOR_OUTLINE_SMOOTH);
+	immBindBuiltinProgram(GPU_SHADER_2D_POINT_UNIFORM_SIZE_UNIFORM_COLOR_OUTLINE_AA);
 	immUniform1f("size", handle_size);
 	immUniform1f("outlineWidth", 1.5f);
 
@@ -212,7 +213,7 @@ static void draw_spline_points(const bContext *C, MaskLayer *masklay, MaskSpline
 	VertexFormat *format = immVertexFormat();
 	unsigned int pos = add_attrib(format, "pos", COMP_F32, 2, KEEP_FLOAT);
 
-	immBindBuiltinProgram(GPU_SHADER_2D_POINT_UNIFORM_SIZE_UNIFORM_COLOR_SMOOTH);
+	immBindBuiltinProgram(GPU_SHADER_2D_POINT_UNIFORM_SIZE_UNIFORM_COLOR_AA);
 	immUniform1f("size", 0.7f * handle_size);
 
 	/* feather points */
@@ -305,7 +306,7 @@ static void draw_spline_points(const bContext *C, MaskLayer *masklay, MaskSpline
 		}
 
 		/* bind program in loop so it does not interfere with draw_single_handle */
-		immBindBuiltinProgram(GPU_SHADER_2D_POINT_UNIFORM_SIZE_UNIFORM_COLOR_SMOOTH);
+		immBindBuiltinProgram(GPU_SHADER_2D_POINT_UNIFORM_SIZE_UNIFORM_COLOR_AA);
 
 		/* draw CV point */
 		if (MASKPOINT_ISSEL_KNOT(point)) {
@@ -334,7 +335,7 @@ static void draw_spline_points(const bContext *C, MaskLayer *masklay, MaskSpline
 		float x = (min[0] + max[0]) * 0.5f;
 		float y = (min[1] + max[1]) * 0.5f;
 
-		immBindBuiltinProgram(GPU_SHADER_2D_POINT_UNIFORM_SIZE_UNIFORM_COLOR_OUTLINE_SMOOTH);
+		immBindBuiltinProgram(GPU_SHADER_2D_POINT_UNIFORM_SIZE_UNIFORM_COLOR_OUTLINE_AA);
 		immUniform1f("outlineWidth", 1.5f);
 
 		if (masklay->act_spline == spline) {
@@ -752,18 +753,13 @@ void ED_mask_draw_region(Mask *mask, ARegion *ar,
 	}
 
 	if (draw_flag & MASK_DRAWFLAG_OVERLAY) {
+		float red[4] = {1.0f, 0.0f, 0.0f, 0.0f};
 		float *buffer = threaded_mask_rasterize(mask, width, height);
-		int format;
 
-		if (overlay_mode == MASK_OVERLAY_ALPHACHANNEL) {
-			glColor3f(1.0f, 1.0f, 1.0f);
-			format = GL_LUMINANCE;
-		}
-		else {
+		if (overlay_mode != MASK_OVERLAY_ALPHACHANNEL) {
 			/* More blending types could be supported in the future. */
 			glEnable(GL_BLEND);
-			glBlendFunc(GL_DST_COLOR, GL_SRC_ALPHA);
-			format = GL_ALPHA;
+			glBlendFunc(GL_DST_COLOR, GL_ZERO);
 		}
 
 		glPushMatrix();
@@ -772,7 +768,10 @@ void ED_mask_draw_region(Mask *mask, ARegion *ar,
 		if (stabmat) {
 			glMultMatrixf((const float *) stabmat);
 		}
-		glaDrawPixelsTex(0.0f, 0.0f, width, height, format, GL_FLOAT, GL_NEAREST, buffer);
+		GPUShader *shader = immDrawPixelsTexSetup(GPU_SHADER_2D_IMAGE_SHUFFLE_COLOR);
+		GPU_shader_uniform_vector(shader, GPU_shader_get_uniform(shader, "shuffle"), 4, 1, red);
+		immDrawPixelsTex(0.0f, 0.0f, width, height, GL_RED, GL_FLOAT, GL_NEAREST, buffer, 1.0f, 1.0f, NULL);
+
 		glPopMatrix();
 
 		if (overlay_mode != MASK_OVERLAY_ALPHACHANNEL) {

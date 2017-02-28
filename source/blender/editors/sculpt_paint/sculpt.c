@@ -626,8 +626,7 @@ static bool sculpt_get_redraw_rect(ARegion *ar, RegionView3D *rv3d,
 	return 1;
 }
 
-void ED_sculpt_redraw_planes_get(float planes[4][4], ARegion *ar,
-                                 RegionView3D *rv3d, Object *ob)
+void ED_sculpt_redraw_planes_get(float planes[4][4], ARegion *ar, Object *ob)
 {
 	PBVH *pbvh = ob->sculpt->pbvh;
 	/* copy here, original will be used below */
@@ -635,7 +634,7 @@ void ED_sculpt_redraw_planes_get(float planes[4][4], ARegion *ar,
 
 	sculpt_extend_redraw_rect_previous(ob, &rect);
 
-	paint_calc_redraw_planes(planes, ar, rv3d, ob, &rect);
+	paint_calc_redraw_planes(planes, ar, ob, &rect);
 
 	/* we will draw this rect, so now we can set it as the previous partial rect.
 	 * Note that we don't update with the union of previous/current (rect), only with
@@ -5365,8 +5364,12 @@ static int sculpt_mode_toggle_exec(bContext *C, wmOperator *op)
 		if (mmd)
 			multires_force_update(ob);
 
-		if (flush_recalc || (ob->sculpt && ob->sculpt->bm))
+		/* Always for now, so leaving sculpt mode always ensures scene is in
+		 * a consistent state.
+		 */
+		if (true || flush_recalc || (ob->sculpt && ob->sculpt->bm)) {
 			DAG_id_tag_update(&ob->id, OB_RECALC_DATA);
+		}
 
 		if (me->flag & ME_SCULPT_DYNAMIC_TOPOLOGY) {
 			/* Dynamic topology must be disabled before exiting sculpt
