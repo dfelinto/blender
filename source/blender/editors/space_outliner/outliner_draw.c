@@ -1842,6 +1842,7 @@ void draw_outliner(const bContext *C)
 {
 	Main *mainvar = CTX_data_main(C); 
 	Scene *scene = CTX_data_scene(C);
+	wmWindow *win = CTX_wm_window(C);
 	SceneLayer *sl = CTX_data_scene_layer(C);
 	ARegion *ar = CTX_wm_region(C);
 	View2D *v2d = &ar->v2d;
@@ -1851,7 +1852,7 @@ void draw_outliner(const bContext *C)
 	TreeElement *te_edit = NULL;
 	bool has_restrict_icons;
 
-	outliner_build_tree(mainvar, scene, sl, soops); // always
+	outliner_build_tree(mainvar, scene, sl, win, soops); // always
 	
 	/* get extents of data */
 	outliner_height(soops, &soops->tree, &sizey);

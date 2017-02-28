@@ -731,13 +731,14 @@ static void viewops_data_create_ex(bContext *C, wmOperator *op, const wmEvent *e
 	}
 	else if (use_orbit_zbuf) {
 		Scene *scene = CTX_data_scene(C);
+		wmWindow *win = CTX_wm_window(C);
 		float fallback_depth_pt[3];
 
 		view3d_operator_needs_opengl(C); /* needed for zbuf drawing */
 
 		negate_v3_v3(fallback_depth_pt, rv3d->ofs);
 
-		if ((vod->use_dyn_ofs = ED_view3d_autodist(scene, vod->ar, vod->v3d,
+		if ((vod->use_dyn_ofs = ED_view3d_autodist(win, scene, vod->ar, vod->v3d,
 		                                           event->mval, vod->dyn_ofs, true, fallback_depth_pt)))
 		{
 			if (rv3d->is_persp) {
@@ -3269,6 +3270,7 @@ void VIEW3D_OT_view_center_cursor(wmOperatorType *ot)
 static int viewcenter_pick_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
 	View3D *v3d = CTX_wm_view3d(C);
+	wmWindow *win = CTX_wm_window(C);
 	RegionView3D *rv3d = CTX_wm_region_view3d(C);
 	Scene *scene = CTX_data_scene(C);
 	ARegion *ar = CTX_wm_region(C);
@@ -3281,7 +3283,7 @@ static int viewcenter_pick_invoke(bContext *C, wmOperator *op, const wmEvent *ev
 
 		view3d_operator_needs_opengl(C);
 
-		if (ED_view3d_autodist(scene, ar, v3d, event->mval, new_ofs, false, NULL)) {
+		if (ED_view3d_autodist(win, scene, ar, v3d, event->mval, new_ofs, false, NULL)) {
 			/* pass */
 		}
 		else {
@@ -3540,6 +3542,7 @@ static int view3d_zoom_border_exec(bContext *C, wmOperator *op)
 	View3D *v3d = CTX_wm_view3d(C);
 	RegionView3D *rv3d = CTX_wm_region_view3d(C);
 	Scene *scene = CTX_data_scene(C);
+	wmWindow *win = CTX_wm_window(C);
 	int gesture_mode;
 	const int smooth_viewtx = WM_operator_smooth_viewtx_get(op);
 
@@ -3568,7 +3571,7 @@ static int view3d_zoom_border_exec(bContext *C, wmOperator *op)
 	ED_view3d_dist_range_get(v3d, dist_range);
 
 	/* Get Z Depths, needed for perspective, nice for ortho */
-	ED_view3d_draw_depth(scene, ar, v3d, true);
+	ED_view3d_draw_depth(win, scene, ar, v3d, true);
 	
 	{
 		/* avoid allocating the whole depth buffer */
@@ -4649,6 +4652,7 @@ void ED_view3d_cursor3d_position(bContext *C, float fp[3], const int mval[2])
 	Scene *scene = CTX_data_scene(C);
 	ARegion *ar = CTX_wm_region(C);
 	View3D *v3d = CTX_wm_view3d(C);
+	wmWindow *win = CTX_wm_window(C);
 	RegionView3D *rv3d = ar->regiondata;
 	bool flip;
 	bool depth_used = false;
@@ -4669,7 +4673,7 @@ void ED_view3d_cursor3d_position(bContext *C, float fp[3], const int mval[2])
 
 	if (U.uiflag & USER_ZBUF_CURSOR) {  /* maybe this should be accessed some other way */
 		view3d_operator_needs_opengl(C);
-		if (ED_view3d_autodist(scene, ar, v3d, mval, fp, true, NULL))
+		if (ED_view3d_autodist(win, scene, ar, v3d, mval, fp, true, NULL))
 			depth_used = true;
 	}
 
@@ -4886,7 +4890,7 @@ static float view_autodist_depth_margin(ARegion *ar, const int mval[2], int marg
  * \param fallback_depth_pt: Use this points depth when no depth can be found.
  */
 bool ED_view3d_autodist(
-        Scene *scene, ARegion *ar, View3D *v3d,
+        wmWindow *win, Scene *scene, ARegion *ar, View3D *v3d,
         const int mval[2], float mouse_worldloc[3],
         const bool alphaoverride, const float fallback_depth_pt[3])
 {
@@ -4896,7 +4900,7 @@ bool ED_view3d_autodist(
 	bool depth_ok = false;
 
 	/* Get Z Depths, needed for perspective, nice for ortho */
-	ED_view3d_draw_depth(scene, ar, v3d, alphaoverride);
+	ED_view3d_draw_depth(win, scene, ar, v3d, alphaoverride);
 
 	/* Attempt with low margin's first */
 	i = 0;
@@ -4924,12 +4928,12 @@ bool ED_view3d_autodist(
 	}
 }
 
-void ED_view3d_autodist_init(Scene *scene, ARegion *ar, View3D *v3d, int mode)
+void ED_view3d_autodist_init(wmWindow *win, Scene *scene, ARegion *ar, View3D *v3d, int mode)
 {
 	/* Get Z Depths, needed for perspective, nice for ortho */
 	switch (mode) {
 		case 0:
-			ED_view3d_draw_depth(scene, ar, v3d, true);
+			ED_view3d_draw_depth(win, scene, ar, v3d, true);
 			break;
 		case 1:
 			ED_view3d_draw_depth_gpencil(scene, ar, v3d);

@@ -1705,7 +1705,8 @@ Base *_setlooper_base_step(Scene **sce_iter, Base *base)
 		/* first time looping, return the scenes first base */
 
 		/* for the first loop we should get the layer from context */
-		SceneLayer *sl = BKE_scene_layer_context_active((*sce_iter));
+		TODO_LAYER_CONTEXT; /* TODO: workspace, should use BKE_scene_layer_context_active instead */
+		SceneLayer *sl = BKE_scene_layer_render_active((*sce_iter));
 
 		if (sl->object_bases.first) {
 			return (Base *)sl->object_bases.first;

@@ -1685,7 +1685,7 @@ static int outliner_filter_tree(SpaceOops *soops, ListBase *lb)
 
 /* Main entry point for building the tree data-structure that the outliner represents */
 // TODO: split each mode into its own function?
-void outliner_build_tree(Main *mainvar, Scene *scene, SceneLayer *sl, SpaceOops *soops)
+void outliner_build_tree(Main *mainvar, Scene *scene, SceneLayer *sl, wmWindow *win, SpaceOops *soops)
 {
 	TreeElement *te = NULL, *ten;
 	TreeStoreElem *tselem;
@@ -1893,7 +1893,7 @@ void outliner_build_tree(Main *mainvar, Scene *scene, SceneLayer *sl, SpaceOops 
 		outliner_add_orphaned_datablocks(mainvar, soops);
 	}
 	else if (soops->outlinevis == SO_ACT_LAYER) {
-		outliner_add_collections_act_layer(soops, BKE_scene_layer_context_active(scene), scene);
+		outliner_add_collections_act_layer(soops, BKE_scene_layer_context_active(win), scene);
 	}
 	else if (soops->outlinevis == SO_COLLECTIONS) {
 		outliner_add_collections_master(soops, scene);

@@ -46,6 +46,7 @@ struct ID;
 struct Object;
 struct bPoseChannel;
 struct EditBone;
+struct wmWindow;
 
 /**
  * Callback type for reinserting elements at a different position, used to allow user customizable element order.
@@ -158,7 +159,8 @@ TreeElement *outliner_find_posechannel(ListBase *lb, const struct bPoseChannel *
 TreeElement *outliner_find_editbone(ListBase *lb, const struct EditBone *ebone);
 struct ID *outliner_search_back(SpaceOops *soops, TreeElement *te, short idcode);
 
-void outliner_build_tree(struct Main *mainvar, struct Scene *scene, struct SceneLayer *sl, struct SpaceOops *soops);
+void outliner_build_tree(struct Main *mainvar, struct Scene *scene, struct SceneLayer *sl,
+                         struct wmWindow *win, struct SpaceOops *soops);
 
 /* outliner_draw.c ---------------------------------------------- */
 

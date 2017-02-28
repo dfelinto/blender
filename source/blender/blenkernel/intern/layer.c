@@ -41,7 +41,9 @@
 #include "DNA_layer_types.h"
 #include "DNA_object_types.h"
 #include "DNA_node_types.h"
+#include "DNA_screen_types.h"
 #include "DNA_scene_types.h"
+#include "DNA_windowmanager_types.h"
 
 #include "DRW_engine.h"
 
@@ -76,10 +78,11 @@ SceneLayer *BKE_scene_layer_render_active(const Scene *scene)
  * Returns the SceneLayer to be used for drawing, outliner, and
  * other context related areas.
  */
-SceneLayer *BKE_scene_layer_context_active(Scene *scene)
+SceneLayer *BKE_scene_layer_context_active(wmWindow *win)
 {
-	/* waiting for workspace to get the layer from context*/
 	TODO_LAYER_CONTEXT;
+	/* waiting for workspace to get the layer from context*/
+	Scene *scene = win->screen->scene;
 	return BKE_scene_layer_render_active(scene);
 }
 

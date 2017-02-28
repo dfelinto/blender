@@ -5019,12 +5019,13 @@ void paint_proj_stroke(
 		Scene *scene = ps_handle->scene;
 		View3D *v3d = CTX_wm_view3d(C);
 		ARegion *ar = CTX_wm_region(C);
+		wmWindow *win = CTX_wm_window(C);
 		float *cursor = ED_view3d_cursor3d_get(scene, v3d);
 		int mval_i[2] = {(int)pos[0], (int)pos[1]};
 
 		view3d_operator_needs_opengl(C);
 
-		if (!ED_view3d_autodist(scene, ar, v3d, mval_i, cursor, false, NULL))
+		if (!ED_view3d_autodist(win, scene, ar, v3d, mval_i, cursor, false, NULL))
 			return;
 
 		ED_region_tag_redraw(ar);

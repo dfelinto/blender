@@ -1247,7 +1247,7 @@ void ED_view3d_draw_depth_gpencil(Scene *scene, ARegion *ar, View3D *v3d)
 	v3d->zbuf = zbuf;
 }
 
-void ED_view3d_draw_depth(Scene *scene, ARegion *ar, View3D *v3d, bool alphaoverride)
+void ED_view3d_draw_depth(wmWindow *win, Scene *scene, ARegion *ar, View3D *v3d, bool alphaoverride)
 {
 	RegionView3D *rv3d = ar->regiondata;
 	Base *base;
@@ -1255,7 +1255,7 @@ void ED_view3d_draw_depth(Scene *scene, ARegion *ar, View3D *v3d, bool alphaover
 	short flag = v3d->flag;
 	float glalphaclip = U.glalphaclip;
 	int obcenter_dia = U.obcenter_dia;
-	SceneLayer *sl = BKE_scene_layer_context_active(scene);
+	SceneLayer *sl = BKE_scene_layer_context_active(win);
 	/* no need for color when drawing depth buffer */
 	const short dflag_depth = DRAW_CONSTCOLOR;
 	/* temp set drawtype to solid */

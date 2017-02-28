@@ -637,7 +637,7 @@ static short gp_stroke_addpoint(tGPsdata *p, const int mval[2], float pressure, 
 				View3D *v3d = p->sa->spacedata.first;
 				
 				view3d_region_operator_needs_opengl(p->win, p->ar);
-				ED_view3d_autodist_init(p->scene, p->ar, v3d, (p->gpd->flag & GP_DATA_DEPTH_STROKE) ? 1 : 0);
+				ED_view3d_autodist_init(p->win, p->scene, p->ar, v3d, (p->gpd->flag & GP_DATA_DEPTH_STROKE) ? 1 : 0);
 			}
 			
 			/* convert screen-coordinates to appropriate coordinates (and store them) */
@@ -1239,7 +1239,7 @@ static void gp_stroke_doeraser(tGPsdata *p)
 			View3D *v3d = p->sa->spacedata.first;
 			
 			view3d_region_operator_needs_opengl(p->win, p->ar);
-			ED_view3d_autodist_init(p->scene, p->ar, v3d, 0);
+			ED_view3d_autodist_init(p->win, p->scene, p->ar, v3d, 0);
 		}
 	}
 	
@@ -1804,7 +1804,7 @@ static void gp_paint_strokeend(tGPsdata *p)
 		
 		/* need to restore the original projection settings before packing up */
 		view3d_region_operator_needs_opengl(p->win, p->ar);
-		ED_view3d_autodist_init(p->scene, p->ar, v3d, (p->gpd->flag & GP_DATA_DEPTH_STROKE) ? 1 : 0);
+		ED_view3d_autodist_init(p->win, p->scene, p->ar, v3d, (p->gpd->flag & GP_DATA_DEPTH_STROKE) ? 1 : 0);
 	}
 	
 	/* check if doing eraser or not */

@@ -885,6 +885,7 @@ static void depthdropper_depth_sample_pt(bContext *C, DepthDropper *ddr, int mx,
 	bScreen *screen = CTX_wm_screen(C);
 	ScrArea *sa = BKE_screen_find_area_xy(screen, SPACE_TYPE_ANY, mx, my);
 	Scene *scene = CTX_data_scene(C);
+	wmWindow *win = CTX_wm_window(C);
 	UnitSettings *unit = &scene->unit;
 	const bool do_split = (unit->flag & USER_UNIT_OPT_SPLIT) != 0;
 
@@ -914,7 +915,7 @@ static void depthdropper_depth_sample_pt(bContext *C, DepthDropper *ddr, int mx,
 
 				view3d_operator_needs_opengl(C);
 
-				if (ED_view3d_autodist(scene, ar, v3d, mval, co, true, NULL)) {
+				if (ED_view3d_autodist(win, scene, ar, v3d, mval, co, true, NULL)) {
 					const float mval_center_fl[2] = {
 					    (float)ar->winx / 2,
 					    (float)ar->winy / 2};

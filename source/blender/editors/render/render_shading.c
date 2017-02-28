@@ -653,7 +653,8 @@ void SCENE_OT_render_layer_add(wmOperatorType *ot)
 static int render_layer_remove_exec(bContext *C, wmOperator *UNUSED(op))
 {
 	Scene *scene = CTX_data_scene(C);
-	SceneLayer *sl = BKE_scene_layer_context_active(scene);
+	wmWindow *win = CTX_wm_window(C);
+	SceneLayer *sl = BKE_scene_layer_context_active(win);
 
 	if (!BKE_scene_layer_remove(CTX_data_main(C), scene, sl)) {
 		return OPERATOR_CANCELLED;
