@@ -58,6 +58,7 @@
 
 
 #include "RNA_access.h"
+#include "RNA_define.h"
 
 #include "WM_api.h"
 #include "WM_types.h"
@@ -78,6 +79,8 @@
 #include "GPU_extensions.h"
 #include "GPU_init_exit.h"
 #include "GPU_immediate.h"
+
+#include "UI_resources.h"
 
 /* for assert */
 #ifndef NDEBUG
@@ -723,17 +726,95 @@ int wm_window_close_exec(bContext *C, wmOperator *UNUSED(op))
 	return OPERATOR_FINISHED;
 }
 
-/* operator callback */
-int wm_window_duplicate_exec(bContext *C, wmOperator *UNUSED(op))
+
+int wm_window_new_screen_test(bContext *C, bScreen *screen)
 {
+	wmWindow *win = wm_window_new(C);
+	win->screen = screen;
+
+	WM_check(C);
+
+	if (win->ghostwin) {
+		WM_event_add_notifier(C, NC_WINDOW | NA_ADDED, NULL);
+		return win;
+	}
+	else {
+		wmWindowManager *wm = CTX_wm_manager(C);
+		wm_window_close(C, wm, win);
+		return NULL;
+	}
+}
+
+/* new window operator callback */
+int wm_window_new_exec(bContext *C, wmOperator *op)
+{
+	Main *bmain = CTX_data_main(C);
 	wmWindow *win_src = CTX_wm_window(C);
+	int screen_id = RNA_enum_get(op->ptr, "screen");
+	bScreen *screen = BLI_findlink(&bmain->screen, screen_id);
 	bool ok;
 
-	ok = (wm_window_copy_test(C, win_src) != NULL);
+	if (screen == win_src->screen) {
+		/* Duplicate window and screen */
+		ok = (wm_window_copy_test(C, win_src) != NULL);
+	}
+	else {
+		/* New window with a different screen */
+		ok = (wm_window_new_screen_test(C, screen) != NULL);
+	}
 
 	return ok ? OPERATOR_FINISHED : OPERATOR_CANCELLED;
 }
 
+int wm_window_new_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+{
+	Main *bmain = CTX_data_main(C);
+
+	if (BLI_listbase_count_ex(&bmain->screen, 2) == 1) {
+		RNA_enum_set(op->ptr, "screen", 0);
+		return wm_window_new_exec(C, op);
+}
+	else {
+		return WM_enum_search_invoke(C, op, event);
+	}
+}
+
+struct EnumPropertyItem *wm_window_new_screen_itemf(bContext *C, struct PointerRNA *ptr, struct PropertyRNA *prop, bool *r_free)
+{
+	EnumPropertyItem *item = NULL;
+	EnumPropertyItem tmp = { 0, "", 0, "", "" };
+	int value = 0, totitem = 0;
+	char active_screen[MAX_NAME + 12];
+
+	Main *bmain = CTX_data_main(C);
+	wmWindow *win = CTX_wm_window(C);
+
+	BLI_snprintf(active_screen, sizeof(active_screen), "%s (Duplicate)", win->screen->id.name + 2);
+	tmp.value = 0;
+	tmp.icon = ICON_NEW;
+	tmp.identifier = win->screen->id.name;
+	tmp.name = active_screen;
+	RNA_enum_item_add(&item, &totitem, &tmp);
+	value++;
+
+	for (bScreen *screen = bmain->screen.first; screen; screen = screen->id.next) {
+		if (screen == win->screen) {
+			continue;
+		}
+
+		tmp.value = value;
+		tmp.icon = ICON_SPLITSCREEN;
+		tmp.identifier = screen->id.name;
+		tmp.name = screen->id.name + 2;
+		RNA_enum_item_add(&item, &totitem, &tmp);
+		value++;
+	}
+
+	RNA_enum_item_end(&item, &totitem);
+	*r_free = true;
+
+	return item;
+}
 
 /* fullscreen operator callback */
 int wm_window_fullscreen_toggle_exec(bContext *C, wmOperator *UNUSED(op))
