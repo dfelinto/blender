@@ -42,6 +42,7 @@ class UnitTesting(RenderLayerTesting):
         layer_collection_mom.collections[layer_collection_kid.name].hide = True
         layer_collection_kid.hide = True
 
+        bpy.context.scene.update() # update depsgraph
         self.assertFalse(cube.visible_get(), "Object is not invisible")
 
 
