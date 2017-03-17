@@ -33,6 +33,8 @@
 #include "BLT_translation.h"
 
 #include "BKE_collection.h"
+#include "BKE_depsgraph.h"
+#include "BKE_global.h"
 #include "BKE_layer.h"
 #include "BKE_main.h"
 #include "BKE_node.h"
@@ -46,6 +48,8 @@
 #include "DRW_engine.h"
 
 #include "MEM_guardedalloc.h"
+
+#define DEBUG_PRINT if (G.debug & G_DEBUG_DEPSGRAPH) printf
 
 /* prototype */
 struct CollectionEngineSettingsCB_Type;
@@ -1778,4 +1782,63 @@ void BKE_scene_layer_doversion_update(Main *bmain)
 	}
 
 	layer_collection_engine_settings_free(&lc_ref);
+}
+
+/* Evaluation  */
+
+void BKE_layer_eval_layer_collection_pre(EvaluationContext *UNUSED(eval_ctx),
+                                         SceneLayer *scene_layer)
+{
+	DEBUG_PRINT("%s on %s\n", __func__, scene_layer->name);
+	for (Base *base = scene_layer->object_bases.first; base != NULL; base = base->next) {
+		base->flag &= ~(BASE_VISIBLED | BASE_SELECTABLED);
+	}
+	/* TODO(sergey): Is it always required? */
+	scene_layer->flag |= SCENE_LAYER_ENGINE_DIRTY;
+}
+
+void BKE_layer_eval_layer_collection(EvaluationContext *UNUSED(eval_ctx),
+                                     LayerCollection *layer_collection,
+                                     LayerCollection *parent_layer_collection)
+{
+	DEBUG_PRINT("%s on %s, parent %s \n",
+	            __func__,
+	            layer_collection->scene_collection->name,
+	            (parent_layer_collection != NULL) ? parent_layer_collection->scene_collection->name : "NONE");
+
+	layer_collection->flag_evaluated = layer_collection->flag;
+	bool is_visible = (layer_collection->flag & COLLECTION_VISIBLE) != 0;
+	bool is_selectable = (layer_collection->flag & COLLECTION_SELECTABLE) != 0;
+
+	if (parent_layer_collection != NULL) {
+		is_visible &= (parent_layer_collection->flag_evaluated & COLLECTION_VISIBLE) != 0;
+		is_selectable &= (parent_layer_collection->flag_evaluated & COLLECTION_SELECTABLE) != 0;
+		layer_collection->flag_evaluated &= parent_layer_collection->flag_evaluated;
+	}
+
+	for (LinkData *link = layer_collection->object_bases.first; link != NULL; link = link->next) {
+		Base *base = link->data;
+		/* Non-recursive code from base_flag_recalculate(). */
+		if (is_visible) {
+			base->flag |= BASE_VISIBLED;
+		}
+		if (is_selectable) {
+			base->flag |= BASE_SELECTABLED;
+		}
+		/* Non-recursive code from engine_settings_collection_recalculate(). */
+		/* TODO(sergey): Is it always required? */
+		base->flag |= BASE_DIRTY_ENGINE_SETTINGS;
+	}
+}
+
+void BKE_layer_eval_layer_collection_post(EvaluationContext *UNUSED(eval_ctx),
+                                          SceneLayer *scene_layer)
+{
+	DEBUG_PRINT("%s on %s\n", __func__, scene_layer->name);
+	/* if base is not selectabled, clear select */
+	for (Base *base = scene_layer->object_bases.first; base; base = base->next) {
+		if ((base->flag & BASE_SELECTABLED) == 0) {
+			base->flag &= ~BASE_SELECTED;
+		}
+	}
 }

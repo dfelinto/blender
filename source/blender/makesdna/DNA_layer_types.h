@@ -55,7 +55,9 @@ typedef struct LayerCollection {
 	struct LayerCollection *next, *prev;
 	struct SceneCollection *scene_collection;
 	short flag;
-	short pad[3];
+	/* TODO(sergey): Get rid of this once we've got CoW in DEG, */
+	short flag_evaluated;
+	short pad[2];
 	ListBase object_bases;      /* (ObjectBase *)LinkData->data - synced with collection->objects and collection->filter_objects */
 	ListBase overrides;
 	ListBase layer_collections; /* synced with collection->collections */

@@ -2514,9 +2514,9 @@ RNA_LAYER_MODE_EDIT_GET_SET_FLOAT(backwire_opacity)
 
 static void rna_CollectionEngineSettings_update(bContext *C, PointerRNA *UNUSED(ptr))
 {
-	SceneLayer *sl = CTX_data_scene_layer(C);
-	LayerCollection *lc = CTX_data_layer_collection(C);
-	BKE_scene_layer_engine_settings_collection_recalculate(sl, lc);
+	Scene *scene = CTX_data_scene(C);
+	/* TODO(sergey): Use proper flag for tagging here. */
+	DAG_id_tag_update(&scene->id, 0);
 }
 
 /***********************************/
@@ -2608,15 +2608,13 @@ static int rna_LayerCollection_move_into(ID *id, LayerCollection *lc_src, LayerC
 	return BKE_layer_collection_move_into(scene, lc_dst, lc_src);
 }
 
-static void rna_LayerCollection_hide_update(bContext *C, PointerRNA *ptr)
+static void rna_LayerCollection_hide_update(bContext *C, PointerRNA *UNUSED(ptr))
 {
 	Scene *scene = CTX_data_scene(C);
-	LayerCollection *lc = ptr->data;
-	SceneLayer *sl = BKE_scene_layer_find_from_collection(scene, lc);
 
 	/* hide and deselect bases that are directly influenced by this LayerCollection */
-	BKE_scene_layer_base_flag_recalculate(sl);
-	BKE_scene_layer_engine_settings_collection_recalculate(sl, lc);
+	/* TODO(sergey): Use proper flag for tagging here. */
+	DAG_id_tag_update(&scene->id, 0);
 	WM_event_add_notifier(C, NC_SCENE | ND_OB_SELECT, scene);
 }
 
@@ -2626,10 +2624,10 @@ static void rna_LayerCollection_hide_select_update(bContext *C, PointerRNA *ptr)
 
 	if ((lc->flag & COLLECTION_SELECTABLE) == 0) {
 		Scene *scene = CTX_data_scene(C);
-		SceneLayer *sl = BKE_scene_layer_find_from_collection(scene, lc);
 
 		/* deselect bases that are directly influenced by this LayerCollection */
-		BKE_scene_layer_base_flag_recalculate(sl);
+		/* TODO(sergey): Use proper flag for tagging here. */
+		DAG_id_tag_update(&scene->id, 0);
 		WM_event_add_notifier(C, NC_SCENE | ND_OB_SELECT, CTX_data_scene(C));
 	}
 }

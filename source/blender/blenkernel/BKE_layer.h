@@ -43,6 +43,7 @@ extern "C" {
 #define TODO_LAYER /* generic todo */
 
 struct CollectionEngineSettings;
+struct EvaluationContext;
 struct LayerCollection;
 struct ID;
 struct ListBase;
@@ -131,6 +132,16 @@ void BKE_collection_engine_property_value_set_float(struct CollectionEngineSetti
 void BKE_collection_engine_property_value_set_bool(struct CollectionEngineSettings *ces, const char *name, bool value);
 bool BKE_collection_engine_property_use_get(struct CollectionEngineSettings *ces, const char *name);
 void BKE_collection_engine_property_use_set(struct CollectionEngineSettings *ces, const char *name, bool value);
+
+/* evaluation */
+
+void BKE_layer_eval_layer_collection_pre(struct EvaluationContext *eval_ctx,
+                                         struct SceneLayer *scene_layer);
+void BKE_layer_eval_layer_collection(struct EvaluationContext *eval_ctx,
+                                     struct LayerCollection *layer_collection,
+                                     struct LayerCollection *parent_layer_collection);
+void BKE_layer_eval_layer_collection_post(struct EvaluationContext *eval_ctx,
+                                          struct SceneLayer *scene_layer);
 
 /* iterators */
 
