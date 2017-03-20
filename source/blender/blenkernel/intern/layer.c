@@ -1808,11 +1808,11 @@ void BKE_layer_eval_layer_collection(EvaluationContext *UNUSED(eval_ctx),
 
 	layer_collection->flag_evaluated = layer_collection->flag;
 	bool is_visible = (layer_collection->flag & COLLECTION_VISIBLE) != 0;
-	bool is_selectable = (layer_collection->flag & COLLECTION_SELECTABLE) != 0;
+	bool is_selectable = is_visible && ((layer_collection->flag & COLLECTION_SELECTABLE) != 0);
 
 	if (parent_layer_collection != NULL) {
 		is_visible &= (parent_layer_collection->flag_evaluated & COLLECTION_VISIBLE) != 0;
-		is_selectable &= (parent_layer_collection->flag_evaluated & COLLECTION_SELECTABLE) != 0;
+		is_selectable &= is_visible && (parent_layer_collection->flag_evaluated & COLLECTION_SELECTABLE) != 0;
 		layer_collection->flag_evaluated &= parent_layer_collection->flag_evaluated;
 	}
 
