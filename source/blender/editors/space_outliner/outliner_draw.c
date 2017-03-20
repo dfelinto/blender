@@ -262,10 +262,9 @@ static void restrictbutton_collection_hide_select_cb(bContext *C, void *poin, vo
 	LayerCollection *collection = poin2;
 
 	if ((collection->flag & COLLECTION_SELECTABLE) == 0) {
-		SceneLayer *sl = BKE_scene_layer_find_from_collection(scene, collection);
-
 		/* deselect bases that are directly influenced by this LayerCollection */
-		BKE_scene_layer_base_flag_recalculate(sl);
+		/* TODO(sergey): Use proper flag for tagging here. */
+		DAG_id_tag_update(&scene->id, 0);
 		WM_event_add_notifier(C, NC_SCENE | ND_OB_SELECT, CTX_data_scene(C));
 	}
 	WM_event_add_notifier(C, NC_SCENE | ND_LAYER_CONTENT, NULL);

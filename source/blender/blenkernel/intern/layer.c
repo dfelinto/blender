@@ -245,64 +245,6 @@ static void scene_layer_object_base_unref(SceneLayer *sl, Base *base)
 	}
 }
 
-static void layer_collection_base_flag_recalculate(
-        LayerCollection *lc, const bool tree_is_visible, const bool tree_is_selectable)
-{
-	bool is_visible = tree_is_visible && ((lc->flag & COLLECTION_VISIBLE) != 0);
-	/* an object can only be selected if it's visible */
-	bool is_selectable = tree_is_selectable && is_visible && ((lc->flag & COLLECTION_SELECTABLE) != 0);
-
-	for (LinkData *link = lc->object_bases.first; link; link = link->next) {
-		Base *base = link->data;
-
-		if (is_visible) {
-			base->flag |= BASE_VISIBLED;
-		}
-
-		if (is_selectable) {
-			base->flag |= BASE_SELECTABLED;
-		}
-	}
-
-	for (LayerCollection *lcn = lc->layer_collections.first; lcn; lcn = lcn->next) {
-		layer_collection_base_flag_recalculate(lcn, is_visible, is_selectable);
-	}
-}
-
-/**
- * Re-evaluate the ObjectBase flags for SceneLayer
- */
-void BKE_scene_layer_base_flag_recalculate(SceneLayer *sl)
-{
-	for (Base *base = sl->object_bases.first; base; base = base->next) {
-		base->flag &= ~(BASE_VISIBLED | BASE_SELECTABLED);
-	}
-
-	for (LayerCollection *lc = sl->layer_collections.first; lc; lc = lc->next) {
-		layer_collection_base_flag_recalculate(lc, true, true);
-	}
-
-	/* if base is not selectabled, clear select */
-	for (Base *base = sl->object_bases.first; base; base = base->next) {
-		if ((base->flag & BASE_SELECTABLED) == 0) {
-			base->flag &= ~BASE_SELECTED;
-		}
-	}
-}
-
-/**
- * Tag Scene Layer to recalculation
- *
- * Temporary function, waiting for real depsgraph
- */
-void BKE_scene_layer_engine_settings_recalculate(SceneLayer *sl)
-{
-	sl->flag |= SCENE_LAYER_ENGINE_DIRTY;
-	for (Base *base = sl->object_bases.first; base; base = base->next) {
-		base->flag |= BASE_DIRTY_ENGINE_SETTINGS;
-	}
-}
-
 /**
  * Tag Object in SceneLayer to recalculation
  *
@@ -858,7 +800,6 @@ LayerCollection *BKE_collection_link(SceneLayer *sl, SceneCollection *sc)
 void BKE_collection_unlink(SceneLayer *sl, LayerCollection *lc)
 {
 	BKE_layer_collection_free(sl, lc);
-	BKE_scene_layer_base_flag_recalculate(sl);
 	BKE_scene_layer_engine_settings_collection_recalculate(sl, lc);
 
 	BLI_remlink(&sl->layer_collections, lc);
@@ -879,7 +820,6 @@ static void layer_collection_object_add(SceneLayer *sl, LayerCollection *lc, Obj
 
 	BLI_addtail(&lc->object_bases, BLI_genericNodeN(base));
 
-	BKE_scene_layer_base_flag_recalculate(sl);
 	BKE_scene_layer_engine_settings_object_recalculate(sl, ob);
 }
 
@@ -1018,7 +958,6 @@ void BKE_layer_sync_object_unlink(const Scene *scene, SceneCollection *sc, Objec
 				layer_collection_object_remove(sl, found, ob);
 			}
 		}
-		BKE_scene_layer_base_flag_recalculate(sl);
 		BKE_scene_layer_engine_settings_object_recalculate(sl, ob);
 	}
 }
@@ -1812,12 +1751,19 @@ void BKE_layer_eval_layer_collection(EvaluationContext *UNUSED(eval_ctx),
 
 	if (parent_layer_collection != NULL) {
 		is_visible &= (parent_layer_collection->flag_evaluated & COLLECTION_VISIBLE) != 0;
-		is_selectable &= is_visible && (parent_layer_collection->flag_evaluated & COLLECTION_SELECTABLE) != 0;
+		is_selectable &= (parent_layer_collection->flag_evaluated & COLLECTION_SELECTABLE) != 0;
 		layer_collection->flag_evaluated &= parent_layer_collection->flag_evaluated;
 	}
 
 	for (LinkData *link = layer_collection->object_bases.first; link != NULL; link = link->next) {
 		Base *base = link->data;
+
+		/* TODO(sergey): Is it always required? */
+		if (is_visible != ((base->flag & BASE_VISIBLED) != 0)) {
+			/* Non-recursive code from engine_settings_collection_recalculate(). */
+			base->flag |= BASE_DIRTY_ENGINE_SETTINGS;
+		}
+
 		/* Non-recursive code from base_flag_recalculate(). */
 		if (is_visible) {
 			base->flag |= BASE_VISIBLED;
@@ -1825,9 +1771,6 @@ void BKE_layer_eval_layer_collection(EvaluationContext *UNUSED(eval_ctx),
 		if (is_selectable) {
 			base->flag |= BASE_SELECTABLED;
 		}
-		/* Non-recursive code from engine_settings_collection_recalculate(). */
-		/* TODO(sergey): Is it always required? */
-		base->flag |= BASE_DIRTY_ENGINE_SETTINGS;
 	}
 }
 

@@ -71,7 +71,6 @@ struct SceneLayer *BKE_scene_layer_find_from_collection(const struct Scene *scen
 struct Base *BKE_scene_layer_base_find(struct SceneLayer *sl, struct Object *ob);
 void BKE_scene_layer_base_deselect_all(struct SceneLayer *sl);
 void BKE_scene_layer_base_select(struct SceneLayer *sl, struct Base *selbase);
-void BKE_scene_layer_base_flag_recalculate(struct SceneLayer *sl);
 
 void BKE_scene_layer_engine_settings_recalculate(struct SceneLayer *sl);
 void BKE_scene_layer_engine_settings_object_recalculate(struct SceneLayer *sl, struct Object *ob);

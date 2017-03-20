@@ -138,9 +138,6 @@ void do_versions_after_linking_280(Main *main)
 					lc = lc->next;
 				}
 
-				/* but we still need to make the flags synced */
-				BKE_scene_layer_base_flag_recalculate(sl);
-
 				/* convert active base */
 				if (scene->basact) {
 					sl->basact = BKE_scene_layer_base_find(sl, scene->basact->object);

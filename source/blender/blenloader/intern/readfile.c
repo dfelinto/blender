@@ -6265,8 +6265,6 @@ static void direct_link_scene(FileData *fd, Scene *sce)
 		link_list(fd, &sl->object_bases);
 		sl->basact = newdataadr(fd, sl->basact);
 		direct_link_layer_collections(fd, &sl->layer_collections);
-		/* tag scene layer to update for collection tree evaluation */
-		BKE_scene_layer_base_flag_recalculate(sl);
 	}
 
 	link_list(fd, &sce->engines_settings);
