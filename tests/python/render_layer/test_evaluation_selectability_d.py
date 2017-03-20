@@ -17,7 +17,7 @@ from render_layer_common import *
 # ############################################################
 
 class UnitTesting(RenderLayerTesting):
-    def test_visibility(self):
+    def test_selectability(self):
         """
         See if the depsgraph evaluation is correct
         """
@@ -26,7 +26,7 @@ class UnitTesting(RenderLayerTesting):
         scene = bpy.context.scene
         cube = bpy.data.objects.new('guinea pig', bpy.data.meshes.new('mesh'))
 
-        layer = scene.render_layers.new('Visibility Test')
+        layer = scene.render_layers.new('Selectability Test')
         layer.collections.unlink(layer.collections[0])
         scene.render_layers.active = layer
 
@@ -39,10 +39,12 @@ class UnitTesting(RenderLayerTesting):
         layer_collection_kid = layer.collections.link(scene_collection_kid)
 
         layer_collection_mom.hide = False
-        layer_collection_mom.collections[layer_collection_kid.name].hide = True
-        layer_collection_kid.hide = True
+        cube.select_set('SELECT')
+        layer_collection_mom.collections[layer_collection_kid.name].hide_select = True
 
-        self.assertFalse(cube.visible_get(), "Object is not invisible")
+        bpy.context.scene.update() # update depsgraph
+        self.assertTrue(cube.visible_get(), "Cube should be visible")
+        self.assertTrue(cube.select_get(), "Cube should be selected")
 
 
 # ############################################################
