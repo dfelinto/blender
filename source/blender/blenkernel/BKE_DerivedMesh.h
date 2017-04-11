@@ -88,6 +88,7 @@ struct MFace;
 struct MTFace;
 struct Object;
 struct Scene;
+struct SceneLayer;
 struct Mesh;
 struct MLoopNorSpaceArray;
 struct BMEditMesh;
@@ -676,10 +677,12 @@ void mesh_get_mapped_verts_coords(DerivedMesh *dm, float (*r_cos)[3], const int 
 
 /* */
 DerivedMesh *mesh_get_derived_final(
-        struct Scene *scene, struct Object *ob,
+        struct Scene *scene, struct SceneLayer *sl,
+        struct Object *ob,
         CustomDataMask dataMask);
 DerivedMesh *mesh_get_derived_deform(
-        struct Scene *scene, struct Object *ob,
+        struct Scene *scene, struct SceneLayer *sl,
+        struct Object *ob,
         CustomDataMask dataMask);
 
 DerivedMesh *mesh_create_derived_for_modifier(
@@ -687,7 +690,7 @@ DerivedMesh *mesh_create_derived_for_modifier(
         struct ModifierData *md, int build_shapekey_layers);
 
 DerivedMesh *mesh_create_derived_render(
-        struct Scene *scene, struct Object *ob,
+        struct Scene *scene, struct SceneLayer *sl, struct Object *ob,
         CustomDataMask dataMask);
 
 DerivedMesh *getEditDerivedBMesh(
@@ -725,7 +728,8 @@ DerivedMesh *editbmesh_get_derived_cage(
         struct Scene *scene, struct Object *,
         struct BMEditMesh *em, CustomDataMask dataMask);
 DerivedMesh *editbmesh_get_derived_cage_and_final(
-        struct Scene *scene, struct Object *,
+        struct Scene *scene, struct SceneLayer *sl,
+        struct Object *,
         struct BMEditMesh *em, CustomDataMask dataMask,
         DerivedMesh **r_final);
 
@@ -734,7 +738,7 @@ DerivedMesh *object_get_derived_final(struct Object *ob, const bool for_render);
 float (*editbmesh_get_vertex_cos(struct BMEditMesh *em, int *r_numVerts))[3];
 bool editbmesh_modifier_is_enabled(struct Scene *scene, struct ModifierData *md, DerivedMesh *dm);
 void makeDerivedMesh(
-        struct Scene *scene, struct Object *ob, struct BMEditMesh *em,
+        struct Scene *scene, struct SceneLayer *sl, struct Object *ob, struct BMEditMesh *em,
         CustomDataMask dataMask, const bool build_shapekey_layers);
 
 void weight_to_rgb(float r_rgb[3], const float weight);

@@ -2488,7 +2488,7 @@ static void createTransEditVerts(TransInfo *t)
 		if (totleft > 0)
 #endif
 		{
-			mappedcos = BKE_crazyspace_get_mapped_editverts(t->scene, t->obedit);
+			mappedcos = BKE_crazyspace_get_mapped_editverts(t->scene, t->scene_layer, t->obedit);
 			quats = MEM_mallocN(em->bm->totvert * sizeof(*quats), "crazy quats");
 			BKE_crazyspace_set_quats_editmesh(em, defcos, mappedcos, quats, !prop_mode);
 			if (mappedcos)

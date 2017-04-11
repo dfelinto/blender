@@ -839,6 +839,7 @@ static void curve_calc_modifiers_pre(Scene *scene, Object *ob, ListBase *nurb,
 			const ModifierTypeInfo *mti = modifierType_getInfo(md->type);
 
 			md->scene = scene;
+			md->scene_layer = sl;
 
 			if (!modifier_isEnabled(scene, md, required_mode))
 				continue;
@@ -941,6 +942,7 @@ static void curve_calc_modifiers_post(Scene *scene, Object *ob, ListBase *nurb,
 		ModifierApplyFlag appf = app_flag;
 
 		md->scene = scene;
+		md->scene_layer = sl;
 
 		if (!modifier_isEnabled(scene, md, required_mode))
 			continue;
@@ -1171,6 +1173,7 @@ static void curve_calc_orcodm(Scene *scene, Object *ob, DerivedMesh *dm_final,
 		const ModifierTypeInfo *mti = modifierType_getInfo(md->type);
 
 		md->scene = scene;
+		md->scene_layer = sl;
 
 		if (!modifier_isEnabled(scene, md, required_mode))
 			continue;

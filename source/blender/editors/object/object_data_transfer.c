@@ -132,6 +132,7 @@ static EnumPropertyItem *dt_layers_select_src_itemf(
 	else if (data_type == DT_TYPE_UV) {
 		Object *ob_src = CTX_data_active_object(C);
 		Scene *scene = CTX_data_scene(C);
+		SceneLayer *sl = CTX_data_scene_layer(C);
 
 		if (ob_src) {
 			DerivedMesh *dm_src;
@@ -139,7 +140,7 @@ static EnumPropertyItem *dt_layers_select_src_itemf(
 			int num_data, i;
 
 			/* XXX Is this OK? */
-			dm_src = mesh_get_derived_final(scene, ob_src, CD_MASK_BAREMESH | CD_MTEXPOLY);
+			dm_src = mesh_get_derived_final(scene, sl, ob_src, CD_MASK_BAREMESH | CD_MTEXPOLY);
 			pdata = dm_src->getPolyDataLayout(dm_src);
 			num_data = CustomData_number_of_layers(pdata, CD_MTEXPOLY);
 
@@ -155,6 +156,7 @@ static EnumPropertyItem *dt_layers_select_src_itemf(
 	else if (data_type == DT_TYPE_VCOL) {
 		Object *ob_src = CTX_data_active_object(C);
 		Scene *scene = CTX_data_scene(C);
+		SceneLayer *sl = CTX_data_scene_layer(C);
 
 		if (ob_src) {
 			DerivedMesh *dm_src;
@@ -162,7 +164,7 @@ static EnumPropertyItem *dt_layers_select_src_itemf(
 			int num_data, i;
 
 			/* XXX Is this OK? */
-			dm_src = mesh_get_derived_final(scene, ob_src, CD_MASK_BAREMESH | CD_MLOOPCOL);
+			dm_src = mesh_get_derived_final(scene, sl, ob_src, CD_MASK_BAREMESH | CD_MLOOPCOL);
 			ldata = dm_src->getLoopDataLayout(dm_src);
 			num_data = CustomData_number_of_layers(ldata, CD_MLOOPCOL);
 

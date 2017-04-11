@@ -226,6 +226,7 @@ typedef struct ProjPaintState {
 	RegionView3D *rv3d;
 	ARegion *ar;
 	Scene *scene;
+	SceneLayer *scene_layer;
 	int source; /* PROJ_SRC_**** */
 
 	/* the paint color. It can change depending of inverted mode or not */
@@ -3425,7 +3426,7 @@ static bool proj_paint_state_dm_init(ProjPaintState *ps)
 	/* Workaround for subsurf selection, try the display mesh first */
 	if (ps->source == PROJ_SRC_IMAGE_CAM) {
 		/* using render mesh, assume only camera was rendered from */
-		ps->dm = mesh_create_derived_render(ps->scene, ps->ob, ps->scene->customdata_mask | CD_MASK_MTFACE);
+		ps->dm = mesh_create_derived_render(ps->scene, ps->scene_layer, ps->ob, ps->scene->customdata_mask | CD_MASK_MTFACE);
 		ps->dm_release = true;
 	}
 	else if (ps->ob->derivedFinal &&
@@ -3437,7 +3438,7 @@ static bool proj_paint_state_dm_init(ProjPaintState *ps)
 	}
 	else {
 		ps->dm = mesh_get_derived_final(
-		        ps->scene, ps->ob,
+		        ps->scene, ps->scene_layer, ps->ob,
 		        ps->scene->customdata_mask | CD_MASK_MTFACE | (ps->do_face_sel ? CD_ORIGINDEX : 0));
 		ps->dm_release = true;
 	}
@@ -5082,6 +5083,7 @@ static void project_state_init(bContext *C, Object *ob, ProjPaintState *ps, int 
 	ps->ar = CTX_wm_region(C);
 
 	ps->scene = scene;
+	ps->scene_layer = CTX_data_scene_layer(C);
 	ps->ob = ob; /* allow override of active object */
 
 	ps->do_material_slots = (settings->imapaint.mode == IMAGEPAINT_MODE_MATERIAL);

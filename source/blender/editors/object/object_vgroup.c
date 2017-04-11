@@ -1256,9 +1256,9 @@ static void dm_deform_clear(DerivedMesh *dm, Object *ob)
 }
 
 /* recalculate the deformation */
-static DerivedMesh *dm_deform_recalc(Scene *scene, Object *ob)
+static DerivedMesh *dm_deform_recalc(Scene *scene, SceneLayer *sl, Object *ob)
 {
-	return mesh_get_derived_deform(scene, ob, CD_MASK_BAREMESH);
+	return mesh_get_derived_deform(scene, sl, ob, CD_MASK_BAREMESH);
 }
 
 /* by changing nonzero weights, try to move a vertex in me->mverts with index 'index' to
@@ -1270,7 +1270,7 @@ static DerivedMesh *dm_deform_recalc(Scene *scene, Object *ob)
  * norm and d are the plane's properties for the equation: ax + by + cz + d = 0
  * coord is a point on the plane
  */
-static void moveCloserToDistanceFromPlane(Scene *scene, Object *ob, Mesh *me, int index, float norm[3],
+static void moveCloserToDistanceFromPlane(Scene *scene, SceneLayer *sl, Object *ob, Mesh *me, int index, float norm[3],
                                           float coord[3], float d, float distToBe, float strength, float cp)
 {
 	DerivedMesh *dm;
@@ -1297,7 +1297,7 @@ static void moveCloserToDistanceFromPlane(Scene *scene, Object *ob, Mesh *me, in
 	float originalDistToBe = distToBe;
 	do {
 		wasChange = false;
-		dm = dm_deform_recalc(scene, ob);
+		dm = dm_deform_recalc(scene, sl, ob);
 		dm->getVert(dm, index, &m);
 		copy_v3_v3(oldPos, m.co);
 		distToStart = dot_v3v3(norm, oldPos) + d;
@@ -1335,7 +1335,7 @@ static void moveCloserToDistanceFromPlane(Scene *scene, Object *ob, Mesh *me, in
 				if (dw->weight > 1) {
 					dw->weight = 1;
 				}
-				dm = dm_deform_recalc(scene, ob);
+				dm = dm_deform_recalc(scene, sl, ob);
 				dm->getVert(dm, index, &m);
 				getVerticalAndHorizontalChange(norm, d, coord, oldPos, distToStart, m.co, changes, dists, i);
 				dw->weight = oldw;
@@ -1445,7 +1445,7 @@ static void moveCloserToDistanceFromPlane(Scene *scene, Object *ob, Mesh *me, in
 
 /* this is used to try to smooth a surface by only adjusting the nonzero weights of a vertex 
  * but it could be used to raise or lower an existing 'bump.' */
-static void vgroup_fix(Scene *scene, Object *ob, float distToBe, float strength, float cp)
+static void vgroup_fix(Scene *scene, SceneLayer *sl, Object *ob, float distToBe, float strength, float cp)
 {
 	int i;
 
@@ -1462,7 +1462,7 @@ static void vgroup_fix(Scene *scene, Object *ob, float distToBe, float strength,
 				MVert *p = MEM_callocN(sizeof(MVert) * (count), "deformedPoints");
 				int k;
 
-				DerivedMesh *dm = mesh_get_derived_deform(scene, ob, CD_MASK_BAREMESH);
+				DerivedMesh *dm = mesh_get_derived_deform(scene, sl, ob, CD_MASK_BAREMESH);
 				k = count;
 				while (k--) {
 					dm->getVert(dm, verts[k], &m);
@@ -1480,7 +1480,7 @@ static void vgroup_fix(Scene *scene, Object *ob, float distToBe, float strength,
 					if (mag) { /* zeros fix */
 						d = -dot_v3v3(norm, coord);
 						/* dist = (dot_v3v3(norm, m.co) + d); */ /* UNUSED */
-						moveCloserToDistanceFromPlane(scene, ob, me, i, norm, coord, d, distToBe, strength, cp);
+						moveCloserToDistanceFromPlane(scene, sl, ob, me, i, norm, coord, d, distToBe, strength, cp);
 					}
 				}
 
@@ -2957,6 +2957,7 @@ static int vertex_group_fix_exec(bContext *C, wmOperator *op)
 {
 	Object *ob = CTX_data_active_object(C);
 	Scene *scene = CTX_data_scene(C);
+	SceneLayer *sl = CTX_data_scene_layer(C);
 	
 	float distToBe = RNA_float_get(op->ptr, "dist");
 	float strength = RNA_float_get(op->ptr, "strength");
@@ -2974,7 +2975,7 @@ static int vertex_group_fix_exec(bContext *C, wmOperator *op)
 		BKE_report(op->reports, RPT_ERROR_INVALID_CONTEXT, "This operator does not support an active mirror modifier");
 		return OPERATOR_CANCELLED;
 	}
-	vgroup_fix(scene, ob, distToBe, strength, cp);
+	vgroup_fix(scene, sl, ob, distToBe, strength, cp);
 	
 	DAG_id_tag_update(&ob->id, OB_RECALC_DATA);
 	WM_event_add_notifier(C, NC_OBJECT | ND_DRAW, ob);

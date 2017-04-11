@@ -46,6 +46,7 @@ struct Paint;
 struct PointerRNA;
 struct rcti;
 struct Scene;
+struct SceneLayer;
 struct RegionView3D;
 struct VPaint;
 struct ViewContext;
@@ -127,7 +128,7 @@ unsigned int vpaint_get_current_col(struct Scene *scene, struct VPaint *vp);
 /* paint_vertex_proj.c */
 struct VertProjHandle;
 struct VertProjHandle *ED_vpaint_proj_handle_create(
-        struct Scene *scene, struct Object *ob,
+        struct Scene *scene, struct SceneLayer *sl, struct Object *ob,
         struct DMCoNo **r_vcosnos);
 void  ED_vpaint_proj_handle_update(
         struct VertProjHandle *vp_handle,

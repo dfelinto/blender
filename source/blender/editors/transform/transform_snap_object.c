@@ -1667,10 +1667,10 @@ static bool snapObject(
 			DerivedMesh *dm;
 			em = BKE_editmesh_from_object(ob);
 			if (em) {
-				editbmesh_get_derived_cage_and_final(sctx->scene, ob, em, CD_MASK_BAREMESH, &dm);
+				editbmesh_get_derived_cage_and_final(sctx->scene, sctx->scene_layer, ob, em, CD_MASK_BAREMESH, &dm);
 			}
 			else {
-				dm = mesh_get_derived_final(sctx->scene, ob, CD_MASK_BAREMESH);
+				dm = mesh_get_derived_final(sctx->scene, sctx->scene_layer, ob, CD_MASK_BAREMESH);
 			}
 			retval = snapDerivedMesh(
 			        sctx, snapdata, ob, dm, obmat, ob_index,

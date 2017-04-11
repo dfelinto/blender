@@ -1053,7 +1053,7 @@ static bool copy_particle_systems_to_object(Main *bmain,
 	psys_start = totpsys > 0 ? tmp_psys[0] : NULL;
 	
 	/* get the DM (psys and their modifiers have not been appended yet) */
-	final_dm = mesh_get_derived_final(scene, ob_to, cdmask);
+	final_dm = mesh_get_derived_final(scene, sl, ob_to, cdmask);
 	
 	/* now append psys to the object and make modifiers */
 	for (i = 0, psys_from = PSYS_FROM_FIRST;

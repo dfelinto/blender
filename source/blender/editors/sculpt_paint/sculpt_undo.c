@@ -449,6 +449,7 @@ static int sculpt_undo_bmesh_restore(bContext *C,
 static void sculpt_undo_restore(bContext *C, ListBase *lb)
 {
 	Scene *scene = CTX_data_scene(C);
+	SceneLayer *sl = CTX_data_scene_layer(C);
 	Sculpt *sd = CTX_data_tool_settings(C)->sculpt;
 	Object *ob = CTX_data_active_object(C);
 	DerivedMesh *dm;
@@ -472,7 +473,7 @@ static void sculpt_undo_restore(bContext *C, ListBase *lb)
 	BKE_sculpt_update_mesh_elements(scene, sd, ob, 0, need_mask);
 
 	/* call _after_ sculpt_update_mesh_elements() which may update 'ob->derivedFinal' */
-	dm = mesh_get_derived_final(scene, ob, 0);
+	dm = mesh_get_derived_final(scene, sl, ob, 0);
 
 	if (lb->first && sculpt_undo_bmesh_restore(C, lb->first, ob, ss))
 		return;

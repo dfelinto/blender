@@ -109,7 +109,7 @@ void meshobject_foreachScreenVert(
         void *userData, eV3DProjTest clip_flag)
 {
 	foreachScreenObjectVert_userData data;
-	DerivedMesh *dm = mesh_get_derived_deform(vc->scene, vc->obact, CD_MASK_BAREMESH);
+	DerivedMesh *dm = mesh_get_derived_deform(vc->scene, vc->scene_layer, vc->obact, CD_MASK_BAREMESH);
 
 	ED_view3d_check_mats_rv3d(vc->rv3d);
 

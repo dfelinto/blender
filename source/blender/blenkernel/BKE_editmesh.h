@@ -38,6 +38,7 @@ struct BMesh;
 struct BMLoop;
 struct Mesh;
 struct Scene;
+struct SceneLayer;
 struct DerivedMesh;
 struct MeshStatVis;
 
@@ -99,6 +100,6 @@ float     (*BKE_editmesh_vertexCos_get_orco(BMEditMesh *em, int *r_numVerts))[3]
 void        BKE_editmesh_statvis_calc(BMEditMesh *em, struct DerivedMesh *dm,
                                       const struct MeshStatVis *statvis);
 
-float (*BKE_editmesh_vertexCos_get(struct BMEditMesh *em, struct Scene *scene, int *r_numVerts))[3];
+float (*BKE_editmesh_vertexCos_get(struct BMEditMesh *em, struct Scene *scene, struct SceneLayer *sl, int *r_numVerts))[3];
 
 #endif /* __BKE_EDITMESH_H__ */

@@ -1727,7 +1727,7 @@ static int convert_exec(bContext *C, wmOperator *op)
 			/* note: get the mesh from the original, not from the copy in some
 			 * cases this doesnt give correct results (when MDEF is used for eg)
 			 */
-			dm = mesh_get_derived_final(scene, newob, CD_MASK_MESH);
+			dm = mesh_get_derived_final(scene, sl, newob, CD_MASK_MESH);
 
 			DM_to_mesh(dm, newob->data, newob, CD_MASK_MESH, true);
 

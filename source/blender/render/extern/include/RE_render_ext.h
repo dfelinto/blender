@@ -70,6 +70,7 @@ struct PointDensity;
 
 void RE_point_density_cache(
         struct Scene *scene,
+        struct SceneLayer *sl,
         struct PointDensity *pd,
         const bool use_render_params);
 

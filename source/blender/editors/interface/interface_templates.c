@@ -887,6 +887,7 @@ static uiLayout *draw_modifier(
 		
 		/* modifier name */
 		md->scene = scene;
+	md->scene_layer = sl;
 		if (mti->isDisabled && mti->isDisabled(md, 0)) {
 			uiLayoutSetRedAlert(row, true);
 		}

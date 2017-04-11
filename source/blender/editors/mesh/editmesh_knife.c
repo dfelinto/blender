@@ -164,6 +164,7 @@ typedef struct KnifeTool_OpData {
 	//bContext *C;
 
 	Scene *scene;
+	SceneLayer *scene_layer;
 	Object *ob;
 	BMEditMesh *em;
 
@@ -2589,7 +2590,7 @@ static void knifetool_init_bmbvh(KnifeTool_OpData *kcd)
 {
 	BM_mesh_elem_index_ensure(kcd->em->bm, BM_VERT);
 
-	kcd->cagecos = (const float (*)[3])BKE_editmesh_vertexCos_get(kcd->em, kcd->scene, NULL);
+	kcd->cagecos = (const float (*)[3])BKE_editmesh_vertexCos_get(kcd->em, kcd->scene, kcd->scene_layer, NULL);
 
 	kcd->bmbvh = BKE_bmbvh_new_from_editmesh(
 	        kcd->em,
@@ -2620,6 +2621,7 @@ static void knifetool_init(bContext *C, KnifeTool_OpData *kcd,
 
 	/* assign the drawing handle for drawing preview line... */
 	kcd->scene = scene;
+	kcd->scene_layer = CTX_data_scene_layer(C);
 	kcd->ob = obedit;
 	kcd->ar = CTX_wm_region(C);
 

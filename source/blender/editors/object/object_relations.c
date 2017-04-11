@@ -123,6 +123,7 @@ static int vertex_parent_set_exec(bContext *C, wmOperator *op)
 {
 	Main *bmain = CTX_data_main(C);
 	Scene *scene = CTX_data_scene(C);
+	SceneLayer *sl = CTX_data_scene_layer(C);
 	Object *obedit = CTX_data_edit_object(C);
 	BMVert *eve;
 	BMIter iter;
@@ -151,7 +152,7 @@ static int vertex_parent_set_exec(bContext *C, wmOperator *op)
 
 		/* derivedMesh might be needed for solving parenting,
 		 * so re-create it here */
-		makeDerivedMesh(scene, obedit, em, CD_MASK_BAREMESH | CD_MASK_ORIGINDEX, false);
+		makeDerivedMesh(scene, sl, obedit, em, CD_MASK_BAREMESH | CD_MASK_ORIGINDEX, false);
 
 		BM_ITER_MESH (eve, &iter, em->bm, BM_VERTS_OF_MESH) {
 			if (BM_elem_flag_test(eve, BM_ELEM_SELECT)) {
@@ -607,7 +608,7 @@ EnumPropertyItem prop_make_parent_types[] = {
 	{0, NULL, 0, NULL, NULL}
 };
 
-bool ED_object_parent_set(ReportList *reports, Main *bmain, Scene *scene, Object *ob, Object *par,
+bool ED_object_parent_set(ReportList *reports, Main *bmain, Scene *scene, SceneLayer *sl, Object *ob, Object *par,
                           int partype, const bool xmirror, const bool keep_transform, const int vert_par[3])
 {
 	bPoseChannel *pchan = NULL;
@@ -773,12 +774,12 @@ bool ED_object_parent_set(ReportList *reports, Main *bmain, Scene *scene, Object
 			}
 			else if (pararm && (ob->type == OB_MESH) && (par->type == OB_ARMATURE)) {
 				if (partype == PAR_ARMATURE_NAME)
-					create_vgroups_from_armature(reports, scene, ob, par, ARM_GROUPS_NAME, false);
+					create_vgroups_from_armature(reports, scene, sl, ob, par, ARM_GROUPS_NAME, false);
 				else if (partype == PAR_ARMATURE_ENVELOPE)
-					create_vgroups_from_armature(reports, scene, ob, par, ARM_GROUPS_ENVELOPE, xmirror);
+					create_vgroups_from_armature(reports, scene, sl, ob, par, ARM_GROUPS_ENVELOPE, xmirror);
 				else if (partype == PAR_ARMATURE_AUTO) {
 					WM_cursor_wait(1);
-					create_vgroups_from_armature(reports, scene, ob, par, ARM_GROUPS_AUTO, xmirror);
+					create_vgroups_from_armature(reports, scene, sl, ob, par, ARM_GROUPS_AUTO, xmirror);
 					WM_cursor_wait(0);
 				}
 				/* get corrected inverse */
@@ -831,6 +832,7 @@ static int parent_set_exec(bContext *C, wmOperator *op)
 {
 	Main *bmain = CTX_data_main(C);
 	Scene *scene = CTX_data_scene(C);
+	SceneLayer *sl = CTX_data_scene_layer(C);
 	Object *par = ED_object_active_context(C);
 	int partype = RNA_enum_get(op->ptr, "type");
 	const bool xmirror = RNA_boolean_get(op->ptr, "xmirror");
@@ -864,7 +866,7 @@ static int parent_set_exec(bContext *C, wmOperator *op)
 				parent_set_vert_find(tree, ob, vert_par, is_tri);
 			}
 
-			if (!ED_object_parent_set(op->reports, bmain, scene, ob, par, partype, xmirror, keep_transform, vert_par_p)) {
+			if (!ED_object_parent_set(op->reports, bmain, scene, sl, ob, par, partype, xmirror, keep_transform, vert_par_p)) {
 				ok = false;
 				break;
 			}

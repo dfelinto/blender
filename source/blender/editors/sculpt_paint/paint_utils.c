@@ -268,9 +268,9 @@ static void imapaint_tri_weights(float matrix[4][4], GLint view[4],
 }
 
 /* compute uv coordinates of mouse in face */
-static void imapaint_pick_uv(Scene *scene, Object *ob, unsigned int faceindex, const int xy[2], float uv[2])
+static void imapaint_pick_uv(Scene *scene, SceneLayer *sl, Object *ob, unsigned int faceindex, const int xy[2], float uv[2])
 {
-	DerivedMesh *dm = mesh_get_derived_final(scene, ob, CD_MASK_BAREMESH);
+	DerivedMesh *dm = mesh_get_derived_final(scene, sl, ob, CD_MASK_BAREMESH);
 	const int tottri = dm->getNumLoopTri(dm);
 	int i, findex;
 	float p[2], w[3], absw, minabsw;
@@ -418,6 +418,7 @@ void flip_qt_qt(float out[4], const float in[4], const char symm)
 void paint_sample_color(bContext *C, ARegion *ar, int x, int y, bool texpaint_proj, bool use_palette)
 {
 	Scene *scene = CTX_data_scene(C);
+	SceneLayer *sl = CTX_data_scene_layer(C);
 	Paint *paint = BKE_paint_get_active_from_context(C);
 	Palette *palette = BKE_paint_palette(paint);
 	PaletteColor *color;
@@ -449,7 +450,7 @@ void paint_sample_color(bContext *C, ARegion *ar, int x, int y, bool texpaint_pr
 
 		if (ob) {
 			Mesh *me = (Mesh *)ob->data;
-			DerivedMesh *dm = mesh_get_derived_final(scene, ob, CD_MASK_BAREMESH);
+			DerivedMesh *dm = mesh_get_derived_final(scene, sl, ob, CD_MASK_BAREMESH);
 
 			ViewContext vc;
 			const int mval[2] = {x, y};
@@ -474,7 +475,7 @@ void paint_sample_color(bContext *C, ARegion *ar, int x, int y, bool texpaint_pr
 						if (ibuf && ibuf->rect) {
 							float uv[2];
 							float u, v;
-							imapaint_pick_uv(scene, ob, faceindex, mval, uv);
+							imapaint_pick_uv(scene, sl, ob, faceindex, mval, uv);
 							sample_success = true;
 							
 							u = fmodf(uv[0], 1.0f);

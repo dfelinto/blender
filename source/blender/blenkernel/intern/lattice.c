@@ -1044,6 +1044,7 @@ void BKE_lattice_modifiers_calc(Scene *scene, Object *ob)
 		const ModifierTypeInfo *mti = modifierType_getInfo(md->type);
 
 		md->scene = scene;
+		md->scene_layer = sl;
 		
 		if (!(mti->flags & eModifierTypeFlag_AcceptsLattice)) continue;
 		if (!(md->mode & eModifierMode_Realtime)) continue;

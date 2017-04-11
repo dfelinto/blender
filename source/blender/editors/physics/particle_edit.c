@@ -3348,7 +3348,7 @@ static void intersect_dm_quad_weights(const float v1[3], const float v2[3], cons
 }
 
 /* check intersection with a derivedmesh */
-static int particle_intersect_dm(Scene *scene, Object *ob, DerivedMesh *dm,
+static int particle_intersect_dm(Scene *scene, SceneLayer *sl, Object *ob, DerivedMesh *dm,
                                  float *vert_cos,
                                  const float co1[3], const float co2[3],
                                  float *min_d, int *min_face, float *min_w,
@@ -3364,9 +3364,9 @@ static int particle_intersect_dm(Scene *scene, Object *ob, DerivedMesh *dm,
 	if (dm == NULL) {
 		psys_disable_all(ob);
 
-		dm=mesh_get_derived_final(scene, ob, 0);
+		dm=mesh_get_derived_final(scene, sl, ob, 0);
 		if (dm == NULL)
-			dm=mesh_get_derived_deform(scene, ob, 0);
+			dm=mesh_get_derived_deform(scene, sl, ob, 0);
 
 		psys_enable_all(ob);
 
@@ -3481,7 +3481,8 @@ static int particle_intersect_dm(Scene *scene, Object *ob, DerivedMesh *dm,
 
 static int brush_add(PEData *data, short number)
 {
-	Scene *scene= data->scene;
+	Scene *scene = data->scene;
+	SceneLayer *sl = data->scene_layer;
 	Object *ob= data->ob;
 	DerivedMesh *dm;
 	PTCacheEdit *edit = data->edit;
@@ -3548,7 +3549,7 @@ static int brush_add(PEData *data, short number)
 		min_d=2.0;
 		
 		/* warning, returns the derived mesh face */
-		if (particle_intersect_dm(scene, ob, dm, 0, co1, co2, &min_d, &add_pars[n].num_dmcache, add_pars[n].fuv, 0, 0, 0, 0)) {
+		if (particle_intersect_dm(scene, sl, ob, dm, 0, co1, co2, &min_d, &add_pars[n].num_dmcache, add_pars[n].fuv, 0, 0, 0, 0)) {
 			if (psys->part->use_modifier_stack && !psmd->dm_final->deformedOnly) {
 				add_pars[n].num = add_pars[n].num_dmcache;
 				add_pars[n].num_dmcache = DMCACHE_ISCHILD;

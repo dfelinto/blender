@@ -99,7 +99,7 @@ static int modifiers_disable_subsurf_temporary(Object *ob)
 }
 
 /* disable subsurf temporal, get mapped cos, and enable it */
-float (*BKE_crazyspace_get_mapped_editverts(Scene *scene, Object *obedit))[3]
+float (*BKE_crazyspace_get_mapped_editverts(Scene *scene, SceneLayer *sl, Object *obedit))[3]
 {
 	Mesh *me = obedit->data;
 	DerivedMesh *dm;
@@ -109,7 +109,7 @@ float (*BKE_crazyspace_get_mapped_editverts(Scene *scene, Object *obedit))[3]
 	/* disable subsurf temporal, get mapped cos, and enable it */
 	if (modifiers_disable_subsurf_temporary(obedit)) {
 		/* need to make new derivemesh */
-		makeDerivedMesh(scene, obedit, me->edit_btmesh, CD_MASK_BAREMESH, false);
+		makeDerivedMesh(scene, sl, obedit, me->edit_btmesh, CD_MASK_BAREMESH, false);
 	}
 
 	/* now get the cage */

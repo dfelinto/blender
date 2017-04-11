@@ -174,7 +174,8 @@ void ED_armature_transform(struct bArmature *arm, float mat[4][4]);
 #define ARM_GROUPS_ENVELOPE 2
 #define ARM_GROUPS_AUTO     3
 
-void create_vgroups_from_armature(struct ReportList *reports, struct Scene *scene, struct Object *ob,
+void create_vgroups_from_armature(struct ReportList *reports, struct Scene *scene, struct SceneLayer *sl,
+                                  struct Object *ob,
                                   struct Object *par, const int mode, const bool mirror);
 
 /* if bone is already in list, pass it as param to ignore it */

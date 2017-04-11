@@ -1985,6 +1985,7 @@ static bool wpaint_ensure_data(
 static bool wpaint_stroke_test_start(bContext *C, wmOperator *op, const float UNUSED(mouse[2]))
 {
 	Scene *scene = CTX_data_scene(C);
+	SceneLayer *sl = CTX_data_scene_layer(C);
 	struct PaintStroke *stroke = op->customdata;
 	ToolSettings *ts = scene->toolsettings;
 	VPaint *wp = ts->wpaint;
@@ -2094,7 +2095,7 @@ static bool wpaint_stroke_test_start(bContext *C, wmOperator *op, const float UN
 	}
 
 	/* painting on subsurfs should give correct points too, this returns me->totvert amount */
-	wpd->vp_handle = ED_vpaint_proj_handle_create(scene, ob, &wpd->vertexcosnos);
+	wpd->vp_handle = ED_vpaint_proj_handle_create(scene, sl, ob, &wpd->vertexcosnos);
 
 	wpd->indexar = get_indexarray(me);
 	copy_wpaint_prev(wp, me->dvert, me->totvert);
@@ -2686,7 +2687,7 @@ static bool vpaint_stroke_test_start(bContext *C, struct wmOperator *op, const f
 	paint_stroke_set_mode_data(stroke, vpd);
 	view3d_set_viewcontext(C, &vpd->vc);
 	
-	vpd->vp_handle = ED_vpaint_proj_handle_create(vpd->vc.scene, ob, &vpd->vertexcosnos);
+	vpd->vp_handle = ED_vpaint_proj_handle_create(vpd->vc.scene, vpd->vc.scene_layer, ob, &vpd->vertexcosnos);
 
 	vpd->indexar = get_indexarray(me);
 	vpd->paintcol = vpaint_get_current_col(scene, vp);
@@ -2966,12 +2967,13 @@ static int weight_from_bones_poll(bContext *C)
 static int weight_from_bones_exec(bContext *C, wmOperator *op)
 {
 	Scene *scene = CTX_data_scene(C);
+	SceneLayer *sl = CTX_data_scene_layer(C);
 	Object *ob = CTX_data_active_object(C);
 	Object *armob = modifiers_isDeformedByArmature(ob);
 	Mesh *me = ob->data;
 	int type = RNA_enum_get(op->ptr, "type");
 
-	create_vgroups_from_armature(op->reports, scene, ob, armob, type, (me->editflag & ME_EDIT_MIRROR_X));
+	create_vgroups_from_armature(op->reports, scene, sl, ob, armob, type, (me->editflag & ME_EDIT_MIRROR_X));
 
 	DAG_id_tag_update(&me->id, 0);
 	WM_event_add_notifier(C, NC_GEOM | ND_DATA, me);
@@ -3180,6 +3182,7 @@ static int paint_weight_gradient_exec(bContext *C, wmOperator *op)
 	DMGradient_vertStore *vert_cache;
 	struct ARegion *ar = CTX_wm_region(C);
 	Scene *scene = CTX_data_scene(C);
+	SceneLayer *sl = CTX_data_scene_layer(C);
 	Object *ob = CTX_data_active_object(C);
 	Mesh *me = ob->data;
 	int x_start = RNA_int_get(op->ptr, "xstart");
@@ -3189,7 +3192,7 @@ static int paint_weight_gradient_exec(bContext *C, wmOperator *op)
 	float sco_start[2] = {x_start, y_start};
 	float sco_end[2] = {x_end, y_end};
 	const bool is_interactive = (gesture != NULL);
-	DerivedMesh *dm = mesh_get_derived_final(scene, ob, scene->customdata_mask);
+	DerivedMesh *dm = mesh_get_derived_final(scene, sl, ob, scene->customdata_mask);
 
 	DMGradient_userData data = {NULL};
 

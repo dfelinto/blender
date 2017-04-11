@@ -378,7 +378,7 @@ static int hide_show_exec(bContext *C, wmOperator *op)
 
 	clip_planes_from_rect(C, clip_planes, &rect);
 
-	dm = mesh_get_derived_final(CTX_data_scene(C), ob, CD_MASK_BAREMESH);
+	dm = mesh_get_derived_final(CTX_data_scene(C), CTX_data_scene_layer(C), ob, CD_MASK_BAREMESH);
 	pbvh = dm->getPBVH(ob, dm);
 	ob->sculpt->pbvh = pbvh;
 

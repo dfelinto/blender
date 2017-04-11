@@ -111,6 +111,8 @@ typedef struct ModifierData {
 	/* XXX for timing info set by caller... solve later? (ton) */
 	struct Scene *scene;
 
+	struct SceneLayer *scene_layer;
+
 	char *error;
 } ModifierData;
 

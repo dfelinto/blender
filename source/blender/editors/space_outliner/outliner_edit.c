@@ -1888,6 +1888,7 @@ static int parent_drop_exec(bContext *C, wmOperator *op)
 	Object *par = NULL, *ob = NULL;
 	Main *bmain = CTX_data_main(C);
 	Scene *scene = CTX_data_scene(C);
+	SceneLayer *sl = CTX_data_scene_layer(C);
 	int partype = -1;
 	char parname[MAX_ID_NAME], childname[MAX_ID_NAME];
 
@@ -1902,7 +1903,7 @@ static int parent_drop_exec(bContext *C, wmOperator *op)
 		return OPERATOR_CANCELLED;
 	}
 
-	ED_object_parent_set(op->reports, bmain, scene, ob, par, partype, false, false, NULL);
+	ED_object_parent_set(op->reports, bmain, scene, sl, ob, par, partype, false, false, NULL);
 
 	DAG_relations_tag_update(bmain);
 	WM_event_add_notifier(C, NC_OBJECT | ND_TRANSFORM, NULL);
@@ -1976,7 +1977,8 @@ static int parent_drop_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 		}
 
 		if ((par->type != OB_ARMATURE) && (par->type != OB_CURVE) && (par->type != OB_LATTICE)) {
-			if (ED_object_parent_set(op->reports, bmain, scene, ob, par, partype, false, false, NULL)) {
+			SceneLayer *sl = CTX_data_scene_layer(C);
+			if (ED_object_parent_set(op->reports, bmain, scene, sl, ob, par, partype, false, false, NULL)) {
 				DAG_relations_tag_update(bmain);
 				WM_event_add_notifier(C, NC_OBJECT | ND_TRANSFORM, NULL);
 				WM_event_add_notifier(C, NC_OBJECT | ND_PARENT, NULL);

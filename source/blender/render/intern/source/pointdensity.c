@@ -168,6 +168,7 @@ static void alloc_point_data(PointDensity *pd)
 }
 
 static void pointdensity_cache_psys(Scene *scene,
+                                    SceneLayer *sl,
                                     PointDensity *pd,
                                     Object *ob,
                                     ParticleSystem *psys,
@@ -202,11 +203,13 @@ static void pointdensity_cache_psys(Scene *scene,
 
 	if (use_render_params) {
 		dm = mesh_create_derived_render(scene,
+		                                sl,
 		                                ob,
 		                                CD_MASK_BAREMESH | CD_MASK_MTFACE | CD_MASK_MCOL);
 	}
 	else {
 		dm = mesh_get_derived_final(scene,
+		                            sl,
 		                            ob,
 		                            CD_MASK_BAREMESH | CD_MASK_MTFACE | CD_MASK_MCOL);
 	}
@@ -401,6 +404,7 @@ static void pointdensity_cache_vertex_normal(PointDensity *pd, Object *UNUSED(ob
 }
 
 static void pointdensity_cache_object(Scene *scene,
+                                      SceneLayer *sl,
                                       PointDensity *pd,
                                       Object *ob,
                                       const bool use_render_params)
@@ -424,7 +428,7 @@ static void pointdensity_cache_object(Scene *scene,
 		dm = mesh_create_derived_render(scene, ob, mask);
 	}
 	else {
-		dm = mesh_get_derived_final(scene, ob, mask);
+		dm = mesh_get_derived_final(scene, sl, ob, mask);
 	}
 
 	mvert = dm->getVertArray(dm);	/* local object space */
@@ -476,6 +480,7 @@ static void pointdensity_cache_object(Scene *scene,
 }
 
 static void cache_pointdensity_ex(Scene *scene,
+                                  SceneLayer *sl,
                                   PointDensity *pd,
                                   float viewmat[4][4],
                                   float winmat[4][4],
@@ -505,6 +510,7 @@ static void cache_pointdensity_ex(Scene *scene,
 		}
 
 		pointdensity_cache_psys(scene,
+		                        sl,
 		                        pd,
 		                        ob,
 		                        psys,
@@ -515,7 +521,7 @@ static void cache_pointdensity_ex(Scene *scene,
 	else if (pd->source == TEX_PD_OBJECT) {
 		Object *ob = pd->object;
 		if (ob && ob->type == OB_MESH)
-			pointdensity_cache_object(scene, pd, ob, use_render_params);
+			pointdensity_cache_object(scene, sl, pd, ob, use_render_params);
 	}
 }
 
@@ -938,6 +944,7 @@ static void particle_system_minmax(Scene *scene,
 
 void RE_point_density_cache(
         Scene *scene,
+        SceneLayer *sl,
         PointDensity *pd,
         const bool use_render_params)
 {
@@ -945,7 +952,7 @@ void RE_point_density_cache(
 	/* Same matricies/resolution as dupli_render_particle_set(). */
 	unit_m4(mat);
 	BLI_mutex_lock(&sample_mutex);
-	cache_pointdensity_ex(scene, pd, mat, mat, 1, 1, use_render_params);
+	cache_pointdensity_ex(scene, sl, pd, mat, mat, 1, 1, use_render_params);
 	BLI_mutex_unlock(&sample_mutex);
 }
 

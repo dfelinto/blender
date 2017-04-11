@@ -285,6 +285,7 @@ bool modifier_supportsCage(struct Scene *scene, ModifierData *md)
 	const ModifierTypeInfo *mti = modifierType_getInfo(md->type);
 
 	md->scene = scene;
+	md->scene_layer = sl;
 
 	return ((!mti->isDisabled || !mti->isDisabled(md, 0)) &&
 	        (mti->flags & eModifierTypeFlag_SupportsEditmode) &&
@@ -296,6 +297,7 @@ bool modifier_couldBeCage(struct Scene *scene, ModifierData *md)
 	const ModifierTypeInfo *mti = modifierType_getInfo(md->type);
 
 	md->scene = scene;
+	md->scene_layer = sl;
 
 	return ((md->mode & eModifierMode_Realtime) &&
 	        (md->mode & eModifierMode_Editmode) &&
@@ -357,6 +359,7 @@ int modifiers_getCageIndex(struct Scene *scene, Object *ob, int *r_lastPossibleC
 		bool supports_mapping;
 
 		md->scene = scene;
+		md->scene_layer = sl;
 
 		if (mti->isDisabled && mti->isDisabled(md, 0)) continue;
 		if (!(mti->flags & eModifierTypeFlag_SupportsEditmode)) continue;
@@ -414,6 +417,7 @@ bool modifier_isEnabled(struct Scene *scene, ModifierData *md, int required_mode
 	const ModifierTypeInfo *mti = modifierType_getInfo(md->type);
 
 	md->scene = scene;
+	md->scene_layer = sl;
 
 	if ((md->mode & required_mode) != required_mode) return false;
 	if (mti->isDisabled && mti->isDisabled(md, required_mode == eModifierMode_Render)) return false;

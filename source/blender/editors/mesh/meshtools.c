@@ -613,6 +613,7 @@ int join_mesh_exec(bContext *C, wmOperator *op)
 int join_mesh_shapes_exec(bContext *C, wmOperator *op)
 {
 	Scene *scene = CTX_data_scene(C);
+	SceneLayer *sl = CTX_data_scene_layer(C);
 	Object *ob = CTX_data_active_object(C);
 	Mesh *me = (Mesh *)ob->data;
 	Mesh *selme = NULL;
@@ -662,7 +663,7 @@ int join_mesh_shapes_exec(bContext *C, wmOperator *op)
 			selme = (Mesh *)base->object->data;
 			
 			if (selme->totvert == me->totvert) {
-				dm = mesh_get_derived_deform(scene, base->object, CD_MASK_BAREMESH);
+				dm = mesh_get_derived_deform(scene, sl, base->object, CD_MASK_BAREMESH);
 				
 				if (!dm) continue;
 					
@@ -1155,10 +1156,11 @@ bool ED_mesh_pick_face_vert(bContext *C, Object *ob, const int mval[2], unsigned
 
 	if (ED_mesh_pick_face(C, ob, mval, &poly_index, size)) {
 		Scene *scene = CTX_data_scene(C);
+		SceneLayer *sl = CTX_data_scene_layer(C);
 		struct ARegion *ar = CTX_wm_region(C);
 
 		/* derived mesh to find deformed locations */
-		DerivedMesh *dm = mesh_get_derived_final(scene, ob, CD_MASK_BAREMESH | CD_MASK_ORIGINDEX);
+		DerivedMesh *dm = mesh_get_derived_final(scene, sl, ob, CD_MASK_BAREMESH | CD_MASK_ORIGINDEX);
 
 		int v_idx_best = ORIGINDEX_NONE;
 
@@ -1285,7 +1287,7 @@ bool ED_mesh_pick_vert(bContext *C, Object *ob, const int mval[2], unsigned int 
 	}
 	else {
 		/* derived mesh to find deformed locations */
-		DerivedMesh *dm = mesh_get_derived_final(vc.scene, ob, CD_MASK_BAREMESH);
+		DerivedMesh *dm = mesh_get_derived_final(vc.scene, vc.scene_layer, ob, CD_MASK_BAREMESH);
 		ARegion *ar = vc.ar;
 		RegionView3D *rv3d = ar->regiondata;
 

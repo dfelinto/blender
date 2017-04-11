@@ -56,13 +56,13 @@
 #include "mesh_intern.h"  /* own include */
 
 
-static LinkNode *knifeproject_poly_from_object(ARegion *ar, Scene *scene, Object *ob, LinkNode *polys)
+static LinkNode *knifeproject_poly_from_object(ARegion *ar, Scene *scene, SceneLayer *sl, Object *ob, LinkNode *polys)
 {
 	DerivedMesh *dm;
 	bool dm_needsFree;
 
 	if (ob->type == OB_MESH || ob->derivedFinal) {
-		dm = ob->derivedFinal ? ob->derivedFinal : mesh_get_derived_final(scene, ob, CD_MASK_BAREMESH);
+		dm = ob->derivedFinal ? ob->derivedFinal : mesh_get_derived_final(scene, sl, ob, CD_MASK_BAREMESH);
 		dm_needsFree = false;
 	}
 	else if (ELEM(ob->type, OB_FONT, OB_CURVE, OB_SURF)) {
@@ -118,6 +118,7 @@ static int knifeproject_exec(bContext *C, wmOperator *op)
 {
 	ARegion *ar = CTX_wm_region(C);
 	Scene *scene = CTX_data_scene(C);
+	SceneLayer *sl = CTX_data_scene_layer(C);
 	Object *obedit = CTX_data_edit_object(C);
 	BMEditMesh *em = BKE_editmesh_from_object(obedit);
 	const bool cut_through = RNA_boolean_get(op->ptr, "cut_through");
@@ -127,7 +128,7 @@ static int knifeproject_exec(bContext *C, wmOperator *op)
 	CTX_DATA_BEGIN (C, Object *, ob, selected_objects)
 	{
 		if (ob != obedit) {
-			polys = knifeproject_poly_from_object(ar, scene, ob, polys);
+			polys = knifeproject_poly_from_object(ar, scene, sl, ob, polys);
 		}
 	}
 	CTX_DATA_END;

@@ -4274,7 +4274,7 @@ static void draw_mesh_fancy(Scene *scene, SceneLayer *sl, ARegion *ar, View3D *v
 	Mesh *me = ob->data;
 	eWireDrawMode draw_wire = OBDRAW_WIRE_OFF;
 	bool /* no_verts,*/ no_edges, no_faces;
-	DerivedMesh *dm = mesh_get_derived_final(scene, ob, scene->customdata_mask);
+	DerivedMesh *dm = mesh_get_derived_final(scene, sl, ob, scene->customdata_mask);
 	const bool is_obact = (ob == OBACT_NEW);
 	int draw_flags = (is_obact && BKE_paint_select_face_test(ob)) ? DRAW_FACE_SELECT : 0;
 
@@ -4568,7 +4568,7 @@ static bool draw_mesh_object(Scene *scene, SceneLayer *sl, ARegion *ar, View3D *
 		}
 		else {
 			cageDM = editbmesh_get_derived_cage_and_final(
-			        scene, ob, em, scene->customdata_mask,
+			        scene, sl, ob, em, scene->customdata_mask,
 			        &finalDM);
 		}
 
@@ -4689,7 +4689,7 @@ static void draw_mesh_fancy_new(Scene *scene, SceneLayer *sl, ARegion *ar, View3
 	Mesh *me = ob->data;
 	eWireDrawMode draw_wire = OBDRAW_WIRE_OFF; /* could be bool draw_wire_overlay */
 	bool no_edges, no_faces;
-	DerivedMesh *dm = mesh_get_derived_final(scene, ob, scene->customdata_mask);
+	DerivedMesh *dm = mesh_get_derived_final(scene, sl, ob, scene->customdata_mask);
 	const bool is_obact = (ob == OBACT_NEW);
 	int draw_flags = (is_obact && BKE_paint_select_face_test(ob)) ? DRAW_FACE_SELECT : 0;
 
@@ -5027,7 +5027,7 @@ static bool draw_mesh_object_new(Scene *scene, SceneLayer *sl, ARegion *ar, View
 		}
 		else {
 			cageDM = editbmesh_get_derived_cage_and_final(
-			        scene, ob, em, scene->customdata_mask,
+			        scene, sl, ob, em, scene->customdata_mask,
 			        &finalDM);
 		}
 
@@ -9525,10 +9525,10 @@ static DMDrawOption bbs_mesh_solid_hide2__setDrawOpts(void *userData, int index)
 	}
 }
 
-static void bbs_mesh_solid_verts(Scene *scene, Object *ob)
+static void bbs_mesh_solid_verts(Scene *scene, SceneLayer *sl, Object *ob)
 {
 	Mesh *me = ob->data;
-	DerivedMesh *dm = mesh_get_derived_final(scene, ob, scene->customdata_mask);
+	DerivedMesh *dm = mesh_get_derived_final(scene, sl, ob, scene->customdata_mask);
 
 	DM_update_materials(dm, ob);
 
@@ -9541,9 +9541,9 @@ static void bbs_mesh_solid_verts(Scene *scene, Object *ob)
 	dm->release(dm);
 }
 
-static void bbs_mesh_solid_faces(Scene *scene, Object *ob)
+static void bbs_mesh_solid_faces(Scene *scene, SceneLayer *sl, Object *ob)
 {
-	DerivedMesh *dm = mesh_get_derived_final(scene, ob, scene->customdata_mask);
+	DerivedMesh *dm = mesh_get_derived_final(scene, sl, ob, scene->customdata_mask);
 	Mesh *me = ob->data;
 	
 	DM_update_materials(dm, ob);
@@ -9556,7 +9556,7 @@ static void bbs_mesh_solid_faces(Scene *scene, Object *ob)
 	dm->release(dm);
 }
 
-void draw_object_backbufsel(Scene *scene, View3D *v3d, RegionView3D *rv3d, Object *ob)
+void draw_object_backbufsel(Scene *scene, SceneLayer *sl, View3D *v3d, RegionView3D *rv3d, Object *ob)
 {
 	ToolSettings *ts = scene->toolsettings;
 
@@ -9611,7 +9611,7 @@ void draw_object_backbufsel(Scene *scene, View3D *v3d, RegionView3D *rv3d, Objec
 					bbs_mesh_solid_verts(scene, ob);
 				}
 				else {
-					bbs_mesh_solid_faces(scene, ob);
+					bbs_mesh_solid_faces(scene, sl, ob);
 				}
 			}
 			break;
@@ -9639,7 +9639,7 @@ static void draw_object_mesh_instance(Scene *scene, SceneLayer *sl, View3D *v3d,
 		DM_update_materials(edm, ob);
 	}
 	else {
-		dm = mesh_get_derived_final(scene, ob, CD_MASK_BAREMESH);
+		dm = mesh_get_derived_final(scene, sl, ob, CD_MASK_BAREMESH);
 		DM_update_materials(dm, ob);
 	}
 

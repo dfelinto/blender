@@ -807,7 +807,7 @@ static void draw_mesh_text(Scene *scene, SceneLayer *sl, Object *ob, int glsl)
 		if (BKE_paint_select_elem_test(ob))
 			return;
 
-	ddm = mesh_get_derived_deform(scene, ob, CD_MASK_BAREMESH);
+	ddm = mesh_get_derived_deform(scene, sl, ob, CD_MASK_BAREMESH);
 
 	for (a = 0, mp = mface; a < totpoly; a++, mtpoly++, mp++) {
 		short matnr = mp->mat_nr;

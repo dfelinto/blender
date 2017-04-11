@@ -525,6 +525,7 @@ static int modifier_apply_shape(ReportList *reports, Scene *scene, Object *ob, M
 	const ModifierTypeInfo *mti = modifierType_getInfo(md->type);
 
 	md->scene = scene;
+	md->scene_layer = sl;
 
 	if (mti->isDisabled && mti->isDisabled(md, 0)) {
 		BKE_report(reports, RPT_ERROR, "Modifier is disabled, skipping apply");
@@ -585,6 +586,7 @@ static int modifier_apply_obdata(ReportList *reports, Scene *scene, Object *ob, 
 	const ModifierTypeInfo *mti = modifierType_getInfo(md->type);
 
 	md->scene = scene;
+	md->scene_layer = sl;
 
 	if (mti->isDisabled && mti->isDisabled(md, 0)) {
 		BKE_report(reports, RPT_ERROR, "Modifier is disabled, skipping apply");
@@ -1698,7 +1700,7 @@ static Object *modifier_skin_armature_create(Main *bmain, Scene *scene, SceneLay
 	int *emap_mem;
 	int v;
 
-	deform_dm = mesh_get_derived_deform(scene, skin_ob, CD_MASK_BAREMESH);
+	deform_dm = mesh_get_derived_deform(scene, sl, skin_ob, CD_MASK_BAREMESH);
 	mvert = deform_dm->getVertArray(deform_dm);
 
 	/* add vertex weights to original mesh */
