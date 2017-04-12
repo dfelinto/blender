@@ -123,8 +123,11 @@ void gpuOrtho2D(float left, float right, float bottom, float top);
 
 
 /* functions to get matrix values */
+const float *gpuGetModelViewMatrix2D(float m[3][3]);
 const float *gpuGetModelViewMatrix3D(float m[4][4]);
+const float *gpuGetProjectionMatrix2D(float m[3][3]);
 const float *gpuGetProjectionMatrix3D(float m[4][4]);
+const float *gpuGetModelViewProjectionMatrix2D(float m[3][3]);
 const float *gpuGetModelViewProjectionMatrix3D(float m[4][4]);
 
 const float *gpuGetNormalMatrix(float m[3][3]);
