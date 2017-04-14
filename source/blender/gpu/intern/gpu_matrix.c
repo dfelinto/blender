@@ -44,8 +44,6 @@
 typedef float Mat4[4][4];
 typedef float Mat3[3][3];
 
-#define ModelView2DS
-
 typedef struct {
 	Mat4 ModelViewStack3D[MATRIX_STACK_DEPTH];
 	Mat4 ProjectionMatrix3D;
