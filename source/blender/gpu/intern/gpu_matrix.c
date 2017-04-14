@@ -62,8 +62,6 @@ typedef struct {
 	 */
 } MatrixState;
 
-static MatrixState state; /* TODO(merwin): make part of GPUContext, alongside immediate mode & state tracker */
-
 #define MATRIX_4X4_IDENTITY {{1.0f, 0.0f, 0.0f, 0.0f}, \
                              {0.0f, 1.0f, 0.0f, 0.0f}, \
                              {0.0f, 0.0f, 1.0f, 0.0f}, \
