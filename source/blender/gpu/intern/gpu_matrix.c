@@ -85,25 +85,6 @@ void gpuMatrixInit(void)
 	memset(&state, 0, sizeof(MatrixState));
 }
 
-void gpuMatrixBegin2D(void)
-{
-	state.top = 0;
-	unit_m4(ModelView3D);
-	unit_m4(Projection3D);
-}
-
-void gpuMatrixBegin3D(void)
-{
-	state.top = 0;
-	unit_m4(ModelView3D);
-	unit_m4(Projection3D);
-}
-
-void gpuMatrixEnd(void)
-{
-}
-
-
 #ifdef WITH_GPU_SAFETY
 
 /* Check if matrix is numerically good */

@@ -69,12 +69,6 @@ typedef enum {
 
 MatrixMode gpuMatrixMode(void);
 
-void gpuMatrixBegin2D(void);
-void gpuMatrixBegin3D(void);
-void gpuMatrixEnd(void);
-/* TODO: gpuMatrixResume2D & gpuMatrixResume3D to switch modes but not reset stack */
-
-
 /* ModelView Matrix (2D or 3D) */
 
 void gpuPushMatrix(void); /* TODO: PushCopy vs PushIdentity? */
