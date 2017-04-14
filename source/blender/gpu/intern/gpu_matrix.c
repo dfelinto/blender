@@ -78,9 +78,7 @@ static MatrixState state = {
 #undef MATRIX_4X4_IDENTITY
 
 #define ModelView3D state.ModelViewStack3D[state.top]
-#define ModelView2D state.ModelViewStack3D[state.top]
 #define Projection3D state.ProjectionMatrix3D
-#define Projection2D state.ProjectionMatrix3D
 
 void gpuMatrixInit(void)
 {
@@ -90,8 +88,8 @@ void gpuMatrixInit(void)
 void gpuMatrixBegin2D(void)
 {
 	state.top = 0;
-	unit_m4(ModelView2D);
-	unit_m4(Projection2D);
+	unit_m4(ModelView3D);
+	unit_m4(Projection3D);
 }
 
 void gpuMatrixBegin3D(void)
@@ -346,7 +344,7 @@ void gpuMultMatrix3D(const float m[4][4])
 #if MATRIX_2D_4x4
 void gpuMultMatrix2D(const float m[4][4])
 {
-	mul_m4_m4_post(ModelView2D, m);
+	mul_m4_m4_post(ModelView3D, m);
 	CHECKMAT(ModelView2D);
 	state.dirty = true;
 }
@@ -372,7 +370,7 @@ void gpuRotate2D(float deg)
 	/* essentially RotateAxis('Z')
 	 * TODO: simpler math for 2D case
 	 */
-	rotate_m4(ModelView2D, 'Z', DEG2RADF(deg));
+	rotate_m4(ModelView3D, 'Z', DEG2RADF(deg));
 }
 
 void gpuRotate3f(float deg, float x, float y, float z)
@@ -789,39 +787,6 @@ const float *gpuGetNormalMatrixInverse(float m[3][3])
 	return (const float*)m;
 }
 
-static const float *gpuGetModelViewMatrix2D(float m[4][4])
-{
-	if (m) {
-		copy_m4_m4(m, ModelView2D);
-		return (const float*)m;
-	}
-	else {
-		return (const float*)ModelView2D;
-	}
-}
-
-static const float *gpuGetProjectionMatrix2D(float m[4][4])
-{
-	if (m) {
-		copy_m4_m4(m, Projection2D);
-		return (const float*)m;
-	}
-	else {
-		return (const float*)Projection2D;
-	}
-}
-
-static const float *gpuGetModelViewProjectionMatrix2D(float m[4][4])
-{
-	if (m == NULL) {
-		static Mat4 temp;
-		m = temp;
-	}
-
-	mul_m4_m4m4(m, Projection2D, ModelView2D);
-	return (const float*)m;
-}
-
 void gpuBindMatrices(const ShaderInterface* shaderface)
 {
 	/* set uniform values to matrix stack values
@@ -832,83 +797,55 @@ void gpuBindMatrices(const ShaderInterface* shaderface)
 	const ShaderInput *MV = ShaderInterface_builtin_uniform(shaderface, UNIFORM_MODELVIEW_3D);
 	const ShaderInput *P = ShaderInterface_builtin_uniform(shaderface, UNIFORM_PROJECTION_3D);
 	const ShaderInput *MVP = ShaderInterface_builtin_uniform(shaderface, UNIFORM_MVP_3D);
-	/* TODO: teach ShaderInterface to distinguish 2D from 3D --^ */
 
-	if (false) { /* only needed if we want to support pure 2D shaders */
-		if (MV) {
-			#if DEBUG_MATRIX_BIND
-			puts("setting 2D MV matrix");
-			#endif
+	const ShaderInput *N = ShaderInterface_builtin_uniform(shaderface, UNIFORM_NORMAL_3D);
+	const ShaderInput *MV_inv = ShaderInterface_builtin_uniform(shaderface, UNIFORM_MODELVIEW_INV_3D);
+	const ShaderInput *P_inv = ShaderInterface_builtin_uniform(shaderface, UNIFORM_PROJECTION_INV_3D);
 
-			glUniformMatrix4fv(MV->location, 1, GL_FALSE, gpuGetModelViewMatrix2D(NULL));
-		}
+	if (MV) {
+		#if DEBUG_MATRIX_BIND
+		puts("setting 3D MV matrix");
+		#endif
 
-		if (P) {
-			#if DEBUG_MATRIX_BIND
-			puts("setting 2D P matrix");
-			#endif
-
-			glUniformMatrix4fv(P->location, 1, GL_FALSE, gpuGetProjectionMatrix2D(NULL));
-		}
-
-		if (MVP) {
-			#if DEBUG_MATRIX_BIND
-			puts("setting 2D MVP matrix");
-			#endif
-
-			glUniformMatrix4fv(MVP->location, 1, GL_FALSE, gpuGetModelViewProjectionMatrix2D(NULL));
-		}
+		glUniformMatrix4fv(MV->location, 1, GL_FALSE, gpuGetModelViewMatrix3D(NULL));
 	}
-	else {
-		const ShaderInput *N = ShaderInterface_builtin_uniform(shaderface, UNIFORM_NORMAL_3D);
-		const ShaderInput *MV_inv = ShaderInterface_builtin_uniform(shaderface, UNIFORM_MODELVIEW_INV_3D);
-		const ShaderInput *P_inv = ShaderInterface_builtin_uniform(shaderface, UNIFORM_PROJECTION_INV_3D);
 
-		if (MV) {
-			#if DEBUG_MATRIX_BIND
-			puts("setting 3D MV matrix");
-			#endif
+	if (P) {
+		#if DEBUG_MATRIX_BIND
+		puts("setting 3D P matrix");
+		#endif
 
-			glUniformMatrix4fv(MV->location, 1, GL_FALSE, gpuGetModelViewMatrix3D(NULL));
-		}
+		glUniformMatrix4fv(P->location, 1, GL_FALSE, gpuGetProjectionMatrix3D(NULL));
+	}
 
-		if (P) {
-			#if DEBUG_MATRIX_BIND
-			puts("setting 3D P matrix");
-			#endif
+	if (MVP) {
+		#if DEBUG_MATRIX_BIND
+		puts("setting 3D MVP matrix");
+		#endif
 
-			glUniformMatrix4fv(P->location, 1, GL_FALSE, gpuGetProjectionMatrix3D(NULL));
-		}
+		glUniformMatrix4fv(MVP->location, 1, GL_FALSE, gpuGetModelViewProjectionMatrix3D(NULL));
+	}
 
-		if (MVP) {
-			#if DEBUG_MATRIX_BIND
-			puts("setting 3D MVP matrix");
-			#endif
+	if (N) {
+		#if DEBUG_MATRIX_BIND
+		puts("setting 3D normal matrix");
+		#endif
 
-			glUniformMatrix4fv(MVP->location, 1, GL_FALSE, gpuGetModelViewProjectionMatrix3D(NULL));
-		}
+		glUniformMatrix3fv(N->location, 1, GL_FALSE, gpuGetNormalMatrix(NULL));
+	}
 
-		if (N) {
-			#if DEBUG_MATRIX_BIND
-			puts("setting 3D normal matrix");
-			#endif
+	if (MV_inv) {
+		Mat4 m;
+		gpuGetModelViewMatrix3D(m);
+		invert_m4(m);
+		glUniformMatrix4fv(MV_inv->location, 1, GL_FALSE, (const float*) m);
+	}
 
-			glUniformMatrix3fv(N->location, 1, GL_FALSE, gpuGetNormalMatrix(NULL));
-		}
-
-		if (MV_inv) {
-			Mat4 m;
-			gpuGetModelViewMatrix3D(m);
-			invert_m4(m);
-			glUniformMatrix4fv(MV_inv->location, 1, GL_FALSE, (const float*) m);
-		}
-
-		if (P_inv) {
-			Mat4 m;
-			gpuGetProjectionMatrix3D(m);
-			invert_m4(m);
-			glUniformMatrix4fv(P_inv->location, 1, GL_FALSE, (const float*) m);
-		}
+	if (P_inv) {
+		Mat4 m;
+		gpuGetProjectionMatrix3D(m);
+		invert_m4(m);
+		glUniformMatrix4fv(P_inv->location, 1, GL_FALSE, (const float*) m);
 	}
 
 	state.dirty = false;
