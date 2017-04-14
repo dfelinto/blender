@@ -105,12 +105,7 @@ void gpuLookAt(float eyeX, float eyeY, float eyeZ, float centerX, float centerY,
 
 /* 2D ModelView Matrix */
 
-#if MATRIX_2D_4x4
 void gpuMultMatrix2D(const float m[4][4]);
-#else
-void gpuLoadMatrix2D(const float m[3][3]);
-void gpuMultMatrix2D(const float m[3][3]);
-#endif
 
 void gpuTranslate2f(float x, float y);
 void gpuTranslate2fv(const float vec[2]);
@@ -187,12 +182,7 @@ bool gpuMatricesDirty(void); /* since last bind */
 
 #  define gpuLoadProjectionMatrix3D(x)  gpuLoadProjectionMatrix3D((const float (*)[4])(x))
 
-# if MATRIX_2D_4x4
 #  define gpuMultMatrix2D(x)  gpuMultMatrix2D((const float (*)[4])(x))
-# else
-#  define gpuMultMatrix2D(x)  gpuMultMatrix2D((const float (*)[3])(x))
-#  define gpuLoadMatrix2D(x)  gpuLoadMatrix2D((const float (*)[3])(x))
-# endif
 
 #  define gpuGetModelViewMatrix3D(x)  gpuGetModelViewMatrix3D((float (*)[4])(x))
 #  define gpuGetProjectionMatrix3D(x)  gpuGetProjectionMatrix3D((float (*)[4])(x))
