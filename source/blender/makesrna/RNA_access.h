@@ -453,6 +453,8 @@ extern StructRNA RNA_OperatorStrokeElement;
 extern StructRNA RNA_OperatorMacro;
 extern StructRNA RNA_OrController;
 extern StructRNA RNA_OutflowFluidSettings;
+extern StructRNA RNA_OverrideSet;
+extern StructRNA RNA_OverriddenCollection;
 extern StructRNA RNA_PackedFile;
 extern StructRNA RNA_Paint;
 extern StructRNA RNA_PaintCurve;

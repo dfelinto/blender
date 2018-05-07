@@ -62,6 +62,25 @@ typedef struct LayerCollection {
 	ListBase layer_collections; /* synced with collection->collections */
 } LayerCollection;
 
+typedef struct DynamicOverrideProperty {
+	struct DynamicOverrideProperty *next, *prev;
+	char name[64]; /* MAX_NAME */
+	struct IDProperty *data;
+	short flag;
+	short property_type; /* eDynamicOverridePropertyType */
+	short override_mode; /* eDynamicOverrideMode */
+	short pad;
+} DynamicOverrideProperty;
+
+typedef struct OverrideSet {
+	struct OverrideSet *next, *prev;
+	char name[64]; /* MAX_NAME */
+	short flag;
+	short pad[2];
+	short active_affected_collection;
+	ListBase affected_collections; /* (SceneCollection *)LinkData->data */
+} OverrideSet;
+
 typedef struct ViewLayer {
 	struct ViewLayer *next, *prev;
 	char name[64]; /* MAX_NAME */
@@ -83,6 +102,10 @@ typedef struct ViewLayer {
 	struct IDProperty *id_properties; /* Equivalent to datablocks ID properties. */
 
 	struct FreestyleConfig freestyle_config;
+
+	struct ListBase override_sets; /* OverrideSet */
+	short active_override_set;
+	short pad2[3];
 
 	/* Runtime data */
 	ListBase drawdata;    /* ViewLayerEngineData */
@@ -129,6 +152,28 @@ enum {
 	COLLECTION_TYPE_NONE =  0,
 	COLLECTION_TYPE_GROUP_INTERNAL = 1,
 };
+
+/* OverrideSet->flag */
+enum {
+	DYN_OVERRIDE_SET_USE = (1 << 0),
+};
+
+/* DynamicOverrideProperty->flag */
+enum {
+	DYN_OVERRIDE_PROP_USE = (1 << 0),
+};
+
+/* DynamicOverrideProperty->property_type */
+typedef enum eDynamicOverridePropertyType {
+	DYN_OVERRIDE_PROP_TYPE_SCENE = 0,
+	DYN_OVERRIDE_PROP_TYPE_COLLECTION = 1,
+} eDynamicOverridePropertyType;
+
+/* DynamicOverrideProperty->override_mode */
+typedef enum eDynamicOverrideMode {
+	DYN_OVERRIDE_MODE_REPLACE = 0,
+	DYN_OVERRIDE_MODE_MULTIPLY = 1,
+} eDynamicOverrideMode;
 
 #ifdef __cplusplus
 }

@@ -1777,6 +1777,9 @@ typedef enum eVGroupSelect {
 #define SCE_NLA_EDIT_ON			(1<<2)
 #define SCE_FRAME_DROP			(1<<3)
 #define SCE_KEYS_NO_SELONLY	    (1<<4)
+#define SCE_DYN_OVERRIDE_HIDE_SCENE_PROPS	(1 << 5)
+#define SCE_DYN_OVERRIDE_HIDE_COLLECTIONS	(1 << 6)
+#define SCE_DYN_OVERRIDE_HIDE_COLL_PROPS	(1 << 7)
 
 	/* return flag BKE_scene_base_iter_next functions */
 /* #define F_ERROR			-1 */  /* UNUSED */

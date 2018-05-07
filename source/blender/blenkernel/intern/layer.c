@@ -72,6 +72,8 @@ static IDProperty *collection_engine_settings_create(struct EngineSettingsCB_Typ
 static IDProperty *collection_engine_get(IDProperty *root, const char *engine_name);
 static void collection_engine_settings_init(IDProperty *root, const bool populate);
 static void layer_engine_settings_init(IDProperty *root, const bool populate);
+static void override_set_copy_data(struct OverrideSet *override_set_dst, const struct OverrideSet *override_set_src);
+static void override_set_free(struct OverrideSet *override_set);
 static void object_bases_iterator_next(BLI_Iterator *iter, const int flag);
 
 /* RenderLayer */
@@ -226,6 +228,11 @@ void BKE_view_layer_free_ex(ViewLayer *view_layer, const bool do_id_user)
 
 	MEM_SAFE_FREE(view_layer->object_bases_array);
 
+	for (OverrideSet *override_set = view_layer->override_sets.first; override_set; override_set = override_set->next) {
+		override_set_free(override_set);
+	}
+	BLI_freelistN(&view_layer->override_sets);
+
 	MEM_freeN(view_layer);
 }
 
@@ -311,6 +318,28 @@ ViewLayer *BKE_view_layer_find_from_collection(const ID *owner_id, LayerCollecti
 		}
 		default:
 			BLI_assert(!"ID doesn't support scene layers");
+			return NULL;
+	}
+}
+
+/**
+ * Return the view layer that owns the override set
+ */
+ViewLayer *BKE_view_layer_find_from_override_set(const ID *owner_id, OverrideSet *override_set)
+{
+	switch (GS(owner_id->name)) {
+		case ID_SCE:
+		{
+			Scene *scene = (Scene *)owner_id;
+			for (ViewLayer *view_layer = scene->view_layers.first; view_layer; view_layer = view_layer->next) {
+				if (BLI_findindex(&view_layer->override_sets, override_set) != -1) {
+					return view_layer;
+				}
+			}
+			return NULL;
+		}
+		default:
+			BLI_assert(!"ID doesn't support override sets");
 			return NULL;
 	}
 }
@@ -499,6 +528,16 @@ void BKE_view_layer_copy_data(
 		if (base_dst->object == active_ob) {
 			view_layer_dst->basact = base_dst;
 		}
+	}
+
+	BLI_duplicatelist(&view_layer_dst->override_sets, &view_layer_src->override_sets);
+	OverrideSet *override_set_dst, *override_set_src;
+	for (override_set_dst = view_layer_dst->override_sets.first,
+	     override_set_src = view_layer_src->override_sets.first;
+	     override_set_dst != NULL;
+	     override_set_dst = override_set_dst->next, override_set_src = override_set_src->next)
+	{
+		override_set_copy_data(override_set_dst, override_set_src);
 	}
 
 	view_layer_dst->object_bases_array = NULL;
@@ -1797,6 +1836,107 @@ void BKE_view_layer_engine_settings_validate_scene(Scene *scene)
 /** \} */
 
 /* Iterators */
+
+/* -------------------------------------------------------------------- */
+/** \name Public Dynamic Overrides
+ * \{ */
+
+static void override_set_copy_data(OverrideSet *override_set_dst, const OverrideSet *override_set_src)
+{
+	BLI_strncpy(override_set_dst->name, override_set_src->name, sizeof(override_set_dst->name));
+	override_set_dst->flag = override_set_src->flag;
+	BLI_duplicatelist(&override_set_dst->affected_collections, &override_set_src->affected_collections);
+}
+
+static void override_set_free(OverrideSet *override_set)
+{
+	BLI_freelistN(&override_set->affected_collections);
+}
+
+struct OverrideSet *BKE_view_layer_override_set_add(struct ViewLayer *view_layer, const char *name)
+{
+	OverrideSet *override_set = MEM_callocN(sizeof(OverrideSet), __func__);
+	override_set->flag = DYN_OVERRIDE_SET_USE;
+
+	BLI_strncpy_utf8(override_set->name, name, sizeof(override_set->name));
+	BLI_uniquename(&view_layer->override_sets,
+	               override_set,
+	               DATA_("OverrideSet"),
+	               '.',
+	               offsetof(OverrideSet, name),
+	               sizeof(override_set->name));
+
+	BLI_addtail(&view_layer->override_sets, override_set);
+	return override_set;
+}
+
+bool BKE_view_layer_override_set_remove(struct ViewLayer *view_layer, struct OverrideSet *override_set)
+{
+	const int override_set_index = BLI_findindex(&view_layer->override_sets, override_set);
+
+	if (override_set_index == -1) {
+		return false;
+	}
+
+	BLI_remlink(&view_layer->override_sets, override_set);
+	override_set_free(override_set);
+	MEM_freeN(override_set);
+
+	if (view_layer->active_override_set > override_set_index) {
+		view_layer->active_override_set -= 1;
+	}
+	else if (view_layer->active_override_set == override_set_index) {
+		if (override_set_index == BLI_listbase_count(&view_layer->override_sets)) {
+			view_layer->active_override_set = MAX2(0, override_set_index - 1);
+		}
+	}
+
+	return true;
+}
+
+/**
+ * Add an existent collection to the affected collection list.
+ * If collection already exists it returns false.
+ */
+bool BKE_view_layer_override_set_collection_link(OverrideSet *override_set, SceneCollection *collection)
+{
+	/* We don't support duplicated collections in the override set. */
+	if (BLI_findptr(&override_set->affected_collections, collection, offsetof(LinkData, data)) != NULL) {
+		return false;
+	};
+
+	BLI_addtail(&override_set->affected_collections, BLI_genericNodeN(collection));
+	return true;
+}
+
+/**
+ * Remove collection from override set
+ * If collection was not there it returns false.
+ */
+bool BKE_view_layer_override_set_collection_unlink(struct OverrideSet *override_set, struct SceneCollection *collection)
+{
+	LinkData *link = BLI_findptr(&override_set->affected_collections, collection, offsetof(LinkData, data));
+	if (link == NULL) {
+		return false;
+	}
+
+	const int collection_index = BLI_findindex(&override_set->affected_collections, link);
+
+	BLI_remlink(&override_set->affected_collections, link);
+	MEM_freeN(link);
+
+	if (override_set->active_affected_collection > collection_index) {
+		override_set->active_affected_collection -= 1;
+	}
+	else if (override_set->active_affected_collection == collection_index) {
+		if (collection_index == BLI_listbase_count(&override_set->affected_collections)) {
+			override_set->active_affected_collection = MAX2(0, collection_index - 1);
+		}
+	}
+	return true;
+}
+
+/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Private Iterator Helpers

@@ -50,6 +50,7 @@ struct LayerCollection;
 struct ListBase;
 struct Main;
 struct Object;
+struct OverrideSet;
 struct RenderEngine;
 struct Scene;
 struct SceneCollection;
@@ -75,6 +76,7 @@ void BKE_view_layer_selected_objects_tag(struct ViewLayer *view_layer, const int
 struct Object *BKE_view_layer_camera_find(struct ViewLayer *view_layer);
 struct ViewLayer *BKE_view_layer_first_from_id(const struct ID *owner_id);
 struct ViewLayer *BKE_view_layer_find_from_collection(const struct ID *owner_id, struct LayerCollection *lc);
+struct ViewLayer *BKE_view_layer_find_from_override_set(const struct ID *owner_id, struct OverrideSet *override_set);
 struct Base *BKE_view_layer_base_find(struct ViewLayer *view_layer, struct Object *ob);
 void BKE_view_layer_base_deselect_all(struct ViewLayer *view_layer);
 void BKE_view_layer_base_select(struct ViewLayer *view_layer, struct Base *selbase);
@@ -162,6 +164,13 @@ void BKE_collection_engine_property_value_set_int(struct IDProperty *props, cons
 void BKE_collection_engine_property_value_set_float(struct IDProperty *props, const char *name, float value);
 void BKE_collection_engine_property_value_set_float_array(struct IDProperty *props, const char *name, const float *values);
 void BKE_collection_engine_property_value_set_bool(struct IDProperty *props, const char *name, bool value);
+
+/* Dynamic override. */
+
+struct OverrideSet *BKE_view_layer_override_set_add(struct ViewLayer *view_layer, const char *name);
+bool BKE_view_layer_override_set_remove(struct ViewLayer *view_layer, struct OverrideSet *override_set);
+bool BKE_view_layer_override_set_collection_link(struct OverrideSet *override_set, struct SceneCollection *collection);
+bool BKE_view_layer_override_set_collection_unlink(struct OverrideSet *override_set, struct SceneCollection *collection);
 
 /* evaluation */
 

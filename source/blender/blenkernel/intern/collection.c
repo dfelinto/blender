@@ -264,6 +264,13 @@ bool BKE_collection_remove(ID *owner_id, SceneCollection *sc)
 	for (ViewLayer *view_layer = BKE_view_layer_first_from_id(owner_id); view_layer; view_layer = view_layer->next) {
 		layer_collection_remove(view_layer, &view_layer->layer_collections, sc);
 		view_layer->active_collection = 0;
+
+		for (OverrideSet *override_set = view_layer->override_sets.first;
+		     override_set != NULL;
+		     override_set = override_set->next)
+		{
+			BKE_view_layer_override_set_collection_unlink(override_set, sc);
+		}
 	}
 
 	MEM_freeN(sc);

@@ -76,9 +76,79 @@ class VIEWLAYER_PT_eevee_layer_passes(ViewLayerButtonsPanel, Panel):
         row.prop(view_layer, "use_pass_subsurface_color", text="Color", toggle=True)
 
 
+class VIEWLAYER_UL_override_set_collections(UIList):
+    def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
+        layout.row().label(text=item.name, icon_value=icon)
+
+
+class VIEWLAYER_UL_override_sets(UIList):
+    def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
+        row = layout.row(align=True)
+        row.prop(item, "use", text="", index=index)
+        row.prop(item, "name", text="", index=index, icon_value=icon, emboss=False)
+
+
+class VIEWLAYER_OT_overrides(ViewLayerButtonsPanel, Panel):
+    bl_label = "Overrides"
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_CLAY', 'BLENDER_EEVEE', 'BLENDER_WORKBENCH'}
+
+    def draw(self, context):
+        layout = self.layout
+
+        scene = context.scene
+        view_layer = context.view_layer
+
+        row = layout.row(align=True)
+        row.label(text="Override Sets")
+
+        row = layout.row()
+        col = row.column()
+
+        col.template_list("VIEWLAYER_UL_override_sets", "name", view_layer, "override_sets", view_layer.override_sets, "active_index", rows=2)
+
+        col = row.column(align=True)
+        col.operator("scene.view_layer_override_set_add", icon='ZOOMIN', text="")
+        col.operator("scene.view_layer_override_set_remove", icon='ZOOMOUT', text="")
+
+        override_set = view_layer.override_sets.active
+        if not override_set:
+            return
+
+        row = layout.row(align=True)
+        row.prop(scene, "show_view_layer_overrides_scene_property", emboss=False, text="")
+        row.label(text="Scene Properties")
+
+        if scene.show_view_layer_overrides_scene_property:
+            layout.label(text="Work in progress...")
+
+        row = layout.row(align=True)
+        row.prop(scene, "show_view_layer_overrides_affected_collections", emboss=False, text="")
+        row.label(text="Affected Collections")
+
+        if scene.show_view_layer_overrides_affected_collections:
+            row = layout.row()
+            col = row.column()
+
+            col.template_list("VIEWLAYER_UL_override_set_collections", "", override_set, "affected_collections", override_set.affected_collections, "active_index", rows=1)
+
+            col = row.column(align=True)
+            col.operator("scene.override_set_collection_link", icon='ZOOMIN', text="")
+            col.operator("scene.override_set_collection_unlink", icon='ZOOMOUT', text="")
+
+        row = layout.row(align=True)
+        row.prop(scene, "show_view_layer_overrides_collections_property", emboss=False, text="")
+        row.label(text="Collection Properties")
+
+        if scene.show_view_layer_overrides_collections_property:
+            layout.label(text="Work in progress...")
+
+
 classes = (
     VIEWLAYER_PT_layer,
     VIEWLAYER_PT_eevee_layer_passes,
+    VIEWLAYER_UL_override_set_collections,
+    VIEWLAYER_UL_override_sets,
+    VIEWLAYER_OT_overrides,
 )
 
 if __name__ == "__main__":  # only for live edit.

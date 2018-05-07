@@ -870,6 +870,173 @@ static void rna_ObjectBase_select_update(Main *UNUSED(bmain), Scene *UNUSED(scen
 	ED_object_base_select(base, mode);
 }
 
+static void rna_OverriddenCollection_name_get(PointerRNA *ptr, char *value)
+{
+	SceneCollection *collection = ((LinkData *)ptr->data)->data;
+	strcpy(value, collection->name);
+}
+
+static int rna_OverriddenCollection_name_length(PointerRNA *ptr)
+{
+	SceneCollection *collection = ((LinkData *)ptr->data)->data;
+	return strnlen(collection->name, sizeof(collection->name));
+}
+
+static int rna_OverriddenCollections_active_index_get(PointerRNA *ptr)
+{
+	OverrideSet *override_set = (OverrideSet *)ptr->data;
+	return override_set->active_affected_collection;
+}
+
+static void rna_OverriddenCollections_active_index_set(PointerRNA *ptr, int value)
+{
+	OverrideSet *override_set = (OverrideSet *)ptr->data;
+	override_set->active_affected_collection = value;
+}
+
+static void rna_OverriddenCollections_active_index_index_range(
+        PointerRNA *ptr, int *min, int *max, int *UNUSED(softmin), int *UNUSED(softmax))
+{
+	OverrideSet *override_set = (OverrideSet *)ptr->data;
+	*min = 0;
+	*max = max_ii(0, BLI_listbase_count(&override_set->affected_collections) - 1);
+}
+
+static PointerRNA rna_OverriddenCollections_active_get(PointerRNA *ptr)
+{
+	OverrideSet *override_set = (OverrideSet *)ptr->data;
+	LinkData *link = BLI_findlink(&override_set->affected_collections, override_set->active_affected_collection);
+	return rna_pointer_inherit_refine(ptr, &RNA_OverriddenCollection, link);
+}
+
+static void rna_OverriddenCollections_active_set(PointerRNA *ptr, PointerRNA value)
+{
+	OverrideSet *override_set = (OverrideSet *)ptr->data;
+	LinkData *link = (LinkData *)value.data;
+
+	const int index = BLI_findindex(&override_set->affected_collections, link);
+	if (index != -1) {
+		override_set->active_affected_collection = index;
+	}
+}
+
+static void rna_OverriddenCollection_link(
+        ID *id, OverrideSet *override_set, Main *UNUSED(bmain), ReportList *reports, SceneCollection *collection)
+{
+	if (BKE_view_layer_override_set_collection_link(override_set, collection)) {
+		Scene *scene = (Scene *)id;
+		WM_main_add_notifier(NC_SCENE | ND_DYN_OVERRIDES, scene);
+	}
+	else {
+		BKE_reportf(reports,
+		            RPT_ERROR,
+		            "Collection '%s' already affected by override set '%s'",
+		            collection->name,
+		            override_set->name);
+	}
+}
+
+static void rna_OverriddenCollection_unlink(
+        ID *id, OverrideSet *override_set, Main *UNUSED(bmain), ReportList *reports, SceneCollection *collection)
+{
+	if (!BKE_view_layer_override_set_collection_unlink(override_set, collection)) {
+		BKE_reportf(reports,
+		            RPT_ERROR,
+		            "Collection '%s' is not affected by override set '%s'",
+		            collection->name,
+		            override_set->name);
+	}
+	else {
+		Scene *scene = (Scene *)id;
+		WM_main_add_notifier(NC_SCENE | ND_DYN_OVERRIDES, scene);
+	}
+}
+
+static char *rna_OverrideSet_path(PointerRNA *ptr)
+{
+	OverrideSet *override_set = (OverrideSet *)ptr->data;
+	return BLI_sprintfN("view_layer.override_sets[\"%s\"]", override_set->name);
+}
+
+static void rna_OverrideSet_name_set(PointerRNA *ptr, const char *value)
+{
+	Scene *scene = (Scene *)ptr->id.data;
+	OverrideSet *override_set = (OverrideSet *)ptr->data;
+
+	ViewLayer *view_layer = BKE_view_layer_find_from_override_set(&scene->id, override_set);
+	BLI_strncpy_utf8(override_set->name, value, sizeof(override_set->name));
+	BLI_uniquename(&view_layer->override_sets,
+	               override_set,
+	               DATA_("OverrideSet"),
+	               '.',
+	               offsetof(OverrideSet, name),
+	               sizeof(override_set->name));
+}
+
+static int rna_OverrideSets_active_override_set_index_get(PointerRNA *ptr)
+{
+	ViewLayer *view_layer = (ViewLayer *)ptr->data;
+	return view_layer->active_override_set;
+}
+
+static void rna_OverrideSets_active_override_set_index_set(PointerRNA *ptr, int value)
+{
+	ViewLayer *view_layer = (ViewLayer *)ptr->data;
+	view_layer->active_override_set = value;
+}
+
+static void rna_OverrideSets_active_override_set_index_range(
+        PointerRNA *ptr, int *min, int *max, int *UNUSED(softmin), int *UNUSED(softmax))
+{
+	ViewLayer *view_layer = (ViewLayer *)ptr->data;
+
+	*min = 0;
+	*max = max_ii(0, BLI_listbase_count(&view_layer->override_sets) - 1);
+}
+
+static PointerRNA rna_OverrideSets_active_override_set_get(PointerRNA *ptr)
+{
+	ViewLayer *view_layer = (ViewLayer *)ptr->data;
+	OverrideSet *override_set = BLI_findlink(&view_layer->override_sets, view_layer->active_override_set);
+	return rna_pointer_inherit_refine(ptr, &RNA_OverrideSet, override_set);
+}
+
+static void rna_OverrideSets_active_override_set_set(PointerRNA *ptr, PointerRNA value)
+{
+	ViewLayer *view_layer = (ViewLayer *)ptr->data;
+	OverrideSet *override_set = (OverrideSet *)value.data;
+	const int index = BLI_findindex(&view_layer->override_sets, override_set);
+	if (index != -1) {
+		view_layer->active_override_set = index;
+	}
+}
+
+static OverrideSet *rna_OverrideSet_new(ID *id, ViewLayer *view_layer, const char *name)
+{
+	Scene *scene = (Scene *)id;
+	OverrideSet *override_set = BKE_view_layer_override_set_add(view_layer, name);
+	WM_main_add_notifier(NC_SCENE | ND_DYN_OVERRIDES, scene);
+	return override_set;
+}
+
+static void rna_OverrideSet_remove(
+        ID *id, ViewLayer *view_layer, Main *UNUSED(bmain), ReportList *reports, PointerRNA *ptr)
+{
+	OverrideSet *override_set = ptr->data;
+	Scene *scene = (Scene *)id;
+
+	if (!BKE_view_layer_override_set_remove(view_layer, override_set)) {
+		BKE_reportf(reports,
+		            RPT_ERROR,
+		            "Override set'%s' could not be removed from view layer '%s'",
+		            override_set->name,
+		            view_layer->name);
+		return;
+	}
+
+	RNA_POINTER_INVALIDATE(ptr);
+	WM_main_add_notifier(NC_SCENE | ND_DYN_OVERRIDES, scene);
+}
 #else
 
 static void rna_def_scene_collections(BlenderRNA *brna, PropertyRNA *cprop)
@@ -1924,6 +2091,142 @@ static void rna_def_object_base(BlenderRNA *brna)
 	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_ObjectBase_select_update");
 }
 
+static void rna_def_overridden_collection(BlenderRNA *brna)
+{
+	StructRNA *srna;
+	PropertyRNA *prop;
+
+	srna = RNA_def_struct(brna, "OverriddenCollection", NULL);
+	RNA_def_struct_ui_text(srna, "Overridden Collection", "Collection overridden by override set");
+	RNA_def_struct_ui_icon(srna, ICON_COLLAPSEMENU);
+
+	prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
+	RNA_def_property_string_funcs(prop,
+	                              "rna_OverriddenCollection_name_get",
+	                              "rna_OverriddenCollection_name_length",
+	                              NULL);
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+	RNA_def_property_ui_text(prop, "Name", "Collection name");
+}
+
+static void rna_def_overridden_collections(BlenderRNA *brna, PropertyRNA *cprop)
+{
+	StructRNA *srna;
+	FunctionRNA *func;
+	PropertyRNA *prop;
+	PropertyRNA *parm;
+
+	RNA_def_property_srna(cprop, "OverriddenCollections");
+	srna = RNA_def_struct(brna, "OverriddenCollections", NULL);
+	RNA_def_struct_sdna(srna, "OverrideSet");
+	RNA_def_struct_ui_text(srna, "Overridden Collections", "Collections overridden by override set");
+
+	prop = RNA_def_property(srna, "active_index", PROP_INT, PROP_UNSIGNED);
+	RNA_def_property_int_funcs(prop,
+	                           "rna_OverriddenCollections_active_index_get",
+	                           "rna_OverriddenCollections_active_index_set",
+	                           "rna_OverriddenCollections_active_index_index_range");
+	RNA_def_property_ui_text(prop, "Active Affected Collection Index", "Active index in override set array");
+
+	prop = RNA_def_property(srna, "active", PROP_POINTER, PROP_NONE);
+	RNA_def_property_struct_type(prop, "OverriddenCollection");
+	RNA_def_property_pointer_funcs(prop,
+	                               "rna_OverriddenCollections_active_get",
+	                               "rna_OverriddenCollections_active_set",
+	                               NULL, NULL);
+	RNA_def_property_flag(prop, PROP_EDITABLE | PROP_NEVER_NULL);
+	RNA_def_property_ui_text(prop, "Active Affected Collection", "Active affected collection in override set array");
+
+	func = RNA_def_function(srna, "link", "rna_OverriddenCollection_link");
+	RNA_def_function_ui_description(func, "Link collection to override set");
+	RNA_def_function_flag(func, FUNC_USE_SELF_ID | FUNC_USE_MAIN | FUNC_USE_REPORTS);
+	parm = RNA_def_pointer(func, "scene_collection", "SceneCollection", "", "Collection to link to override set");
+	RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED);
+
+	func = RNA_def_function(srna, "unlink", "rna_OverriddenCollection_unlink");
+	RNA_def_function_ui_description(func, "Unlink a collection from override set");
+	RNA_def_function_flag(func, FUNC_USE_SELF_ID | FUNC_USE_MAIN | FUNC_USE_REPORTS);
+	parm = RNA_def_pointer(func, "scene_collection", "SceneCollection", "", "Collection to unlink from override set");
+	RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED);
+
+	rna_def_overridden_collection(brna);
+}
+
+static void rna_def_override_set(BlenderRNA *brna)
+{
+	StructRNA *srna;
+	PropertyRNA *prop;
+
+	srna = RNA_def_struct(brna, "OverrideSet", NULL);
+	RNA_def_struct_ui_text(srna, "Override Set", "Set of overrides");
+	RNA_def_struct_path_func(srna, "rna_OverrideSet_path");
+
+	prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
+	RNA_def_property_string_funcs(prop, NULL, NULL, "rna_OverrideSet_name_set");
+	RNA_def_property_ui_text(prop, "Name", "Override set name");
+	RNA_def_struct_name_property(srna, prop);
+	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
+	prop = RNA_def_property(srna, "use", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "flag", DYN_OVERRIDE_SET_USE);
+	RNA_def_property_ui_text(prop, "Enabled", "Disable or enable the override set");
+	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
+	prop = RNA_def_property(srna, "affected_collections", PROP_COLLECTION, PROP_NONE);
+	RNA_def_property_collection_sdna(prop, NULL, "affected_collections", NULL);
+	RNA_def_property_struct_type(prop, "OverriddenCollection");
+	RNA_def_property_ui_text(prop, "Affected Collections", "Collections that overridden by override set");
+	rna_def_overridden_collections(brna, prop);
+}
+
+static void rna_def_override_sets(BlenderRNA *brna, PropertyRNA *cprop)
+{
+	StructRNA *srna;
+	FunctionRNA *func;
+	PropertyRNA *prop;
+	PropertyRNA *parm;
+
+	RNA_def_property_srna(cprop, "OverrideSets");
+	srna = RNA_def_struct(brna, "OverrideSets", NULL);
+	RNA_def_struct_sdna(srna, "ViewLayer");
+	RNA_def_struct_ui_text(srna, "Override Sets", "Sets of view layer overrides");
+
+	prop = RNA_def_property(srna, "active_index", PROP_INT, PROP_UNSIGNED);
+	RNA_def_property_int_funcs(prop,
+	                           "rna_OverrideSets_active_override_set_index_get",
+	                           "rna_OverrideSets_active_override_set_index_set",
+	                           "rna_OverrideSets_active_override_set_index_range");
+	RNA_def_property_ui_text(prop, "Active Override Set Index", "Active index in override set array");
+	RNA_def_property_update(prop, NC_SCENE | ND_DYN_OVERRIDES, NULL);
+
+	prop = RNA_def_property(srna, "active", PROP_POINTER, PROP_NONE);
+	RNA_def_property_struct_type(prop, "OverrideSet");
+	RNA_def_property_pointer_funcs(prop,
+	                               "rna_OverrideSets_active_override_set_get",
+	                               "rna_OverrideSets_active_override_set_set",
+	                               NULL, NULL);
+	RNA_def_property_flag(prop, PROP_EDITABLE | PROP_NEVER_NULL);
+	RNA_def_property_ui_text(prop, "Active Override Set", "Active Override Set");
+	RNA_def_property_update(prop, NC_SCENE | ND_DYN_OVERRIDES, NULL);
+
+	func = RNA_def_function(srna, "new", "rna_OverrideSet_new");
+	RNA_def_function_ui_description(func, "Add an override set to view layer");
+	RNA_def_function_flag(func, FUNC_USE_SELF_ID);
+	parm = RNA_def_string(func, "name", "Name", 0, "", "New name for the override set");
+	RNA_def_parameter_flags(parm, 0, PARM_REQUIRED);
+	parm = RNA_def_pointer(func, "result", "OverrideSet", "", "Newly created override set");
+	RNA_def_function_return(func, parm);
+
+	func = RNA_def_function(srna, "remove", "rna_OverrideSet_remove");
+	RNA_def_function_ui_description(func, "Remove an override set from view layer");
+	RNA_def_function_flag(func, FUNC_USE_MAIN | FUNC_USE_REPORTS | FUNC_USE_SELF_ID);
+	parm = RNA_def_pointer(func, "override_set", "OverrideSet", "", "Override set to remove");
+	RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED | PARM_RNAPTR);
+	RNA_def_parameter_clear_flags(parm, PROP_THICK_WRAP, 0);
+
+	rna_def_override_set(brna);
+}
+
 void RNA_def_view_layer(BlenderRNA *brna)
 {
 	FunctionRNA *func;
@@ -1954,6 +2257,12 @@ void RNA_def_view_layer(BlenderRNA *brna)
 	RNA_def_property_collection_funcs(prop, NULL, NULL, NULL, "rna_ViewLayer_objects_get", NULL, NULL, NULL, NULL);
 	RNA_def_property_ui_text(prop, "Objects", "All the objects in this layer");
 	rna_def_layer_objects(brna, prop);
+
+	prop = RNA_def_property(srna, "override_sets", PROP_COLLECTION, PROP_NONE);
+	RNA_def_property_collection_sdna(prop, NULL, "override_sets", NULL);
+	RNA_def_property_struct_type(prop, "OverrideSet");
+	RNA_def_property_ui_text(prop, "Override Sets", "");
+	rna_def_override_sets(brna, prop);
 
 	/* layer options */
 	prop = RNA_def_property(srna, "use", PROP_BOOLEAN, PROP_NONE);

@@ -2436,6 +2436,11 @@ static void write_view_layer(WriteData *wd, ViewLayer *view_layer)
 		writestruct(wd, DATA, FreestyleLineSet, 1, fls);
 	}
 	write_layer_collections(wd, &view_layer->layer_collections);
+
+	writelist(wd, DATA, OverrideSet, &view_layer->override_sets);
+	for (OverrideSet *override_set = view_layer->override_sets.first; override_set; override_set = override_set->next) {
+		writelist(wd, DATA, LinkData, &override_set->affected_collections);
+	}
 }
 
 static void write_scene(WriteData *wd, Scene *sce)

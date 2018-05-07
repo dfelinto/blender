@@ -6105,6 +6105,31 @@ void RNA_def_scene(BlenderRNA *brna)
 	RNA_def_property_struct_type(prop, "SceneCollection");
 	RNA_def_property_ui_text(prop, "Master Collection", "Collection that contains all other collections");
 
+	/* Interface */
+	prop = RNA_def_property(srna, "show_view_layer_overrides_scene_property", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_negative_sdna(prop, NULL, "flag", SCE_DYN_OVERRIDE_HIDE_SCENE_PROPS);
+	RNA_def_property_ui_text(prop,
+	                         "Scene Properties",
+	                         "Show scene properties overrides for active set");
+	RNA_def_property_ui_icon(prop, ICON_TRIA_RIGHT, 1);
+	RNA_def_property_update(prop, NC_SCENE | ND_DYN_OVERRIDES, NULL);
+
+	prop = RNA_def_property(srna, "show_view_layer_overrides_affected_collections", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_negative_sdna(prop, NULL, "flag", SCE_DYN_OVERRIDE_HIDE_COLLECTIONS);
+	RNA_def_property_ui_text(prop,
+	                         "Affected Collections",
+	                         "Show affected collections overriden for active set");
+	RNA_def_property_ui_icon(prop, ICON_TRIA_RIGHT, 1);
+	RNA_def_property_update(prop, NC_SCENE | ND_DYN_OVERRIDES, NULL);
+
+	prop = RNA_def_property(srna, "show_view_layer_overrides_collections_property", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_negative_sdna(prop, NULL, "flag", SCE_DYN_OVERRIDE_HIDE_COLL_PROPS);
+	RNA_def_property_ui_text(prop,
+	                         "Collection Properties",
+	                         "Show collection properties overrides for active set");
+	RNA_def_property_ui_icon(prop, ICON_TRIA_RIGHT, 1);
+	RNA_def_property_update(prop, NC_SCENE | ND_DYN_OVERRIDES, NULL);
+
 	/* Nestled Data  */
 	/* *** Non-Animated *** */
 	RNA_define_animate_sdna(false);

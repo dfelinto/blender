@@ -24,6 +24,8 @@
 
 #include <stdio.h>
 
+#include "MEM_guardedalloc.h"
+
 #include "BLI_compiler_attrs.h"
 #include "BLI_listbase.h"
 
@@ -54,9 +56,15 @@
 #include "RNA_access.h"
 #include "RNA_define.h"
 
+#include "UI_interface.h"
+#include "UI_resources.h"
+
 #include "WM_api.h"
 #include "WM_types.h"
 
+/* prototypes */
+typedef struct OverrideSetLinkCollectionData OverrideSetLinkCollectionData;
+static void view_layer_override_set_collection_link_menus_items(struct uiLayout *layout, struct OverrideSetLinkCollectionData *menu);
 
 Scene *ED_scene_add(Main *bmain, bContext *C, wmWindow *win, eSceneCopyMethod method)
 {
@@ -281,8 +289,312 @@ static void SCENE_OT_delete(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
+static int view_layer_override_set_add_exec(bContext *C, wmOperator *UNUSED(op))
+{
+	BKE_view_layer_override_set_add(CTX_data_view_layer(C), "New Override Set");
+	WM_event_add_notifier(C, NC_SCENE | ND_DYN_OVERRIDES, CTX_data_scene(C));
+	return OPERATOR_FINISHED;
+}
+
+static void SCENE_OT_view_layer_override_set_add(wmOperatorType *ot)
+{
+	/* identifiers */
+	ot->name = "Add View Layer Override Set";
+	ot->description = "Add a view layer override set";
+	ot->idname = "SCENE_OT_view_layer_override_set_add";
+
+	/* api callbacks */
+	ot->exec = view_layer_override_set_add_exec;
+
+	/* flags */
+	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+}
+
+static int view_layer_override_set_remove_exec(bContext *C, wmOperator *op)
+{
+	ViewLayer *view_layer = CTX_data_view_layer(C);
+	OverrideSet *override_set = BLI_findlink(&view_layer->override_sets, view_layer->active_override_set);
+
+	if (override_set == NULL) {
+		BKE_report(op->reports, RPT_ERROR, "No override set found");
+		return OPERATOR_CANCELLED;
+	}
+
+	BKE_view_layer_override_set_remove(view_layer, override_set);
+	WM_event_add_notifier(C, NC_SCENE | ND_DYN_OVERRIDES, CTX_data_scene(C));
+
+	return OPERATOR_FINISHED;
+}
+
+static int view_layer_override_set_remove_poll(bContext *C)
+{
+	ViewLayer *view_layer = CTX_data_view_layer(C);
+	return view_layer->active_override_set || BLI_listbase_count_at_most(&view_layer->override_sets, 1);
+}
+
+static void SCENE_OT_view_layer_override_set_remove(wmOperatorType *ot)
+{
+	/* identifiers */
+	ot->name = "Remove View Layer Override Set";
+	ot->description = "Remove active view layer override set";
+	ot->idname = "SCENE_OT_view_layer_override_set_remove";
+
+	/* api callbacks */
+	ot->exec = view_layer_override_set_remove_exec;
+	ot->poll = view_layer_override_set_remove_poll;
+
+	/* flags */
+	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+}
+
+#define COLLECTION_INVALID_INDEX -1
+
+static int view_layer_override_set_collection_link_poll(bContext *C)
+{
+	ViewLayer *view_layer = CTX_data_view_layer(C);
+	return view_layer->active_override_set || BLI_findlink(&view_layer->override_sets, view_layer->active_override_set);
+}
+
+static int view_layer_override_set_collection_link_exec(bContext *C, wmOperator *op)
+{
+	PropertyRNA *prop = RNA_struct_find_property(op->ptr, "collection_index");
+
+	if (!RNA_property_is_set(op->ptr, prop)) {
+		BKE_report(op->reports, RPT_ERROR, "No collection selected");
+		return OPERATOR_CANCELLED;
+	}
+
+	int collection_index = RNA_property_int_get(op->ptr, prop);
+	Scene *scene = CTX_data_scene(C);
+	SceneCollection *collection = BKE_collection_from_index(scene, collection_index);
+
+	if (collection == NULL) {
+		BKE_report(op->reports, RPT_ERROR, "Unexpected error, collection not found");
+		return OPERATOR_CANCELLED;
+	}
+
+	ViewLayer *view_layer = CTX_data_view_layer(C);
+	OverrideSet *override_set = BLI_findlink(&view_layer->override_sets, view_layer->active_override_set);
+
+	if (BKE_view_layer_override_set_collection_link(override_set, collection)) {
+		WM_event_add_notifier(C, NC_SCENE | ND_DYN_OVERRIDES, scene);
+		return OPERATOR_FINISHED;
+	}
+	else {
+		BKE_reportf(op->reports,
+		            RPT_ERROR,
+		            "Collection '%s' already affected by override set '%s'",
+		            collection->name,
+		            override_set->name);
+		return OPERATOR_CANCELLED;
+	}
+}
+
+typedef struct OverrideSetLinkCollectionData {
+	struct OverrideSetLinkCollectionData *next, *prev;
+	int index;
+	struct SceneCollection *collection;
+	struct ListBase submenus;
+	PointerRNA ptr;
+	struct wmOperatorType *ot;
+} OverrideSetLinkCollectionData;
+
+static int view_layer_override_set_collection_link_menus_create(wmOperator *op, OverrideSetLinkCollectionData *menu)
+{
+	int index = menu->index;
+	for (SceneCollection *scene_collection = menu->collection->scene_collections.first;
+	     scene_collection != NULL;
+	     scene_collection = scene_collection->next)
+	{
+		OverrideSetLinkCollectionData *submenu = MEM_callocN (sizeof(OverrideSetLinkCollectionData),
+		                                            "OverrideSetLinkCollectionData submenu - expected memleak");
+		BLI_addtail(&menu->submenus, submenu);
+		submenu->collection = scene_collection;
+		submenu->index = ++index;
+		index = view_layer_override_set_collection_link_menus_create(op, submenu);
+		submenu->ot = op->type;
+	}
+	return index;
+}
+
+static void view_layer_override_set_collection_link_menus_free_recursive(OverrideSetLinkCollectionData *menu)
+{
+	for (OverrideSetLinkCollectionData *submenu = menu->submenus.first;
+	     submenu != NULL;
+	     submenu = submenu->next)
+	{
+		view_layer_override_set_collection_link_menus_free_recursive(submenu);
+	}
+	BLI_freelistN(&menu->submenus);
+}
+
+static void view_layer_override_set_collection_link_menus_free(OverrideSetLinkCollectionData **menu)
+{
+	if (*menu == NULL) {
+		return;
+	}
+
+	view_layer_override_set_collection_link_menus_free_recursive(*menu);
+	MEM_freeN(*menu);
+	*menu = NULL;
+}
+
+static void view_layer_override_set_collection_link_menu_create(bContext *UNUSED(C), uiLayout *layout, void *menu_v)
+{
+	OverrideSetLinkCollectionData *menu = menu_v;
+
+	uiItemIntO(layout,
+	           menu->collection->name,
+	           ICON_NONE,
+	           "SCENE_OT_override_set_collection_link",
+	           "collection_index",
+	           menu->index);
+	uiItemS(layout);
+
+	for (OverrideSetLinkCollectionData *submenu = menu->submenus.first;
+	     submenu != NULL;
+	     submenu = submenu->next)
+	{
+		view_layer_override_set_collection_link_menus_items(layout, submenu);
+	}
+}
+
+static void view_layer_override_set_collection_link_menus_items(uiLayout *layout, OverrideSetLinkCollectionData *menu)
+{
+	if (BLI_listbase_is_empty(&menu->submenus)) {
+		uiItemIntO(layout,
+		           menu->collection->name,
+		           ICON_NONE,
+		           "SCENE_OT_override_set_collection_link",
+		           "collection_index",
+		           menu->index);
+	}
+	else {
+		uiItemMenuF(layout,
+		            menu->collection->name,
+		            ICON_NONE,
+		            view_layer_override_set_collection_link_menu_create,
+		            menu);
+	}
+}
+
+/* This is allocated statically because we need this available for the menus creation callback. */
+static OverrideSetLinkCollectionData *master_collection_menu = NULL;
+
+static int view_layer_override_set_collection_link_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event))
+{
+	/* Reset the menus data for the current master collection, and free previously allocated data. */
+	view_layer_override_set_collection_link_menus_free(&master_collection_menu);
+
+	PropertyRNA *prop;
+	prop = RNA_struct_find_property(op->ptr, "collection_index");
+	if (RNA_property_is_set(op->ptr, prop)) {
+		return view_layer_override_set_collection_link_exec(C, op);
+	}
+
+	SceneCollection *master_collection = BKE_collection_master(&CTX_data_scene(C)->id);
+
+	/* We need the data to be allocated so it's available during menu drawing.
+	 * Technically we could use wmOperator->customdata. However there is no free callback
+	 * called to an operator that exit with OPERATOR_INTERFACE to launch a menu.
+	 *
+	 * So we are left with a memory that will necessarily leak. It's a small leak though.*/
+	if (master_collection_menu == NULL) {
+		master_collection_menu = MEM_callocN(sizeof(OverrideSetLinkCollectionData),
+		                                     "OverrideSetLinkCollectionData menu - expected eventual memleak");
+	}
+
+	master_collection_menu->collection = master_collection;
+	master_collection_menu->ot = op->type;
+	view_layer_override_set_collection_link_menus_create(op, master_collection_menu);
+
+	uiPopupMenu *pup;
+	uiLayout *layout;
+
+	/* Build the menus. */
+	pup = UI_popup_menu_begin(C, IFACE_("Link Collection"), ICON_NONE);
+	layout = UI_popup_menu_layout(pup);
+
+	/* We use invoke here so we can read ctrl from event. */
+	uiLayoutSetOperatorContext(layout, WM_OP_INVOKE_DEFAULT);
+
+	view_layer_override_set_collection_link_menu_create(C, layout, master_collection_menu);
+
+	UI_popup_menu_end(C, pup);
+
+	return OPERATOR_INTERFACE;
+}
+
+static void SCENE_OT_override_set_collection_link(wmOperatorType *ot)
+{
+	PropertyRNA *prop;
+
+	/* identifiers */
+	ot->name = "Link Collection to Override Set";
+	ot->description = "Link a collection to a view layer override set";
+	ot->idname = "SCENE_OT_override_set_collection_link";
+
+	/* api callbacks */
+	ot->exec = view_layer_override_set_collection_link_exec;
+	ot->invoke = view_layer_override_set_collection_link_invoke;
+	ot->poll = view_layer_override_set_collection_link_poll;
+
+	/* flags */
+	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+	prop = RNA_def_int(ot->srna, "collection_index", COLLECTION_INVALID_INDEX, COLLECTION_INVALID_INDEX, INT_MAX,
+	                   "Collection Index", "Index of the collection to link", 0, INT_MAX);
+	RNA_def_property_flag(prop, PROP_SKIP_SAVE | PROP_HIDDEN);
+}
+
+#undef COLLECTION_INVALID_INDEX
+
+static int view_layer_override_set_collection_unlink_exec(bContext *C, wmOperator *UNUSED(op))
+{
+	ViewLayer *view_layer = CTX_data_view_layer(C);
+	OverrideSet *override_set = BLI_findlink(&view_layer->override_sets, view_layer->active_override_set);
+	LinkData *link = BLI_findlink(&override_set->affected_collections, override_set->active_affected_collection);
+	SceneCollection *collection = link->data;
+
+	BKE_view_layer_override_set_collection_unlink(override_set, collection);
+	WM_event_add_notifier(C, NC_SCENE | ND_DYN_OVERRIDES, CTX_data_scene(C));
+
+	return OPERATOR_FINISHED;
+}
+
+static int view_layer_override_set_collection_unlink_poll(bContext *C)
+{
+	ViewLayer *view_layer = CTX_data_view_layer(C);
+	OverrideSet *override_set = BLI_findlink(&view_layer->override_sets, view_layer->active_override_set);
+
+	if (override_set == NULL) {
+		return 0;
+	}
+
+	return override_set->active_affected_collection || BLI_listbase_count_at_most(&override_set->affected_collections, 1);
+}
+
+static void SCENE_OT_override_set_collection_unlink(wmOperatorType *ot)
+{
+	/* identifiers */
+	ot->name = "Unlink Collection from Override Set";
+	ot->description = "Unlink collection from view layer override set";
+	ot->idname = "SCENE_OT_override_set_collection_unlink";
+
+	/* api callbacks */
+	ot->exec = view_layer_override_set_collection_unlink_exec;
+	ot->poll = view_layer_override_set_collection_unlink_poll;
+
+	/* flags */
+	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+}
+
 void ED_operatortypes_scene(void)
 {
 	WM_operatortype_append(SCENE_OT_new);
 	WM_operatortype_append(SCENE_OT_delete);
+	WM_operatortype_append(SCENE_OT_view_layer_override_set_add);
+	WM_operatortype_append(SCENE_OT_view_layer_override_set_remove);
+	WM_operatortype_append(SCENE_OT_override_set_collection_link);
+	WM_operatortype_append(SCENE_OT_override_set_collection_unlink);
 }

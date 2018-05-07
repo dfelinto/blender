@@ -5926,6 +5926,14 @@ static void direct_link_view_layer(FileData *fd, ViewLayer *view_layer)
 
 	BLI_listbase_clear(&view_layer->drawdata);
 	view_layer->object_bases_array = NULL;
+
+	link_list(fd, &(view_layer->override_sets));
+	for (OverrideSet *override_set = view_layer->override_sets.first; override_set; override_set = override_set->next) {
+		link_list(fd, &override_set->affected_collections);
+		for (LinkData *link = override_set->affected_collections.first; link; link = link->next) {
+			link->data = newdataadr(fd, link->data);
+		}
+	}
 }
 
 /**
