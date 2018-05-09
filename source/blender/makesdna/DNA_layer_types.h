@@ -64,7 +64,6 @@ typedef struct LayerCollection {
 
 typedef struct DynamicOverrideProperty {
 	struct DynamicOverrideProperty *next, *prev;
-	char name[64]; /* MAX_NAME */
 	struct IDProperty *data;
 	short flag;
 	short property_type; /* eDynamicOverridePropertyType */
