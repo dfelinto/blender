@@ -6663,8 +6663,11 @@ static bool ui_but_menu(bContext *C, uiBut *but)
 		/*bool is_idprop = RNA_property_is_idprop(prop);*/ /* XXX does not work as expected, not strictly needed */
 		bool is_set = RNA_property_is_set(ptr, prop);
 
-		const int override_status = RNA_property_static_override_status(ptr, prop, -1);
-		const bool is_overridable = (override_status & RNA_OVERRIDE_STATUS_OVERRIDABLE) != 0;
+		const int static_override_status = RNA_property_static_override_status(ptr, prop, -1);
+		const bool is_static_overridable = (static_override_status & RNA_OVERRIDE_STATUS_OVERRIDABLE) != 0;
+
+		const int dynamic_override_status = RNA_property_dynamic_override_status(ptr, prop, -1);
+		const bool is_dynamic_overridable = (dynamic_override_status & RNA_OVERRIDE_STATUS_OVERRIDABLE) != 0;
 
 		/* second slower test, saved people finding keyframe items in menus when its not possible */
 		if (is_anim)
@@ -6794,8 +6797,14 @@ static bool ui_but_menu(bContext *C, uiBut *but)
 			}
 		}
 
-		if (is_overridable) {
-			/* Override Operators */
+		/* Dynamic Override Operators */
+		if (is_editable && is_dynamic_overridable) {
+			uiItemS(layout);
+			uiItemFullO(layout, "SCENE_OT_view_layer_override_add", NULL, ICON_NONE, NULL, WM_OP_INVOKE_DEFAULT, 0, NULL);
+		}
+
+		if (is_static_overridable) {
+			/* Static Override Operators */
 			uiItemS(layout);
 
 			if (but->flag & UI_BUT_OVERRIDEN) {

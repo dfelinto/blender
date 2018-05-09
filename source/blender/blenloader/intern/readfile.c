@@ -5611,6 +5611,13 @@ static void lib_link_scene_collection(FileData *fd, Library *lib, SceneCollectio
 	}
 }
 
+static void lib_link_dynamic_properties(FileData *fd, Library *lib, ListBase *properties) {
+	for (DynamicOverrideProperty *dyn_prop = properties->first; dyn_prop; dyn_prop = dyn_prop->next) {
+		dyn_prop->data.id = newlibadr(fd, lib, dyn_prop->data.id);
+		dyn_prop->root = newlibadr(fd, lib, dyn_prop->root);
+	}
+}
+
 static void lib_link_view_layer(FileData *fd, Library *lib, ViewLayer *view_layer)
 {
 	/* tag scene layer to update for collection tree evaluation */
@@ -5629,6 +5636,11 @@ static void lib_link_view_layer(FileData *fd, Library *lib, ViewLayer *view_laye
 		/* we only bump the use count for the collection objects */
 		base->object = newlibadr(fd, lib, base->object);
 		base->flag |= BASE_DIRTY_ENGINE_SETTINGS;
+	}
+
+	for (OverrideSet *override_set = view_layer->override_sets.first; override_set; override_set = override_set->next) {
+		lib_link_dynamic_properties(fd, lib, &override_set->scene_properties);
+		lib_link_dynamic_properties(fd, lib, &override_set->collection_properties);
 	}
 
 	IDP_LibLinkProperty(view_layer->id_properties, fd);
@@ -5909,6 +5921,16 @@ static void direct_link_layer_collections(FileData *fd, ListBase *lb)
 	}
 }
 
+static void direct_link_dynamic_properties(FileData *fd, ListBase *properties)
+{
+	for (DynamicOverrideProperty *dyn_prop = properties->first; dyn_prop; dyn_prop = dyn_prop->next) {
+		dyn_prop->rna_path = newdataadr(fd, dyn_prop->rna_path);
+		dyn_prop->data.str = newdataadr(fd, dyn_prop->data.str);
+		/* Run-time data. */
+		BLI_listbase_clear(&dyn_prop->data_path);
+	}
+}
+
 static void direct_link_view_layer(FileData *fd, ViewLayer *view_layer)
 {
 	view_layer->stats = NULL;
@@ -5933,6 +5955,10 @@ static void direct_link_view_layer(FileData *fd, ViewLayer *view_layer)
 		for (LinkData *link = override_set->affected_collections.first; link; link = link->next) {
 			link->data = newdataadr(fd, link->data);
 		}
+		link_list(fd, &override_set->scene_properties);
+		direct_link_dynamic_properties(fd, &override_set->scene_properties);
+		link_list(fd, &override_set->collection_properties);
+		direct_link_dynamic_properties(fd, &override_set->collection_properties);
 	}
 }
 

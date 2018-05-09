@@ -589,6 +589,50 @@ static void SCENE_OT_override_set_collection_unlink(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
+static int view_layer_override_add_exec(bContext *C, wmOperator *UNUSED(op))
+{	PointerRNA ptr;
+	PropertyRNA *prop;
+	int index;
+
+	/* try to reset the nominated setting to its default value */
+	UI_context_active_but_prop_get(C, &ptr, &prop, &index);
+
+	ID *id = ptr.id.data;
+	BLI_assert(id != NULL);
+
+	ViewLayer *view_layer = CTX_data_view_layer(C);
+	OverrideSet *override_set = BLI_findlink(&view_layer->override_sets, view_layer->active_override_set);
+
+	if (override_set == NULL) {
+		/* TODO - handle override sets */
+		BLI_assert(!"Implement this");
+	}
+
+	BKE_view_layer_override_property_add(override_set, &ptr, prop, index);
+	return OPERATOR_FINISHED;
+}
+
+static int view_layer_override_add_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event))
+{
+	/* TODO: Option to add a new override set or add to existent one. */
+	return view_layer_override_add_exec(C, op);
+}
+
+static void SCENE_OT_view_layer_override_add(wmOperatorType *ot)
+{
+	/* identifiers */
+	ot->name = "Add View Layer Override";
+	ot->description = "Override property in a view layer override set";
+	ot->idname = "SCENE_OT_view_layer_override_add";
+
+	/* api callbacks */
+	ot->exec = view_layer_override_add_exec;
+	ot->invoke = view_layer_override_add_invoke;
+
+	/* flags */
+	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+}
+
 void ED_operatortypes_scene(void)
 {
 	WM_operatortype_append(SCENE_OT_new);
@@ -597,4 +641,5 @@ void ED_operatortypes_scene(void)
 	WM_operatortype_append(SCENE_OT_view_layer_override_set_remove);
 	WM_operatortype_append(SCENE_OT_override_set_collection_link);
 	WM_operatortype_append(SCENE_OT_override_set_collection_unlink);
+	WM_operatortype_append(SCENE_OT_view_layer_override_add);
 }

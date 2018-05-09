@@ -59,6 +59,8 @@
 
 #include "DRW_engine.h"
 
+#include "RNA_access.h"
+
 #include "MEM_guardedalloc.h"
 
 /* prototype */
@@ -1846,11 +1848,25 @@ static void override_set_copy_data(OverrideSet *override_set_dst, const Override
 	BLI_strncpy(override_set_dst->name, override_set_src->name, sizeof(override_set_dst->name));
 	override_set_dst->flag = override_set_src->flag;
 	BLI_duplicatelist(&override_set_dst->affected_collections, &override_set_src->affected_collections);
+	/* TODO copy properties. */
+}
+
+static void override_set_properties_free(ListBase *properties)
+{
+	for (DynamicOverrideProperty *dyn_prop = properties->first; dyn_prop; dyn_prop = dyn_prop->next) {
+		MEM_SAFE_FREE(dyn_prop->rna_path);
+		MEM_SAFE_FREE(dyn_prop->data.str);
+		BLI_freelistN(&dyn_prop->data_path);
+	}
 }
 
 static void override_set_free(OverrideSet *override_set)
 {
 	BLI_freelistN(&override_set->affected_collections);
+	override_set_properties_free(&override_set->scene_properties);
+	BLI_freelistN(&override_set->scene_properties);
+	override_set_properties_free(&override_set->collection_properties);
+	BLI_freelistN(&override_set->collection_properties);
 }
 
 struct OverrideSet *BKE_view_layer_override_set_add(struct ViewLayer *view_layer, const char *name)
@@ -1934,6 +1950,78 @@ bool BKE_view_layer_override_set_collection_unlink(struct OverrideSet *override_
 		}
 	}
 	return true;
+}
+
+DynamicOverrideProperty *BKE_view_layer_override_property_add(
+        OverrideSet *override_set,
+        PointerRNA *ptr,
+        PropertyRNA *prop,
+        const int index)
+{
+	ID *owner_id = ptr->id.data;
+	eDynamicOverridePropertyType property_type;
+
+	switch (GS(owner_id->name)) {
+		case ID_OB:
+		case ID_ME:
+		case ID_MA:
+			property_type = DYN_OVERRIDE_PROP_TYPE_COLLECTION;
+			break;
+		case ID_SCE:
+		case ID_WO:
+			property_type = DYN_OVERRIDE_PROP_TYPE_SCENE;
+			break;
+		default:
+			BLI_assert("!undefined dynamic assert type");
+			return NULL;
+	}
+
+	DynamicOverrideProperty *dyn_prop = MEM_callocN(sizeof(DynamicOverrideProperty), __func__);
+	dyn_prop->flag = DYN_OVERRIDE_PROP_USE;
+	dyn_prop->override_mode = DYN_OVERRIDE_MODE_REPLACE;
+	dyn_prop->root = owner_id;
+	dyn_prop->property_type = property_type;
+	dyn_prop->rna_path = RNA_path_from_ID_to_property_index(ptr, prop, 0, index);
+
+	/* TODO handle array. */
+	switch (RNA_property_type(prop)) {
+		case PROP_BOOLEAN:
+			dyn_prop->data.i = RNA_property_boolean_get(ptr, prop);
+			break;
+		case PROP_INT:
+			dyn_prop->data.i = RNA_property_int_get(ptr, prop);
+			break;
+		case PROP_FLOAT:
+			dyn_prop->data.f = RNA_property_float_get(ptr, prop);
+			break;
+		case PROP_STRING:
+			dyn_prop->data.str = RNA_property_string_get_alloc(ptr, prop, NULL, 0, NULL);
+			break;
+		case PROP_ENUM:
+			dyn_prop->data.i = RNA_property_enum_get(ptr, prop);
+			break;
+		case PROP_POINTER:
+		{
+			PointerRNA poin = RNA_property_pointer_get(ptr, prop);
+			BLI_assert(RNA_struct_is_ID(poin.type));
+			dyn_prop->data.id = poin.id.data;
+			break;
+		}
+		case PROP_COLLECTION:
+			BLI_assert(!"Should never happen - dyn");
+			break;
+	}
+
+	/* TODO - data_path for depsgraph. */
+
+	if (property_type == DYN_OVERRIDE_PROP_TYPE_SCENE) {
+		BLI_addtail(&override_set->scene_properties, dyn_prop);
+	}
+	else {
+		BLI_addtail(&override_set->collection_properties, dyn_prop);
+	}
+
+	return dyn_prop;
 }
 
 /** \} */

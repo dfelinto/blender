@@ -845,6 +845,64 @@ static void rna_ObjectBase_select_update(Main *UNUSED(bmain), Scene *UNUSED(scen
 	ED_object_base_select(base, mode);
 }
 
+static void rna_DynamicOverrideProperty_name_get(PointerRNA *ptr, char *value)
+{
+	DynamicOverrideProperty *dyn_prop = ptr->data;
+	/* TODO: Get the name from data_path. */
+	strcpy(value, dyn_prop->rna_path);
+}
+
+static int rna_DynamicOverrideProperty_length(PointerRNA *ptr)
+{
+	DynamicOverrideProperty *dyn_prop = ptr->data;
+	/* TODO: Get the name from data_path. */
+	return strlen(dyn_prop->rna_path);
+}
+
+static int rna_DynamicOverrideProperty_value_int_get(PointerRNA *ptr)
+{
+	DynamicOverrideProperty *dyn_prop = ptr->data;
+	return dyn_prop->data.i;
+}
+
+static void rna_DynamicOverrideProperty_value_int_set(PointerRNA *ptr, int value)
+{
+	DynamicOverrideProperty *dyn_prop = ptr->data;
+	dyn_prop->data.i = value;
+}
+
+static void rna_DynamicOverrideProperty_value_int_range(
+        PointerRNA *ptr, int *min, int *max,
+        int *UNUSED(softmin), int *UNUSED(softmax))
+{
+	DynamicOverrideProperty *dyn_prop = ptr->data;
+	(void)dyn_prop;
+	*min = INT_MIN;
+	*max = INT_MAX;
+}
+
+static float rna_DynamicOverrideProperty_value_float_get(PointerRNA *ptr)
+{
+	DynamicOverrideProperty *dyn_prop = ptr->data;
+	return dyn_prop->data.f;
+}
+
+static void rna_DynamicOverrideProperty_value_float_set(PointerRNA *ptr, float value)
+{
+	DynamicOverrideProperty *dyn_prop = ptr->data;
+	dyn_prop->data.f = value;
+}
+
+static void rna_DynamicOverrideProperty_value_float_range(
+        PointerRNA *ptr, float *min, float *max,
+        float *UNUSED(softmin), float *UNUSED(softmax))
+{
+	DynamicOverrideProperty *dyn_prop = ptr->data;
+	(void)dyn_prop;
+	*min = FLT_MIN;
+	*max = FLT_MAX;
+}
+
 static void rna_OverriddenCollection_name_get(PointerRNA *ptr, char *value)
 {
 	SceneCollection *collection = ((LinkData *)ptr->data)->data;
@@ -2015,6 +2073,43 @@ static void rna_def_object_base(BlenderRNA *brna)
 	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_ObjectBase_select_update");
 }
 
+static void rna_def_dynamic_override_property(BlenderRNA *brna)
+{
+	StructRNA *srna;
+	PropertyRNA *prop;
+
+	srna = RNA_def_struct(brna, "DynamicOverrideProperty", NULL);
+	RNA_def_struct_ui_text(srna, "Dynamic Override Property", "Properties overridden by override set");
+
+	prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
+	RNA_def_property_string_funcs(prop,
+	                              "rna_DynamicOverrideProperty_name_get",
+	                              "rna_DynamicOverrideProperty_length",
+	                              NULL);
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+	RNA_def_property_ui_text(prop, "Name", "Property name");
+
+	prop = RNA_def_property(srna, "use", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "flag", DYN_OVERRIDE_PROP_USE);
+	RNA_def_property_ui_text(prop, "Enabled", "Disable or enable the overridden property");
+	RNA_def_property_update(prop, NC_SCENE | ND_DYN_OVERRIDES, NULL);
+
+	/* Accessors for the different value types. */
+	prop = RNA_def_property(srna, "value_int", PROP_INT, PROP_NONE);
+	RNA_def_property_int_funcs(prop,
+	                           "rna_DynamicOverrideProperty_value_int_get",
+	                           "rna_DynamicOverrideProperty_value_int_set",
+	                           "rna_DynamicOverrideProperty_value_int_range");
+	RNA_def_property_update(prop, NC_SCENE | ND_DYN_OVERRIDES, NULL);
+
+	prop = RNA_def_property(srna, "value_float", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_float_funcs(prop,
+	                             "rna_DynamicOverrideProperty_value_float_get",
+	                             "rna_DynamicOverrideProperty_value_float_set",
+	                             "rna_DynamicOverrideProperty_value_float_range");
+	RNA_def_property_update(prop, NC_SCENE | ND_DYN_OVERRIDES, NULL);
+}
+
 static void rna_def_overridden_collection(BlenderRNA *brna)
 {
 	StructRNA *srna;
@@ -2101,6 +2196,20 @@ static void rna_def_override_set(BlenderRNA *brna)
 	RNA_def_property_struct_type(prop, "OverriddenCollection");
 	RNA_def_property_ui_text(prop, "Affected Collections", "Collections that overridden by override set");
 	rna_def_overridden_collections(brna, prop);
+
+	prop = RNA_def_property(srna, "scene_properties", PROP_COLLECTION, PROP_NONE);
+	RNA_def_property_collection_sdna(prop, NULL, "scene_properties", NULL);
+	RNA_def_property_struct_type(prop, "DynamicOverrideProperty");
+	RNA_def_property_ui_text(prop, "Dynamic Override Properties", "Properties overriden for the entire scene");
+
+	prop = RNA_def_property(srna, "collection_properties", PROP_COLLECTION, PROP_NONE);
+	RNA_def_property_collection_sdna(prop, NULL, "collection_properties", NULL);
+	RNA_def_property_struct_type(prop, "DynamicOverrideProperty");
+	RNA_def_property_ui_text(prop,
+	                         "Dynamic Override Properties",
+	                         "Properties overriden for the objects in the affected collections");
+
+	rna_def_dynamic_override_property(brna);
 }
 
 static void rna_def_override_sets(BlenderRNA *brna, PropertyRNA *cprop)

@@ -7825,13 +7825,9 @@ IDOverrideStaticPropertyOperation *RNA_property_override_property_operation_get(
 	return BKE_override_static_property_operation_get(op, operation, NULL, NULL, index, index, strict, r_strict, r_created);
 }
 
-eRNAOverrideStatus RNA_property_static_override_status(PointerRNA *ptr, PropertyRNA *prop, const int index)
+static eRNAOverrideStatus rna_property_override_status_common(PointerRNA *ptr, PropertyRNA *prop, const int index)
 {
 	int override_status = 0;
-
-	if (!ptr || !prop || !ptr->id.data || !((ID *)ptr->id.data)->override_static) {
-		return override_status;
-	}
 
 	if (RNA_property_overridable_get(ptr, prop) && RNA_property_editable_flag(ptr, prop)) {
 		override_status |= RNA_OVERRIDE_STATUS_OVERRIDABLE;
@@ -7851,7 +7847,21 @@ eRNAOverrideStatus RNA_property_static_override_status(PointerRNA *ptr, Property
 	return override_status;
 }
 
+eRNAOverrideStatus RNA_property_static_override_status(PointerRNA *ptr, PropertyRNA *prop, const int index)
+{
+	if (!ptr || !prop || !ptr->id.data || !((ID *)ptr->id.data)->override_static) {
+		return 0;
+	}
+	return rna_property_override_status_common(ptr, prop, index);
+}
 
+eRNAOverrideStatus RNA_property_dynamic_override_status(PointerRNA *ptr, PropertyRNA *prop, const int index)
+{
+	if (!ptr || !prop || !ptr->id.data) {
+		return 0;
+	}
+	return rna_property_override_status_common(ptr, prop, index);
+}
 
 bool RNA_path_resolved_create(
         PointerRNA *ptr, struct PropertyRNA *prop,

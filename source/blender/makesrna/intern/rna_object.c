@@ -1830,6 +1830,7 @@ static void rna_def_object_display(BlenderRNA *brna)
 	RNA_def_property_boolean_sdna(prop, NULL, "flag", OB_SHOW_SHADOW);
 	RNA_def_property_boolean_default(prop, true);
 	RNA_def_property_ui_text(prop, "Shadow", "Object cast shadows in the 3d viewport");
+	RNA_def_property_flag(prop, PROP_OVERRIDABLE_STATIC);
 	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, NULL);
 }
 
@@ -2233,11 +2234,13 @@ static void rna_def_object(BlenderRNA *brna)
 	prop = RNA_def_property(srna, "pass_index", PROP_INT, PROP_UNSIGNED);
 	RNA_def_property_int_sdna(prop, NULL, "index");
 	RNA_def_property_ui_text(prop, "Pass Index", "Index number for the \"Object Index\" render pass");
+	RNA_def_property_flag(prop, PROP_OVERRIDABLE_STATIC);
 	RNA_def_property_update(prop, NC_OBJECT, "rna_Object_internal_update_draw");
 	
 	prop = RNA_def_property(srna, "color", PROP_FLOAT, PROP_COLOR);
 	RNA_def_property_float_sdna(prop, NULL, "col");
 	RNA_def_property_ui_text(prop, "Color", "Object color and alpha, used when faces have the ObColor mode enabled");
+	RNA_def_property_flag(prop, PROP_OVERRIDABLE_STATIC);
 	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, NULL);
 
 	/* physics */

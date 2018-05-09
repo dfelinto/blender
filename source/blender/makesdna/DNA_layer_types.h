@@ -62,9 +62,19 @@ typedef struct LayerCollection {
 	ListBase layer_collections; /* synced with collection->collections */
 } LayerCollection;
 
+typedef struct DynamicOverridePropertyData {
+	int i;
+	float f;
+	struct ID *id;
+	char *str;
+} DynamicOverridePropertyData;
+
 typedef struct DynamicOverrideProperty {
 	struct DynamicOverrideProperty *next, *prev;
-	struct IDProperty *data;
+	struct DynamicOverridePropertyData data;
+	struct ID *root;
+	char *rna_path;
+	struct ListBase data_path; /* runtime: (RNAProperty *)LinkData->data */
 	short flag;
 	short property_type; /* eDynamicOverridePropertyType */
 	short override_mode; /* eDynamicOverrideMode */
@@ -78,6 +88,8 @@ typedef struct OverrideSet {
 	short pad[2];
 	short active_affected_collection;
 	ListBase affected_collections; /* (SceneCollection *)LinkData->data */
+	ListBase scene_properties;
+	ListBase collection_properties;
 } OverrideSet;
 
 typedef struct ViewLayer {

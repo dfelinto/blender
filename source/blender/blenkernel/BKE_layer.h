@@ -43,6 +43,7 @@ extern "C" {
 
 struct Base;
 struct Depsgraph;
+struct DynamicOverrideProperty;
 struct Group;
 struct ID;
 struct IDProperty;
@@ -51,6 +52,8 @@ struct ListBase;
 struct Main;
 struct Object;
 struct OverrideSet;
+struct PointerRNA;
+struct PropertyRNA;
 struct RenderEngine;
 struct Scene;
 struct SceneCollection;
@@ -171,6 +174,12 @@ struct OverrideSet *BKE_view_layer_override_set_add(struct ViewLayer *view_layer
 bool BKE_view_layer_override_set_remove(struct ViewLayer *view_layer, struct OverrideSet *override_set);
 bool BKE_view_layer_override_set_collection_link(struct OverrideSet *override_set, struct SceneCollection *collection);
 bool BKE_view_layer_override_set_collection_unlink(struct OverrideSet *override_set, struct SceneCollection *collection);
+
+struct DynamicOverrideProperty *BKE_view_layer_override_property_add(
+        struct OverrideSet *override_set,
+        struct PointerRNA *ptr,
+        struct PropertyRNA *prop,
+        const int index);
 
 /* evaluation */
 

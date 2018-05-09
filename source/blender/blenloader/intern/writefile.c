@@ -2419,6 +2419,16 @@ static void write_layer_collections(WriteData *wd, ListBase *lb)
 	}
 }
 
+static void write_dynamic_properties(WriteData *wd, ListBase *properties)
+{
+	for (DynamicOverrideProperty *dyn_prop = properties->first; dyn_prop; dyn_prop = dyn_prop->next) {
+		writedata(wd, DATA, strlen(dyn_prop->rna_path) + 1, dyn_prop->rna_path);
+		if (dyn_prop->data.str != NULL) {
+			writedata(wd, DATA, strlen(dyn_prop->data.str) + 1, dyn_prop->data.str);
+		}
+	}
+}
+
 static void write_view_layer(WriteData *wd, ViewLayer *view_layer)
 {
 	writestruct(wd, DATA, ViewLayer, 1, view_layer);
@@ -2440,6 +2450,10 @@ static void write_view_layer(WriteData *wd, ViewLayer *view_layer)
 	writelist(wd, DATA, OverrideSet, &view_layer->override_sets);
 	for (OverrideSet *override_set = view_layer->override_sets.first; override_set; override_set = override_set->next) {
 		writelist(wd, DATA, LinkData, &override_set->affected_collections);
+		writelist(wd, DATA, DynamicOverrideProperty, &override_set->scene_properties);
+		write_dynamic_properties(wd, &override_set->scene_properties);
+		writelist(wd, DATA, DynamicOverrideProperty, &override_set->collection_properties);
+		write_dynamic_properties(wd, &override_set->collection_properties);
 	}
 }
 
