@@ -55,6 +55,7 @@
 
 #include "RNA_access.h"
 #include "RNA_define.h"
+#include "RNA_enum_types.h"
 
 #include "UI_interface.h"
 #include "UI_resources.h"
@@ -590,7 +591,8 @@ static void SCENE_OT_override_set_collection_unlink(wmOperatorType *ot)
 }
 
 static int view_layer_override_add_exec(bContext *C, wmOperator *UNUSED(op))
-{	PointerRNA ptr;
+{
+	PointerRNA ptr;
 	PropertyRNA *prop;
 	int index;
 
@@ -633,6 +635,74 @@ static void SCENE_OT_view_layer_override_add(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
+static int view_layer_override_remove_exec(bContext *C, wmOperator *op)
+{
+	ViewLayer *view_layer = CTX_data_view_layer(C);
+	OverrideSet *override_set = BLI_findlink(&view_layer->override_sets, view_layer->active_override_set);
+
+	if (override_set == NULL) {
+		return OPERATOR_CANCELLED;
+	}
+
+	PropertyRNA *prop = RNA_struct_find_property(op->ptr, "index");
+	if (!RNA_property_is_set(op->ptr, prop)) {
+		BKE_report(op->reports, RPT_ERROR, "No property index defined");
+		return OPERATOR_CANCELLED;
+	}
+
+	const int index = RNA_property_int_get(op->ptr, prop);
+
+	prop = RNA_struct_find_property(op->ptr, "property_type");
+	if (!RNA_property_is_set(op->ptr, prop)) {
+		BKE_report(op->reports, RPT_ERROR, "No property type set");
+		return OPERATOR_CANCELLED;
+	}
+
+	const int property_type = RNA_property_enum_get(op->ptr, prop);
+
+	ListBase *lb[] = {
+		&override_set->scene_properties,
+		&override_set->collection_properties,
+	};
+
+	DynamicOverrideProperty *dyn_prop = BLI_findlink(lb[property_type], index);
+
+	if (dyn_prop == NULL) {
+		BKE_report(op->reports, RPT_ERROR, "No property found");
+		return OPERATOR_CANCELLED;
+	}
+
+	BKE_view_layer_override_property_remove(override_set, dyn_prop);
+	return OPERATOR_FINISHED;
+}
+
+static void SCENE_OT_view_layer_override_remove(wmOperatorType *ot)
+{
+	PropertyRNA *prop;
+
+	/* identifiers */
+	ot->name = "Remove View Layer Override";
+	ot->description = "Remove override property in a view layer override set";
+	ot->idname = "SCENE_OT_view_layer_override_remove";
+
+	/* api callbacks */
+	ot->exec = view_layer_override_remove_exec;
+
+	/* flags */
+	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+	prop = RNA_def_int(ot->srna, "index", 0, 0, INT_MAX, "Property Index",
+	            "Index of the property within its list", 0, INT_MAX);
+	RNA_def_property_flag(prop, PROP_SKIP_SAVE | PROP_HIDDEN);
+	prop = RNA_def_enum(ot->srna,
+	             "property_type",
+	             rna_enum_dynamic_override_property_type_items,
+	             DYN_OVERRIDE_PROP_TYPE_SCENE,
+	             "Property Type",
+	             "Whether the property removed is a scene or a collection property");
+	RNA_def_property_flag(prop, PROP_SKIP_SAVE | PROP_HIDDEN);
+}
+
 void ED_operatortypes_scene(void)
 {
 	WM_operatortype_append(SCENE_OT_new);
@@ -642,4 +712,5 @@ void ED_operatortypes_scene(void)
 	WM_operatortype_append(SCENE_OT_override_set_collection_link);
 	WM_operatortype_append(SCENE_OT_override_set_collection_unlink);
 	WM_operatortype_append(SCENE_OT_view_layer_override_add);
+	WM_operatortype_append(SCENE_OT_view_layer_override_remove);
 }

@@ -149,7 +149,7 @@ class VIEWLAYER_OT_overrides(ViewLayerButtonsPanel, Panel):
         row.label(text="Collection Properties")
 
         if scene.show_view_layer_overrides_collections_property:
-            for dyn_prop in override_set.collection_properties:
+            for i, dyn_prop in enumerate(override_set.collection_properties):
                 box = layout.box()
                 row = box.row()
                 row.prop(dyn_prop, "use", text="")
@@ -158,7 +158,9 @@ class VIEWLAYER_OT_overrides(ViewLayerButtonsPanel, Panel):
                 subrow.label(text=dyn_prop.name, icon='NONE')
                 #subrow.prop(dyn_prop, "override_mode", text="")
                 subrow.prop(dyn_prop, "value_int", text="")
-                row.label(icon='ZOOMOUT')
+                ops = row.operator("scene.view_layer_override_remove", text="", icon='ZOOMOUT', emboss=False)
+                ops.index = i
+                ops.property_type = 'COLLECTION'
 
 
 classes = (

@@ -1851,12 +1851,17 @@ static void override_set_copy_data(OverrideSet *override_set_dst, const Override
 	/* TODO copy properties. */
 }
 
+static void override_set_property_free(DynamicOverrideProperty *dyn_prop)
+{
+	MEM_SAFE_FREE(dyn_prop->rna_path);
+	MEM_SAFE_FREE(dyn_prop->data.str);
+	BLI_freelistN(&dyn_prop->data_path);
+}
+
 static void override_set_properties_free(ListBase *properties)
 {
 	for (DynamicOverrideProperty *dyn_prop = properties->first; dyn_prop; dyn_prop = dyn_prop->next) {
-		MEM_SAFE_FREE(dyn_prop->rna_path);
-		MEM_SAFE_FREE(dyn_prop->data.str);
-		BLI_freelistN(&dyn_prop->data_path);
+		override_set_property_free(dyn_prop);
 	}
 }
 
@@ -2022,6 +2027,26 @@ DynamicOverrideProperty *BKE_view_layer_override_property_add(
 	}
 
 	return dyn_prop;
+}
+
+bool BKE_view_layer_override_property_remove(
+        OverrideSet *override_set,
+        DynamicOverrideProperty *dyn_prop)
+{
+	bool ok = BLI_remlink_safe(&override_set->scene_properties, dyn_prop);
+
+	if (ok == false) {
+		ok = BLI_remlink_safe(&override_set->collection_properties, dyn_prop);
+	}
+
+	if (ok == false) {
+		/* Something went wrong. */
+		return false;
+	}
+
+	override_set_property_free(dyn_prop);
+	MEM_freeN(dyn_prop);
+	return true;
 }
 
 /** \} */

@@ -181,6 +181,10 @@ struct DynamicOverrideProperty *BKE_view_layer_override_property_add(
         struct PropertyRNA *prop,
         const int index);
 
+bool BKE_view_layer_override_property_remove(
+        struct OverrideSet *override_set,
+        struct DynamicOverrideProperty *dyn_prop);
+
 /* evaluation */
 
 void BKE_layer_eval_view_layer(

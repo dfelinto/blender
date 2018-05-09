@@ -53,6 +53,12 @@ const EnumPropertyItem rna_enum_collection_type_items[] = {
 	{0, NULL, 0, NULL, NULL}
 };
 
+const EnumPropertyItem rna_enum_dynamic_override_property_type_items[] = {
+	{DYN_OVERRIDE_PROP_TYPE_SCENE, "SCENE", 0, "Scene", ""},
+	{DYN_OVERRIDE_PROP_TYPE_COLLECTION, "COLLECTION", 0, "Collection", ""},
+	{0, NULL, 0, NULL, NULL}
+};
+
 #ifdef RNA_RUNTIME
 
 #include "DNA_group_types.h"
@@ -2093,6 +2099,13 @@ static void rna_def_dynamic_override_property(BlenderRNA *brna)
 	RNA_def_property_boolean_sdna(prop, NULL, "flag", DYN_OVERRIDE_PROP_USE);
 	RNA_def_property_ui_text(prop, "Enabled", "Disable or enable the overridden property");
 	RNA_def_property_update(prop, NC_SCENE | ND_DYN_OVERRIDES, NULL);
+
+	prop = RNA_def_property(srna, "type", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_sdna(prop, NULL, "property_type");
+	RNA_def_property_enum_items(prop, rna_enum_dynamic_override_property_type_items);
+	RNA_def_property_ui_text(prop, "Type",
+	                         "Whether the property affects the entire scene or the collection objects only");
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 
 	/* Accessors for the different value types. */
 	prop = RNA_def_property(srna, "value_int", PROP_INT, PROP_NONE);
