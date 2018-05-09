@@ -119,16 +119,11 @@ class VIEWLAYER_OT_overrides(ViewLayerButtonsPanel, Panel):
         row.label(text="Scene Properties")
 
         if scene.show_view_layer_overrides_scene_property:
-            for dyn_prop in override_set.scene_properties:
-                box = layout.box()
-                row = box.row()
-                row.prop(dyn_prop, "use", text="")
-                subrow = row.row()
-                subrow.active = dyn_prop.use
-                subrow.label(text=dyn_prop.name, icon='NONE')
-                #subrow.prop(dyn_prop, "override_mode", text="")
-                subrow.prop(dyn_prop, "value_int", text="")
-                row.label(icon='ZOOMOUT')
+            if override_set.scene_properties:
+                for i, dyn_prop in enumerate(override_set.scene_properties):
+                    self._draw_property(layout, dyn_prop, i, 'SCENE')
+            else:
+                layout.label(text="No scene property")
 
         row = layout.row(align=True)
         row.prop(scene, "show_view_layer_overrides_affected_collections", emboss=False, text="")
@@ -149,18 +144,24 @@ class VIEWLAYER_OT_overrides(ViewLayerButtonsPanel, Panel):
         row.label(text="Collection Properties")
 
         if scene.show_view_layer_overrides_collections_property:
-            for i, dyn_prop in enumerate(override_set.collection_properties):
-                box = layout.box()
-                row = box.row()
-                row.prop(dyn_prop, "use", text="")
-                subrow = row.row()
-                subrow.active = dyn_prop.use
-                subrow.label(text=dyn_prop.name, icon='NONE')
-                #subrow.prop(dyn_prop, "override_mode", text="")
-                subrow.prop(dyn_prop, "value_int", text="")
-                ops = row.operator("scene.view_layer_override_remove", text="", icon='ZOOMOUT', emboss=False)
-                ops.index = i
-                ops.property_type = 'COLLECTION'
+            if override_set.collection_properties:
+                for i, dyn_prop in enumerate(override_set.collection_properties):
+                    self._draw_property(layout, dyn_prop, i, 'COLLECTION')
+            else:
+                layout.label(text="No collection property")
+
+    def _draw_property(self, layout, dyn_prop, index, property_type):
+        box = layout.box()
+        row = box.row()
+        row.prop(dyn_prop, "use", text="")
+        subrow = row.row()
+        subrow.active = dyn_prop.use
+        subrow.label(text=dyn_prop.name, icon='NONE')
+        subrow.prop(dyn_prop, "override_mode", text="")
+        subrow.prop(dyn_prop, "value_int", text="")
+        ops = row.operator("scene.view_layer_override_remove", text="", icon='ZOOMOUT', emboss=False)
+        ops.index = index
+        ops.property_type = property_type
 
 
 classes = (

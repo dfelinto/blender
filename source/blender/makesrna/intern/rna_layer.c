@@ -2084,6 +2084,12 @@ static void rna_def_dynamic_override_property(BlenderRNA *brna)
 	StructRNA *srna;
 	PropertyRNA *prop;
 
+	static const EnumPropertyItem rna_enum_dynamic_override_mode_items[] = {
+		{DYN_OVERRIDE_MODE_REPLACE, "REPLACE", 0, "Replace", ""},
+		{DYN_OVERRIDE_MODE_MULTIPLY, "MULTIPLY", 0, "Multiply", ""},
+		{0, NULL, 0, NULL, NULL}
+	};
+
 	srna = RNA_def_struct(brna, "DynamicOverrideProperty", NULL);
 	RNA_def_struct_ui_text(srna, "Dynamic Override Property", "Properties overridden by override set");
 
@@ -2106,6 +2112,12 @@ static void rna_def_dynamic_override_property(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Type",
 	                         "Whether the property affects the entire scene or the collection objects only");
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+
+	prop = RNA_def_property(srna, "override_mode", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_items(prop, rna_enum_dynamic_override_mode_items);
+	RNA_def_property_ui_text(prop, "Override Mode",
+	                         "Method of override the original values");
+	RNA_def_property_update(prop, NC_SCENE | ND_DYN_OVERRIDES, NULL);
 
 	/* Accessors for the different value types. */
 	prop = RNA_def_property(srna, "value_int", PROP_INT, PROP_NONE);
