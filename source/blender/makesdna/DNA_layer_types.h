@@ -75,10 +75,10 @@ typedef struct DynamicOverrideProperty {
 	struct ID *root;
 	char *rna_path;
 	struct ListBase data_path; /* runtime: (RNAProperty *)LinkData->data */
+	float multiply_factor;
 	short flag;
-	short property_type; /* eDynamicOverridePropertyType */
-	short override_mode; /* eDynamicOverrideMode */
-	short pad;
+	char property_type; /* eDynamicOverridePropertyType */
+	char override_mode; /* eDynamicOverrideMode */
 } DynamicOverrideProperty;
 
 typedef struct OverrideSet {

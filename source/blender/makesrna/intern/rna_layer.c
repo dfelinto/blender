@@ -2119,6 +2119,12 @@ static void rna_def_dynamic_override_property(BlenderRNA *brna)
 	                         "Method of override the original values");
 	RNA_def_property_update(prop, NC_SCENE | ND_DYN_OVERRIDES, NULL);
 
+	prop = RNA_def_property(srna, "multiply_factor", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_range(prop, -FLT_MAX, FLT_MAX);
+	RNA_def_property_ui_range(prop, -10.0f, 10.0f, 5, 3);
+	RNA_def_property_ui_text(prop, "Factor", "Multiplication factor");
+	RNA_def_property_update(prop, NC_SCENE | ND_DYN_OVERRIDES, NULL);
+
 	/* Accessors for the different value types. */
 	prop = RNA_def_property(srna, "value_int", PROP_INT, PROP_NONE);
 	RNA_def_property_int_funcs(prop,

@@ -1984,6 +1984,7 @@ DynamicOverrideProperty *BKE_view_layer_override_property_add(
 
 	DynamicOverrideProperty *dyn_prop = MEM_callocN(sizeof(DynamicOverrideProperty), __func__);
 	dyn_prop->flag = DYN_OVERRIDE_PROP_USE;
+	dyn_prop->multiply_factor = 1.0f;
 	dyn_prop->override_mode = DYN_OVERRIDE_MODE_REPLACE;
 	dyn_prop->root = owner_id;
 	dyn_prop->property_type = property_type;

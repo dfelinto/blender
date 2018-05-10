@@ -156,9 +156,20 @@ class VIEWLAYER_OT_overrides(ViewLayerButtonsPanel, Panel):
         row.prop(dyn_prop, "use", text="")
         subrow = row.row()
         subrow.active = dyn_prop.use
-        subrow.label(text=dyn_prop.name, icon='NONE')
+
+        # TODO: Show different cons depending on the ID.
+        icon = 'NONE'
+        subrow.label(text=dyn_prop.name, icon=icon)
+
+        # TODO: Only show override_mode and multiply_factor if property is not ID.
         subrow.prop(dyn_prop, "override_mode", text="")
-        subrow.prop(dyn_prop, "value_int", text="")
+
+        if (dyn_prop.override_mode == 'MULTIPLY'):
+            subrow.prop(dyn_prop, "multiply_factor", text="")
+        else:
+            # TODO: Show different RNA prop depending on the property.
+            subrow.prop(dyn_prop, "value_int", text="")
+
         ops = row.operator("scene.view_layer_override_remove", text="", icon='ZOOMOUT', emboss=False)
         ops.index = index
         ops.property_type = property_type
