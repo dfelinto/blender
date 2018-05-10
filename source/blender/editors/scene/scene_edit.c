@@ -590,38 +590,122 @@ static void SCENE_OT_override_set_collection_unlink(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
-static int view_layer_override_add_exec(bContext *C, wmOperator *UNUSED(op))
-{
+static struct {
 	PointerRNA ptr;
 	PropertyRNA *prop;
 	int index;
+	bool set;
+} override_property_data = { .set = false };
 
-	/* try to reset the nominated setting to its default value */
-	UI_context_active_but_prop_get(C, &ptr, &prop, &index);
+static int view_layer_override_add_exec(bContext *C, wmOperator *op)
+{
+	if (override_property_data.set == false) {
+		UI_context_active_but_prop_get(C,
+		                               &override_property_data.ptr,
+		                               &override_property_data.prop,
+		                               &override_property_data.index);
+	}
+	override_property_data.set = false;
 
-	ID *id = ptr.id.data;
+	ID *id = override_property_data.ptr.id.data;
 	BLI_assert(id != NULL);
 
 	ViewLayer *view_layer = CTX_data_view_layer(C);
-	OverrideSet *override_set = BLI_findlink(&view_layer->override_sets, view_layer->active_override_set);
+	OverrideSet *override_set;
 
-	if (override_set == NULL) {
-		/* TODO - handle override sets */
-		BLI_assert(!"Implement this");
+	if (RNA_boolean_get(op->ptr, "is_new")) {
+		char new_override_set_name[MAX_NAME];
+		RNA_string_get(op->ptr, "new_override_set_name", new_override_set_name);
+		override_set = BKE_view_layer_override_set_add(view_layer, new_override_set_name);
+	}
+	else if (BLI_listbase_is_empty(&view_layer->override_sets)) {
+		override_set = BKE_view_layer_override_set_add(view_layer, "Override Set");
+	}
+	else {
+		const int override_set_index = RNA_int_get(op->ptr, "override_set_index");
+		override_set = BLI_findlink(&view_layer->override_sets, override_set_index);
 	}
 
-	BKE_view_layer_override_property_add(override_set, &ptr, prop, index);
+	if (override_set == NULL) {
+		BKE_report(op->reports, RPT_ERROR, "No valid override set selected");
+		return OPERATOR_CANCELLED;
+	}
+
+	BKE_view_layer_override_property_add(override_set,
+	                                     &override_property_data.ptr,
+	                                     override_property_data.prop,
+	                                     override_property_data.index);
+
+	WM_event_add_notifier(C, NC_SCENE | ND_DYN_OVERRIDES, CTX_data_scene(C));
 	return OPERATOR_FINISHED;
 }
 
 static int view_layer_override_add_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event))
 {
-	/* TODO: Option to add a new override set or add to existent one. */
-	return view_layer_override_add_exec(C, op);
+	PropertyRNA *prop;
+	ViewLayer *view_layer = CTX_data_view_layer(C);
+
+	if (RNA_boolean_get(op->ptr, "is_new")) {
+		prop = RNA_struct_find_property(op->ptr, "new_override_set_name");
+		if (!RNA_property_is_set(op->ptr, prop)) {
+			/* The dialog popup messes with the context prop/ptr, so we need to pre-store it
+			 * to re-access it from the exec function. */
+			UI_context_active_but_prop_get(C,
+			                               &override_property_data.ptr,
+			                               &override_property_data.prop,
+			                               &override_property_data.index);
+			override_property_data.set = true;
+			return WM_operator_props_dialog_popup(C, op, 10 * UI_UNIT_X, 5 * UI_UNIT_Y);
+		}
+	}
+	override_property_data.set = false;
+
+	if (BLI_listbase_is_empty(&view_layer->override_sets)) {
+		return view_layer_override_add_exec(C, op);
+	}
+
+	prop = RNA_struct_find_property(op->ptr, "override_set_index");
+	if (RNA_property_is_set(op->ptr, prop)) {
+		return view_layer_override_add_exec(C, op);
+	}
+
+	uiPopupMenu *pup;
+	uiLayout *layout;
+
+	/* Build the menus. */
+	pup = UI_popup_menu_begin(C, IFACE_("Override Property in Set"), ICON_NONE);
+	layout = UI_popup_menu_layout(pup);
+
+	uiLayoutSetOperatorContext(layout, WM_OP_INVOKE_DEFAULT);
+
+	int i = 0;
+	for (OverrideSet *override_set = view_layer->override_sets.first; override_set; override_set = override_set->next) {
+		uiItemIntO(layout,
+		           override_set->name,
+		           ICON_NONE,
+		           "SCENE_OT_view_layer_override_add",
+		           "override_set_index",
+		           i++);
+	}
+
+	uiItemS(layout);
+
+	uiItemBooleanO(layout,
+	               "New Override Set",
+	               ICON_ZOOMIN,
+	               "SCENE_OT_view_layer_override_add",
+	               "is_new",
+	               true);
+
+	UI_popup_menu_end(C, pup);
+
+	return OPERATOR_INTERFACE;
 }
 
 static void SCENE_OT_view_layer_override_add(wmOperatorType *ot)
 {
+	PropertyRNA *prop;
+
 	/* identifiers */
 	ot->name = "Add View Layer Override";
 	ot->description = "Override property in a view layer override set";
@@ -633,6 +717,15 @@ static void SCENE_OT_view_layer_override_add(wmOperatorType *ot)
 
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+	prop = RNA_def_int(ot->srna, "override_set_index", 0, 0, INT_MAX,
+	                   "Override Set Index", "Index of the override set to add the property", 0, INT_MAX);
+	RNA_def_property_flag(prop, PROP_SKIP_SAVE | PROP_HIDDEN);
+	prop = RNA_def_boolean(ot->srna, "is_new", false, "New", "Add a new override set");
+	RNA_def_property_flag(prop, PROP_SKIP_SAVE | PROP_HIDDEN);
+	prop = RNA_def_string(ot->srna, "new_override_set_name", "Override Set", MAX_NAME, "Name",
+	                      "Name of the newly added override set");
+	RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 }
 
 static int view_layer_override_remove_exec(bContext *C, wmOperator *op)
