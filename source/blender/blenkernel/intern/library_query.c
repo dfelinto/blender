@@ -438,6 +438,21 @@ void BKE_library_foreach_ID_link(Main *bmain, ID *id, LibraryIDLinkCallback call
 							CALLBACK_INVOKE(fls->linestyle, IDWALK_CB_USER);
 						}
 					}
+
+					for (OverrideSet *override_set = view_layer->override_sets.first;
+					     override_set != NULL;
+					     override_set = override_set->next)
+					{
+						DynamicOverrideProperty *dyn_prop;
+						for (dyn_prop = override_set->scene_properties.first; dyn_prop; dyn_prop = dyn_prop->next) {
+							CALLBACK_INVOKE_ID(dyn_prop->root, IDWALK_CB_NOP);
+							CALLBACK_INVOKE_ID(dyn_prop->data.id, IDWALK_CB_NOP);
+						}
+						for (dyn_prop = override_set->collection_properties.first; dyn_prop; dyn_prop = dyn_prop->next) {
+							CALLBACK_INVOKE_ID(dyn_prop->root, IDWALK_CB_NOP);
+							CALLBACK_INVOKE_ID(dyn_prop->data.id, IDWALK_CB_NOP);
+						}
+					}
 				}
 
 				for (TimeMarker *marker = scene->markers.first; marker; marker = marker->next) {
