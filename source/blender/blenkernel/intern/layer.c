@@ -1888,6 +1888,7 @@ struct OverrideSet *BKE_view_layer_override_set_add(struct ViewLayer *view_layer
 	               sizeof(override_set->name));
 
 	BLI_addtail(&view_layer->override_sets, override_set);
+	view_layer->active_override_set = BLI_listbase_count(&view_layer->override_sets) - 1;
 	return override_set;
 }
 
