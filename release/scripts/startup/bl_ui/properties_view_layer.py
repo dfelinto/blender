@@ -150,6 +150,10 @@ class VIEWLAYER_OT_overrides(ViewLayerButtonsPanel, Panel):
             else:
                 layout.label(text="No collection property")
 
+    @staticmethod
+    def _icon_from_id_type(id_type):
+        return id_type + '_DATA'
+
     def _draw_property(self, layout, dyn_prop, index, property_type):
         box = layout.box()
         row = box.row()
@@ -157,9 +161,7 @@ class VIEWLAYER_OT_overrides(ViewLayerButtonsPanel, Panel):
         subrow = row.row()
         subrow.active = dyn_prop.use
 
-        # TODO: Show different cons depending on the ID.
-        icon = 'NONE'
-        subrow.label(text=dyn_prop.name, icon=icon)
+        subrow.label(text=dyn_prop.name, icon=self._icon_from_id_type(dyn_prop.id_type))
 
         # TODO: Only show override_mode and multiply_factor if property is not ID.
         subrow.prop(dyn_prop, "override_mode", text="")

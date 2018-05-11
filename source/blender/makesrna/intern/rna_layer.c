@@ -44,6 +44,7 @@
 #include "WM_types.h"
 
 #include "RNA_define.h"
+#include "RNA_enum_types.h"
 
 #include "rna_internal.h"
 
@@ -2111,6 +2112,13 @@ static void rna_def_dynamic_override_property(BlenderRNA *brna)
 	RNA_def_property_enum_items(prop, rna_enum_dynamic_override_property_type_items);
 	RNA_def_property_ui_text(prop, "Type",
 	                         "Whether the property affects the entire scene or the collection objects only");
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+
+	prop = RNA_def_property(srna, "id_type", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_items(prop, rna_enum_id_type_items);
+	RNA_def_property_ui_text(prop, "ID Type",
+	                         "Type of ID block that owns this property");
+	RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_ID_ID);
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 
 	prop = RNA_def_property(srna, "override_mode", PROP_ENUM, PROP_NONE);

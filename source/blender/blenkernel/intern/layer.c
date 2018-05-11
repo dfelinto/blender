@@ -1987,8 +1987,9 @@ DynamicOverrideProperty *BKE_view_layer_override_property_add(
 {
 	ID *owner_id = ptr->id.data;
 	eDynamicOverridePropertyType property_type;
+	const short id_type = GS(owner_id->name);
 
-	switch (GS(owner_id->name)) {
+	switch (id_type) {
 		case ID_OB:
 		case ID_ME:
 		case ID_MA:
@@ -2008,6 +2009,7 @@ DynamicOverrideProperty *BKE_view_layer_override_property_add(
 	dyn_prop->multiply_factor = 1.0f;
 	dyn_prop->override_mode = DYN_OVERRIDE_MODE_REPLACE;
 	dyn_prop->root = owner_id;
+	dyn_prop->id_type = id_type;
 	dyn_prop->property_type = property_type;
 	dyn_prop->rna_path = RNA_path_from_ID_to_property_index(ptr, prop, 0, index);
 
