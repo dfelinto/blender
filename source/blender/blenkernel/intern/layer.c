@@ -74,7 +74,7 @@ static IDProperty *collection_engine_settings_create(struct EngineSettingsCB_Typ
 static IDProperty *collection_engine_get(IDProperty *root, const char *engine_name);
 static void collection_engine_settings_init(IDProperty *root, const bool populate);
 static void layer_engine_settings_init(IDProperty *root, const bool populate);
-static void override_set_copy_data(struct OverrideSet *override_set_dst, const struct OverrideSet *override_set_src);
+static void override_set_copy_data(struct OverrideSet *override_set_dst, struct OverrideSet *override_set_src);
 static void override_set_free(struct OverrideSet *override_set);
 static void object_bases_iterator_next(BLI_Iterator *iter, const int flag);
 
@@ -1843,12 +1843,33 @@ void BKE_view_layer_engine_settings_validate_scene(Scene *scene)
 /** \name Public Dynamic Overrides
  * \{ */
 
-static void override_set_copy_data(OverrideSet *override_set_dst, const OverrideSet *override_set_src)
+static void dynamic_property_copy_data(ListBase *lb_dst, ListBase *lb_src)
+{
+	BLI_duplicatelist(lb_dst, lb_src);
+
+	DynamicOverrideProperty *dyn_prop_dst;
+	DynamicOverrideProperty *dyn_prop_src;
+	for (dyn_prop_dst = lb_dst->first, dyn_prop_src = lb_src->first;
+	     dyn_prop_dst != NULL;
+	     dyn_prop_dst = dyn_prop_dst->next, dyn_prop_src = dyn_prop_src->next)
+	{
+		if (dyn_prop_src->rna_path != NULL) {
+			dyn_prop_dst->rna_path = MEM_dupallocN(dyn_prop_src->rna_path);
+		}
+		if (dyn_prop_src->data.str != NULL) {
+			dyn_prop_dst->data.str = MEM_dupallocN(dyn_prop_src->data.str);
+		}
+		BLI_duplicatelist(&dyn_prop_dst->data_path, &dyn_prop_src->data_path);
+	}
+}
+
+static void override_set_copy_data(OverrideSet *override_set_dst, OverrideSet *override_set_src)
 {
 	BLI_strncpy(override_set_dst->name, override_set_src->name, sizeof(override_set_dst->name));
 	override_set_dst->flag = override_set_src->flag;
 	BLI_duplicatelist(&override_set_dst->affected_collections, &override_set_src->affected_collections);
-	/* TODO copy properties. */
+	dynamic_property_copy_data(&override_set_dst->scene_properties, &override_set_src->scene_properties);
+	dynamic_property_copy_data(&override_set_dst->collection_properties, &override_set_src->collection_properties);
 }
 
 static void override_set_property_free(DynamicOverrideProperty *dyn_prop)
