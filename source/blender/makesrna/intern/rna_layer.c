@@ -2114,6 +2114,11 @@ static void rna_def_dynamic_override_property(BlenderRNA *brna)
 	                         "Whether the property affects the entire scene or the collection objects only");
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 
+	prop = RNA_def_property(srna, "owner_id", PROP_POINTER, PROP_NONE);
+	RNA_def_property_pointer_sdna(prop, NULL, "root");
+	RNA_def_property_ui_text(prop, "ID",
+	                         "ID owner");
+
 	prop = RNA_def_property(srna, "id_type", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_items(prop, rna_enum_id_type_items);
 	RNA_def_property_ui_text(prop, "ID Type",
