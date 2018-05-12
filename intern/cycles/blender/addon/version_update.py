@@ -433,3 +433,18 @@ def do_versions(self):
        (bpy.data.version >= (2, 80, 0) and bpy.data.version <= (2, 80, 4)):
         # Switch to squared roughness convention
         square_roughness_nodes_insert()
+
+    if bpy.data.version <= (2, 80, 13):
+        for cam in bpy.data.cameras:
+            ccam = cam.cycles
+            bcam = cam.projection
+
+            bcam.fisheye_fov = ccam.fisheye_fov
+            bcam.fisheye_lens = ccam.fisheye_lens
+            bcam.panorama_type = ccam.panorama_type
+
+            bcam.latitude_min = ccam.latitude_min
+            bcam.latitude_max = ccam.latitude_max
+            bcam.longitude_min = ccam.longitude_min
+            bcam.longitude_max = ccam.longitude_max
+

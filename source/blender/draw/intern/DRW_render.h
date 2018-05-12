@@ -224,6 +224,19 @@ void DRW_transform_to_display(struct GPUTexture *tex);
 void DRW_multisamples_resolve(
         struct GPUTexture *src_depth, struct GPUTexture *src_color);
 
+typedef struct ProjectionData {
+	float fisheye_lens;
+	float fisheye_fov;
+	float sensor_width;
+	float sensor_height;
+	float equirectangular_range[4];
+	int panorama_type;
+} ProjectionData;
+
+bool DRW_projection_is_enabled(void);
+struct ProjectionData DRW_projection_data_get(void);
+void DRW_projection_result(struct GPUTexture *tex, struct ProjectionData *data);
+
 /* Shaders */
 struct GPUShader *DRW_shader_create(
         const char *vert, const char *geom, const char *frag, const char *defines);

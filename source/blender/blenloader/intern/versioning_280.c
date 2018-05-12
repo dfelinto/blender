@@ -1078,7 +1078,7 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *main)
 		}
 	}
 
-	{
+	if (!MAIN_VERSION_ATLEAST(main, 280, 14)) {
 		if (!DNA_struct_elem_find(fd->filesdna, "Scene", "SceneDisplay", "display")) {
 			/* Initialize new scene.SceneDisplay */
 			for (Scene *scene = main->scene.first; scene; scene = scene->id.next) {
@@ -1096,6 +1096,19 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *main)
 		if (!DNA_struct_elem_find(fd->filesdna, "ToolSettings", "char", "transform_pivot_point")) {
 			for (Scene *scene = main->scene.first; scene; scene = scene->id.next) {
 				scene->toolsettings->transform_pivot_point = V3D_AROUND_CENTER_MEAN;
+			}
+		}
+
+		if (!DNA_struct_find(fd->filesdna, "CameraProjection")) {
+			for (Camera *cam = main->camera.first; cam; cam = cam->id.next) {
+				/* Panorama and fisheye. */
+				cam->projection.panorama_type = CAM_PROJ_MODE_EQUIRECTANGULAR;
+				cam->projection.fisheye_fov = M_PI;
+				cam->projection.fisheye_lens = 10.5f;
+				cam->projection.equirectangular_range[0] = -M_PI;
+				cam->projection.equirectangular_range[1] = M_PI;
+				cam->projection.equirectangular_range[2] = -M_PI_2;
+				cam->projection.equirectangular_range[3] = M_PI_2;
 			}
 		}
 	}

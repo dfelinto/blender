@@ -350,6 +350,11 @@ static void eevee_draw_background(void *vedata)
 	EEVEE_volumes_free_smoke_textures();
 
 	stl->g_data->view_updated = false;
+
+	if (DRW_projection_is_enabled()) {
+		ProjectionData data = DRW_projection_data_get();
+		DRW_projection_result(sldata->probe_rt, &data);
+	}
 }
 
 static void eevee_view_update(void *vedata)

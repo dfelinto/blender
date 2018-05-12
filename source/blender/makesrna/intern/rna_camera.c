@@ -136,6 +136,11 @@ static void rna_Camera_dof_update(Main *UNUSED(bmain), Scene *scene, PointerRNA 
 	WM_main_add_notifier(NC_SCENE | ND_SEQUENCER, scene);
 }
 
+static char *rna_CameraProjection_path(PointerRNA *UNUSED(ptr))
+{
+	return BLI_sprintfN("projection");
+}
+
 #else
 
 static void rna_def_camera_background_image(BlenderRNA *brna)
@@ -368,6 +373,78 @@ static void rna_def_camera_stereo_data(BlenderRNA *brna)
 	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, NULL);
 }
 
+static void rna_def_camera_projection(BlenderRNA *brna)
+{
+	StructRNA *srna;
+	PropertyRNA *prop;
+
+	static const EnumPropertyItem projection_panorama_type_items[] = {
+		{CAM_PROJ_MODE_EQUIRECTANGULAR, "EQUIRECTANGULAR", 0, "Equirectangular", "Render the scene with a spherical camera, also known as Lat Long panorama"},
+		{CAM_PROJ_MODE_FISHEYE_EQUIDIST, "FISHEYE_EQUIDISTANT", 0, "Fisheye Equidistant", "Ideal for fulldomes, ignore the sensor dimensions"},
+		{CAM_PROJ_MODE_FISHEYE_EQUISOLID, "FISHEYE_EQUISOLID", 0, "Fisheye Equisolid", "Similar to most fisheye modern lens, takes sensor dimensions into consideration"},
+		{0, NULL, 0, NULL, NULL}
+	};
+
+	srna = RNA_def_struct(brna, "CameraProjection", NULL);
+	RNA_def_struct_nested(brna, srna, "Camera");
+	RNA_def_struct_path_func(srna, "rna_CameraProjection_path");
+	RNA_def_struct_ui_text(srna, "Projection", "Settings for panorama and fisheye effects");
+
+	prop = RNA_def_property(srna, "panorama_type", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_items(prop, projection_panorama_type_items);
+	RNA_def_property_ui_text(prop, "Mode", "");
+	RNA_def_property_enum_default(prop, CAM_PROJ_MODE_EQUIRECTANGULAR);
+	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_Camera_update");
+
+	prop = RNA_def_property(srna, "fisheye_fov", PROP_FLOAT, PROP_ANGLE);
+	RNA_def_property_range(prop, 0.1745f, 10.0f * M_PI);
+	RNA_def_property_ui_range(prop, 0.1745f, 2.0f * M_PI, 1, 3);
+	RNA_def_property_ui_text(prop, "Field of View",
+	                         "Field of view for the fisheye lens");
+	RNA_def_property_float_default(prop, M_PI);
+	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_Camera_update");
+
+	prop = RNA_def_property(srna, "fisheye_lens", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_range(prop, 0.01f, 100.0f);
+	RNA_def_property_ui_range(prop, 0.01f, 15.0f, 1, 3);
+	RNA_def_property_ui_text(prop, "Fisheye Lens",
+	                         "Lens focal length (mm)");
+	RNA_def_property_float_default(prop, 10.5f);
+	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_Camera_update");
+
+	prop = RNA_def_property(srna, "longitude_min", PROP_FLOAT, PROP_ANGLE);
+	RNA_def_property_float_sdna(prop, NULL, "equirectangular_range[0]");
+	RNA_def_property_range(prop, -M_PI, M_PI);
+	RNA_def_property_ui_text(prop, "Min Longitude",
+	                         "Minimum longitude (horizontal angle) for the equirectangular lens");
+	RNA_def_property_float_default(prop, -M_PI);
+	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_Camera_update");
+
+	prop = RNA_def_property(srna, "longitude_max", PROP_FLOAT, PROP_ANGLE);
+	RNA_def_property_float_sdna(prop, NULL, "equirectangular_range[1]");
+	RNA_def_property_range(prop, -M_PI, M_PI);
+	RNA_def_property_ui_text(prop, "Max Longitude",
+	                         "Maximum longitude (horizontal angle) for the equirectangular lens");
+	RNA_def_property_float_default(prop, M_PI);
+	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_Camera_update");
+
+	prop = RNA_def_property(srna, "latitude_min", PROP_FLOAT, PROP_ANGLE);
+	RNA_def_property_float_sdna(prop, NULL, "equirectangular_range[2]");
+	RNA_def_property_range(prop, -M_PI_2, M_PI_2);
+	RNA_def_property_ui_text(prop, "Min Latitude",
+	                         "Minimum latitude (vertical angle) for the equirectangular lens");
+	RNA_def_property_float_default(prop, -M_PI_2);
+	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_Camera_update");
+
+	prop = RNA_def_property(srna, "latitude_max", PROP_FLOAT, PROP_ANGLE);
+	RNA_def_property_float_sdna(prop, NULL, "equirectangular_range[3]");
+	RNA_def_property_range(prop, -M_PI_2, M_PI_2);
+	RNA_def_property_ui_text(prop, "Max Latitude",
+	                         "Maximum latitude (vertical angle) for the equirectangular lens");
+	RNA_def_property_float_default(prop, M_PI_2);
+	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_Camera_update");
+}
+
 void RNA_def_camera(BlenderRNA *brna)
 {
 	StructRNA *srna;
@@ -529,6 +606,11 @@ void RNA_def_camera(BlenderRNA *brna)
 	RNA_def_property_struct_type(prop, "CameraStereoData");
 	RNA_def_property_ui_text(prop, "Stereo", "");
 
+	/* Projection - panorama and fisheye. */
+	prop = RNA_def_property(srna, "projection", PROP_POINTER, PROP_NONE);
+	RNA_def_property_flag(prop, PROP_NEVER_NULL);
+	RNA_def_property_struct_type(prop, "CameraProjection");
+
 	/* flag */
 	prop = RNA_def_property(srna, "show_limits", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "flag", CAM_SHOWLIMITS);
@@ -607,6 +689,7 @@ void RNA_def_camera(BlenderRNA *brna)
 
 	/* *** Animated *** */
 	rna_def_camera_stereo_data(brna);
+	rna_def_camera_projection(brna);
 
 	/* Camera API */
 	RNA_api_camera(srna);

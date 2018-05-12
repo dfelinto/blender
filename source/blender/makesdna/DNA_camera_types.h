@@ -61,6 +61,16 @@ typedef struct CameraStereoSettings {
 	float pole_merge_angle_to;
 } CameraStereoSettings;
 
+/* Panorama and fisheye */
+typedef struct CameraProjection
+{
+	float fisheye_lens;
+	float fisheye_fov;
+	float equirectangular_range[4];
+	int panorama_type;
+	int pad;
+} CameraProjection;
+
 /* Background Picture */
 typedef struct CameraBGImage {
 	struct CameraBGImage *next, *prev;
@@ -113,6 +123,8 @@ typedef struct Camera {
 
 	/* Stereo settings */
 	struct CameraStereoSettings stereo;
+
+	struct CameraProjection projection;
 } Camera;
 
 /* **************** CAMERA ********************* */
@@ -185,6 +197,13 @@ enum {
 	CAM_S3D_SPHERICAL       = (1 << 0),
 	CAM_S3D_POLE_MERGE      = (1 << 1),
 };
+
+/* CameraProjection->panorama_type */
+typedef enum eCameraProjectionPanoramType {
+	CAM_PROJ_MODE_EQUIRECTANGULAR   = 0,
+	CAM_PROJ_MODE_FISHEYE_EQUIDIST  = 1,
+	CAM_PROJ_MODE_FISHEYE_EQUISOLID = 2,
+} eCameraProjectionPanoramType;
 
 /* CameraBGImage->flag */
 /* may want to use 1 for select ? */

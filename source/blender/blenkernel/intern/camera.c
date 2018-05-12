@@ -81,6 +81,15 @@ void BKE_camera_init(Camera *cam)
 	cam->stereo.convergence_distance = 30.f * 0.065f;
 	cam->stereo.pole_merge_angle_from = DEG2RADF(60.0f);
 	cam->stereo.pole_merge_angle_to = DEG2RADF(75.0f);
+
+	/* Panorama and fisheye. */
+	cam->projection.panorama_type = CAM_PROJ_MODE_EQUIRECTANGULAR;
+	cam->projection.fisheye_fov = M_PI;
+	cam->projection.fisheye_lens = 10.5f;
+	cam->projection.equirectangular_range[0] = -M_PI;
+	cam->projection.equirectangular_range[1] = M_PI;
+	cam->projection.equirectangular_range[2] = -M_PI_2;
+	cam->projection.equirectangular_range[3] = M_PI_2;
 }
 
 void *BKE_camera_add(Main *bmain, const char *name)

@@ -96,31 +96,22 @@ class DATA_PT_lens(CameraButtonsPanel, Panel):
             col.prop(cam, "ortho_scale")
 
         elif cam.type == 'PANO':
-            engine = context.engine
-            if engine == 'CYCLES':
-                ccam = cam.cycles
-                col.prop(ccam, "panorama_type", text="Type")
-                if ccam.panorama_type == 'FISHEYE_EQUIDISTANT':
-                    col.prop(ccam, "fisheye_fov")
-                elif ccam.panorama_type == 'FISHEYE_EQUISOLID':
-                    row = layout.row()
-                    row.prop(ccam, "fisheye_lens", text="Lens")
-                    row.prop(ccam, "fisheye_fov")
-                elif ccam.panorama_type == 'EQUIRECTANGULAR':
-                    row = layout.row()
-                    sub = row.column(align=True)
-                    sub.prop(ccam, "latitude_min")
-                    sub.prop(ccam, "latitude_max")
-                    sub = row.column(align=True)
-                    sub.prop(ccam, "longitude_min")
-                    sub.prop(ccam, "longitude_max")
-            elif engine in {'BLENDER_RENDER', 'BLENDER_CLAY', 'BLENDER_EEVEE'}:
-                row = col.row()
-                if cam.lens_unit == 'MILLIMETERS':
-                    row.prop(cam, "lens")
-                elif cam.lens_unit == 'FOV':
-                    row.prop(cam, "angle")
-                row.prop(cam, "lens_unit", text="")
+            ccam = cam.projection
+            col.prop(ccam, "panorama_type", text="Type")
+            if ccam.panorama_type == 'FISHEYE_EQUIDISTANT':
+                col.prop(ccam, "fisheye_fov")
+            elif ccam.panorama_type == 'FISHEYE_EQUISOLID':
+                row = layout.row()
+                row.prop(ccam, "fisheye_lens", text="Lens")
+                row.prop(ccam, "fisheye_fov")
+            elif ccam.panorama_type == 'EQUIRECTANGULAR':
+                row = layout.row()
+                sub = row.column(align=True)
+                sub.prop(ccam, "latitude_min")
+                sub.prop(ccam, "latitude_max")
+                sub = row.column(align=True)
+                sub.prop(ccam, "longitude_min")
+                sub.prop(ccam, "longitude_max")
 
         split = layout.split()
 

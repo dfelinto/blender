@@ -355,6 +355,142 @@ void DRW_multisamples_resolve(GPUTexture *src_depth, GPUTexture *src_color)
 /** \name Viewport (DRW_viewport)
  * \{ */
 
+static struct Camera *panorama_camera_get(void)
+{
+	const DRWContextState *draw_ctx = DRW_context_state_get();
+	Object *camera;
+
+	if (DRW_state_is_scene_render()) {
+		camera = DEG_get_evaluated_object(draw_ctx->depsgraph, draw_ctx->scene->camera);
+	}
+	else {
+		View3D *v3d = draw_ctx->v3d;
+		RegionView3D *rv3d = draw_ctx->rv3d;
+		camera = (rv3d->persp == RV3D_CAMOB) ? v3d->camera : NULL;
+	}
+	return camera ? camera->data : NULL;
+}
+
+/**
+ * Whether projection (fisheye, equirectangular, ...) is enabled.
+ */
+bool DRW_projection_is_enabled()
+{
+	Camera *camera = panorama_camera_get();
+	if (camera == NULL) {
+		return false;
+	}
+	return camera->type == CAM_PANO;
+}
+
+/**
+ * Get the camera panorama data from context.
+ */
+ProjectionData DRW_projection_data_get()
+{
+	Camera *camera = panorama_camera_get();
+	BLI_assert(camera != NULL);
+
+	ProjectionData data = {
+	    .fisheye_lens = camera->projection.fisheye_lens,
+	    .fisheye_fov = camera->projection.fisheye_fov,
+		.sensor_width = camera->sensor_x,
+	    .sensor_height = camera->sensor_x,
+	    .panorama_type = camera->projection.panorama_type
+	};
+
+	/* Longitude min, longitude max, latitude min, latitude max. */
+	copy_v4_v4(data.equirectangular_range, camera->projection.equirectangular_range);
+	return data;
+}
+
+/**
+ * Draw projection distortion (panorama, fisheye, ...)
+ * \param tex: Cubemap texture
+ * \param data: Settings to pass as uniform for the shader
+ */
+void DRW_projection_result(struct GPUTexture *tex, ProjectionData *data)
+{
+	drw_state_set(DRW_STATE_WRITE_COLOR);
+
+	if (DRW_state_is_image_render() == false) {
+		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+		glClear(GL_COLOR_BUFFER_BIT);
+
+		gpuPushAttrib(GPU_VIEWPORT_BIT);
+		const DRWContextState *draw_ctx = DRW_context_state_get();
+		float x1, y1, x2, y2;
+
+		rctf vb;
+		ED_view3d_calc_camera_border(
+		            draw_ctx->scene,
+		            draw_ctx->depsgraph,
+		            draw_ctx->ar,
+		            draw_ctx->v3d,
+		            draw_ctx->rv3d,
+		            &vb,
+		            false);
+
+		x1 = vb.xmin;
+		y1 = vb.ymin;
+		x2 = vb.xmax - vb.xmin;
+		y2 = vb.ymax - vb.ymin;
+
+		glViewport(x1, y1, x2, y2);
+	}
+
+	Gwn_VertFormat *vert_format = immVertexFormat();
+	uint pos = GWN_vertformat_attr_add(vert_format, "pos", GWN_COMP_F32, 2, GWN_FETCH_FLOAT);
+	uint texco = GWN_vertformat_attr_add(vert_format, "texCoord", GWN_COMP_F32, 2, GWN_FETCH_FLOAT);
+
+	immBindBuiltinProgram(GPU_SHADER_2D_IMAGE_PROJECTION);
+	immUniform1i("images", 0);
+
+	immUniform1i("panorama_type", data->panorama_type);
+	immUniform1f("fisheye_lens", data->fisheye_lens);
+	immUniform1f("fisheye_fov", data->fisheye_fov);
+	immUniform1f("sensor_width", data->sensor_width);
+	immUniform1f("sensor_height", data->sensor_height);
+	immUniform4f("equirectangular_range",
+	             data->equirectangular_range[0] - data->equirectangular_range[1],
+	             -data->equirectangular_range[0],
+	             data->equirectangular_range[2] - data->equirectangular_range[3],
+	             -data->equirectangular_range[2] + M_PI_2);
+
+	GPU_texture_bind(tex, 0);
+
+	float mat[4][4];
+	unit_m4(mat);
+	immUniformMatrix4fv("ModelViewProjectionMatrix", mat);
+
+	/* Full screen triangle */
+	immBegin(GWN_PRIM_TRIS, 3);
+	immAttrib2f(texco, 0.0f, 0.0f);
+	immVertex2f(pos, -1.0f, -1.0f);
+
+	immAttrib2f(texco, 2.0f, 0.0f);
+	immVertex2f(pos, 3.0f, -1.0f);
+
+	immAttrib2f(texco, 0.0f, 2.0f);
+	immVertex2f(pos, -1.0f, 3.0f);
+	immEnd();
+
+	GPU_texture_unbind(tex);
+
+	immUnbindProgram();
+
+	if (DRW_state_is_image_render() == false) {
+		gpuPopAttrib();
+	}
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+
+/** \name Viewport (DRW_viewport)
+ * \{ */
+
 void *drw_viewport_engine_data_ensure(void *engine_type)
 {
 	void *data = GPU_viewport_engine_data_get(DST.viewport, engine_type);

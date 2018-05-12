@@ -91,6 +91,7 @@ extern char datatoc_gpu_shader_image_modulate_alpha_frag_glsl[];
 extern char datatoc_gpu_shader_image_depth_linear_frag_glsl[];
 extern char datatoc_gpu_shader_image_depth_copy_frag_glsl[];
 extern char datatoc_gpu_shader_image_multisample_resolve_frag_glsl[];
+extern char datatoc_gpu_shader_image_projection_frag_glsl[];
 extern char datatoc_gpu_shader_3D_vert_glsl[];
 extern char datatoc_gpu_shader_3D_normal_vert_glsl[];
 extern char datatoc_gpu_shader_3D_flat_color_vert_glsl[];
@@ -723,6 +724,8 @@ GPUShader *GPU_shader_get_builtin_shader(GPUBuiltinShader shader)
 		                                     datatoc_gpu_shader_image_color_frag_glsl },
 		[GPU_SHADER_2D_IMAGE_MULTI_RECT_COLOR] = { datatoc_gpu_shader_2D_image_multi_rect_vert_glsl,
 		                                           datatoc_gpu_shader_image_varying_color_frag_glsl },
+		[GPU_SHADER_2D_IMAGE_PROJECTION] = { datatoc_gpu_shader_2D_image_vert_glsl,
+		                                     datatoc_gpu_shader_image_projection_frag_glsl },
 
 		[GPU_SHADER_3D_UNIFORM_COLOR] = { datatoc_gpu_shader_3D_vert_glsl, datatoc_gpu_shader_uniform_color_frag_glsl },
 		[GPU_SHADER_3D_UNIFORM_COLOR_U32] = { datatoc_gpu_shader_3D_vert_glsl, datatoc_gpu_shader_uniform_color_frag_glsl },
