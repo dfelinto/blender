@@ -4606,7 +4606,7 @@ static bool rna_path_parse_array_index(const char **path, PointerRNA *ptr, Prope
 static bool rna_path_parse(PointerRNA *ptr, const char *path,
                            PointerRNA *r_ptr, PropertyRNA **r_prop, int *r_index,
                            ListBase *r_elements,
-                           const bool eval_pointer)
+                           const bool eval_pointer, const bool allow_type_only)
 {
 	PropertyRNA *prop;
 	PointerRNA curptr;
@@ -4615,6 +4615,16 @@ static bool rna_path_parse(PointerRNA *ptr, const char *path,
 	char fixedbuf[256];
 	int type;
 
+	if (r_ptr) {
+		*r_ptr = PointerRNA_NULL;
+	}
+	if (r_prop) {
+		*r_prop = NULL;
+	}
+	if (r_index) {
+		*r_index = -1;
+	}
+
 	prop = NULL;
 	curptr = *ptr;
 
@@ -4622,14 +4632,22 @@ static bool rna_path_parse(PointerRNA *ptr, const char *path,
 		return false;
 
 	while (*path) {
-		int use_id_prop = (*path == '[') ? 1 : 0;
+		const bool use_id_prop = (*path == '[') ? 1 : 0;
+		/* type-only path resolution is very limited with real RNA properties, and... totally impossible with IDProps. */
+		const bool do_type_only = allow_type_only && !use_id_prop && curptr.data == NULL;
 		char *token;
 		/* custom property lookup ?
 		 * C.object["someprop"]
 		 */
 
-		if (!curptr.data)
+		if (!curptr.data && !do_type_only) {
 			return false;
+		}
+
+		if (prop != NULL) {
+			/* We could not properly prepare dataptr for this iteration, so path is invalid. */
+			return false;
+		}
 
 		/* look up property name in current struct */
 		token = rna_path_token(&path, fixedbuf, sizeof(fixedbuf), use_id_prop);
@@ -4637,7 +4655,6 @@ static bool rna_path_parse(PointerRNA *ptr, const char *path,
 		if (!token)
 			return false;
 
-		prop = NULL;
 		if (use_id_prop) { /* look up property name in current struct */
 			IDProperty *group = RNA_struct_idprops(&curptr, 0);
 			if (group && rna_token_strip_quotes(token))
@@ -4672,7 +4689,20 @@ static bool rna_path_parse(PointerRNA *ptr, const char *path,
 				 * or explicitly requested
 				 */
 				if (eval_pointer || *path) {
-					PointerRNA nextptr = RNA_property_pointer_get(&curptr, prop);
+					PointerRNA nextptr;
+					if (do_type_only) {
+						StructRNA *nexttype = RNA_property_pointer_type(&curptr, prop);
+						if (nexttype != &RNA_UnknownType) {
+							RNA_pointer_create(NULL, nexttype, NULL, &nextptr);
+						}
+						else {
+							/* We cannot go further... */
+							break;
+						}
+					}
+					else {
+						nextptr = RNA_property_pointer_get(&curptr, prop);
+					}
 					
 					curptr = nextptr;
 					prop = NULL; /* now we have a PointerRNA, the prop is our parent so forget it */
@@ -4686,7 +4716,8 @@ static bool rna_path_parse(PointerRNA *ptr, const char *path,
 				 * so eval_pointer is of no use here (esp. as in this case, we want to keep found prop,
 				 * erasing it breaks operators - e.g. bpy.types.Operator.bl_rna.foobar errors...).
 				 */
-				if (*path) {
+				/* We do not support type-only at all with collections... */
+				if (!do_type_only && *path) {
 					PointerRNA nextptr;
 					if (!rna_path_parse_collection_key(&path, &curptr, prop, &nextptr))
 						return false;
@@ -4737,7 +4768,7 @@ static bool rna_path_parse(PointerRNA *ptr, const char *path,
  */
 bool RNA_path_resolve(PointerRNA *ptr, const char *path, PointerRNA *r_ptr, PropertyRNA **r_prop)
 {
-	if (!rna_path_parse(ptr, path, r_ptr, r_prop, NULL, NULL, true))
+	if (!rna_path_parse(ptr, path, r_ptr, r_prop, NULL, NULL, true, false))
 		return false;
 
 	return r_ptr->data != NULL;
@@ -4751,10 +4782,24 @@ bool RNA_path_resolve(PointerRNA *ptr, const char *path, PointerRNA *r_ptr, Prop
  */
 bool RNA_path_resolve_full(PointerRNA *ptr, const char *path, PointerRNA *r_ptr, PropertyRNA **r_prop, int *r_index)
 {
-	if (!rna_path_parse(ptr, path, r_ptr, r_prop, r_index, NULL, true))
+	if (!rna_path_parse(ptr, path, r_ptr, r_prop, r_index, NULL, true, false))
 		return false;
 
 	return r_ptr->data != NULL;
+}
+
+/**
+ * Resolve the given RNA Path to find the pointer and/or property + array index indicated by fully resolving the path,
+ * like \a RNA_path_resolve_full, but also attempt to return a valid PropertyRNA + array index in case no data is given
+ * (i.e. \a ptr.data is NULL).
+ *
+ * \note Assumes all pointers provided are valid.
+ * \return True if path can be resolved to a valid "property" OR "property + array index"
+ */
+bool RNA_path_resolve_full_nod_data(
+        PointerRNA *ptr, const char *path, PointerRNA *r_ptr, PropertyRNA **r_prop, int *r_index)
+{
+	return rna_path_parse(ptr, path, r_ptr, r_prop, r_index, NULL, true, true);
 }
 
 /**
@@ -4766,7 +4811,7 @@ bool RNA_path_resolve_full(PointerRNA *ptr, const char *path, PointerRNA *r_ptr,
  */
 bool RNA_path_resolve_property(PointerRNA *ptr, const char *path, PointerRNA *r_ptr, PropertyRNA **r_prop)
 {
-	if (!rna_path_parse(ptr, path, r_ptr, r_prop, NULL, NULL, false))
+	if (!rna_path_parse(ptr, path, r_ptr, r_prop, NULL, NULL, false, false))
 		return false;
 
 	return r_ptr->data != NULL && *r_prop != NULL;
@@ -4782,7 +4827,7 @@ bool RNA_path_resolve_property(PointerRNA *ptr, const char *path, PointerRNA *r_
  */
 bool RNA_path_resolve_property_full(PointerRNA *ptr, const char *path, PointerRNA *r_ptr, PropertyRNA **r_prop, int *r_index)
 {
-	if (!rna_path_parse(ptr, path, r_ptr, r_prop, r_index, NULL, false))
+	if (!rna_path_parse(ptr, path, r_ptr, r_prop, r_index, NULL, false, false))
 		return false;
 
 	return r_ptr->data != NULL && *r_prop != NULL;
@@ -4799,7 +4844,7 @@ bool RNA_path_resolve_property_full(PointerRNA *ptr, const char *path, PointerRN
  */
 bool RNA_path_resolve_elements(PointerRNA *ptr, const char *path, ListBase *r_elements)
 {
-	return rna_path_parse(ptr, path, NULL, NULL, NULL, r_elements, false);
+	return rna_path_parse(ptr, path, NULL, NULL, NULL, r_elements, false, false);
 }
 
 char *RNA_path_append(const char *path, PointerRNA *UNUSED(ptr), PropertyRNA *prop, int intkey, const char *strkey)
