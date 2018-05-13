@@ -139,41 +139,77 @@ static void particle_cache_init(void *vedata)
 	DRW_shgroup_uniform_float(stl->g_data->tip_points_group, "outlineWidth", &outline_width, 1);
 }
 
-static void particle_edit_cache_populate(void *vedata, PTCacheEdit *edit)
+static void draw_update_ptcache_edit(Object *object_eval,
+                                     ParticleSystem *psys,
+                                     PTCacheEdit *edit)
+{
+	if (edit->psys == NULL) {
+		return;
+	}
+	/* NOTE: Get flag from particle system coming from drawing object.
+	 * this is where depsgraph will be setting flags to.
+	 */
+	if (psys->flag & PSYS_HAIR_UPDATED) {
+		const DRWContextState *draw_ctx = DRW_context_state_get();
+		Scene *scene_orig = (Scene *)DEG_get_original_id(&draw_ctx->scene->id);
+		Object *object_orig = DEG_get_original_object(object_eval);
+		PE_update_object(draw_ctx->depsgraph, scene_orig, object_orig, 0);
+	}
+	BLI_assert(edit->pathcache != NULL);
+}
+
+static void particle_edit_cache_populate(void *vedata,
+                                         Object *object,
+                                         ParticleSystem *psys,
+                                         PTCacheEdit *edit)
 {
 	PARTICLE_StorageList *stl = ((PARTICLE_Data *)vedata)->stl;
 	const DRWContextState *draw_ctx = DRW_context_state_get();
+	draw_update_ptcache_edit(object, psys, edit);
 	ParticleEditSettings *pset = PE_settings(draw_ctx->scene);
 	{
-		struct Gwn_Batch *strands = DRW_cache_particles_get_edit_strands(edit);
+		struct Gwn_Batch *strands =
+		        DRW_cache_particles_get_edit_strands(object, psys, edit);
 		DRW_shgroup_call_add(stl->g_data->strands_group, strands, NULL);
 	}
 	if (pset->selectmode == SCE_SELECT_POINT) {
-		struct Gwn_Batch *points = DRW_cache_particles_get_edit_inner_points(edit);
+		struct Gwn_Batch *points =
+		        DRW_cache_particles_get_edit_inner_points(object, psys, edit);
 		DRW_shgroup_call_add(stl->g_data->inner_points_group, points, NULL);
 	}
 	if (ELEM(pset->selectmode, SCE_SELECT_POINT, SCE_SELECT_END)) {
-		struct Gwn_Batch *points = DRW_cache_particles_get_edit_tip_points(edit);
+		struct Gwn_Batch *points =
+		        DRW_cache_particles_get_edit_tip_points(object, psys, edit);
 		DRW_shgroup_call_add(stl->g_data->tip_points_group, points, NULL);
 	}
 }
 
 static void particle_cache_populate(void *vedata, Object *object)
 {
-	for (ParticleSystem *psys = object->particlesystem.first;
-	     psys != NULL;
-	     psys = psys->next)
-	{
-		if (!psys_check_enabled(object, psys, false)) {
-			continue;
-		}
-		PTCacheEdit *edit = PE_get_current_from_psys(psys);
-		if (edit == NULL) {
-			continue;
-		}
-		particle_edit_cache_populate(vedata, edit);
-		break;
+	if (object->mode != OB_MODE_PARTICLE_EDIT) {
+		return;
 	}
+	const DRWContextState *draw_ctx = DRW_context_state_get();
+	Object *object_orig = DEG_get_original_object(object);
+	PTCacheEdit *edit = PE_get_current(draw_ctx->scene, object_orig);
+	if (edit == NULL) {
+		printf("Particle edit struct is NULL, not supposed to happen.\n");
+		return;
+	}
+	ParticleSystem *psys = object->particlesystem.first;
+	ParticleSystem *psys_orig = object_orig->particlesystem.first;
+	while (psys_orig != NULL) {
+		if (PE_get_current_from_psys(psys_orig) == edit) {
+			break;
+		}
+		psys = psys->next;
+		psys_orig = psys_orig->next;
+	}
+	if (psys == NULL) {
+		printf("Error getting evaluated particle system for edit.\n");
+		return;
+	}
+	particle_edit_cache_populate(vedata, object, psys, edit);
 }
 
 /* Optional: Post-cache_populate callback */

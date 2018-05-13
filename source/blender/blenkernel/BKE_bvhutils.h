@@ -143,8 +143,6 @@ BVHTree *bvhtree_from_editmesh_looptri_ex(
         const BLI_bitmap *mask, int looptri_num_active,
         float epsilon, int tree_type, int axis, BVHCache **bvhCache);
 
-BVHTree *BKE_bvhtree_from_mesh_looptri(
-        struct BVHTreeFromMesh *data, struct Mesh *mesh, float epsilon, int tree_type, int axis);
 BVHTree *bvhtree_from_mesh_looptri_ex(
         struct BVHTreeFromMesh *data,
         const struct MVert *vert, const bool vert_allocated,
@@ -196,7 +194,7 @@ enum {
 };
 
 
-BVHTree *bvhcache_find(BVHCache *cache, int type);
+bool     bvhcache_find(const BVHCache *cache, int type, BVHTree **r_tree);
 bool     bvhcache_has_tree(const BVHCache *cache, const BVHTree *tree);
 void     bvhcache_insert(BVHCache **cache_p, BVHTree *tree, int type);
 void     bvhcache_free(BVHCache **cache_p);

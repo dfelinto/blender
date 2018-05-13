@@ -100,6 +100,8 @@ enum {
 	UI_EMBOSS_NONE          = 1,  /* Nothing, only icon and/or text */
 	UI_EMBOSS_PULLDOWN      = 2,  /* Pulldown menu style */
 	UI_EMBOSS_RADIAL        = 3,  /* Pie Menu */
+
+	UI_EMBOSS_UNDEFINED     = 255, /* For layout engine, use emboss from block. */
 };
 
 /* uiBlock->direction */
@@ -142,6 +144,8 @@ enum {
 #define UI_BLOCK_LIST_ITEM   (1 << 19)
 #define UI_BLOCK_RADIAL      (1 << 20)
 #define UI_BLOCK_POPOVER     (1 << 21)
+/** Always show keymaps, even for non-menus. */
+#define UI_BLOCK_SHOW_SHORTCUT_ALWAYS (1 << 22)
 
 /* uiPopupBlockHandle->menuretval */
 #define UI_RETURN_CANCEL     (1 << 0)   /* cancel all menus cascading */
@@ -944,6 +948,7 @@ void uiLayoutSetAlignment(uiLayout *layout, char alignment);
 void uiLayoutSetKeepAspect(uiLayout *layout, bool keepaspect);
 void uiLayoutSetScaleX(uiLayout *layout, float scale);
 void uiLayoutSetScaleY(uiLayout *layout, float scale);
+void uiLayoutSetEmboss(uiLayout *layout, char emboss);
 
 int uiLayoutGetOperatorContext(uiLayout *layout);
 bool uiLayoutGetActive(uiLayout *layout);
@@ -954,6 +959,7 @@ bool uiLayoutGetKeepAspect(uiLayout *layout);
 int uiLayoutGetWidth(uiLayout *layout);
 float uiLayoutGetScaleX(uiLayout *layout);
 float uiLayoutGetScaleY(uiLayout *layout);
+int uiLayoutGetEmboss(uiLayout *layout);
 
 /* layout specifiers */
 uiLayout *uiLayoutRow(uiLayout *layout, int align);

@@ -138,7 +138,8 @@ typedef struct View3DShading {
 	short color_type;
 
 	short light;
-	short studio_light;
+	char pad[2];
+	char studio_light[256]; /* FILE_MAXFILE */
 
 	float shadow_intensity;
 	float single_color[3];
@@ -192,7 +193,7 @@ typedef struct View3D {
 	int layact;
 	
 	short ob_centre_cursor;		/* optional bool for 3d cursor to define center */
-	short scenelock, around;
+	short scenelock, _pad0;
 	short flag, flag2, pad2;
 	
 	float lens, grid;
@@ -254,12 +255,12 @@ typedef struct View3D {
 #define V3D_S3D_DISPVOLUME		(1 << 2)
 
 /* View3D->flag (short) */
-/*#define V3D_DISPIMAGE		1*/ /*UNUSED*/
-/*#define V3D_DISPBGPICS		2*/ /* UNUSED */
+/*#define V3D_FLAG_DEPRECATED_1 (1 << 0) */ /*UNUSED */
+/*#define V3D_FLAG_DEPRECATED_2 (1 << 1) */ /* UNUSED */
 #define V3D_HIDE_HELPLINES	4
 #define V3D_INVALID_BACKBUF	8
 
-#define V3D_ALIGN			1024
+/* #define V3D_FLAG_DEPRECATED_10 (1 << 10) */ /* UNUSED */
 #define V3D_SELECT_OUTLINE	2048
 #define V3D_ZBUF_SELECT		4096
 #define V3D_GLOBAL_STATS	8192

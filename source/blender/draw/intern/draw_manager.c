@@ -45,6 +45,7 @@
 
 #include "ED_space_api.h"
 #include "ED_screen.h"
+#include "ED_particle.h"
 #include "ED_view3d.h"
 
 #include "GPU_draw.h"
@@ -216,6 +217,15 @@ int DRW_object_is_paint_mode(const Object *ob)
 		}
 	}
 	return false;
+}
+
+bool DRW_check_particles_visible_within_active_context(Object *object)
+{
+	const DRWContextState *draw_ctx = DRW_context_state_get();
+	if (object == draw_ctx->object_edit) {
+		return false;
+	}
+	return (object->mode != OB_MODE_PARTICLE_EDIT);
 }
 
 /** \} */
@@ -670,11 +680,11 @@ void *DRW_view_layer_engine_data_get(DrawEngineType *engine_type)
 	return NULL;
 }
 
-void **DRW_view_layer_engine_data_ensure(DrawEngineType *engine_type, void (*callback)(void *storage))
+void **DRW_view_layer_engine_data_ensure_ex(ViewLayer *view_layer, DrawEngineType *engine_type, void (*callback)(void *storage))
 {
 	ViewLayerEngineData *sled;
 
-	for (sled = DST.draw_ctx.view_layer->drawdata.first; sled; sled = sled->next) {
+	for (sled = view_layer->drawdata.first; sled; sled = sled->next) {
 		if (sled->engine_type == engine_type) {
 			return &sled->storage;
 		}
@@ -683,9 +693,14 @@ void **DRW_view_layer_engine_data_ensure(DrawEngineType *engine_type, void (*cal
 	sled = MEM_callocN(sizeof(ViewLayerEngineData), "ViewLayerEngineData");
 	sled->engine_type = engine_type;
 	sled->free = callback;
-	BLI_addtail(&DST.draw_ctx.view_layer->drawdata, sled);
+	BLI_addtail(&view_layer->drawdata, sled);
 
 	return &sled->storage;
+}
+
+void **DRW_view_layer_engine_data_ensure(DrawEngineType *engine_type, void (*callback)(void *storage))
+{
+	return DRW_view_layer_engine_data_ensure_ex(DST.draw_ctx.view_layer, engine_type, callback);
 }
 
 /** \} */

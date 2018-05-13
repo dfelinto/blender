@@ -56,6 +56,7 @@
 
 #include "BKE_icons.h"
 #include "BKE_global.h" /* only for G.background test */
+#include "BKE_studiolight.h"
 
 #include "BLI_sys_types.h" // for intptr_t support
 
@@ -564,8 +565,12 @@ static int icon_id_ensure_create_icon(struct ID *id)
 
 int BKE_icon_id_ensure(struct ID *id)
 {
-	if (!id || G.background)
+	/* Never handle icons in non-main thread! */
+	BLI_assert(BLI_thread_is_main());
+
+	if (!id || G.background) {
 		return 0;
+	}
 
 	if (id->icon_id)
 		return id->icon_id;
@@ -798,3 +803,13 @@ struct Icon_Geom *BKE_icon_geom_from_file(const char *filename)
 }
 
 /** \} */
+
+/** \name Studio Light Icon
+ * \{ */
+int BKE_icon_ensure_studio_light(struct StudioLight *sl) {
+	int icon_id = get_next_free_id();
+	icon_create(icon_id, ICON_DATA_STUDIOLIGHT, sl);
+	return icon_id;
+}
+/** \} */
+

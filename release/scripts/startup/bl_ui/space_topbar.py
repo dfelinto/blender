@@ -147,35 +147,131 @@ class TOPBAR_HT_lower_bar(Header):
         if draw_fn is not None:
             draw_fn(context, layout)
 
+        # Note: general mode options should be added to 'draw_right'.
         if mode == 'SCULPT':
             layout.popover_group(space_type='VIEW_3D', region_type='TOOLS', context=".paint_common", category="")
-            layout.popover_group(space_type='VIEW_3D', region_type='TOOLS', context=".sculpt_mode", category="")
         elif mode == 'PAINT_VERTEX':
             layout.popover_group(space_type='VIEW_3D', region_type='TOOLS', context=".paint_common", category="")
-            layout.popover_group(space_type='VIEW_3D', region_type='TOOLS', context=".vertexpaint", category="")
         elif mode == 'PAINT_WEIGHT':
             layout.popover_group(space_type='VIEW_3D', region_type='TOOLS', context=".paint_common", category="")
-            layout.popover_group(space_type='VIEW_3D', region_type='TOOLS', context=".weightpaint", category="")
         elif mode == 'PAINT_TEXTURE':
             layout.popover_group(space_type='VIEW_3D', region_type='TOOLS', context=".paint_common", category="")
-            layout.popover_group(space_type='VIEW_3D', region_type='TOOLS', context=".imagepaint", category="")
+        elif mode == 'EDIT_ARMATURE':
+            pass
+        elif mode == 'EDIT_CURVE':
+            pass
+        elif mode == 'EDIT_MESH':
+            pass
+        elif mode == 'POSE':
+            layout.popover_group(space_type='VIEW_3D', region_type='TOOLS', context=".posemode", category="")
+        elif mode == 'PARTICLE':
+            layout.popover_group(space_type='VIEW_3D', region_type='TOOLS', context=".paint_common", category="")
 
+
+    def draw_right(self, context):
+        layout = self.layout
+
+        # General options, note, these _could_ display at the RHS of the draw_left callback.
+        # we just want them not to be confused with tool options.
+        mode = context.mode
+
+        if mode == 'SCULPT':
+            layout.popover_group(space_type='VIEW_3D', region_type='TOOLS', context=".sculpt_mode", category="")
+        elif mode == 'PAINT_VERTEX':
+            layout.popover_group(space_type='VIEW_3D', region_type='TOOLS', context=".vertexpaint", category="")
+        elif mode == 'PAINT_WEIGHT':
+            layout.popover_group(space_type='VIEW_3D', region_type='TOOLS', context=".weightpaint", category="")
+        elif mode == 'PAINT_TEXTURE':
+            layout.popover_group(space_type='VIEW_3D', region_type='TOOLS', context=".imagepaint", category="")
         elif mode == 'EDIT_ARMATURE':
             layout.popover_group(space_type='VIEW_3D', region_type='TOOLS', context=".armature_edit", category="")
         elif mode == 'EDIT_CURVE':
             layout.popover_group(space_type='VIEW_3D', region_type='TOOLS', context=".curve_edit", category="")
         elif mode == 'EDIT_MESH':
             layout.popover_group(space_type='VIEW_3D', region_type='TOOLS', context=".mesh_edit", category="")
-
         elif mode == 'POSE':
             layout.popover_group(space_type='VIEW_3D', region_type='TOOLS', context=".posemode", category="")
         elif mode == 'PARTICLE':
-            layout.popover_group(space_type='VIEW_3D', region_type='TOOLS', context=".paint_common", category="")
             layout.popover_group(space_type='VIEW_3D', region_type='TOOLS', context=".particlemode", category="")
 
+        # 3D View Options, tsk. maybe users aren't always using 3D view?
+        toolsettings = context.tool_settings
+        scene = context.scene
+        obj = context.active_object
 
-    def draw_right(self, context):
-        layout = self.layout
+        object_mode = 'OBJECT' if obj is None else obj.mode
+
+        # Pivit & Orientation
+        row = layout.row(align=True)
+        row.prop(toolsettings, "transform_pivot_point", text="", icon_only=True)
+        if (obj is None) or (mode in {'OBJECT', 'POSE', 'WEIGHT_PAINT'}):
+            row.prop(toolsettings, "use_transform_pivot_point_align", text="")
+
+        layout.prop(scene, "transform_orientation", text="")
+
+        if obj:
+            # Proportional editing
+            if context.gpencil_data and context.gpencil_data.use_stroke_edit_mode:
+                row = layout.row(align=True)
+                row.prop(toolsettings, "proportional_edit", icon_only=True)
+                if toolsettings.proportional_edit != 'DISABLED':
+                    row.prop(toolsettings, "proportional_edit_falloff", icon_only=True)
+            elif object_mode in {'EDIT', 'PARTICLE_EDIT'}:
+                row = layout.row(align=True)
+                row.prop(toolsettings, "proportional_edit", icon_only=True)
+                if toolsettings.proportional_edit != 'DISABLED':
+                    row.prop(toolsettings, "proportional_edit_falloff", icon_only=True)
+            elif object_mode == 'OBJECT':
+                row = layout.row(align=True)
+                row.prop(toolsettings, "use_proportional_edit_objects", icon_only=True)
+                if toolsettings.use_proportional_edit_objects:
+                    row.prop(toolsettings, "proportional_edit_falloff", icon_only=True)
+        else:
+            # Proportional editing
+            if context.gpencil_data and context.gpencil_data.use_stroke_edit_mode:
+                row = layout.row(align=True)
+                row.prop(toolsettings, "proportional_edit", icon_only=True)
+                if toolsettings.proportional_edit != 'DISABLED':
+                    row.prop(toolsettings, "proportional_edit_falloff", icon_only=True)
+
+        # Snap
+        show_snap = False
+        if obj is None:
+            show_snap = True
+        else:
+            if object_mode not in {'SCULPT', 'VERTEX_PAINT', 'WEIGHT_PAINT', 'TEXTURE_PAINT'}:
+                show_snap = True
+            else:
+                paint_settings = UnifiedPaintPanel.paint_settings(context)
+                if paint_settings:
+                    brush = paint_settings.brush
+                    if brush and brush.stroke_method == 'CURVE':
+                        show_snap = True
+
+        if show_snap:
+            snap_element = toolsettings.snap_element
+            row = layout.row(align=True)
+            row.prop(toolsettings, "use_snap", text="")
+            row.prop(toolsettings, "snap_element", icon_only=True)
+            if snap_element == 'INCREMENT':
+                row.prop(toolsettings, "use_snap_grid_absolute", text="")
+            else:
+                row.prop(toolsettings, "snap_target", text="")
+                if obj:
+                    if object_mode == 'EDIT':
+                        row.prop(toolsettings, "use_snap_self", text="")
+                    if object_mode in {'OBJECT', 'POSE', 'EDIT'} and snap_element != 'VOLUME':
+                        row.prop(toolsettings, "use_snap_align_rotation", text="")
+
+            if snap_element == 'VOLUME':
+                row.prop(toolsettings, "use_snap_peel_object", text="")
+            elif snap_element == 'FACE':
+                row.prop(toolsettings, "use_snap_project", text="")
+
+        # AutoMerge editing
+        if obj:
+            if (object_mode == 'EDIT' and obj.type == 'MESH'):
+                layout.prop(toolsettings, "use_mesh_automerge", text="", icon='AUTOMERGE_ON')
 
         # Command Settings (redo)
         op = context.active_operator

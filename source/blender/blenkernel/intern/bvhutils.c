@@ -908,23 +908,23 @@ BVHTree *bvhtree_from_editmesh_looptri_ex(
 	/* BMESH specific check that we have tessfaces,
 	 * we _could_ tessellate here but rather not - campbell */
 
-	BVHTree *tree;
+	BVHTree *tree = NULL;
 	if (bvhCache) {
 		BLI_rw_mutex_lock(&cache_rwlock, THREAD_LOCK_READ);
-		tree = bvhcache_find(*bvhCache, BVHTREE_FROM_EM_LOOPTRI);
+		bool in_cache = bvhcache_find(*bvhCache, BVHTREE_FROM_EM_LOOPTRI, &tree);
 		BLI_rw_mutex_unlock(&cache_rwlock);
-		if (tree == NULL) {
+		if (in_cache == false) {
 			BLI_rw_mutex_lock(&cache_rwlock, THREAD_LOCK_WRITE);
-			tree = bvhcache_find(*bvhCache, BVHTREE_FROM_EM_LOOPTRI);
-			if (tree == NULL) {
+			in_cache = bvhcache_find(*bvhCache, BVHTREE_FROM_EM_LOOPTRI, &tree);
+			if (in_cache == false) {
 				tree = bvhtree_from_editmesh_looptri_create_tree(
 				        epsilon, tree_type, axis,
 				        em, em->tottri, looptri_mask, looptri_num_active);
-				if (tree) {
-					/* Save on cache for later use */
-					/* printf("BVHTree built and saved on cache\n"); */
-					bvhcache_insert(bvhCache, tree, BVHTREE_FROM_EM_LOOPTRI);
-				}
+
+				/* Save on cache for later use */
+				/* printf("BVHTree built and saved on cache\n"); */
+				bvhcache_insert(bvhCache, tree, BVHTREE_FROM_EM_LOOPTRI);
+
 			}
 			BLI_rw_mutex_unlock(&cache_rwlock);
 		}
@@ -1055,8 +1055,13 @@ BVHTree *bvhtree_from_mesh_get(
 	bool looptri_allocated = false;
 
 	BLI_rw_mutex_lock(&cache_rwlock, THREAD_LOCK_READ);
-	tree = bvhcache_find(dm->bvhCache, type);
+	bool in_cache = bvhcache_find(dm->bvhCache, type, &tree);
 	BLI_rw_mutex_unlock(&cache_rwlock);
+
+	if (in_cache && tree == NULL) {
+		memset(data, 0, sizeof(*data));
+		return tree;
+	}
 
 	switch (type) {
 		case BVHTREE_FROM_VERTS:
@@ -1065,12 +1070,10 @@ BVHTree *bvhtree_from_mesh_get(
 
 			mvert = DM_get_vert_array(dm, &vert_allocated);
 
-			if (tree == NULL) {
-				/* Not in cache */
+			if (in_cache == false) {
 				BLI_rw_mutex_lock(&cache_rwlock, THREAD_LOCK_WRITE);
-				tree = bvhcache_find(dm->bvhCache, type);
-
-				if (tree == NULL) {
+				in_cache = bvhcache_find(dm->bvhCache, type, &tree);
+				if (in_cache == false) {
 					BLI_bitmap *loose_verts_mask = NULL;
 					int loose_vert_num = -1;
 					int verts_num = dm->getNumVerts(dm);
@@ -1097,11 +1100,11 @@ BVHTree *bvhtree_from_mesh_get(
 						MEM_freeN(loose_verts_mask);
 					}
 
-					if (tree) {
-						/* Save on cache for later use */
-						/* printf("BVHTree built and saved on cache\n"); */
-						bvhcache_insert(&dm->bvhCache, tree, type);
-					}
+
+					/* Save on cache for later use */
+					/* printf("BVHTree built and saved on cache\n"); */
+					bvhcache_insert(&dm->bvhCache, tree, type);
+
 				}
 
 				BLI_rw_mutex_unlock(&cache_rwlock);
@@ -1116,12 +1119,10 @@ BVHTree *bvhtree_from_mesh_get(
 			mvert = DM_get_vert_array(dm, &vert_allocated);
 			medge = DM_get_edge_array(dm, &edge_allocated);
 
-			if (tree == NULL) {
-				/* Not in cache */
+			if (in_cache == false) {
 				BLI_rw_mutex_lock(&cache_rwlock, THREAD_LOCK_WRITE);
-				tree = bvhcache_find(dm->bvhCache, type);
-
-				if (tree == NULL) {
+				in_cache = bvhcache_find(dm->bvhCache, type, &tree);
+				if (in_cache == false) {
 					BLI_bitmap *loose_edges_mask = NULL;
 					int loose_edges_num = -1;
 					int edges_num = dm->getNumEdges(dm);
@@ -1139,11 +1140,9 @@ BVHTree *bvhtree_from_mesh_get(
 						MEM_freeN(loose_edges_mask);
 					}
 
-					if (tree) {
-						/* Save on cache for later use */
-						/* printf("BVHTree built and saved on cache\n"); */
-						bvhcache_insert(&dm->bvhCache, tree, type);
-					}
+					/* Save on cache for later use */
+					/* printf("BVHTree built and saved on cache\n"); */
+					bvhcache_insert(&dm->bvhCache, tree, type);
 				}
 				BLI_rw_mutex_unlock(&cache_rwlock);
 			}
@@ -1156,22 +1155,19 @@ BVHTree *bvhtree_from_mesh_get(
 			mvert = DM_get_vert_array(dm, &vert_allocated);
 			mface = DM_get_tessface_array(dm, &face_allocated);
 
-			if (tree == NULL) {
-				/* Not in cache */
+			if (in_cache == false) {
 				BLI_rw_mutex_lock(&cache_rwlock, THREAD_LOCK_WRITE);
-				tree = bvhcache_find(dm->bvhCache, BVHTREE_FROM_FACES);
-				if (tree == NULL) {
+				in_cache = bvhcache_find(dm->bvhCache, BVHTREE_FROM_FACES, &tree);
+				if (in_cache == false) {
 					int numFaces = dm->getNumTessFaces(dm);
 					BLI_assert(!(numFaces == 0 && dm->getNumPolys(dm) != 0));
 
 					tree = bvhtree_from_mesh_faces_create_tree(
 					        0.0, tree_type, 6, mvert, mface, numFaces, NULL, -1);
 
-					if (tree) {
-						/* Save on cache for later use */
-						/* printf("BVHTree built and saved on cache\n"); */
-						bvhcache_insert(&dm->bvhCache, tree, BVHTREE_FROM_FACES);
-					}
+					/* Save on cache for later use */
+					/* printf("BVHTree built and saved on cache\n"); */
+					bvhcache_insert(&dm->bvhCache, tree, BVHTREE_FROM_FACES);
 				}
 				BLI_rw_mutex_unlock(&cache_rwlock);
 			}
@@ -1185,11 +1181,10 @@ BVHTree *bvhtree_from_mesh_get(
 			mloop = DM_get_loop_array(dm, &loop_allocated);
 			looptri = dm->getLoopTriArray(dm);
 
-			if (tree == NULL) {
-				/* Not in cache */
+			if (in_cache == false) {
 				BLI_rw_mutex_lock(&cache_rwlock, THREAD_LOCK_WRITE);
-				tree = bvhcache_find(dm->bvhCache, BVHTREE_FROM_LOOPTRI);
-				if (tree == NULL) {
+				in_cache = bvhcache_find(dm->bvhCache, BVHTREE_FROM_LOOPTRI, &tree);
+				if (in_cache == false) {
 					int looptri_num = dm->getNumLoopTri(dm);
 
 					/* this assert checks we have looptris,
@@ -1199,11 +1194,10 @@ BVHTree *bvhtree_from_mesh_get(
 					tree = bvhtree_from_mesh_looptri_create_tree(
 					        0.0, tree_type, 6,
 					        mvert, mloop, looptri, looptri_num, NULL, -1);
-					if (tree) {
-						/* Save on cache for later use */
-						/* printf("BVHTree built and saved on cache\n"); */
-						bvhcache_insert(&dm->bvhCache, tree, BVHTREE_FROM_LOOPTRI);
-					}
+
+					/* Save on cache for later use */
+					/* printf("BVHTree built and saved on cache\n"); */
+					bvhcache_insert(&dm->bvhCache, tree, BVHTREE_FROM_LOOPTRI);
 				}
 				BLI_rw_mutex_unlock(&cache_rwlock);
 			}
@@ -1257,70 +1251,6 @@ BVHTree *bvhtree_from_mesh_get(
 	return tree;
 }
 
-/* This is a Mesh-specific copy of bvhtree_from_mesh_looptri() */
-/**
- * Builds a bvh tree where nodes are the looptri faces of the given mesh.
- *
- * \note for editmesh this is currently a duplicate of bvhtree_from_mesh_faces
- */
-BVHTree *BKE_bvhtree_from_mesh_looptri(
-        BVHTreeFromMesh *data, Mesh *mesh,
-        float epsilon, int tree_type, int axis)
-{
-	BVHTree *tree;
-	MVert *mvert = NULL;
-	MLoop *mloop = NULL;
-	const MLoopTri *looptri = NULL;
-
-	BLI_rw_mutex_lock(&cache_rwlock, THREAD_LOCK_READ);
-	tree = bvhcache_find(mesh->runtime.bvh_cache, BVHTREE_FROM_LOOPTRI);
-	BLI_rw_mutex_unlock(&cache_rwlock);
-
-	mvert = mesh->mvert;
-	mloop = mesh->mloop;
-	looptri = BKE_mesh_runtime_looptri_ensure(mesh);
-
-	/* Not in cache */
-	if (tree == NULL) {
-		BLI_rw_mutex_lock(&cache_rwlock, THREAD_LOCK_WRITE);
-		tree = bvhcache_find(mesh->runtime.bvh_cache, BVHTREE_FROM_LOOPTRI);
-		if (tree == NULL) {
-			int looptri_num = BKE_mesh_runtime_looptri_len(mesh);
-
-			/* this assert checks we have looptris,
-			 * if not caller should use DM_ensure_looptri() */
-			BLI_assert(!(looptri_num == 0 && mesh->totpoly != 0));
-
-			tree = bvhtree_from_mesh_looptri_create_tree(
-			        epsilon, tree_type, axis,
-			        mvert, mloop, looptri, looptri_num, NULL, -1);
-			if (tree) {
-				/* Save on cache for later use */
-				/* printf("BVHTree built and saved on cache\n"); */
-				bvhcache_insert(&mesh->runtime.bvh_cache, tree, BVHTREE_FROM_LOOPTRI);
-			}
-		}
-		BLI_rw_mutex_unlock(&cache_rwlock);
-	}
-	else {
-		/* printf("BVHTree is already build, using cached tree\n"); */
-	}
-
-	if (tree) {
-		/* Setup BVHTreeFromMesh */
-		bvhtree_from_mesh_looptri_setup_data(
-		        data, tree, true,
-		        mvert, false,
-		        mloop, false,
-		        looptri, false);
-	}
-	else {
-		memset(data, 0, sizeof(*data));
-	}
-
-	return tree;
-}
-
 /**
  * Builds or queries a bvhcache for the cache bvhtree of the request type.
  */
@@ -1345,8 +1275,13 @@ BVHTree *BKE_bvhtree_from_mesh_get(
 	bool looptri_allocated = false;
 
 	BLI_rw_mutex_lock(&cache_rwlock, THREAD_LOCK_READ);
-	tree = bvhcache_find(mesh->runtime.bvh_cache, type);
+	bool in_cache = bvhcache_find(mesh->runtime.bvh_cache, type, &tree);
 	BLI_rw_mutex_unlock(&cache_rwlock);
+
+	if (in_cache && tree == NULL) {
+		memset(data, 0, sizeof(*data));
+		return tree;
+	}
 
 	switch (type) {
 		case BVHTREE_FROM_VERTS:
@@ -1355,11 +1290,10 @@ BVHTree *BKE_bvhtree_from_mesh_get(
 
 			mvert = mesh->mvert;
 
-			if (tree == NULL) {
-				/* Not in cache */
+			if (in_cache == false) {
 				BLI_rw_mutex_lock(&cache_rwlock, THREAD_LOCK_WRITE);
-				tree = bvhcache_find(mesh->runtime.bvh_cache, type);
-				if (tree == NULL) {
+				in_cache = bvhcache_find(mesh->runtime.bvh_cache, type, &tree);
+				if (in_cache == false) {
 					BLI_bitmap *loose_verts_mask = NULL;
 					int loose_vert_len = -1;
 					int verts_len = mesh->totvert;
@@ -1378,11 +1312,9 @@ BVHTree *BKE_bvhtree_from_mesh_get(
 						MEM_freeN(loose_verts_mask);
 					}
 
-					if (tree != NULL) {
-						/* Save on cache for later use */
-						/* printf("BVHTree built and saved on cache\n"); */
-						bvhcache_insert(&mesh->runtime.bvh_cache, tree, type);
-					}
+					/* Save on cache for later use */
+					/* printf("BVHTree built and saved on cache\n"); */
+					bvhcache_insert(&mesh->runtime.bvh_cache, tree, type);
 				}
 				BLI_rw_mutex_unlock(&cache_rwlock);
 			}
@@ -1396,11 +1328,10 @@ BVHTree *BKE_bvhtree_from_mesh_get(
 			mvert = mesh->mvert;
 			medge = mesh->medge;
 
-			if (tree == NULL) {
-				/* Not in cache */
+			if (in_cache == false) {
 				BLI_rw_mutex_lock(&cache_rwlock, THREAD_LOCK_WRITE);
-				tree = bvhcache_find(mesh->runtime.bvh_cache, type);
-				if (tree == NULL) {
+				in_cache = bvhcache_find(mesh->runtime.bvh_cache, type, &tree);
+				if (in_cache == false) {
 					BLI_bitmap *loose_edges_mask = NULL;
 					int loose_edges_len = -1;
 					int edges_len = mesh->totedge;
@@ -1418,11 +1349,9 @@ BVHTree *BKE_bvhtree_from_mesh_get(
 						MEM_freeN(loose_edges_mask);
 					}
 
-					if (tree != NULL) {
-						/* Save on cache for later use */
-						/* printf("BVHTree built and saved on cache\n"); */
-						bvhcache_insert(&mesh->runtime.bvh_cache, tree, type);
-					}
+					/* Save on cache for later use */
+					/* printf("BVHTree built and saved on cache\n"); */
+					bvhcache_insert(&mesh->runtime.bvh_cache, tree, type);
 				}
 				BLI_rw_mutex_unlock(&cache_rwlock);
 			}
@@ -1435,22 +1364,19 @@ BVHTree *BKE_bvhtree_from_mesh_get(
 			mvert = mesh->mvert;
 			mface = mesh->mface;
 
-			if (tree == NULL) {
-				/* Not in cache */
+			if (in_cache == false) {
 				BLI_rw_mutex_lock(&cache_rwlock, THREAD_LOCK_WRITE);
-				tree = bvhcache_find(mesh->runtime.bvh_cache, BVHTREE_FROM_FACES);
-				if (tree == NULL) {
+				in_cache = bvhcache_find(mesh->runtime.bvh_cache, BVHTREE_FROM_FACES, &tree);
+				if (in_cache == false) {
 					int num_faces = mesh->totface;
 					BLI_assert(!(num_faces == 0 && mesh->totpoly != 0));
 
 					tree = bvhtree_from_mesh_faces_create_tree(
 					        0.0, tree_type, 6, mvert, mface, num_faces, NULL, -1);
 
-					if (tree != NULL) {
-						/* Save on cache for later use */
-						/* printf("BVHTree built and saved on cache\n"); */
-						bvhcache_insert(&mesh->runtime.bvh_cache, tree, BVHTREE_FROM_FACES);
-					}
+					/* Save on cache for later use */
+					/* printf("BVHTree built and saved on cache\n"); */
+					bvhcache_insert(&mesh->runtime.bvh_cache, tree, BVHTREE_FROM_FACES);
 				}
 				BLI_rw_mutex_unlock(&cache_rwlock);
 			}
@@ -1466,11 +1392,10 @@ BVHTree *BKE_bvhtree_from_mesh_get(
 			/* TODO: store looptris somewhere? */
 			looptri = BKE_mesh_runtime_looptri_ensure(mesh);
 
-			if (tree == NULL) {
-				/* Not in cache */
+			if (in_cache == false) {
 				BLI_rw_mutex_lock(&cache_rwlock, THREAD_LOCK_WRITE);
-				tree = bvhcache_find(mesh->runtime.bvh_cache, BVHTREE_FROM_LOOPTRI);
-				if (tree == NULL) {
+				in_cache = bvhcache_find(mesh->runtime.bvh_cache, BVHTREE_FROM_LOOPTRI, &tree);
+				if (in_cache == false) {
 					int looptri_num = BKE_mesh_runtime_looptri_len(mesh);
 					/* this assert checks we have looptris,
 					* if not caller should use DM_ensure_looptri() */
@@ -1479,11 +1404,10 @@ BVHTree *BKE_bvhtree_from_mesh_get(
 					tree = bvhtree_from_mesh_looptri_create_tree(
 					        0.0, tree_type, 6,
 					        mvert, mloop, looptri, looptri_num, NULL, -1);
-					if (tree != NULL) {
-						/* Save on cache for later use */
-						/* printf("BVHTree built and saved on cache\n"); */
-						bvhcache_insert(&mesh->runtime.bvh_cache, tree, BVHTREE_FROM_LOOPTRI);
-					}
+
+					/* Save on cache for later use */
+					/* printf("BVHTree built and saved on cache\n"); */
+					bvhcache_insert(&mesh->runtime.bvh_cache, tree, BVHTREE_FROM_LOOPTRI);
 				}
 				BLI_rw_mutex_unlock(&cache_rwlock);
 			}
@@ -1592,16 +1516,17 @@ typedef struct BVHCacheItem {
 /**
  * Queries a bvhcache for the cache bvhtree of the request type
  */
-BVHTree *bvhcache_find(BVHCache *cache, int type)
+bool bvhcache_find(const BVHCache *cache, int type, BVHTree **r_tree)
 {
 	while (cache) {
 		const BVHCacheItem *item = cache->link;
 		if (item->type == type) {
-			return item->tree;
+			*r_tree = item->tree;
+			return true;
 		}
 		cache = cache->next;
 	}
-	return NULL;
+	return false;
 }
 
 bool bvhcache_has_tree(const BVHCache *cache, const BVHTree *tree)
@@ -1627,11 +1552,9 @@ void bvhcache_insert(BVHCache **cache_p, BVHTree *tree, int type)
 {
 	BVHCacheItem *item = NULL;
 
-	assert(tree != NULL);
-	assert(bvhcache_find(*cache_p, type) == NULL);
+	assert(bvhcache_find(*cache_p, type, &(BVHTree *){0}) == false);
 
 	item = MEM_mallocN(sizeof(BVHCacheItem), "BVHCacheItem");
-	assert(item != NULL);
 
 	item->type = type;
 	item->tree = tree;
