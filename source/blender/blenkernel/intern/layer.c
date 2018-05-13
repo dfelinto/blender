@@ -2004,6 +2004,12 @@ DynamicOverrideProperty *BKE_view_layer_override_property_add(
 			return NULL;
 	}
 
+	char *rna_path_str = RNA_path_from_ID_to_property_index(ptr, prop, 0, index);
+	if (rna_path_str == NULL) {
+		printf("%s: could not get valid RNA path!\n", __func__);
+		return NULL;
+	}
+
 	DynamicOverrideProperty *dyn_prop = MEM_callocN(sizeof(DynamicOverrideProperty), __func__);
 	dyn_prop->flag = DYN_OVERRIDE_PROP_USE;
 	dyn_prop->multiply_factor = 1.0f;
@@ -2013,7 +2019,7 @@ DynamicOverrideProperty *BKE_view_layer_override_property_add(
 	dyn_prop->root = owner_id;
 	dyn_prop->id_type = id_type;
 	dyn_prop->property_type = property_type;
-	dyn_prop->rna_path = RNA_path_from_ID_to_property_index(ptr, prop, 0, index);
+	dyn_prop->rna_path = rna_path_str;
 
 	/* TODO handle array. */
 	switch (RNA_property_type(prop)) {
