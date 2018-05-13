@@ -1016,6 +1016,7 @@ struct PropertyElemRNA {
 	int index;
 };
 bool RNA_path_resolve_elements(PointerRNA *ptr, const char *path, struct ListBase *r_elements);
+bool RNA_path_resolve_elements_no_data(PointerRNA *ptr, const char *path, struct ListBase *r_elements);
 
 char *RNA_path_from_ID_to_struct(PointerRNA *ptr);
 char *RNA_path_from_ID_to_property(PointerRNA *ptr, PropertyRNA *prop);

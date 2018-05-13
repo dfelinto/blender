@@ -4847,6 +4847,12 @@ bool RNA_path_resolve_elements(PointerRNA *ptr, const char *path, ListBase *r_el
 	return rna_path_parse(ptr, path, NULL, NULL, NULL, r_elements, false, false);
 }
 
+bool RNA_path_resolve_elements_no_data(PointerRNA *ptr, const char *path, ListBase *r_elements)
+{
+	return rna_path_parse(ptr, path, NULL, NULL, NULL, r_elements, false, true);
+}
+
+
 char *RNA_path_append(const char *path, PointerRNA *UNUSED(ptr), PropertyRNA *prop, int intkey, const char *strkey)
 {
 	DynStr *dynstr;
