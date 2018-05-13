@@ -866,6 +866,46 @@ static int rna_DynamicOverrideProperty_length(PointerRNA *ptr)
 	return strlen(dyn_prop->rna_path);
 }
 
+static int rna_DynamicOverrideProperty_data_type_get(PointerRNA *ptr)
+{
+	DynamicOverrideProperty *dyn_prop = ptr->data;
+
+	/* Lazy building of RNA path elements if needed. */
+	if (dyn_prop->data_path.first == NULL) {
+		PointerRNA ptr_data;
+		if (dyn_prop->root == NULL) {
+			PointerRNA ptr_dummy;
+			ID id_dummy;
+			*((short *)id_dummy.name) = dyn_prop->id_type;
+			RNA_id_pointer_create(&id_dummy, &ptr_dummy);
+			RNA_pointer_create(NULL, rna_ID_refine(&ptr_dummy), NULL, &ptr_data);
+		}
+		else {
+			RNA_id_pointer_create(dyn_prop->root, &ptr_data);
+		}
+
+		RNA_path_resolve_elements_no_data(&ptr_data, dyn_prop->rna_path, &dyn_prop->data_path);
+	}
+
+	PropertyElemRNA *prop_elem = dyn_prop->data_path.last;
+
+	/* Note that we have no 'invalid' value for PropertyRNA type... :/ */
+	return prop_elem ? RNA_property_type(prop_elem->prop) : -1;
+
+}
+
+static int rna_DynamicOverrideProperty_value_boolean_get(PointerRNA *ptr)
+{
+	DynamicOverrideProperty *dyn_prop = ptr->data;
+	return dyn_prop->data.i;
+}
+
+static void rna_DynamicOverrideProperty_value_boolean_set(PointerRNA *ptr, int value)
+{
+	DynamicOverrideProperty *dyn_prop = ptr->data;
+	dyn_prop->data.i = value;
+}
+
 static int rna_DynamicOverrideProperty_value_int_get(PointerRNA *ptr)
 {
 	DynamicOverrideProperty *dyn_prop = ptr->data;
@@ -2138,7 +2178,19 @@ static void rna_def_dynamic_override_property(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Factor", "Multiplication factor");
 	RNA_def_property_update(prop, NC_SCENE | ND_DYN_OVERRIDES, NULL);
 
+	prop = RNA_def_property(srna, "data_type", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_items(prop, rna_enum_property_type_items);
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+	RNA_def_property_enum_funcs(prop, "rna_DynamicOverrideProperty_data_type_get", NULL, NULL);
+	RNA_def_property_ui_text(prop, "Type", "Data type of the property");
+
 	/* Accessors for the different value types. */
+	prop = RNA_def_property(srna, "value_boolean", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_funcs(prop,
+	                               "rna_DynamicOverrideProperty_value_boolean_get",
+	                               "rna_DynamicOverrideProperty_value_boolean_set");
+	RNA_def_property_update(prop, NC_SCENE | ND_DYN_OVERRIDES, NULL);
+
 	prop = RNA_def_property(srna, "value_int", PROP_INT, PROP_NONE);
 	RNA_def_property_int_funcs(prop,
 	                           "rna_DynamicOverrideProperty_value_int_get",

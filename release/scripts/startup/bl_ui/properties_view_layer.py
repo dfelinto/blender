@@ -169,8 +169,19 @@ class VIEWLAYER_OT_overrides(ViewLayerButtonsPanel, Panel):
         if (dyn_prop.override_mode == 'MULTIPLY'):
             subrow.prop(dyn_prop, "multiply_factor", text="")
         else:
-            # TODO: Show different RNA prop depending on the property.
-            subrow.prop(dyn_prop, "value_int", text="")
+            # TODO: Finish this.
+            proptype_map = {
+                'BOOLEAN': "value_boolean",
+                'INT': "value_int",
+                'FLOAT': "value_float",
+                'STRING': None,
+                'ENUM': None,
+                'POINTER': None,
+                'COLLECTION': None,
+            }
+            value_propname = proptype_map[dyn_prop.data_type]
+            if value_propname is not None:
+                subrow.prop(dyn_prop, value_propname, text="")
 
         ops = row.operator("scene.view_layer_override_remove", text="", icon='ZOOMOUT', emboss=False)
         ops.index = index
