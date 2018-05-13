@@ -4796,7 +4796,7 @@ bool RNA_path_resolve_full(PointerRNA *ptr, const char *path, PointerRNA *r_ptr,
  * \note Assumes all pointers provided are valid.
  * \return True if path can be resolved to a valid "property" OR "property + array index"
  */
-bool RNA_path_resolve_full_nod_data(
+bool RNA_path_resolve_full_no_data(
         PointerRNA *ptr, const char *path, PointerRNA *r_ptr, PropertyRNA **r_prop, int *r_index)
 {
 	return rna_path_parse(ptr, path, r_ptr, r_prop, r_index, NULL, true, true);
