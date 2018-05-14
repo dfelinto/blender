@@ -154,18 +154,39 @@ class VIEWLAYER_OT_overrides(ViewLayerButtonsPanel, Panel):
     def _icon_from_id_type(id_type):
         return id_type + '_DATA'
 
-    def _draw_property(self, layout, dyn_prop, index, property_type):
+    @staticmethod
+    def _value_name_override_mode_get(data_type, data_subtype):
+        """
+        return Tuple: value name and whether the property supports override modes
+        """
         # TODO: Finish this.
         proptype_map = {
-            'BOOLEAN': ("value_boolean", False),
-            'INT': ("value_int", True),
-            'FLOAT': ("value_float", True),
-            'STRING': (None, False),
-            'ENUM': (None, False),
-            'POINTER': (None, False),
-            'COLLECTION': (None, False),
+            'BOOLEAN': {
+                'NONE': ("value_boolean", False)},
+            'INT': {
+                'NONE': ("value_int", True)},
+            'FLOAT': {
+                'NONE': ("value_float", True),
+                'COLOR': ("value_color", False)},
+            'STRING': {
+                'NONE': (None, False)},
+            'ENUM': {
+                'NONE': (None, False)},
+            'POINTER': {
+                'NONE': (None, False)},
+            'COLLECTION': {
+                'NONE': (None, False)},
         }
 
+        type_lookup = proptype_map[data_type]
+        value_name = type_lookup.get(data_subtype)
+
+        if value_name is None:
+            value_name = type_lookup['NONE']
+
+        return value_name
+
+    def _draw_property(self, layout, dyn_prop, index, property_type):
         box = layout.box()
         row = box.row()
         row.prop(dyn_prop, "use", text="")
@@ -173,7 +194,7 @@ class VIEWLAYER_OT_overrides(ViewLayerButtonsPanel, Panel):
         subrow.active = dyn_prop.use
 
         subrow.label(text=dyn_prop.name, icon=self._icon_from_id_type(dyn_prop.id_type))
-        value_propname, override_mode_support = proptype_map[dyn_prop.data_type]
+        value_propname, override_mode_support = self._value_name_override_mode_get(dyn_prop.data_type, dyn_prop.data_subtype)
 
         if override_mode_support:
             subrow.prop(dyn_prop, "override_mode", text="")

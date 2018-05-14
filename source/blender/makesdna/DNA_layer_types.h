@@ -63,8 +63,8 @@ typedef struct LayerCollection {
 } LayerCollection;
 
 typedef struct DynamicOverridePropertyData {
-	int i;
-	float f;
+	int i[4];
+	float f[4];
 	struct ID *id;
 	char *str;
 } DynamicOverridePropertyData;

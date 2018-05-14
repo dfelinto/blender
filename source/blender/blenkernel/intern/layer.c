@@ -2021,22 +2021,29 @@ DynamicOverrideProperty *BKE_view_layer_override_property_add(
 	dyn_prop->property_type = property_type;
 	dyn_prop->rna_path = rna_path_str;
 
+	const bool is_array = RNA_property_array_check(prop);
+
 	/* TODO handle array. */
 	switch (RNA_property_type(prop)) {
 		case PROP_BOOLEAN:
-			dyn_prop->data.i = RNA_property_boolean_get(ptr, prop);
+			dyn_prop->data.i[0] = RNA_property_boolean_get(ptr, prop);
 			break;
 		case PROP_INT:
-			dyn_prop->data.i = RNA_property_int_get(ptr, prop);
+			dyn_prop->data.i[0] = RNA_property_int_get(ptr, prop);
 			break;
 		case PROP_FLOAT:
-			dyn_prop->data.f = RNA_property_float_get(ptr, prop);
+			if (is_array) {
+				RNA_property_float_get_array(ptr, prop, dyn_prop->data.f);
+			}
+			else {
+				dyn_prop->data.f[0] = RNA_property_float_get(ptr, prop);
+			}
 			break;
 		case PROP_STRING:
 			dyn_prop->data.str = RNA_property_string_get_alloc(ptr, prop, NULL, 0, NULL);
 			break;
 		case PROP_ENUM:
-			dyn_prop->data.i = RNA_property_enum_get(ptr, prop);
+			dyn_prop->data.i[0] = RNA_property_enum_get(ptr, prop);
 			break;
 		case PROP_POINTER:
 		{
