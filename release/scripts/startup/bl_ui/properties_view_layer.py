@@ -155,6 +155,17 @@ class VIEWLAYER_OT_overrides(ViewLayerButtonsPanel, Panel):
         return id_type + '_DATA'
 
     def _draw_property(self, layout, dyn_prop, index, property_type):
+        # TODO: Finish this.
+        proptype_map = {
+            'BOOLEAN': ("value_boolean", False),
+            'INT': ("value_int", True),
+            'FLOAT': ("value_float", True),
+            'STRING': (None, False),
+            'ENUM': (None, False),
+            'POINTER': (None, False),
+            'COLLECTION': (None, False),
+        }
+
         box = layout.box()
         row = box.row()
         row.prop(dyn_prop, "use", text="")
@@ -162,26 +173,16 @@ class VIEWLAYER_OT_overrides(ViewLayerButtonsPanel, Panel):
         subrow.active = dyn_prop.use
 
         subrow.label(text=dyn_prop.name, icon=self._icon_from_id_type(dyn_prop.id_type))
+        value_propname, override_mode_support = proptype_map[dyn_prop.data_type]
 
-        # TODO: Only show override_mode and multiply_factor if property is not ID.
-        subrow.prop(dyn_prop, "override_mode", text="")
-
-        if (dyn_prop.override_mode == 'MULTIPLY'):
-            subrow.prop(dyn_prop, "multiply_factor", text="")
-        else:
-            # TODO: Finish this.
-            proptype_map = {
-                'BOOLEAN': "value_boolean",
-                'INT': "value_int",
-                'FLOAT': "value_float",
-                'STRING': None,
-                'ENUM': None,
-                'POINTER': None,
-                'COLLECTION': None,
-            }
-            value_propname = proptype_map[dyn_prop.data_type]
-            if value_propname is not None:
+        if override_mode_support:
+            subrow.prop(dyn_prop, "override_mode", text="")
+            if dyn_prop.override_mode == 'MULTIPLY':
+                subrow.prop(dyn_prop, "multiply_factor", text="")
+            else:
                 subrow.prop(dyn_prop, value_propname, text="")
+        elif value_propname is not None:
+            subrow.prop(dyn_prop, value_propname, text="")
 
         ops = row.operator("scene.view_layer_override_remove", text="", icon='ZOOMOUT', emboss=False)
         ops.index = index
