@@ -121,11 +121,14 @@ float dist_squared_ray_to_seg_v3(
         const float v0[3], const float v1[3],
         float r_point[3], float *r_depth);
 
+void aabb_get_near_far_from_plane(
+        const float plane_no[3], const float bbmin[3], const float bbmax[3],
+        float bb_near[3], float bb_afar[3]);
+
 struct DistRayAABB_Precalc {
 	float ray_origin[3];
 	float ray_direction[3];
 	float ray_inv_dir[3];
-	bool sign[3];
 };
 void dist_squared_ray_to_aabb_v3_precalc(
         struct DistRayAABB_Precalc *neasrest_precalc,
@@ -241,6 +244,9 @@ bool isect_ray_plane_v3(
         float *r_lambda, const bool clip);
 
 bool isect_point_planes_v3(float (*planes)[4], int totplane, const float p[3]);
+bool isect_point_planes_v3_negated(
+        const float (*planes)[4], const int totplane, const float p[3]);
+
 bool isect_line_plane_v3(
         float r_isect_co[3], const float l1[3], const float l2[3],
         const float plane_co[3], const float plane_no[3]) ATTR_WARN_UNUSED_RESULT;
@@ -344,6 +350,14 @@ bool isect_ray_aabb_v3_simple(
         float *tmin, float *tmax);
 
 /* other */
+#define ISECT_AABB_PLANE_BEHIND_ANY   0
+#define ISECT_AABB_PLANE_CROSS_ANY    1
+#define ISECT_AABB_PLANE_IN_FRONT_ALL 2
+
+int isect_aabb_planes_v3(
+        const float (*planes)[4], const int totplane,
+        const float bbmin[3], const float bbmax[3]);
+
 bool isect_sweeping_sphere_tri_v3(const float p1[3], const float p2[3], const float radius,
                                   const float v0[3], const float v1[3], const float v2[3], float *r_lambda, float ipoint[3]);
 

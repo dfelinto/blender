@@ -365,14 +365,57 @@ void MESH_OT_extrude_repeat(wmOperatorType *ot)
 
 #ifdef USE_MANIPULATOR
 
+const float extrude_button_scale = 0.15f;
+const float extrude_button_offset_scale = 1.5f;
+const float extrude_arrow_scale = 1.0f;
+const float extrude_arrow_xyz_axis_scale = 1.0f;
+const float extrude_arrow_normal_axis_scale = 1.75f;
+
+static const uchar shape_plus[] = {
+	0x5f, 0xfb, 0x40, 0xee, 0x25, 0xda, 0x11, 0xbf, 0x4, 0xa0, 0x0, 0x80, 0x4, 0x5f, 0x11,
+	0x40, 0x25, 0x25, 0x40, 0x11, 0x5f, 0x4, 0x7f, 0x0, 0xa0, 0x4, 0xbf, 0x11, 0xda, 0x25,
+	0xee, 0x40, 0xfb, 0x5f, 0xff, 0x7f, 0xfb, 0xa0, 0xee, 0xbf, 0xda, 0xda, 0xbf, 0xee,
+	0xa0, 0xfb, 0x80, 0xff, 0x6e, 0xd7, 0x92, 0xd7, 0x92, 0x90, 0xd8, 0x90, 0xd8, 0x6d,
+	0x92, 0x6d, 0x92, 0x27, 0x6e, 0x27, 0x6e, 0x6d, 0x28, 0x6d, 0x28, 0x90, 0x6e,
+	0x90, 0x6e, 0xd7, 0x80, 0xff, 0x5f, 0xfb, 0x5f, 0xfb,
+};
+
 typedef struct ManipulatorExtrudeGroup {
-	/* Extrude . */
-	struct wmManipulator *axis_arrow;
-	/* Redo Z-axis translation. */
-	struct wmManipulator *axis_redo;
+
+	/* XYZ & normal. */
+	struct wmManipulator *invoke_xyz_no[4];
+	struct wmManipulator *adjust_xyz_no[5];
+
+	struct {
+		float normal_mat3[3][3];  /* use Z axis for normal. */
+		int orientation_type;
+	} data;
 
 	wmOperatorType *ot_extrude;
 } ManipulatorExtrudeGroup;
+
+static void manipulator_mesh_extrude_orientation_matrix_set(
+        struct ManipulatorExtrudeGroup *man, const float mat[3][3])
+{
+	for (int i = 0; i < 3; i++) {
+		/* Set orientation without location. */
+		for (int j = 0; j < 3; j++) {
+			copy_v3_v3(man->adjust_xyz_no[i]->matrix_basis[j], mat[j]);
+		}
+		/* nop when (i == 2). */
+		swap_v3_v3(man->adjust_xyz_no[i]->matrix_basis[i], man->adjust_xyz_no[i]->matrix_basis[2]);
+		/* Orient to normal gives generally less awkward results. */
+		if (man->data.orientation_type != V3D_MANIP_NORMAL) {
+			if (dot_v3v3(man->adjust_xyz_no[i]->matrix_basis[2], man->data.normal_mat3[2]) < 0.0f) {
+				negate_v3(man->adjust_xyz_no[i]->matrix_basis[2]);
+			}
+		}
+		mul_v3_v3fl(
+		        man->invoke_xyz_no[i]->matrix_offset[3],
+		        man->adjust_xyz_no[i]->matrix_basis[2],
+		        (extrude_arrow_xyz_axis_scale * extrude_button_offset_scale) / extrude_button_scale);
+	}
+}
 
 static bool manipulator_mesh_extrude_poll(const bContext *C, wmManipulatorGroupType *wgt)
 {
@@ -388,54 +431,72 @@ static bool manipulator_mesh_extrude_poll(const bContext *C, wmManipulatorGroupT
 
 static void manipulator_mesh_extrude_setup(const bContext *UNUSED(C), wmManipulatorGroup *mgroup)
 {
-	const int constraint_z[3] = {0, 0, 1};
-
 	struct ManipulatorExtrudeGroup *man = MEM_callocN(sizeof(ManipulatorExtrudeGroup), __func__);
 	mgroup->customdata = man;
 
 	const wmManipulatorType *wt_arrow = WM_manipulatortype_find("MANIPULATOR_WT_arrow_3d", true);
-	const wmManipulatorType *wt_grab = WM_manipulatortype_find("MANIPULATOR_WT_grab_3d", true);
+	const wmManipulatorType *wt_grab = WM_manipulatortype_find("MANIPULATOR_WT_button_2d", true);
 
-	man->axis_arrow = WM_manipulator_new_ptr(wt_arrow, mgroup, NULL);
-	man->axis_redo = WM_manipulator_new_ptr(wt_grab, mgroup, NULL);
+	for (int i = 0; i < 4; i++) {
+		man->adjust_xyz_no[i] = WM_manipulator_new_ptr(wt_arrow, mgroup, NULL);
+		man->invoke_xyz_no[i] = WM_manipulator_new_ptr(wt_grab, mgroup, NULL);
+		man->invoke_xyz_no[i]->flag |= WM_MANIPULATOR_DRAW_OFFSET_SCALE;
+	}
+
+	{
+		PropertyRNA *prop = RNA_struct_find_property(man->invoke_xyz_no[3]->ptr, "shape");
+		for (int i = 0; i < 4; i++) {
+			RNA_property_string_set_bytes(
+			        man->invoke_xyz_no[i]->ptr, prop,
+			        (const char *)shape_plus, ARRAY_SIZE(shape_plus));
+		}
+	}
 
 	man->ot_extrude = WM_operatortype_find("MESH_OT_extrude_context_move", true);
 
-	UI_GetThemeColor3fv(TH_MANIPULATOR_PRIMARY, man->axis_arrow->color);
-	UI_GetThemeColor3fv(TH_MANIPULATOR_SECONDARY, man->axis_redo->color);
+	for (int i = 0; i < 3; i++) {
+		UI_GetThemeColor3fv(TH_AXIS_X + i, man->invoke_xyz_no[i]->color);
+		UI_GetThemeColor3fv(TH_AXIS_X + i, man->adjust_xyz_no[i]->color);
+	}
+	UI_GetThemeColor3fv(TH_MANIPULATOR_PRIMARY, man->invoke_xyz_no[3]->color);
+	UI_GetThemeColor3fv(TH_MANIPULATOR_PRIMARY, man->adjust_xyz_no[3]->color);
 
-	man->axis_redo->color[3] = 0.3f;
-	man->axis_redo->color_hi[3] = 0.3f;
+	for (int i = 0; i < 4; i++) {
+		WM_manipulator_set_scale(man->invoke_xyz_no[i], extrude_button_scale);
+		WM_manipulator_set_scale(man->adjust_xyz_no[i], extrude_arrow_scale);
+	}
+	WM_manipulator_set_scale(man->adjust_xyz_no[3], extrude_arrow_normal_axis_scale);
 
-	WM_manipulator_set_scale(man->axis_arrow, 2.0);
-	WM_manipulator_set_scale(man->axis_redo, 1.0);
+	for (int i = 0; i < 4; i++) {
+	}
 
-	RNA_enum_set(man->axis_arrow->ptr, "draw_style", ED_MANIPULATOR_ARROW_STYLE_NORMAL);
-	RNA_enum_set(man->axis_redo->ptr, "draw_style", ED_MANIPULATOR_GRAB_STYLE_RING_2D);
+	for (int i = 0; i < 4; i++) {
+		WM_manipulator_set_flag(man->adjust_xyz_no[i], WM_MANIPULATOR_DRAW_VALUE, true);
+	}
 
-	RNA_enum_set(man->axis_redo->ptr, "draw_options",
-	             ED_MANIPULATOR_GRAB_DRAW_FLAG_FILL);
-
-	WM_manipulator_set_flag(man->axis_redo, WM_MANIPULATOR_DRAW_VALUE, true);
-
-	/* New extrude. */
-	{
-		PointerRNA *ptr = WM_manipulator_operator_set(man->axis_arrow, 0, man->ot_extrude, NULL);
+	/* XYZ & normal axis extrude. */
+	for (int i = 0; i < 4; i++) {
+		PointerRNA *ptr = WM_manipulator_operator_set(man->invoke_xyz_no[i], 0, man->ot_extrude, NULL);
 		{
+			int constraint[3] = {0, 0, 0};
+			constraint[MIN2(i, 2)] = 1;
 			PointerRNA macroptr = RNA_pointer_get(ptr, "TRANSFORM_OT_translate");
 			RNA_boolean_set(&macroptr, "release_confirm", true);
-			RNA_boolean_set_array(&macroptr, "constraint_axis", constraint_z);
+			RNA_boolean_set_array(&macroptr, "constraint_axis", constraint);
 		}
 	}
+
 	/* Adjust extrude. */
-	{
-		PointerRNA *ptr = WM_manipulator_operator_set(man->axis_redo, 0, man->ot_extrude, NULL);
+	for (int i = 0; i < 4; i++) {
+		PointerRNA *ptr = WM_manipulator_operator_set(man->adjust_xyz_no[i], 0, man->ot_extrude, NULL);
 		{
+			int constraint[3] = {0, 0, 0};
+			constraint[MIN2(i, 2)] = 1;
 			PointerRNA macroptr = RNA_pointer_get(ptr, "TRANSFORM_OT_translate");
 			RNA_boolean_set(&macroptr, "release_confirm", true);
-			RNA_boolean_set_array(&macroptr, "constraint_axis", constraint_z);
+			RNA_boolean_set_array(&macroptr, "constraint_axis", constraint);
 		}
-		wmManipulatorOpElem *mpop = WM_manipulator_operator_get(man->axis_redo, 0);
+		wmManipulatorOpElem *mpop = WM_manipulator_operator_get(man->adjust_xyz_no[i], 0);
 		mpop->is_redo = true;
 	}
 }
@@ -444,72 +505,141 @@ static void manipulator_mesh_extrude_refresh(const bContext *C, wmManipulatorGro
 {
 	ManipulatorExtrudeGroup *man = mgroup->customdata;
 
-	WM_manipulator_set_flag(man->axis_arrow, WM_MANIPULATOR_HIDDEN, true);
-	WM_manipulator_set_flag(man->axis_redo, WM_MANIPULATOR_HIDDEN, true);
+	for (int i = 0; i < 4; i++) {
+		WM_manipulator_set_flag(man->invoke_xyz_no[i], WM_MANIPULATOR_HIDDEN, true);
+		WM_manipulator_set_flag(man->adjust_xyz_no[i], WM_MANIPULATOR_HIDDEN, true);
+	}
 
 	if (G.moving) {
 		return;
 	}
 
-	int orientation_type;
-	{
-		PointerRNA ot_ptr;
-		WM_operator_last_properties_ensure(man->ot_extrude, &ot_ptr);
-		PointerRNA macroptr = RNA_pointer_get(&ot_ptr, "TRANSFORM_OT_translate");
-		orientation_type = RNA_enum_get(&macroptr, "constraint_orientation");
-	}
+	Scene *scene = CTX_data_scene(C);
+	man->data.orientation_type = scene->orientation_type;
+	bool use_normal = (man->data.orientation_type != V3D_MANIP_NORMAL);
+	const int axis_len_used = use_normal ? 4 : 3;
 
 	struct TransformBounds tbounds;
+
+	if (use_normal) {
+		struct TransformBounds tbounds_normal;
+		if (!ED_transform_calc_manipulator_stats(
+		            C, &(struct TransformCalcParams){
+		                .orientation_type = V3D_MANIP_NORMAL + 1,
+		            }, &tbounds_normal))
+		{
+			unit_m3(tbounds_normal.axis);
+		}
+		copy_m3_m3(man->data.normal_mat3, tbounds_normal.axis);
+	}
+
+	/* TODO(campbell): run second since this modifies the 3D view, it should not. */
 	if (!ED_transform_calc_manipulator_stats(
 	            C, &(struct TransformCalcParams){
-	                .orientation_type = orientation_type + 1,
+	                .orientation_type = man->data.orientation_type + 1,
 	            }, &tbounds))
 	{
 		return;
 	}
 
-	/* Needed for normal orientation. */
-	copy_m4_m3(man->axis_arrow->matrix_basis, tbounds.axis);
-	copy_m4_m3(man->axis_redo->matrix_basis, tbounds.axis);
+	/* Main axis is normal. */
+	if (!use_normal) {
+		copy_m3_m3(man->data.normal_mat3, tbounds.axis);
+	}
 
-	WM_manipulator_set_matrix_location(man->axis_arrow, tbounds.center);
-	WM_manipulator_set_matrix_location(man->axis_redo, tbounds.center);
+	/* Offset the add icon. */
+	mul_v3_v3fl(
+	        man->invoke_xyz_no[3]->matrix_offset[3],
+	        man->data.normal_mat3[2],
+	        (extrude_arrow_normal_axis_scale * extrude_button_offset_scale) / extrude_button_scale);
+
+	/* Needed for normal orientation. */
+	manipulator_mesh_extrude_orientation_matrix_set(man, tbounds.axis);
+	if (use_normal) {
+		copy_m4_m3(man->adjust_xyz_no[3]->matrix_basis, man->data.normal_mat3);
+	}
+
+	/* Location. */
+	for (int i = 0; i < axis_len_used; i++) {
+		WM_manipulator_set_matrix_location(man->invoke_xyz_no[i], tbounds.center);
+		WM_manipulator_set_matrix_location(man->adjust_xyz_no[i], tbounds.center);
+	}
 
 	wmOperator *op = WM_operator_last_redo(C);
 	bool has_redo = (op && op->type == man->ot_extrude);
 
-	WM_manipulator_set_flag(man->axis_arrow, WM_MANIPULATOR_HIDDEN, false);
-	WM_manipulator_set_flag(man->axis_redo, WM_MANIPULATOR_HIDDEN, !has_redo);
+	/* Un-hide. */
+	for (int i = 0; i < axis_len_used; i++) {
+		WM_manipulator_set_flag(man->invoke_xyz_no[i], WM_MANIPULATOR_HIDDEN, false);
+		WM_manipulator_set_flag(man->adjust_xyz_no[i], WM_MANIPULATOR_HIDDEN, !has_redo);
+	}
 
-	{
-		wmManipulatorOpElem *mpop = WM_manipulator_operator_get(man->axis_arrow, 0);
+	/* Operator properties. */
+	if (use_normal) {
+		wmManipulatorOpElem *mpop = WM_manipulator_operator_get(man->invoke_xyz_no[3], 0);
 		PointerRNA macroptr = RNA_pointer_get(&mpop->ptr, "TRANSFORM_OT_translate");
-		RNA_enum_set(&macroptr, "constraint_orientation", orientation_type);
+		RNA_enum_set(&macroptr, "constraint_orientation", V3D_MANIP_NORMAL);
 	}
 
 	/* Redo with current settings. */
 	if (has_redo) {
-		/* We could also access this from 'ot->last_properties' */
-
 		wmOperator *op_transform = op->macro.last;
-		wmManipulatorOpElem *mpop = WM_manipulator_operator_get(man->axis_redo, 0);
-
-		PointerRNA macroptr = RNA_pointer_get(&mpop->ptr, "TRANSFORM_OT_translate");
-
 		float value[4];
 		RNA_float_get_array(op_transform->ptr, "value", value);
-		RNA_float_set_array(&macroptr, "value", value);
-
 		int constraint_axis[3];
 		RNA_boolean_get_array(op_transform->ptr, "constraint_axis", constraint_axis);
-		RNA_boolean_set_array(&macroptr, "constraint_axis", constraint_axis);
+		int orientation_type = RNA_enum_get(op_transform->ptr, "constraint_orientation");
+
+		/* We could also access this from 'ot->last_properties' */
+		for (int i = 0; i < 4; i++) {
+			if ((i != 3) ?
+			    (orientation_type == man->data.orientation_type && constraint_axis[i]) :
+			    (orientation_type == V3D_MANIP_NORMAL && constraint_axis[2]))
+			{
+				wmManipulatorOpElem *mpop = WM_manipulator_operator_get(man->adjust_xyz_no[i], 0);
+
+				PointerRNA macroptr = RNA_pointer_get(&mpop->ptr, "TRANSFORM_OT_translate");
+
+				RNA_float_set_array(&macroptr, "value", value);
+				RNA_boolean_set_array(&macroptr, "constraint_axis", constraint_axis);
+				RNA_enum_set(&macroptr, "constraint_orientation", orientation_type);
+			}
+			else {
+				/* TODO(campbell): ideally we could adjust all,
+				 * this is complicated by how operator redo and the transform macro works. */
+				WM_manipulator_set_flag(man->adjust_xyz_no[i], WM_MANIPULATOR_HIDDEN, true);
+			}
+		}
+	}
+
+	for (int i = 0; i < 4; i++) {
+		RNA_enum_set(
+		        man->invoke_xyz_no[i]->ptr,
+		        "draw_options",
+		        (man->adjust_xyz_no[i]->flag & WM_MANIPULATOR_HIDDEN) ?
+		        ED_MANIPULATOR_BUTTON_SHOW_HELPLINE : 0);
+	}
+}
+
+static void manipulator_mesh_extrude_draw_prepare(const bContext *C, wmManipulatorGroup *mgroup)
+{
+	ManipulatorExtrudeGroup *man = mgroup->customdata;
+	switch (man->data.orientation_type) {
+		case V3D_MANIP_VIEW:
+		{
+			RegionView3D *rv3d = CTX_wm_region_view3d(C);
+			float mat[3][3];
+			copy_m3_m4(mat, rv3d->viewinv);
+			normalize_m3(mat);
+			manipulator_mesh_extrude_orientation_matrix_set(man, mat);
+			break;
+		}
 	}
 }
 
 static void manipulator_mesh_extrude_message_subscribe(
         const bContext *C, wmManipulatorGroup *mgroup, struct wmMsgBus *mbus)
 {
-	ManipulatorExtrudeGroup *man = mgroup->customdata;
 	ARegion *ar = CTX_wm_region(C);
 
 	/* Subscribe to view properties */
@@ -520,11 +650,9 @@ static void manipulator_mesh_extrude_message_subscribe(
 	};
 
 	{
-		PointerRNA ot_ptr;
-		WM_operator_last_properties_ensure(man->ot_extrude, &ot_ptr);
-		PointerRNA macroptr = RNA_pointer_get(&ot_ptr, "TRANSFORM_OT_translate");
-		WM_msg_subscribe_rna(mbus, &macroptr, NULL, &msg_sub_value_mpr_tag_refresh, __func__);
+		WM_msg_subscribe_rna_anon_prop(mbus, Scene, transform_orientation, &msg_sub_value_mpr_tag_refresh);
 	}
+
 }
 
 static void MESH_WGT_extrude(struct wmManipulatorGroupType *wgt)
@@ -540,6 +668,7 @@ static void MESH_WGT_extrude(struct wmManipulatorGroupType *wgt)
 	wgt->poll = manipulator_mesh_extrude_poll;
 	wgt->setup = manipulator_mesh_extrude_setup;
 	wgt->refresh = manipulator_mesh_extrude_refresh;
+	wgt->draw_prepare = manipulator_mesh_extrude_draw_prepare;
 	wgt->message_subscribe = manipulator_mesh_extrude_message_subscribe;
 }
 

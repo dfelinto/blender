@@ -714,13 +714,15 @@ static const EnumPropertyItem *rna_View3DShading_studio_light_itemf(
         PropertyRNA *UNUSED(prop), bool *r_free)
 {
 	EnumPropertyItem *item = NULL;
+	EnumPropertyItem *lastitem;
 	int totitem = 0;
 
-	/* XXX: add studio lights */
 	LISTBASE_FOREACH(StudioLight*, sl, BKE_studiolight_listbase()) {
 		if (totitem < NUM_STUDIO_LIGHT_ITEMS) {
 			RNA_enum_items_add_value(&item, &totitem, rna_enum_studio_light_items, totitem);
-			item[totitem-1].icon = sl->icon_id;
+			lastitem = &item[totitem-1];
+			lastitem->icon = sl->icon_id;
+			lastitem->name = sl->name;
 		}
 	}
 
@@ -2201,10 +2203,10 @@ static void rna_def_space_view3d_shading(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Lighting", "Lighting Method for Solid/Texture Viewport Shading");
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
 
-	prop = RNA_def_property(srna, "show_object_overlap", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_sdna(prop, NULL, "shading.flag", V3D_SHADING_OBJECT_OVERLAP);
+	prop = RNA_def_property(srna, "show_object_outline", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "shading.flag", V3D_SHADING_OBJECT_OUTLINE);
 	RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
-	RNA_def_property_ui_text(prop, "Object Overlap", "Show Object Overlap");
+	RNA_def_property_ui_text(prop, "Object Outline", "Show Object Outline");
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
 
 	prop = RNA_def_property(srna, "studio_light", PROP_ENUM, PROP_NONE);
@@ -2587,7 +2589,6 @@ static void rna_def_space_view3d(BlenderRNA *brna)
 	prop = RNA_def_property(srna, "show_manipulator", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "twflag", V3D_MANIPULATOR_DRAW);
 	RNA_def_property_ui_text(prop, "Manipulator", "Use a 3D manipulator widget for controlling transforms");
-	RNA_def_property_ui_icon(prop, ICON_MANIPUL, 0);
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
 
 	prop = RNA_def_property(srna, "lock_camera_and_layers", PROP_BOOLEAN, PROP_NONE);

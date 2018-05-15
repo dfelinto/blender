@@ -225,6 +225,32 @@ class _defs_edit_armature:
         )
 
     @ToolDef.from_fn
+    def bone_envelope():
+        return dict(
+            text="Bone Envelope",
+            icon="ops.transform.bone_envelope",
+            widget=None,
+            keymap=(
+                ("transform.transform",
+                 dict(release_confirm=True, mode='BONE_ENVELOPE'),
+                 dict(type='ACTIONMOUSE', value='PRESS')),
+            ),
+        )
+
+    @ToolDef.from_fn
+    def bone_size():
+        return dict(
+            text="Bone Size",
+            icon="ops.transform.bone_size",
+            widget=None,
+            keymap=(
+                ("transform.transform",
+                 dict(release_confirm=True, mode='BONE_SIZE'),
+                 dict(type='ACTIONMOUSE', value='PRESS')),
+            ),
+        )
+
+    @ToolDef.from_fn
     def extrude():
         return dict(
             text="Extrude",
@@ -397,21 +423,14 @@ class _defs_edit_mesh:
 
     @ToolDef.from_fn
     def extrude():
-        def draw_settings(context, layout):
-            wm = context.window_manager
-            props = wm.operator_properties_last("mesh.extrude_context_move")
-            props_xform = props.TRANSFORM_OT_translate
-            layout.prop(props_xform, "constraint_orientation")
-
         return dict(
             text="Extrude Region",
             icon="ops.mesh.extrude_region_move",
             widget="MESH_WGT_extrude",
             keymap=(
                 ("mesh.extrude_context_move", dict(TRANSFORM_OT_translate=dict(release_confirm=True)),
-                 dict(type='ACTIONMOUSE', value='PRESS')),
+                 dict(type='EVT_TWEAK_A', value='ANY')),
             ),
-            draw_settings=draw_settings,
         )
 
     @ToolDef.from_fn
@@ -422,7 +441,7 @@ class _defs_edit_mesh:
             widget=None,
             keymap=(
                 ("mesh.extrude_faces_move", dict(TRANSFORM_OT_shrink_fatten=dict(release_confirm=True)),
-                 dict(type='ACTIONMOUSE', value='PRESS')),
+                 dict(type='EVT_TWEAK_A', value='ANY')),
             ),
         )
 
@@ -587,6 +606,42 @@ class _defs_edit_curve:
             widget=None,
             keymap=(
                 ("curve.vertex_add", dict(), dict(type='ACTIONMOUSE', value='PRESS')),
+            ),
+        )
+
+
+class _defs_pose:
+
+    @ToolDef.from_fn
+    def breakdown():
+        return dict(
+            text="Breakdowner",
+            icon="ops.pose.breakdowner",
+            widget=None,
+            keymap=(
+                ("pose.breakdown", dict(), dict(type='ACTIONMOUSE', value='PRESS')),
+            ),
+        )
+
+    @ToolDef.from_fn
+    def push():
+        return dict(
+            text="Push",
+            icon="ops.pose.push",
+            widget=None,
+            keymap=(
+                ("pose.push", dict(), dict(type='ACTIONMOUSE', value='PRESS')),
+            ),
+        )
+
+    @ToolDef.from_fn
+    def relax():
+        return dict(
+            text="Relax",
+            icon="ops.pose.relax",
+            widget=None,
+            keymap=(
+                ("pose.relax", dict(), dict(type='ACTIONMOUSE', value='PRESS')),
             ),
         )
 
@@ -781,12 +836,22 @@ class VIEW3D_PT_tools_active(ToolSelectPanelHelper, Panel):
         'POSE': [
             *_tools_select,
             *_tools_transform,
+            None,
+            (
+                _defs_pose.breakdown,
+                _defs_pose.push,
+                _defs_pose.relax,
+            )
         ],
         'EDIT_ARMATURE': [
             *_tools_select,
             None,
             *_tools_transform,
             _defs_edit_armature.roll,
+            (
+                _defs_edit_armature.bone_size,
+                _defs_edit_armature.bone_envelope,
+            ),
             None,
             (
                 _defs_edit_armature.extrude,
