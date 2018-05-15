@@ -45,6 +45,7 @@ set(DEFSRC
 	rna_context.c
 	rna_curve.c
 	rna_depsgraph.c
+	rna_dynamic_override.c
 	rna_dynamicpaint.c
 	rna_fcurve.c
 	rna_fluidsim.c

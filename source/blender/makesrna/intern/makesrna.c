@@ -3360,6 +3360,7 @@ static RNAProcessItem PROCESS_ITEMS[] = {
 	{"rna_constraint.c", NULL, RNA_def_constraint},
 	{"rna_context.c", NULL, RNA_def_context},
 	{"rna_curve.c", "rna_curve_api.c", RNA_def_curve},
+	{"rna_dynamic_override.c", NULL, RNA_def_dynamic_override},
 	{"rna_dynamicpaint.c", NULL, RNA_def_dynamic_paint},
 	{"rna_fcurve.c", "rna_fcurve_api.c", RNA_def_fcurve},
 	{"rna_fluidsim.c", NULL, RNA_def_fluidsim},
