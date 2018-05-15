@@ -159,16 +159,26 @@ static void rna_DynamicOverrideProperty_value_float_range(
 	*max = FLT_MAX;
 }
 
+static int rna_DynamicOverrideProperty_value_color_get_length(PointerRNA *ptr, int length[RNA_MAX_ARRAY_DIMENSION])
+{
+	DynamicOverrideProperty *dyn_prop = ptr->data;
+	return dyn_prop->array_len;
+}
+
 static void rna_DynamicOverrideProperty_value_color_get(PointerRNA *ptr, float *values)
 {
 	DynamicOverrideProperty *dyn_prop = ptr->data;
-	copy_v3_v3(values, dyn_prop->data.f);
+	for (int i = 0; i < dyn_prop->array_len; i++) {
+		values[i] = dyn_prop->data.f[i];
+	}
 }
 
 static void rna_DynamicOverrideProperty_value_color_set(PointerRNA *ptr, const float *values)
 {
 	DynamicOverrideProperty *dyn_prop = ptr->data;
-	copy_v3_v3(dyn_prop->data.f, values);
+	for (int i = 0; i < dyn_prop->array_len; i++) {
+		dyn_prop->data.f[i] = values[i];
+	}
 }
 
 #else
@@ -265,7 +275,9 @@ void RNA_def_dynamic_override(BlenderRNA *brna)
 	RNA_def_property_update(prop, NC_SCENE | ND_DYN_OVERRIDES, NULL);
 
 	prop = RNA_def_property(srna, "value_color", PROP_FLOAT, PROP_COLOR);
-	RNA_def_property_array(prop, 3);
+	RNA_def_property_flag(prop, PROP_DYNAMIC);
+	RNA_def_property_multi_array(prop, 1, NULL);
+	RNA_def_property_dynamic_array_funcs(prop, "rna_DynamicOverrideProperty_value_color_get_length");
 	RNA_def_property_float_funcs(prop,
 	                             "rna_DynamicOverrideProperty_value_color_get",
 	                             "rna_DynamicOverrideProperty_value_color_set",

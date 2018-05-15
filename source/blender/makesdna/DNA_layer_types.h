@@ -80,7 +80,8 @@ typedef struct DynamicOverrideProperty {
 	short property_type; /* eDynamicOverridePropertyType */
 	short override_mode; /* eDynamicOverrideMode */
 	short id_type;
-	short pad[2];
+	short array_len;
+	short pad;
 } DynamicOverrideProperty;
 
 typedef struct OverrideSet {
