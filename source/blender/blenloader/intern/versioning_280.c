@@ -722,6 +722,60 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *main)
 
 		for (Scene *scene = main->scene.first; scene; scene = scene->id.next) {
 			scene->r.gauss = 1.5f;
+
+			/* EEVEE */
+			scene->eevee.gi_diffuse_bounces = 3;
+			scene->eevee.gi_cubemap_resolution = 512;
+			scene->eevee.gi_visibility_resolution = 32;
+
+			scene->eevee.taa_samples = 16;
+			scene->eevee.taa_render_samples = 64;
+
+			scene->eevee.sss_samples = 7;
+			scene->eevee.sss_jitter_threshold = 0.3f;
+
+			scene->eevee.ssr_quality = 0.25f;
+			scene->eevee.ssr_max_roughness = 0.5f;
+			scene->eevee.ssr_thickness = 0.2f;
+			scene->eevee.ssr_border_fade = 0.075f;
+			scene->eevee.ssr_firefly_fac = 10.0f;
+
+			scene->eevee.volumetric_start = 0.1f;
+			scene->eevee.volumetric_end = 100.0f;
+			scene->eevee.volumetric_tile_size = 8;
+			scene->eevee.volumetric_samples = 64;
+			scene->eevee.volumetric_sample_distribution = 0.8f;
+			scene->eevee.volumetric_light_clamp = 0.0f;
+			scene->eevee.volumetric_shadow_samples = 16;
+
+			scene->eevee.gtao_distance = 0.2f;
+			scene->eevee.gtao_factor = 1.0f;
+			scene->eevee.gtao_quality = 0.25f;
+
+			scene->eevee.bokeh_max_size = 100.0f;
+			scene->eevee.bokeh_threshold = 1.0f;
+
+			copy_v3_fl(scene->eevee.bloom_color, 1.0f);
+			scene->eevee.bloom_threshold = 0.8f;
+			scene->eevee.bloom_knee = 0.5f;
+			scene->eevee.bloom_intensity = 0.8f;
+			scene->eevee.bloom_radius = 6.5f;
+			scene->eevee.bloom_clamp = 1.0f;
+
+			scene->eevee.motion_blur_samples = 8;
+			scene->eevee.motion_blur_shutter = 1.0f;
+
+			scene->eevee.shadow_method = SHADOW_ESM;
+			scene->eevee.shadow_cube_size = 512;
+			scene->eevee.shadow_cascade_size = 1024;
+
+			scene->eevee.flag =
+			        SCE_EEVEE_VOLUMETRIC_LIGHTS |
+			        SCE_EEVEE_VOLUMETRIC_COLORED |
+			        SCE_EEVEE_GTAO_BENT_NORMALS |
+			        SCE_EEVEE_GTAO_BOUNCE |
+			        SCE_EEVEE_TAA_REPROJECTION |
+			        SCE_EEVEE_SSR_HALF_RESOLUTION;
 		}
 	}
 
@@ -1102,6 +1156,76 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *main)
 		if (!DNA_struct_elem_find(fd->filesdna, "ToolSettings", "char", "transform_pivot_point")) {
 			for (Scene *scene = main->scene.first; scene; scene = scene->id.next) {
 				scene->toolsettings->transform_pivot_point = V3D_AROUND_CENTER_MEAN;
+			}
+		}
+
+		if (!DNA_struct_find(fd->filesdna, "SceneEEVEE")) {
+			for (Scene *scene = main->scene.first; scene; scene = scene->id.next) {
+				IDProperty *props = BKE_view_layer_engine_scene_get(scene, RE_engine_id_BLENDER_EEVEE);
+				scene->eevee.flag =
+				        (BKE_collection_engine_property_value_get_bool(props, "volumetric_enable") ? SCE_EEVEE_VOLUMETRIC_ENABLED : 0) |
+				        (BKE_collection_engine_property_value_get_bool(props, "volumetric_lights") ? SCE_EEVEE_VOLUMETRIC_LIGHTS : 0) |
+				        (BKE_collection_engine_property_value_get_bool(props, "volumetric_shadows") ? SCE_EEVEE_VOLUMETRIC_SHADOWS : 0) |
+				        (BKE_collection_engine_property_value_get_bool(props, "volumetric_colored_transmittance") ? SCE_EEVEE_VOLUMETRIC_COLORED : 0) |
+				        (BKE_collection_engine_property_value_get_bool(props, "gtao_enable") ? SCE_EEVEE_GTAO_ENABLED : 0) |
+				        (BKE_collection_engine_property_value_get_bool(props, "gtao_use_bent_normals") ? SCE_EEVEE_GTAO_BENT_NORMALS : 0) |
+				        (BKE_collection_engine_property_value_get_bool(props, "gtao_bounce") ? SCE_EEVEE_GTAO_BOUNCE : 0) |
+				        (BKE_collection_engine_property_value_get_bool(props, "dof_enable") ? SCE_EEVEE_DOF_ENABLED : 0) |
+				        (BKE_collection_engine_property_value_get_bool(props, "bloom_enable") ? SCE_EEVEE_BLOOM_ENABLED : 0) |
+				        (BKE_collection_engine_property_value_get_bool(props, "motion_blur_enable") ? SCE_EEVEE_MOTION_BLUR_ENABLED : 0) |
+				        (BKE_collection_engine_property_value_get_bool(props, "shadow_high_bitdepth") ? SCE_EEVEE_SHADOW_HIGH_BITDEPTH : 0) |
+				        (BKE_collection_engine_property_value_get_bool(props, "taa_reprojection") ? SCE_EEVEE_TAA_REPROJECTION : 0) |
+				        (BKE_collection_engine_property_value_get_bool(props, "sss_enable") ? SCE_EEVEE_SSS_ENABLED : 0) |
+				        (BKE_collection_engine_property_value_get_bool(props, "sss_separate_albedo") ? SCE_EEVEE_SSS_SEPARATE_ALBEDO : 0) |
+				        (BKE_collection_engine_property_value_get_bool(props, "ssr_enable") ? SCE_EEVEE_SSR_ENABLED : 0) |
+				        (BKE_collection_engine_property_value_get_bool(props, "ssr_refraction") ? SCE_EEVEE_SSR_REFRACTION : 0) |
+				        (BKE_collection_engine_property_value_get_bool(props, "ssr_halfres") ? SCE_EEVEE_SSR_HALF_RESOLUTION : 0);
+
+				scene->eevee.gi_diffuse_bounces = BKE_collection_engine_property_value_get_int(props, "gi_diffuse_bounces");
+				scene->eevee.gi_cubemap_resolution = BKE_collection_engine_property_value_get_int(props, "gi_cubemap_resolution");
+				scene->eevee.gi_visibility_resolution = BKE_collection_engine_property_value_get_int(props, "gi_visibility_resolution");
+
+				scene->eevee.taa_samples = BKE_collection_engine_property_value_get_int(props, "taa_samples");
+				scene->eevee.taa_render_samples = BKE_collection_engine_property_value_get_int(props, "taa_render_samples");
+
+				scene->eevee.sss_samples = BKE_collection_engine_property_value_get_int(props, "sss_samples");
+				scene->eevee.sss_jitter_threshold = BKE_collection_engine_property_value_get_float(props, "sss_jitter_threshold");
+
+				scene->eevee.ssr_quality = BKE_collection_engine_property_value_get_float(props, "ssr_quality");
+				scene->eevee.ssr_max_roughness = BKE_collection_engine_property_value_get_float(props, "ssr_max_roughness");
+				scene->eevee.ssr_thickness = BKE_collection_engine_property_value_get_float(props, "ssr_thickness");
+				scene->eevee.ssr_border_fade = BKE_collection_engine_property_value_get_float(props, "ssr_border_fade");
+				scene->eevee.ssr_firefly_fac = BKE_collection_engine_property_value_get_float(props, "ssr_firefly_fac");
+
+				scene->eevee.volumetric_start = BKE_collection_engine_property_value_get_float(props, "volumetric_start");
+				scene->eevee.volumetric_end = BKE_collection_engine_property_value_get_float(props, "volumetric_end");
+				scene->eevee.volumetric_tile_size = BKE_collection_engine_property_value_get_int(props, "volumetric_tile_size");
+				scene->eevee.volumetric_samples = BKE_collection_engine_property_value_get_int(props, "volumetric_samples");
+				scene->eevee.volumetric_sample_distribution = BKE_collection_engine_property_value_get_float(props, "volumetric_sample_distribution");
+				scene->eevee.volumetric_light_clamp = BKE_collection_engine_property_value_get_float(props, "volumetric_light_clamp");
+				scene->eevee.volumetric_shadow_samples = BKE_collection_engine_property_value_get_int(props, "volumetric_shadow_samples");
+
+				scene->eevee.gtao_distance = BKE_collection_engine_property_value_get_float(props, "gtao_distance");
+				scene->eevee.gtao_factor = BKE_collection_engine_property_value_get_float(props, "gtao_factor");
+				scene->eevee.gtao_quality = BKE_collection_engine_property_value_get_float(props, "gtao_quality");
+
+				scene->eevee.bokeh_max_size = BKE_collection_engine_property_value_get_float(props, "bokeh_max_size");
+				scene->eevee.bokeh_threshold = BKE_collection_engine_property_value_get_float(props, "bokeh_threshold");
+
+				const float *color = BKE_collection_engine_property_value_get_float_array(props, "bloom_color");
+				copy_v3_v3(scene->eevee.bloom_color, color);
+				scene->eevee.bloom_threshold = BKE_collection_engine_property_value_get_float(props, "bloom_threshold");
+				scene->eevee.bloom_knee = BKE_collection_engine_property_value_get_float(props, "bloom_knee");
+				scene->eevee.bloom_intensity = BKE_collection_engine_property_value_get_float(props, "bloom_intensity");
+				scene->eevee.bloom_radius = BKE_collection_engine_property_value_get_float(props, "bloom_radius");
+				scene->eevee.bloom_clamp = BKE_collection_engine_property_value_get_float(props, "bloom_clamp");
+
+				scene->eevee.motion_blur_samples = BKE_collection_engine_property_value_get_int(props, "motion_blur_samples");
+				scene->eevee.motion_blur_shutter = BKE_collection_engine_property_value_get_float(props, "motion_blur_shutter");
+
+				scene->eevee.shadow_method = BKE_collection_engine_property_value_get_int(props, "shadow_method");
+				scene->eevee.shadow_cube_size = BKE_collection_engine_property_value_get_int(props, "shadow_cube_size");
+				scene->eevee.shadow_cascade_size = BKE_collection_engine_property_value_get_int(props, "shadow_cascade_size");
 			}
 		}
 	}
