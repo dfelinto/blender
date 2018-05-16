@@ -159,7 +159,7 @@ static void rna_DynamicOverrideProperty_value_float_range(
 	*max = FLT_MAX;
 }
 
-static int rna_DynamicOverrideProperty_value_color_get_length(PointerRNA *ptr, int UNUSED(length)[RNA_MAX_ARRAY_DIMENSION])
+static int rna_DynamicOverrideProperty_value_color_get_length(PointerRNA *ptr, int UNUSED(length[RNA_MAX_ARRAY_DIMENSION]))
 {
 	DynamicOverrideProperty *dyn_prop = ptr->data;
 	return dyn_prop->array_len;
