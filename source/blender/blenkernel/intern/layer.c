@@ -1383,6 +1383,33 @@ void BKE_override_view_layer_int_add(ViewLayer *view_layer, int id_type, const c
 }
 
 /**
+ * Add a new bool override
+ */
+void BKE_override_view_layer_bool_add(struct ViewLayer *view_layer, int id_type, const char *data_path, const int flag, const bool value)
+{
+	UNUSED_VARS(view_layer, id_type, data_path, flag, value);
+	TODO_LAYER_OVERRIDE;
+}
+
+/**
+ * Add a new float override
+ */
+void BKE_override_view_layer_float_add(struct ViewLayer *view_layer, int id_type, const char *data_path, const float value)
+{
+	UNUSED_VARS(view_layer, id_type, data_path, value);
+	TODO_LAYER_OVERRIDE;
+}
+
+/**
+ * Add a new float array override
+ */
+void BKE_override_view_layer_float_array_add(struct ViewLayer *view_layer, int id_type, const char *data_path, const float *values, const int length)
+{
+	UNUSED_VARS(view_layer, id_type, data_path, values, length);
+	TODO_LAYER_OVERRIDE;
+}
+
+/**
  * Add a new boolean override
  */
 void BKE_override_layer_collection_boolean_add(struct LayerCollection *layer_collection, int id_type, const char *data_path, const bool value)

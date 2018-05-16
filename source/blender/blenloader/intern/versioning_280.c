@@ -1226,6 +1226,115 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *main)
 				scene->eevee.shadow_method = BKE_collection_engine_property_value_get_int(props, "shadow_method");
 				scene->eevee.shadow_cube_size = BKE_collection_engine_property_value_get_int(props, "shadow_cube_size");
 				scene->eevee.shadow_cascade_size = BKE_collection_engine_property_value_get_int(props, "shadow_cascade_size");
+
+#if 0
+				for (ViewLayer *view_layer = scene->view_layers.first; view_layer; view_layer = view_layer->next) {
+					IDProperty *overrides = BKE_view_layer_engine_evaluated_get(view_layer, RE_engine_id_BLENDER_EEVEE);
+
+#define DOVERSION_OVERRIDE_BOOL(_view_layer, _props, _name, _flag) \
+					{ \
+						IDProperty *_idprop = IDP_GetPropertyFromGroup(_props, #_name); \
+						if (_idprop != NULL) { \
+							const bool _value = IDP_Int(_idprop); \
+							BKE_override_view_layer_bool_add(_view_layer, ID_SCE, "eevee.flag", _flag, _value); \
+						} \
+					}
+
+#define DOVERSION_OVERRIDE_INT(_view_layer, _props, _name) \
+					{ \
+						IDProperty *_idprop = IDP_GetPropertyFromGroup(_props, #_name); \
+						if (_idprop != NULL) { \
+							const int _value = IDP_Int(_idprop); \
+							BKE_override_view_layer_int_add(_view_layer, ID_SCE, "eevee."#_name, _value); \
+						} \
+					}
+
+#define DOVERSION_OVERRIDE_FLOAT(_view_layer, _props, _name) \
+					{ \
+						IDProperty *_idprop = IDP_GetPropertyFromGroup(_props, #_name); \
+						if (_idprop != NULL) { \
+							const int _value = IDP_Float(_idprop); \
+							BKE_override_view_layer_float_add(_view_layer, ID_SCE, "eevee."#_name, _value); \
+						} \
+					}
+
+#define DOVERSION_OVERRIDE_FLOAT_ARRAY(_view_layer, _props, _name, _length) \
+					{ \
+						IDProperty *_idprop = IDP_GetPropertyFromGroup(_props, #_name); \
+						if (_idprop != NULL) { \
+							const float *_values = IDP_Array(_idprop); \
+							BKE_override_view_layer_float_array_add(_view_layer, ID_SCE, "eevee."#_name, _values, _length); \
+						} \
+					}
+
+					DOVERSION_OVERRIDE_BOOL(view_layer, overrides, volumetric_enable, SCE_EEVEE_VOLUMETRIC_ENABLED);
+					DOVERSION_OVERRIDE_BOOL(view_layer, overrides, volumetric_lights, SCE_EEVEE_VOLUMETRIC_LIGHTS);
+					DOVERSION_OVERRIDE_BOOL(view_layer, overrides, volumetric_shadows, SCE_EEVEE_VOLUMETRIC_SHADOWS);
+					DOVERSION_OVERRIDE_BOOL(view_layer, overrides, volumetric_colored_transmittance, SCE_EEVEE_VOLUMETRIC_COLORED);
+					DOVERSION_OVERRIDE_BOOL(view_layer, overrides, gtao_enable, SCE_EEVEE_GTAO_ENABLED);
+					DOVERSION_OVERRIDE_BOOL(view_layer, overrides, gtao_use_bent_normals, SCE_EEVEE_GTAO_BENT_NORMALS);
+					DOVERSION_OVERRIDE_BOOL(view_layer, overrides, gtao_bounce, SCE_EEVEE_GTAO_BOUNCE);
+					DOVERSION_OVERRIDE_BOOL(view_layer, overrides, dof_enable, SCE_EEVEE_DOF_ENABLED);
+					DOVERSION_OVERRIDE_BOOL(view_layer, overrides, bloom_enable, SCE_EEVEE_BLOOM_ENABLED);
+					DOVERSION_OVERRIDE_BOOL(view_layer, overrides, motion_blur_enable, SCE_EEVEE_MOTION_BLUR_ENABLED);
+					DOVERSION_OVERRIDE_BOOL(view_layer, overrides, shadow_high_bitdepth, SCE_EEVEE_SHADOW_HIGH_BITDEPTH);
+					DOVERSION_OVERRIDE_BOOL(view_layer, overrides, taa_reprojection, SCE_EEVEE_TAA_REPROJECTION);
+					DOVERSION_OVERRIDE_BOOL(view_layer, overrides, sss_enable, SCE_EEVEE_SSS_ENABLED);
+					DOVERSION_OVERRIDE_BOOL(view_layer, overrides, sss_separate_albedo, SCE_EEVEE_SSS_SEPARATE_ALBEDO);
+					DOVERSION_OVERRIDE_BOOL(view_layer, overrides, ssr_enable, SCE_EEVEE_SSR_ENABLED);
+					DOVERSION_OVERRIDE_BOOL(view_layer, overrides, ssr_refraction, SCE_EEVEE_SSR_REFRACTION);
+					DOVERSION_OVERRIDE_BOOL(view_layer, overrides, ssr_halfres, SCE_EEVEE_SSR_HALF_RESOLUTION);
+
+					DOVERSION_OVERRIDE_INT(view_layer, overrides, gi_diffuse_bounces);
+					DOVERSION_OVERRIDE_INT(view_layer, overrides, gi_cubemap_resolution);
+					DOVERSION_OVERRIDE_INT(view_layer, overrides, gi_visibility_resolution);
+					DOVERSION_OVERRIDE_INT(view_layer, overrides, taa_samples);
+					DOVERSION_OVERRIDE_INT(view_layer, overrides, taa_render_samples);
+
+					DOVERSION_OVERRIDE_INT(view_layer, overrides, sss_samples);
+					DOVERSION_OVERRIDE_FLOAT(view_layer, overrides, sss_jitter_threshold);
+
+					DOVERSION_OVERRIDE_FLOAT(view_layer, overrides, ssr_quality);
+					DOVERSION_OVERRIDE_FLOAT(view_layer, overrides, ssr_max_roughness);
+					DOVERSION_OVERRIDE_FLOAT(view_layer, overrides, ssr_thickness);
+					DOVERSION_OVERRIDE_FLOAT(view_layer, overrides, ssr_border_fade);
+					DOVERSION_OVERRIDE_FLOAT(view_layer, overrides, ssr_firefly_fac);
+
+					DOVERSION_OVERRIDE_FLOAT(view_layer, overrides, volumetric_start);
+					DOVERSION_OVERRIDE_FLOAT(view_layer, overrides, volumetric_end);
+					DOVERSION_OVERRIDE_INT(view_layer, overrides, volumetric_tile_size);
+					DOVERSION_OVERRIDE_INT(view_layer, overrides, volumetric_samples);
+					DOVERSION_OVERRIDE_FLOAT(view_layer, overrides, volumetric_sample_distribution);
+					DOVERSION_OVERRIDE_FLOAT(view_layer, overrides, volumetric_light_clamp);
+					DOVERSION_OVERRIDE_INT(view_layer, overrides, volumetric_shadow_samples);
+
+					DOVERSION_OVERRIDE_FLOAT(view_layer, overrides, gtao_distance);
+					DOVERSION_OVERRIDE_FLOAT(view_layer, overrides, gtao_factor);
+					DOVERSION_OVERRIDE_FLOAT(view_layer, overrides, gtao_quality);
+
+					DOVERSION_OVERRIDE_FLOAT(view_layer, overrides, bokeh_max_size);
+					DOVERSION_OVERRIDE_FLOAT(view_layer, overrides, bokeh_threshold);
+
+					DOVERSION_OVERRIDE_FLOAT_ARRAY(view_layer, overrides, bloom_color, 3);
+					DOVERSION_OVERRIDE_FLOAT(view_layer, overrides, bloom_threshold);
+					DOVERSION_OVERRIDE_FLOAT(view_layer, overrides, bloom_knee);
+					DOVERSION_OVERRIDE_FLOAT(view_layer, overrides, bloom_intensity);
+					DOVERSION_OVERRIDE_FLOAT(view_layer, overrides, bloom_radius);
+					DOVERSION_OVERRIDE_FLOAT(view_layer, overrides, bloom_clamp);
+
+					DOVERSION_OVERRIDE_INT(view_layer, overrides, motion_blur_samples);
+					DOVERSION_OVERRIDE_FLOAT(view_layer, overrides, motion_blur_shutter);
+
+					DOVERSION_OVERRIDE_INT(view_layer, overrides, shadow_method);
+					DOVERSION_OVERRIDE_INT(view_layer, overrides, shadow_cube_size);
+					DOVERSION_OVERRIDE_INT(view_layer, overrides, shadow_cascade_size);
+
+#undef DOVERSION_OVERRIDE_FLOAT_ARRAY
+#undef DOVERSION_OVERRIDE_FLOAT
+#undef DOVERSION_OVERRIDE_INT
+#undef DOVERSION_OVERRIDE_BOOL
+				}
+#endif
 			}
 		}
 	}

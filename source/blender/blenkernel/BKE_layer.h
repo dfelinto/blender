@@ -129,6 +129,9 @@ void BKE_layer_sync_object_unlink(const struct ID *owner_id, struct SceneCollect
 
 void BKE_override_view_layer_datablock_add(struct ViewLayer *view_layer, int id_type, const char *data_path, const struct ID *owner_id);
 void BKE_override_view_layer_int_add(struct ViewLayer *view_layer, int id_type, const char *data_path, const int value);
+void BKE_override_view_layer_bool_add(struct ViewLayer *view_layer, int id_type, const char *data_path, const int flag, const bool value);
+void BKE_override_view_layer_float_add(struct ViewLayer *view_layer, int id_type, const char *data_path, const float value);
+void BKE_override_view_layer_float_array_add(struct ViewLayer *view_layer, int id_type, const char *data_path, const float *values, const int length);
 
 void BKE_override_layer_collection_boolean_add(struct LayerCollection *layer_collection, int id_type, const char *data_path, const bool value);
 
