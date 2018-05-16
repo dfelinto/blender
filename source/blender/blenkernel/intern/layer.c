@@ -2020,9 +2020,9 @@ DynamicOverrideProperty *BKE_view_layer_override_property_add(
 	dyn_prop->id_type = id_type;
 	dyn_prop->property_type = property_type;
 	dyn_prop->rna_path = rna_path_str;
+	dyn_prop->array_len = RNA_property_array_length(ptr, prop);
 
 	const bool is_array = RNA_property_array_check(prop);
-	dyn_prop->array_len = RNA_property_array_length(ptr, prop);
 
 	/* TODO handle array. */
 	switch (RNA_property_type(prop)) {
