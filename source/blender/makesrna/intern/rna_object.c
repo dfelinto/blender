@@ -176,6 +176,7 @@ const EnumPropertyItem rna_enum_object_axis_items[] = {
 #include "DNA_constraint_types.h"
 #include "DNA_ID.h"
 #include "DNA_lattice_types.h"
+#include "DNA_layer_types.h"
 #include "DNA_node_types.h"
 
 #include "BKE_armature.h"
@@ -1135,8 +1136,13 @@ bool rna_Object_constraints_override_apply(
         PointerRNA *ptr_dst, PointerRNA *ptr_src, PointerRNA *UNUSED(ptr_storage),
         PropertyRNA *UNUSED(prop_dst), PropertyRNA *UNUSED(prop_src), PropertyRNA *UNUSED(prop_storage),
         const int UNUSED(len_dst), const int UNUSED(len_src), const int UNUSED(len_storage),
-        IDOverrideStaticPropertyOperation *opop)
+        IDOverrideStaticPropertyOperation *opop, DynamicOverrideProperty *dyn_prop)
 {
+	if (dyn_prop != NULL) {
+		printf("%s: unsupported dynamic override...", __func__);
+		return false;
+	}
+
 	BLI_assert(opop->operation == IDOVERRIDESTATIC_OP_INSERT_AFTER &&
 	           "Unsupported RNA override operation on constraints collection");
 
@@ -1209,8 +1215,13 @@ bool rna_Object_modifiers_override_apply(
         PointerRNA *ptr_dst, PointerRNA *ptr_src, PointerRNA *UNUSED(ptr_storage),
         PropertyRNA *UNUSED(prop_dst), PropertyRNA *UNUSED(prop_src), PropertyRNA *UNUSED(prop_storage),
         const int UNUSED(len_dst), const int UNUSED(len_src), const int UNUSED(len_storage),
-        IDOverrideStaticPropertyOperation *opop)
+        IDOverrideStaticPropertyOperation *opop, DynamicOverrideProperty *dyn_prop)
 {
+	if (dyn_prop != NULL) {
+		printf("%s: unsupported dynamic override...", __func__);
+		return false;
+	}
+
 	BLI_assert(opop->operation == IDOVERRIDESTATIC_OP_INSERT_AFTER &&
 	           "Unsupported RNA override operation on modifiers collection");
 

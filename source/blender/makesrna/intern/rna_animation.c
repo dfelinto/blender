@@ -78,6 +78,8 @@ const EnumPropertyItem rna_enum_keying_flag_items[] = {
 
 #include "DEG_depsgraph.h"
 
+#include "DNA_ID.h"
+#include "DNA_layer_types.h"
 #include "DNA_object_types.h"
 
 #include "WM_api.h"
@@ -589,8 +591,13 @@ bool rna_AnimaData_override_apply(
         PointerRNA *ptr_dst, PointerRNA *ptr_src, PointerRNA *ptr_storage,
         PropertyRNA *prop_dst, PropertyRNA *prop_src, PropertyRNA *UNUSED(prop_storage),
         const int len_dst, const int len_src, const int len_storage,
-        IDOverrideStaticPropertyOperation *opop)
+        IDOverrideStaticPropertyOperation *opop, DynamicOverrideProperty *dyn_prop)
 {
+	if (dyn_prop != NULL) {
+		printf("%s: unsupported dynamic override...", __func__);
+		return false;
+	}
+
 	BLI_assert(len_dst == len_src && (!ptr_storage || len_dst == len_storage) && len_dst == 0);
 	BLI_assert(opop->operation == IDOVERRIDESTATIC_OP_REPLACE && "Unsupported RNA override operation on animdata pointer");
 	UNUSED_VARS_NDEBUG(ptr_storage, len_dst, len_src, len_storage, opop);

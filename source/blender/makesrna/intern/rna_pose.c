@@ -99,6 +99,7 @@ const EnumPropertyItem rna_enum_color_sets_items[] = {
 #include "BKE_armature.h"
 
 #include "DNA_userdef_types.h"
+#include "DNA_layer_types.h"
 
 #include "MEM_guardedalloc.h"
 
@@ -569,8 +570,13 @@ bool rna_PoseChannel_constraints_override_apply(
         PointerRNA *ptr_dst, PointerRNA *ptr_src, PointerRNA *UNUSED(ptr_storage),
         PropertyRNA *UNUSED(prop_dst), PropertyRNA *UNUSED(prop_src), PropertyRNA *UNUSED(prop_storage),
         const int UNUSED(len_dst), const int UNUSED(len_src), const int UNUSED(len_storage),
-        IDOverrideStaticPropertyOperation *opop)
+        IDOverrideStaticPropertyOperation *opop, DynamicOverrideProperty *dyn_prop)
 {
+	if (dyn_prop != NULL) {
+		printf("%s: unsupported dynamic override...", __func__);
+		return false;
+	}
+
 	BLI_assert(opop->operation == IDOVERRIDESTATIC_OP_INSERT_AFTER &&
 	           "Unsupported RNA override operation on constraints collection");
 

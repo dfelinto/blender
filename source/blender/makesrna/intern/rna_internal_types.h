@@ -40,6 +40,7 @@ struct PointerRNA;
 struct FunctionRNA;
 struct CollectionPropertyIterator;
 struct bContext;
+struct DynamicOverrideProperty;
 struct IDOverrideStatic;
 struct IDOverrideStaticProperty;
 struct IDOverrideStaticPropertyOperation;
@@ -166,7 +167,7 @@ typedef bool (*RNAPropOverrideApply)(
         struct PointerRNA *ptr_dst, struct PointerRNA *ptr_src, struct PointerRNA *ptr_storage,
         struct PropertyRNA *prop_dst, struct PropertyRNA *prop_src, struct PropertyRNA *prop_storage,
         const int len_dst, const int len_src, const int len_storage,
-        struct IDOverrideStaticPropertyOperation *opop);
+        struct IDOverrideStaticPropertyOperation *opop, struct DynamicOverrideProperty *dyn_prop);
 
 /* Container - generic abstracted container of RNA properties */
 typedef struct ContainerRNA {

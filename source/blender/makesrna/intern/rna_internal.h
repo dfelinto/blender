@@ -36,6 +36,7 @@
 #define RNA_MAGIC ((int)~0)
 
 struct Depsgraph;
+struct DynamicOverrideProperty;
 struct FreestyleSettings;
 struct ID;
 struct IDOverrideStatic;
@@ -209,7 +210,7 @@ bool rna_AnimaData_override_apply(
         struct PointerRNA *ptr_local, struct PointerRNA *ptr_reference, struct PointerRNA *ptr_storage,
         struct PropertyRNA *prop_local, struct PropertyRNA *prop_reference, struct PropertyRNA *prop_storage,
         const int len_local, const int len_reference, const int len_storage,
-        struct IDOverrideStaticPropertyOperation *opop);
+        struct IDOverrideStaticPropertyOperation *opop, struct DynamicOverrideProperty *dyn_prop);
 
 void rna_def_animviz_common(struct StructRNA *srna);
 void rna_def_motionpath_common(struct StructRNA *srna);
@@ -426,7 +427,7 @@ bool rna_property_override_apply_default(
         struct PointerRNA *ptr_dst, struct PointerRNA *ptr_src, struct PointerRNA *ptr_storage,
         struct PropertyRNA *prop_dst, struct PropertyRNA *prop_src, struct PropertyRNA *prop_storage,
         const int len_dst, const int len_src, const int len_storage,
-        struct IDOverrideStaticPropertyOperation *opop);
+        struct IDOverrideStaticPropertyOperation *opop, struct DynamicOverrideProperty *dyn_prop);
 
 
 /* Builtin Property Callbacks */

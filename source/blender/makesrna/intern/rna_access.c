@@ -7509,7 +7509,7 @@ static bool rna_property_override_operation_apply(
 	            ptr_local, ptr_override, ptr_storage,
 	            prop_local, prop_override, prop_storage,
 	            len_local, len_reference, len_storage,
-	            opop);
+	            opop, NULL);
 }
 
 /**
