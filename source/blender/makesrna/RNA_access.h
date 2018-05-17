@@ -38,6 +38,7 @@ extern "C" {
 #endif
 
 struct bContext;
+struct DynamicOverrideProperty;
 struct ID;
 struct IDOverrideStatic;
 struct IDOverrideStaticProperty;
@@ -1288,6 +1289,8 @@ bool RNA_struct_override_store(
 void RNA_struct_override_apply(
         struct PointerRNA *ptr_local, struct PointerRNA *ptr_override, struct PointerRNA *ptr_storage,
         struct IDOverrideStatic *override);
+
+void RNA_struct_dynamic_override_apply(struct PointerRNA *ptr, struct DynamicOverrideProperty *dyn_prop);
 
 struct IDOverrideStaticProperty *RNA_property_override_property_find(PointerRNA *ptr, PropertyRNA *prop);
 struct IDOverrideStaticProperty *RNA_property_override_property_get(PointerRNA *ptr, PropertyRNA *prop, bool *r_created);

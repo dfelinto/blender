@@ -7162,10 +7162,9 @@ bool RNA_property_reset(PointerRNA *ptr, PropertyRNA *prop, int index)
 	}
 }
 
-static bool rna_property_override_operation_apply(
-        PointerRNA *ptr_local, PointerRNA *ptr_override, PointerRNA *ptr_storage,
+static bool rna_property_override_operation_apply(PointerRNA *ptr_local, PointerRNA *ptr_override, PointerRNA *ptr_storage,
         PropertyRNA *prop_local, PropertyRNA *prop_override, PropertyRNA *prop_storage,
-        IDOverrideStaticPropertyOperation *opop);
+        IDOverrideStaticPropertyOperation *opop, DynamicOverrideProperty *dyn_prop);
 
 bool RNA_property_copy(PointerRNA *ptr, PointerRNA *fromptr, PropertyRNA *prop, int index)
 {
@@ -7202,7 +7201,7 @@ bool RNA_property_copy(PointerRNA *ptr, PointerRNA *fromptr, PropertyRNA *prop, 
 	    .subitem_reference_index = index,
 	    .subitem_local_index = index
 	};
-	return rna_property_override_operation_apply(ptr, fromptr, NULL, prop_dst, prop_src, NULL, &opop);
+	return rna_property_override_operation_apply(ptr, fromptr, NULL, prop_dst, prop_src, NULL, &opop, NULL);
 }
 
 /* use RNA_warning macro which includes __func__ suffix */
@@ -7438,26 +7437,32 @@ static bool rna_property_override_operation_store(
 static bool rna_property_override_operation_apply(
         PointerRNA *ptr_local, PointerRNA *ptr_override, PointerRNA *ptr_storage,
         PropertyRNA *prop_local, PropertyRNA *prop_override, PropertyRNA *prop_storage,
-        IDOverrideStaticPropertyOperation *opop)
+        IDOverrideStaticPropertyOperation *opop, DynamicOverrideProperty *dyn_prop)
 {
 	int len_local, len_reference, len_storage = 0;
 
-	const short override_op = opop->operation;
+	const short override_op = opop != NULL ? opop->operation : dyn_prop->operation;
 
 	if (override_op == IDOVERRIDESTATIC_OP_NOOP) {
 		return true;
 	}
 
-	if (ELEM(override_op, IDOVERRIDESTATIC_OP_ADD, IDOVERRIDESTATIC_OP_SUBTRACT, IDOVERRIDESTATIC_OP_MULTIPLY) && !ptr_storage) {
-		/* We cannot apply 'diff' override operations without some refference storage.
-		 * This should typically only happen at read time of .blend file... */
-		return false;
-	}
+	if (opop != NULL) {
+		if (ELEM(override_op, IDOVERRIDESTATIC_OP_ADD, IDOVERRIDESTATIC_OP_SUBTRACT, IDOVERRIDESTATIC_OP_MULTIPLY) &&
+		    !ptr_storage)
+		{
+			/* We cannot apply 'diff' override operations without some refference storage.
+			 * This should typically only happen at read time of .blend file... */
+			return false;
+		}
 
-	if (ELEM(override_op, IDOVERRIDESTATIC_OP_ADD, IDOVERRIDESTATIC_OP_SUBTRACT, IDOVERRIDESTATIC_OP_MULTIPLY) && !prop_storage) {
-		/* We cannot apply 'diff' override operations without some refference storage.
-		 * This should typically only happen at read time of .blend file... */
-		return false;
+		if (ELEM(override_op, IDOVERRIDESTATIC_OP_ADD, IDOVERRIDESTATIC_OP_SUBTRACT, IDOVERRIDESTATIC_OP_MULTIPLY) &&
+		    !prop_storage)
+		{
+			/* We cannot apply 'diff' override operations without some refference storage.
+			 * This should typically only happen at read time of .blend file... */
+			return false;
+		}
 	}
 
 	RNAPropOverrideApply override_apply = NULL;
@@ -7494,7 +7499,7 @@ static bool rna_property_override_operation_apply(
 
 	/* get the length of the array to work with */
 	len_local = RNA_property_array_length(ptr_local, prop_local);
-	len_reference = RNA_property_array_length(ptr_override, prop_override);
+	len_reference = opop != NULL ? RNA_property_array_length(ptr_override, prop_override) : len_local;
 	if (ptr_storage) {
 		len_storage = RNA_property_array_length(ptr_storage, prop_storage);
 	}
@@ -7509,7 +7514,7 @@ static bool rna_property_override_operation_apply(
 	            ptr_local, ptr_override, ptr_storage,
 	            prop_local, prop_override, prop_storage,
 	            len_local, len_reference, len_storage,
-	            opop, NULL);
+	            opop, dyn_prop);
 }
 
 /**
@@ -7658,7 +7663,7 @@ bool RNA_struct_override_matches(
 						    .subitem_local_index = -1
 						};
 						rna_property_override_operation_apply(ptr_local, ptr_reference, NULL,
-						                                      prop_local, prop_reference, NULL, &opop_tmp);
+						                                      prop_local, prop_reference, NULL, &opop_tmp, NULL);
 						if (r_report_flags) {
 							*r_report_flags |= RNA_OVERRIDE_MATCH_RESULT_RESTORED;
 						}
@@ -7762,7 +7767,7 @@ static void rna_property_override_apply_ex(
 			continue;
 		}
 		if (!rna_property_override_operation_apply(ptr_local, ptr_override, ptr_storage,
-		                                           prop_local, prop_override, prop_storage, opop))
+		                                           prop_local, prop_override, prop_storage, opop, NULL))
 		{
 			/* TODO No assert here, would be much much better to just report as warning,
 			 * failing override applications will probably be fairly common! */
@@ -7814,6 +7819,32 @@ void RNA_struct_override_apply(
 	}
 #ifdef DEBUG_OVERRIDE_TIMEIT
 	TIMEIT_END_AVERAGED(RNA_struct_override_apply);
+#endif
+}
+
+/** Apply given dynamic \a dyn_prop operations on \a ptr_local. */
+void RNA_struct_dynamic_override_apply(PointerRNA *ptr, DynamicOverrideProperty *dyn_prop)
+{
+#ifdef DEBUG_OVERRIDE_TIMEIT
+	TIMEIT_START_AVERAGED(RNA_struct_dynamic_override_apply);
+#endif
+	/* Simplified for now! */
+
+	/* XXX For now, later we can use cached path in dyn_prop->data_path, even if only partially evaluated
+	 * (i.e. with no actual data), would still save us the whole string path parsing. */
+	if (RNA_path_resolve_elements(ptr, dyn_prop->rna_path, &dyn_prop->data_path)) {
+		rna_property_override_operation_apply(&((PropertyElemRNA *)dyn_prop->data_path.last)->ptr, NULL, NULL,
+		                                      ((PropertyElemRNA *)dyn_prop->data_path.last)->prop, NULL, NULL,
+		                                      NULL, dyn_prop);
+	}
+#ifndef NDEBUG
+	else {
+		printf("Failed to apply dynamic override operation to '%s.%s' (could not resolve some properties)\n",
+		       ((ID *)ptr->id.data)->name, dyn_prop->rna_path);
+	}
+#endif
+#ifdef DEBUG_OVERRIDE_TIMEIT
+	TIMEIT_END_AVERAGED(RNA_struct_dynamic_override_apply);
 #endif
 }
 
