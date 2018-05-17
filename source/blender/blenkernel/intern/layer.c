@@ -1597,6 +1597,13 @@ DynamicOverrideProperty *BKE_view_layer_override_property_add(
 		return NULL;
 	}
 
+	const int array_len = RNA_property_array_length(ptr, prop);
+	if (array_len > ARRAY_SIZE(((DynamicOverrideProperty *)NULL)->data.i)) {
+		/* TODO Use a define for supported array length. */
+		BLI_assert(!"Trying to dynamic-override an array longer than supported!");
+		return NULL;
+	}
+
 	DynamicOverrideProperty *dyn_prop = MEM_callocN(sizeof(DynamicOverrideProperty), __func__);
 	dyn_prop->flag = DYN_OVERRIDE_PROP_USE;
 	dyn_prop->multiply_factor = 1.0f;
@@ -1607,17 +1614,27 @@ DynamicOverrideProperty *BKE_view_layer_override_property_add(
 	dyn_prop->id_type = id_type;
 	dyn_prop->property_type = property_type;
 	dyn_prop->rna_path = rna_path_str;
-	dyn_prop->array_len = RNA_property_array_length(ptr, prop);
+	dyn_prop->array_len = array_len;
 
 	const bool is_array = RNA_property_array_check(prop);
 
 	/* TODO handle array. */
 	switch (RNA_property_type(prop)) {
 		case PROP_BOOLEAN:
-			dyn_prop->data.i[0] = RNA_property_boolean_get(ptr, prop);
+			if (is_array) {
+				RNA_property_boolean_get_array(ptr, prop, dyn_prop->data.i);
+			}
+			else {
+				dyn_prop->data.i[0] = RNA_property_boolean_get(ptr, prop);
+			}
 			break;
 		case PROP_INT:
-			dyn_prop->data.i[0] = RNA_property_int_get(ptr, prop);
+			if (is_array) {
+				RNA_property_int_get_array(ptr, prop, dyn_prop->data.i);
+			}
+			else {
+				dyn_prop->data.i[0] = RNA_property_int_get(ptr, prop);
+			}
 			break;
 		case PROP_FLOAT:
 			if (is_array) {
@@ -1641,6 +1658,7 @@ DynamicOverrideProperty *BKE_view_layer_override_property_add(
 			break;
 		}
 		case PROP_COLLECTION:
+		default:
 			BLI_assert(!"Should never happen - dyn");
 			break;
 	}

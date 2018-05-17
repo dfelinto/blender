@@ -64,7 +64,7 @@ typedef struct LayerCollection {
 
 typedef struct DynamicOverridePropertyData {
 	int i[4];
-	float f[4];
+	float f[4];  /*TODO 16 to support 4x4 matrices? Not sure we actually need that though... */
 	struct ID *id;
 	char *str;
 } DynamicOverridePropertyData;
