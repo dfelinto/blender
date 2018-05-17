@@ -78,7 +78,7 @@ typedef struct DynamicOverrideProperty {
 	float multiply_factor;
 	short flag;
 	short property_type; /* eDynamicOverridePropertyType */
-	short override_mode; /* eDynamicOverrideMode */
+	short operation; /* See IDOVERRIDESTATIC_OP_ enums in DNA_ID.h */
 	short id_type;
 	short array_len;
 	short pad;
@@ -181,12 +181,6 @@ typedef enum eDynamicOverridePropertyType {
 	DYN_OVERRIDE_PROP_TYPE_SCENE = 0,
 	DYN_OVERRIDE_PROP_TYPE_COLLECTION = 1,
 } eDynamicOverridePropertyType;
-
-/* DynamicOverrideProperty->override_mode */
-typedef enum eDynamicOverrideMode {
-	DYN_OVERRIDE_MODE_REPLACE = 0,
-	DYN_OVERRIDE_MODE_MULTIPLY = 1,
-} eDynamicOverrideMode;
 
 #ifdef __cplusplus
 }

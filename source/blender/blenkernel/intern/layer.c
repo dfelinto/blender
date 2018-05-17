@@ -1600,7 +1600,7 @@ DynamicOverrideProperty *BKE_view_layer_override_property_add(
 	DynamicOverrideProperty *dyn_prop = MEM_callocN(sizeof(DynamicOverrideProperty), __func__);
 	dyn_prop->flag = DYN_OVERRIDE_PROP_USE;
 	dyn_prop->multiply_factor = 1.0f;
-	dyn_prop->override_mode = DYN_OVERRIDE_MODE_REPLACE;
+	dyn_prop->operation = IDOVERRIDESTATIC_OP_REPLACE;
 	/* TODO: We want to store the id only when the rna path is only relevant to
 	 * this particular object (e.g., modifiers of an object) .*/
 	dyn_prop->root = owner_id;

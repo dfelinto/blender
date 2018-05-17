@@ -28,6 +28,7 @@
 
 #include "BLI_math.h"
 
+#include "DNA_ID.h"
 #include "DNA_layer_types.h"
 
 #include "WM_types.h"
@@ -189,8 +190,8 @@ void RNA_def_dynamic_override(BlenderRNA *brna)
 	PropertyRNA *prop;
 
 	static const EnumPropertyItem rna_enum_dynamic_override_mode_items[] = {
-		{DYN_OVERRIDE_MODE_REPLACE, "REPLACE", 0, "Replace", ""},
-		{DYN_OVERRIDE_MODE_MULTIPLY, "MULTIPLY", 0, "Multiply", ""},
+		{IDOVERRIDESTATIC_OP_REPLACE, "REPLACE", 0, "Replace", ""},
+		{IDOVERRIDESTATIC_OP_MULTIPLY, "MULTIPLY", 0, "Multiply", ""},
 		{0, NULL, 0, NULL, NULL}
 	};
 
@@ -230,6 +231,7 @@ void RNA_def_dynamic_override(BlenderRNA *brna)
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 
 	prop = RNA_def_property(srna, "override_mode", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_sdna(prop, NULL, "operation");
 	RNA_def_property_enum_items(prop, rna_enum_dynamic_override_mode_items);
 	RNA_def_property_ui_text(prop, "Override Mode",
 	                         "Method of override the original values");
