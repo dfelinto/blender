@@ -1220,6 +1220,62 @@ bool BKE_view_layer_override_property_remove(
 	return true;
 }
 
+void BKE_dynamic_override_apply(const struct Depsgraph *depsgraph, ID *id)
+{
+	const ID_Type id_type = GS(id->name);
+	if (ELEM(id_type, ID_SCE, ID_OB) == false) {
+		return;
+	}
+
+	ViewLayer *view_layer = DEG_get_evaluated_view_layer(depsgraph);
+	for (OverrideSet *override_set = view_layer->override_sets.first;
+	     override_set != NULL;
+	     override_set = override_set->next)
+	{
+		if ((override_set->flag & DYN_OVERRIDE_SET_USE) == 0) {
+			continue;
+		}
+
+		if (id_type == ID_SCE) {
+#if 1
+			/** Apply all the scene properties. */
+			for (DynamicOverrideProperty *dyn_prop = override_set->scene_properties.first;
+				 dyn_prop != NULL;
+				 dyn_prop = dyn_prop->next)
+			{
+				if ((dyn_prop->flag & DYN_OVERRIDE_PROP_USE) == 0) {
+					continue;
+				}
+
+				PointerRNA ptr;
+				RNA_id_pointer_create(id, &ptr);
+				RNA_struct_dynamic_override_apply(&ptr, dyn_prop);
+			}
+#endif
+		}
+		else {
+#if 1
+			/** Check if object is in one of the affected collections.
+			 *  If it is, apply all the overrides for the object and its material, mesh, ...
+			 **/
+			for (DynamicOverrideProperty *dyn_prop = override_set->collection_properties.first;
+				 dyn_prop != NULL;
+				 dyn_prop = dyn_prop->next)
+			{
+				if ((dyn_prop->flag & DYN_OVERRIDE_PROP_USE) == 0) {
+					continue;
+				}
+
+				/* If object is in collection ... */
+				PointerRNA ptr;
+				RNA_id_pointer_create(id, &ptr);
+				RNA_struct_dynamic_override_apply(&ptr, dyn_prop);
+			}
+#endif
+		}
+	}
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */

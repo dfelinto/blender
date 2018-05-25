@@ -141,6 +141,11 @@ bool BKE_view_layer_override_property_remove(
         struct OverrideSet *override_set,
         struct DynamicOverrideProperty *dyn_prop);
 
+
+void BKE_dynamic_override_apply(
+        const struct Depsgraph *depsgraph,
+        ID *id);
+
 /* evaluation */
 
 void BKE_layer_eval_view_layer(

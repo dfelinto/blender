@@ -786,6 +786,9 @@ ID *deg_update_copy_on_write_datablock(const Depsgraph *depsgraph,
 		}
 		object->base_flag = base_flag;
 	}
+
+	const ::Depsgraph *graph = reinterpret_cast<const ::Depsgraph *>(depsgraph);
+	BKE_dynamic_override_apply(graph, id_cow);
 	return id_cow;
 }
 
