@@ -564,10 +564,10 @@ static void add_pose_transdata(
 	td->protectflag = pchan->protectflag;
 
 	td->loc = pchan->loc;
-	copy_v3_v3(td->iloc, pchan->loc);
+	copy_v3_v3(td->iloc, pchan_eval->loc);
 
 	td->ext->size = pchan->size;
-	copy_v3_v3(td->ext->isize, pchan->size);
+	copy_v3_v3(td->ext->isize, pchan_eval->size);
 
 	if (pchan->rotmode > 0) {
 		td->ext->rot = pchan->eul;
@@ -575,7 +575,7 @@ static void add_pose_transdata(
 		td->ext->rotAngle = NULL;
 		td->ext->quat = NULL;
 
-		copy_v3_v3(td->ext->irot, pchan->eul);
+		copy_v3_v3(td->ext->irot, pchan_eval->eul);
 	}
 	else if (pchan->rotmode == ROT_MODE_AXISANGLE) {
 		td->ext->rot = NULL;
@@ -583,8 +583,8 @@ static void add_pose_transdata(
 		td->ext->rotAngle = &pchan->rotAngle;
 		td->ext->quat = NULL;
 
-		td->ext->irotAngle = pchan->rotAngle;
-		copy_v3_v3(td->ext->irotAxis, pchan->rotAxis);
+		td->ext->irotAngle = pchan_eval->rotAngle;
+		copy_v3_v3(td->ext->irotAxis, pchan_eval->rotAxis);
 	}
 	else {
 		td->ext->rot = NULL;
@@ -592,7 +592,7 @@ static void add_pose_transdata(
 		td->ext->rotAngle = NULL;
 		td->ext->quat = pchan->quat;
 
-		copy_qt_qt(td->ext->iquat, pchan->quat);
+		copy_qt_qt(td->ext->iquat, pchan_eval->quat);
 	}
 	td->ext->rotOrder = pchan->rotmode;
 
@@ -5583,39 +5583,41 @@ static bool constraints_list_needinv(TransInfo *t, ListBase *list)
 /* transcribe given object into TransData for Transforming */
 static void ObjectToTransData(TransInfo *t, TransData *td, Object *ob)
 {
+	Depsgraph *depsgraph = t->depsgraph;
 	Scene *scene = t->scene;
+	Object *ob_eval = DEG_get_evaluated_object(depsgraph, ob);
 	bool constinv;
 	bool skip_invert = false;
 
 	if (t->mode != TFM_DUMMY && ob->rigidbody_object) {
 		float rot[3][3], scale[3];
-		float ctime = BKE_scene_frame_get(scene);
+		float ctime = DEG_get_ctime(depsgraph);
 
 		/* only use rigid body transform if simulation is running, avoids problems with initial setup of rigid bodies */
+		// XXX: This needs fixing for COW. May need rigidbody_world from scene
 		if (BKE_rigidbody_check_sim_running(scene->rigidbody_world, ctime)) {
-
 			/* save original object transform */
-			copy_v3_v3(td->ext->oloc, ob->loc);
+			copy_v3_v3(td->ext->oloc, ob_eval->loc);
 
 			if (ob->rotmode > 0) {
-				copy_v3_v3(td->ext->orot, ob->rot);
+				copy_v3_v3(td->ext->orot, ob_eval->rot);
 			}
 			else if (ob->rotmode == ROT_MODE_AXISANGLE) {
-				td->ext->orotAngle = ob->rotAngle;
-				copy_v3_v3(td->ext->orotAxis, ob->rotAxis);
+				td->ext->orotAngle = ob_eval->rotAngle;
+				copy_v3_v3(td->ext->orotAxis, ob_eval->rotAxis);
 			}
 			else {
-				copy_qt_qt(td->ext->oquat, ob->quat);
+				copy_qt_qt(td->ext->oquat, ob_eval->quat);
 			}
 			/* update object's loc/rot to get current rigid body transform */
-			mat4_to_loc_rot_size(ob->loc, rot, scale, ob->obmat);
-			sub_v3_v3(ob->loc, ob->dloc);
+			mat4_to_loc_rot_size(ob->loc, rot, scale, ob_eval->obmat);
+			sub_v3_v3(ob->loc, ob_eval->dloc);
 			BKE_object_mat3_to_rot(ob, rot, false); /* drot is already corrected here */
 		}
 	}
 
 	/* axismtx has the real orientation */
-	copy_m3_m4(td->axismtx, ob->obmat);
+	copy_m3_m4(td->axismtx, ob_eval->obmat);
 	normalize_m3(td->axismtx);
 
 	td->con = ob->constraints.first;
@@ -5628,6 +5630,7 @@ static void ObjectToTransData(TransInfo *t, TransData *td, Object *ob)
 	constinv = constraints_list_needinv(t, &ob->constraints);
 
 	/* disable constraints inversion for dummy pass */
+	// XXX: Should this use ob or ob_eval?! It's not clear!
 	if (t->mode == TFM_DUMMY)
 		skip_invert = true;
 
@@ -5642,7 +5645,7 @@ static void ObjectToTransData(TransInfo *t, TransData *td, Object *ob)
 	td->ob = ob;
 
 	td->loc = ob->loc;
-	copy_v3_v3(td->iloc, td->loc);
+	copy_v3_v3(td->iloc, ob_eval->loc);
 
 	if (ob->rotmode > 0) {
 		td->ext->rot = ob->rot;
@@ -5650,8 +5653,8 @@ static void ObjectToTransData(TransInfo *t, TransData *td, Object *ob)
 		td->ext->rotAngle = NULL;
 		td->ext->quat = NULL;
 
-		copy_v3_v3(td->ext->irot, ob->rot);
-		copy_v3_v3(td->ext->drot, ob->drot);
+		copy_v3_v3(td->ext->irot, ob_eval->rot);
+		copy_v3_v3(td->ext->drot, ob_eval->drot);
 	}
 	else if (ob->rotmode == ROT_MODE_AXISANGLE) {
 		td->ext->rot = NULL;
@@ -5659,10 +5662,10 @@ static void ObjectToTransData(TransInfo *t, TransData *td, Object *ob)
 		td->ext->rotAngle = &ob->rotAngle;
 		td->ext->quat = NULL;
 
-		td->ext->irotAngle = ob->rotAngle;
-		copy_v3_v3(td->ext->irotAxis, ob->rotAxis);
-		// td->ext->drotAngle = ob->drotAngle;			// XXX, not implemented
-		// copy_v3_v3(td->ext->drotAxis, ob->drotAxis);	// XXX, not implemented
+		td->ext->irotAngle = ob_eval->rotAngle;
+		copy_v3_v3(td->ext->irotAxis, ob_eval->rotAxis);
+		// td->ext->drotAngle = ob_eval->drotAngle;			// XXX, not implemented
+		// copy_v3_v3(td->ext->drotAxis, ob_eval->drotAxis);	// XXX, not implemented
 	}
 	else {
 		td->ext->rot = NULL;
@@ -5670,18 +5673,18 @@ static void ObjectToTransData(TransInfo *t, TransData *td, Object *ob)
 		td->ext->rotAngle = NULL;
 		td->ext->quat = ob->quat;
 
-		copy_qt_qt(td->ext->iquat, ob->quat);
-		copy_qt_qt(td->ext->dquat, ob->dquat);
+		copy_qt_qt(td->ext->iquat, ob_eval->quat);
+		copy_qt_qt(td->ext->dquat, ob_eval->dquat);
 	}
-	td->ext->rotOrder = ob->rotmode;
+	td->ext->rotOrder = ob_eval->rotmode;
 
 	td->ext->size = ob->size;
-	copy_v3_v3(td->ext->isize, ob->size);
-	copy_v3_v3(td->ext->dscale, ob->dscale);
+	copy_v3_v3(td->ext->isize, ob_eval->size);
+	copy_v3_v3(td->ext->dscale, ob_eval->dscale);
 
-	copy_v3_v3(td->center, ob->obmat[3]);
+	copy_v3_v3(td->center, ob_eval->obmat[3]);
 
-	copy_m4_m4(td->ext->obmat, ob->obmat);
+	copy_m4_m4(td->ext->obmat, ob_eval->obmat);
 
 	/* is there a need to set the global<->data space conversion matrices? */
 	if (ob->parent || constinv) {
@@ -5691,8 +5694,8 @@ static void ObjectToTransData(TransInfo *t, TransData *td, Object *ob)
 		 * NOTE: some Constraints, and also Tracking should never get this
 		 *		done, as it doesn't work well.
 		 */
-		BKE_object_to_mat3(ob, obmtx);
-		copy_m3_m4(totmat, ob->obmat);
+		BKE_object_to_mat3(ob_eval, obmtx);
+		copy_m3_m4(totmat, ob_eval->obmat);
 		invert_m3_m3(obinv, totmat);
 		mul_m3_m3m3(td->smtx, obmtx, obinv);
 		invert_m3_m3(td->mtx, td->smtx);
@@ -5892,6 +5895,7 @@ void autokeyframe_ob_cb_func(bContext *C, Scene *scene, ViewLayer *view_layer, O
 
 	// TODO: this should probably be done per channel instead...
 	if (autokeyframe_cfra_can_key(scene, id)) {
+		Depsgraph *depsgraph = CTX_data_depsgraph(C);
 		ReportList *reports = CTX_wm_reports(C);
 		ToolSettings *ts = scene->toolsettings;
 		KeyingSet *active_ks = ANIM_scene_get_active_keyingset(scene);
@@ -5918,7 +5922,7 @@ void autokeyframe_ob_cb_func(bContext *C, Scene *scene, ViewLayer *view_layer, O
 			if (adt && adt->action) {
 				for (fcu = adt->action->curves.first; fcu; fcu = fcu->next) {
 					fcu->flag &= ~FCURVE_SELECTED;
-					insert_keyframe(reports, id, adt->action,
+					insert_keyframe(depsgraph, reports, id, adt->action,
 					                (fcu->grp ? fcu->grp->name : NULL),
 					                fcu->rna_path, fcu->array_index, cfra,
 					                ts->keyframe_type, flag);
@@ -6016,6 +6020,7 @@ void autokeyframe_pose_cb_func(bContext *C, Scene *scene, Object *ob, int tmode,
 
 	// TODO: this should probably be done per channel instead...
 	if (autokeyframe_cfra_can_key(scene, id)) {
+		Depsgraph *depsgraph = CTX_data_depsgraph(C);
 		ReportList *reports = CTX_wm_reports(C);
 		ToolSettings *ts = scene->toolsettings;
 		KeyingSet *active_ks = ANIM_scene_get_active_keyingset(scene);
@@ -6059,7 +6064,7 @@ void autokeyframe_pose_cb_func(bContext *C, Scene *scene, Object *ob, int tmode,
 								 * NOTE: this will do constraints too, but those are ok to do here too?
 								 */
 								if (pchanName && STREQ(pchanName, pchan->name)) {
-									insert_keyframe(reports, id, act,
+									insert_keyframe(depsgraph, reports, id, act,
 									                ((fcu->grp) ? (fcu->grp->name) : (NULL)),
 									                fcu->rna_path, fcu->array_index, cfra,
 									                ts->keyframe_type, flag);

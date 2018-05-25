@@ -1408,17 +1408,6 @@ int RNA_property_pointer_poll(PointerRNA *ptr, PropertyRNA *prop, PointerRNA *va
 	return 0;
 }
 
-/* Reuse for dynamic types  */
-const EnumPropertyItem DummyRNA_NULL_items[] = {
-	{0, NULL, 0, NULL, NULL}
-};
-
-/* Reuse for dynamic types with default value */
-const EnumPropertyItem DummyRNA_DEFAULT_items[] = {
-	{0, "DEFAULT", 0, "Default", ""},
-	{0, NULL, 0, NULL, NULL}
-};
-
 void RNA_property_enum_items_ex(
         bContext *C, PointerRNA *ptr, PropertyRNA *prop, const bool use_static,
         const EnumPropertyItem **r_item, int *r_totitem, bool *r_free)
@@ -2085,6 +2074,12 @@ static void rna_property_update(bContext *C, Main *bmain, Scene *scene, PointerR
 			struct wmMsgBus *mbus = CTX_wm_message_bus(C);
 			/* we could add NULL check, for now don't */
 			WM_msg_publish_rna(mbus, ptr, prop);
+		}
+		if (ptr->id.data != NULL) {
+			const short id_type = GS(((ID *)ptr->id.data)->name);
+			if (ID_TYPE_IS_COW(id_type)) {
+				DEG_id_tag_update(ptr->id.data, DEG_TAG_COPY_ON_WRITE);
+			}
 		}
 #endif
 	}

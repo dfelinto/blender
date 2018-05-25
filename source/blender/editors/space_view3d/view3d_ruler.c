@@ -282,7 +282,7 @@ static void ruler_state_set(bContext *C, RulerInfo *ruler_info, int state)
 	}
 	else if (state == RULER_STATE_DRAG) {
 		ruler_info->snap_context = ED_transform_snap_object_context_create_view3d(
-		        CTX_data_main(C), CTX_data_scene(C), CTX_data_depsgraph(C), 0,
+		        CTX_data_scene(C), CTX_data_depsgraph(C), 0,
 		        ruler_info->ar, CTX_wm_view3d(C));
 	}
 	else {
@@ -761,13 +761,12 @@ static bool view3d_ruler_item_mousemove(
 
 			co_other = ruler_item->co[ruler_item->co_index == 0 ? 2 : 0];
 
-			if (ED_transform_snap_object_project_view3d_mixed(
+			if (ED_transform_snap_object_project_view3d(
 			        ruler_info->snap_context,
-			        SCE_SELECT_FACE,
+			        SCE_SNAP_MODE_FACE,
 			        &(const struct SnapObjectParams){
 			            .snap_select = SNAP_ALL,
 			            .use_object_edit_cage = true,
-			            .use_occlusion_test = true,
 			        },
 			        mval_fl, &dist_px,
 			        co, ray_normal))
@@ -786,18 +785,15 @@ static bool view3d_ruler_item_mousemove(
 			}
 		}
 		else if (do_snap) {
-			// Scene *scene = CTX_data_scene(C);
-			View3D *v3d = ruler_info->sa->spacedata.first;
 			const float mval_fl[2] = {UNPACK2(mval)};
-			bool use_depth = (v3d->drawtype >= OB_SOLID);
 
-			if (ED_transform_snap_object_project_view3d_mixed(
+			if (ED_transform_snap_object_project_view3d(
 			        ruler_info->snap_context,
-			        (SCE_SELECT_VERTEX | SCE_SELECT_EDGE) | (use_depth ? SCE_SELECT_FACE : 0),
+			        (SCE_SNAP_MODE_VERTEX | SCE_SNAP_MODE_EDGE | SCE_SNAP_MODE_FACE),
 			        &(const struct SnapObjectParams){
 			            .snap_select = SNAP_ALL,
 			            .use_object_edit_cage = true,
-			            .use_occlusion_test = use_depth,
+			            .use_occlusion_test = true,
 			        },
 			        mval_fl, &dist_px,
 			        co, NULL))

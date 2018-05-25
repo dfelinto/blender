@@ -937,6 +937,9 @@ wmWindow *WM_window_open_temp(bContext *C, int x, int y, int sizex, int sizey, i
 	if (type == WM_WINDOW_RENDER) {
 		ED_area_newspace(C, sa, SPACE_IMAGE, false);
 	}
+	else if (type == WM_WINDOW_DRIVERS) {
+		ED_area_newspace(C, sa, SPACE_IPO, false);
+	}
 	else {
 		ED_area_newspace(C, sa, SPACE_USERPREF, false);
 	}
@@ -944,12 +947,42 @@ wmWindow *WM_window_open_temp(bContext *C, int x, int y, int sizex, int sizey, i
 	ED_screen_change(C, screen);
 	ED_screen_refresh(CTX_wm_manager(C), win); /* test scale */
 	
+	/* do additional setup for specific editor type */
+	if (type == WM_WINDOW_DRIVERS) {
+		/* Configure editor - mode, tabs, framing */
+		SpaceIpo *sipo = (SpaceIpo *)sa->spacedata.first;
+		sipo->mode = SIPO_MODE_DRIVERS;
+		
+		ARegion *ar_props = BKE_area_find_region_type(sa, RGN_TYPE_UI);
+		if (ar_props) {
+			UI_panel_category_active_set(ar_props, "Drivers");
+			
+			ar_props->flag &= ~RGN_FLAG_HIDDEN;
+			/* XXX: Adjust width of this too? */
+			
+			ED_region_visibility_change_update(C, ar_props);
+		}
+		
+		ARegion *ar_main = BKE_area_find_region_type(sa, RGN_TYPE_WINDOW);
+		if (ar_main) {
+			/* XXX: Ideally we recenter based on the range instead... */
+			ar_main->v2d.tot.xmin = -2.0f;
+			ar_main->v2d.tot.ymin = -2.0f;
+			ar_main->v2d.tot.xmax = 2.0f;
+			ar_main->v2d.tot.ymax = 2.0f;
+			
+			ar_main->v2d.cur = ar_main->v2d.tot;
+		}
+	}
+	
 	if (sa->spacetype == SPACE_IMAGE)
 		title = IFACE_("Blender Render");
 	else if (ELEM(sa->spacetype, SPACE_OUTLINER, SPACE_USERPREF))
 		title = IFACE_("Blender User Preferences");
 	else if (sa->spacetype == SPACE_FILE)
 		title = IFACE_("Blender File View");
+	else if (sa->spacetype == SPACE_IPO)
+		title = IFACE_("Blender Drivers Editor");
 	else
 		title = "Blender";
 
@@ -2102,23 +2135,44 @@ int WM_window_pixels_y(const wmWindow *win)
 }
 
 /**
- * Get the total pixels that are usable by the screen-layouts, excluding global areas.
+ * Get boundaries usable by all window contents, including global areas.
  */
-int WM_window_screen_pixels_x(const wmWindow *win)
+void WM_window_rect_calc(const wmWindow *win, rcti *r_rect)
 {
-	return WM_window_pixels_x(win);
+	BLI_rcti_init(r_rect, 0, WM_window_pixels_x(win), 0, WM_window_pixels_y(win));
 }
-int WM_window_screen_pixels_y(const wmWindow *win)
+/**
+ * Get boundaries usable by screen-layouts, excluding global areas.
+ * \note Depends on U.dpi_fac. Should that be outdated, call #WM_window_set_dpi first.
+ */
+void WM_window_screen_rect_calc(const wmWindow *win, rcti *r_rect)
 {
-	short screen_size_y = WM_window_pixels_y(win);
+	rcti rect;
 
-	for (ScrArea *sa = win->global_areas.areabase.first; sa; sa = sa->next) {
-		if ((sa->global->flag & GLOBAL_AREA_IS_HIDDEN) == 0) {
-			screen_size_y -= ED_area_global_size_y(sa);
+	BLI_rcti_init(&rect, 0, WM_window_pixels_x(win), 0, WM_window_pixels_y(win));
+
+	/* Substract global areas from screen rectangle. */
+	for (ScrArea *global_area = win->global_areas.areabase.first; global_area; global_area = global_area->next) {
+		if (global_area->global->flag & GLOBAL_AREA_IS_HIDDEN) {
+			continue;
+		}
+
+		switch (global_area->global->align) {
+			case GLOBAL_AREA_ALIGN_TOP:
+				rect.ymax -= ED_area_global_size_y(global_area);
+				break;
+			case GLOBAL_AREA_ALIGN_BOTTOM:
+				rect.ymin += ED_area_global_size_y(global_area);
+				break;
+			default:
+				BLI_assert(0);
+				break;
 		}
 	}
 
-	return screen_size_y;
+	BLI_assert(rect.xmin < rect.xmax);
+	BLI_assert(rect.ymin < rect.ymax);
+	*r_rect = rect;
 }
 
 bool WM_window_is_fullscreen(wmWindow *win)

@@ -42,6 +42,7 @@ struct ID;
 struct IDProperty;
 struct ListBase;
 struct ARegion;
+struct ARegionType;
 struct ScrArea;
 struct bScreen;
 struct wmEvent;
@@ -74,6 +75,7 @@ struct wmDrag;
 struct wmEvent;
 struct wmManipulator;
 struct wmMsgBus;
+struct wmKeyMap;
 
 typedef struct uiBut uiBut;
 typedef struct uiBlock uiBlock;
@@ -144,8 +146,9 @@ enum {
 #define UI_BLOCK_LIST_ITEM   (1 << 19)
 #define UI_BLOCK_RADIAL      (1 << 20)
 #define UI_BLOCK_POPOVER     (1 << 21)
+#define UI_BLOCK_POPOVER_ONCE (1 << 22)
 /** Always show keymaps, even for non-menus. */
-#define UI_BLOCK_SHOW_SHORTCUT_ALWAYS (1 << 22)
+#define UI_BLOCK_SHOW_SHORTCUT_ALWAYS (1 << 23)
 
 /* uiPopupBlockHandle->menuretval */
 #define UI_RETURN_CANCEL     (1 << 0)   /* cancel all menus cascading */
@@ -426,9 +429,14 @@ void UI_popup_menu_but_set(uiPopupMenu *pup, struct ARegion *butregion, uiBut *b
 
 typedef struct uiPopover uiPopover;
 
-uiPopover *UI_popover_begin(struct bContext *C) ATTR_NONNULL();
-void UI_popover_end(struct bContext *C, struct uiPopover *head);
+int UI_popover_panel_invoke(
+        struct bContext *C, int space_id, int region_id, const char *idname,
+        bool keep_open, struct ReportList *reports);
+
+uiPopover *UI_popover_begin(struct bContext *C) ATTR_NONNULL(1);
+void UI_popover_end(struct bContext *C, struct uiPopover *head, struct wmKeyMap *keymap);
 struct uiLayout *UI_popover_layout(uiPopover *head);
+void UI_popover_once_clear(uiPopover *pup);
 
 /* interface_region_menu_pie.c */
 /* Pie menus */
@@ -833,6 +841,8 @@ struct PanelCategoryDyn   *UI_panel_category_find_mouse_over(struct ARegion *ar,
 void                       UI_panel_category_clear_all(struct ARegion *ar);
 void                       UI_panel_category_draw_all(struct ARegion *ar, const char *category_id_active);
 
+struct PanelType *UI_paneltype_find(int space_id, int region_id, const char *idname);
+
 /* Handlers
  *
  * Handlers that can be registered in regions, areas and windows for
@@ -937,6 +947,7 @@ const char *uiLayoutIntrospect(uiLayout *layout); // XXX - testing
 struct MenuType *UI_but_menutype_get(uiBut *but);
 struct PanelType *UI_but_paneltype_get(uiBut *but);
 void UI_menutype_draw(struct bContext *C, struct MenuType *mt, struct uiLayout *layout);
+void UI_paneltype_draw(struct bContext *C, struct PanelType *pt, struct uiLayout *layout);
 
 /* Only for convenience. */
 void uiLayoutSetContextFromBut(uiLayout *layout, uiBut *but);
@@ -1233,6 +1244,9 @@ void UI_widgetbase_draw_cache_end(void);
 
 /* Special drawing for toolbar, mainly workarounds for inflexible icon sizing. */
 #define USE_TOOLBAR_HACK
+
+/* Support click-drag motion which presses the button and closes a popover (like a menu). */
+#define USE_POPOVER_ONCE
 
 bool UI_but_is_tool(const uiBut *but);
 

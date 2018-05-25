@@ -631,6 +631,10 @@ static int apply_objects_internal(
 				la->area_shape = LA_AREA_RECT;
 				la->area_sizey = la->area_size;
 			}
+			else if ((la->area_shape == LA_AREA_DISK) && !keeps_aspect_ratio) {
+				la->area_shape = LA_AREA_ELLIPSE;
+				la->area_sizey = la->area_size;
+			}
 
 			la->area_size *= rsmat[0][0];
 			la->area_sizey *= rsmat[1][1];
@@ -879,7 +883,7 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
 			
 			if (ob->data == NULL) {
 				/* special support for dupligroups */
-				if ((ob->transflag & OB_DUPLIGROUP) && ob->dup_group && (ob->dup_group->id.tag & LIB_TAG_DOIT) == 0) {
+				if ((ob->transflag & OB_DUPLICOLLECTION) && ob->dup_group && (ob->dup_group->id.tag & LIB_TAG_DOIT) == 0) {
 					if (ID_IS_LINKED(ob->dup_group)) {
 						tot_lib_error++;
 					}
@@ -1088,7 +1092,7 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
 					if ((ob_other->flag & OB_DONE) == 0 &&
 					    ((ob->data && (ob->data == ob_other->data)) ||
 					     (ob->dup_group == ob_other->dup_group &&
-					      (ob->transflag | ob_other->transflag) & OB_DUPLIGROUP)))
+					      (ob->transflag | ob_other->transflag) & OB_DUPLICOLLECTION)))
 					{
 						ob_other->flag |= OB_DONE;
 						DEG_id_tag_update(&ob_other->id, OB_RECALC_OB | OB_RECALC_DATA);

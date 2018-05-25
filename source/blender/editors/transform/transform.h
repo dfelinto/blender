@@ -601,6 +601,8 @@ typedef struct TransInfo {
 	/** #TransInfo.center has been set, don't change it. */
 #define T_OVERRIDE_CENTER	(1 << 25)
 
+#define T_MODAL_CURSOR_SET	(1 << 26)
+
 /* TransInfo->modifiers */
 #define	MOD_CONSTRAINT_SELECT	0x01
 #define	MOD_PRECISION			0x02
@@ -844,7 +846,7 @@ bool calculateCenterActive(TransInfo *t, bool select_only, float r_center[3]);
 
 void calculatePropRatio(TransInfo *t);
 
-void getViewVector(TransInfo *t, float coord[3], float vec[3]);
+void getViewVector(const TransInfo *t, const float coord[3], float vec[3]);
 
 void transform_data_ext_rotate(TransData *td, float mat[3][3], bool use_drot);
 
@@ -881,7 +883,6 @@ void projectVertSlideData(TransInfo *t, bool is_final);
 /* TODO. transform_queries.c */
 bool checkUseAxisMatrix(TransInfo *t);
 
-#define TRANSFORM_DIST_MAX_PX 1000.0f
 #define TRANSFORM_SNAP_MAX_PX 100.0f
 #define TRANSFORM_DIST_INVALID -FLT_MAX
 

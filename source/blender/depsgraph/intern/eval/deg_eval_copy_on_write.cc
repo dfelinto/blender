@@ -49,6 +49,7 @@
 #include "BLI_threads.h"
 #include "BLI_string.h"
 
+#include "BKE_curve.h"
 #include "BKE_global.h"
 #include "BKE_idprop.h"
 #include "BKE_layer.h"
@@ -135,6 +136,15 @@ void nested_id_hack_discard_pointers(ID *id_cow)
 		SPECIAL_CASE(ID_LT, Lattice, key)
 		SPECIAL_CASE(ID_ME, Mesh, key)
 
+		case ID_OB:
+		{
+			/* Clear the ParticleSettings pointer to prevent doubly-freeing it. */
+			Object *ob = (Object *)id_cow;
+			LISTBASE_FOREACH(ParticleSystem *, psys, &ob->particlesystem) {
+				psys->part = NULL;
+			}
+			break;
+		}
 #  undef SPECIAL_CASE
 
 		default:
@@ -409,6 +419,14 @@ void updata_armature_edit_mode_pointers(const Depsgraph * /*depsgraph*/,
 	armature_cow->edbo = armature_orig->edbo;
 }
 
+void updata_curve_edit_mode_pointers(const Depsgraph * /*depsgraph*/,
+                                     const ID *id_orig, ID *id_cow)
+{
+	const Curve *curve_orig = (const Curve *)id_orig;
+	Curve *curve_cow = (Curve *)id_cow;
+	curve_cow->editnurb = curve_orig->editnurb;
+}
+
 void updata_mesh_edit_mode_pointers(const Depsgraph *depsgraph,
                                     const ID *id_orig, ID *id_cow)
 {
@@ -444,6 +462,9 @@ void updata_edit_mode_pointers(const Depsgraph *depsgraph,
 			break;
 		case ID_ME:
 			updata_mesh_edit_mode_pointers(depsgraph, id_orig, id_cow);
+			break;
+		case ID_CU:
+			updata_curve_edit_mode_pointers(depsgraph, id_orig, id_cow);
 			break;
 		default:
 			break;
@@ -671,6 +692,7 @@ ID *deg_update_copy_on_write_datablock(const Depsgraph *depsgraph,
 	ListBase gpumaterial_backup;
 	ListBase *gpumaterial_ptr = NULL;
 	Mesh *mesh_evaluated = NULL;
+	CurveCache *curve_cache = NULL;
 	short base_flag = 0;
 	if (check_datablock_expanded(id_cow)) {
 		switch (id_type) {
@@ -720,6 +742,10 @@ ID *deg_update_copy_on_write_datablock(const Depsgraph *depsgraph,
 						object->data = mesh_evaluated->id.orig_id;
 					}
 				}
+				/* Store curve cache and make sure we don't free it. */
+				curve_cache = object->curve_cache;
+				object->curve_cache = NULL;
+
 				/* Make a backup of base flags. */
 				base_flag = object->base_flag;
 				break;
@@ -755,6 +781,9 @@ ID *deg_update_copy_on_write_datablock(const Depsgraph *depsgraph,
 				        ((Mesh *)mesh_evaluated->id.orig_id)->edit_btmesh;
 			}
 		}
+		if (curve_cache != NULL) {
+			object->curve_cache = curve_cache;
+		}
 		object->base_flag = base_flag;
 	}
 	return id_cow;
@@ -775,6 +804,12 @@ void discard_armature_edit_mode_pointers(ID *id_cow)
 {
 	bArmature *armature_cow = (bArmature *)id_cow;
 	armature_cow->edbo = NULL;
+}
+
+void discard_curve_edit_mode_pointers(ID *id_cow)
+{
+	Curve *curve_cow = (Curve *)id_cow;
+	curve_cow->editnurb = NULL;
 }
 
 void discard_mesh_edit_mode_pointers(ID *id_cow)
@@ -800,6 +835,9 @@ void discard_edit_mode_pointers(ID *id_cow)
 			break;
 		case ID_ME:
 			discard_mesh_edit_mode_pointers(id_cow);
+			break;
+		case ID_CU:
+			discard_curve_edit_mode_pointers(id_cow);
 			break;
 		default:
 			break;

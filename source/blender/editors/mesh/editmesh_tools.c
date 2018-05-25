@@ -131,7 +131,7 @@ static int edbm_subdivide_exec(bContext *C, wmOperator *op)
 		EDBM_update_generic(em, true, true);
 	}
 
-	MEM_SAFE_FREE(objects);
+	MEM_freeN(objects);
 
 	return OPERATOR_FINISHED;
 }
@@ -366,16 +366,16 @@ void EMBM_project_snap_verts(bContext *C, ARegion *ar, BMEditMesh *em)
 	ED_view3d_init_mats_rv3d(obedit, ar->regiondata);
 
 	struct SnapObjectContext *snap_context = ED_transform_snap_object_context_create_view3d(
-	        CTX_data_main(C), CTX_data_scene(C), CTX_data_depsgraph(C), 0,
+	        CTX_data_scene(C), CTX_data_depsgraph(C), 0,
 	        ar, CTX_wm_view3d(C));
 
 	BM_ITER_MESH (eve, &iter, em->bm, BM_VERTS_OF_MESH) {
 		if (BM_elem_flag_test(eve, BM_ELEM_SELECT)) {
 			float mval[2], co_proj[3];
 			if (ED_view3d_project_float_object(ar, eve->co, mval, V3D_PROJ_TEST_NOP) == V3D_PROJ_RET_OK) {
-				if (ED_transform_snap_object_project_view3d_mixed(
+				if (ED_transform_snap_object_project_view3d(
 				        snap_context,
-				        SCE_SELECT_FACE,
+				        SCE_SNAP_MODE_FACE,
 				        &(const struct SnapObjectParams){
 				            .snap_select = SNAP_NOT_ACTIVE,
 				            .use_object_edit_cage = false,
@@ -438,7 +438,7 @@ static int edbm_delete_exec(bContext *C, wmOperator *op)
 				break;
 			case MESH_DELETE_EDGE: /* Erase Edges */
 				if (!(em->bm->totedgesel &&
-				      EDBM_op_callf(em, op, "delete geom=%he context=%i", BM_ELEM_SELECT, DEL_FACES)))
+				      EDBM_op_callf(em, op, "delete geom=%he context=%i", BM_ELEM_SELECT, DEL_EDGES)))
 				{
 					continue;
 				}
@@ -478,7 +478,7 @@ static int edbm_delete_exec(bContext *C, wmOperator *op)
 		EDBM_update_generic(em, true, true);
 	}
 
-	MEM_SAFE_FREE(objects);
+	MEM_freeN(objects);
 
 	return changed_multi ? OPERATOR_FINISHED : OPERATOR_CANCELLED;
 }
@@ -603,7 +603,7 @@ static int edbm_delete_loose_exec(bContext *C, wmOperator *op)
 
 	edbm_report_delete_info(op->reports, totelem_old, totelem_new);
 
-	MEM_SAFE_FREE(objects);
+	MEM_freeN(objects);
 
 	return OPERATOR_FINISHED;
 }
@@ -899,7 +899,7 @@ static int edbm_add_edge_face_exec(bContext *C, wmOperator *op)
 
 		/* cancel if nothing was done */
 		if ((totedge_orig == em->bm->totedge) &&
-			(totface_orig == em->bm->totface))
+		    (totface_orig == em->bm->totface))
 		{
 			EDBM_op_finish(em, &bmop, op, true);
 			continue;
@@ -908,8 +908,8 @@ static int edbm_add_edge_face_exec(bContext *C, wmOperator *op)
 		/* normally we would want to leave the new geometry selected,
 		 * but being able to press F many times to add geometry is too useful! */
 		if (ele_desel &&
-			(BMO_slot_buffer_count(bmop.slots_out, "faces.out") == 1) &&
-			(ele_desel_face = BMO_slot_buffer_get_first(bmop.slots_out, "faces.out")))
+		    (BMO_slot_buffer_count(bmop.slots_out, "faces.out") == 1) &&
+		    (ele_desel_face = BMO_slot_buffer_get_first(bmop.slots_out, "faces.out")))
 		{
 			edbm_add_edge_face_exec__tricky_finalize_sel(em->bm, ele_desel, ele_desel_face);
 		}
@@ -1461,7 +1461,7 @@ static int edbm_vert_connect_path_exec(bContext *C, wmOperator *op)
 
 		/* when there is only 2 vertices, we can ignore selection order */
 		if (is_pair) {
-			if(!edbm_connect_vert_pair(em, op)) {
+			if (!edbm_connect_vert_pair(em, op)) {
 				failed_connect_len++;
 			}
 			continue;
@@ -2312,7 +2312,7 @@ void MESH_OT_vertices_smooth_laplacian(wmOperatorType *ot)
 
 	RNA_def_int(ot->srna, "repeat", 1, 1, 1000,
 	            "Number of iterations to smooth the mesh", "", 1, 200);
-	RNA_def_float(ot->srna, "lambda_factor", 5e-5f, 1e-7f, 1000.0f,
+	RNA_def_float(ot->srna, "lambda_factor", 1.0f, 1e-7f, 1000.0f,
 	              "Lambda factor", "", 1e-7f, 1000.0f);
 	RNA_def_float(ot->srna, "lambda_border", 5e-5f, 1e-7f, 1000.0f,
 	              "Lambda factor in border", "", 1e-7f, 1000.0f);
@@ -5447,11 +5447,12 @@ static int edbm_split_exec(bContext *C, wmOperator *op)
 	for (uint ob_index = 0; ob_index < objects_len; ob_index++) {
 		Object *obedit = objects[ob_index];
 		BMEditMesh *em = BKE_editmesh_from_object(obedit);
-
-		if (em->bm->totfacesel == 0) {
+		if ((em->bm->totvertsel == 0) &&
+		    (em->bm->totedgesel == 0) &&
+		    (em->bm->totfacesel == 0))
+		{
 			continue;
 		}
-
 		BMOperator bmop;
 		EDBM_op_init(em, &bmop, op, "split geom=%hvef use_only_faces=%b", BM_ELEM_SELECT, false);
 		BMO_op_exec(em->bm, &bmop);

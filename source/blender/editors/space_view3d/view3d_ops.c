@@ -45,8 +45,8 @@
 
 #include "BKE_appdir.h"
 #include "BKE_blender_copybuffer.h"
+#include "BKE_collection.h"
 #include "BKE_context.h"
-#include "BKE_group.h"
 #include "BKE_main.h"
 #include "BKE_report.h"
 
@@ -81,17 +81,17 @@ static int view3d_copybuffer_exec(bContext *C, wmOperator *op)
 	}
 	CTX_DATA_END;
 
-	for (Group *group = bmain->group.first; group; group = group->id.next) {
-		FOREACH_GROUP_OBJECT_BEGIN(group, object)
-		{
+	for (Collection *collection = bmain->collection.first; collection; collection = collection->id.next) {
+		for (CollectionObject *cob = collection->gobject.first; cob; cob = cob->next) {
+			Object *object = cob->ob;
+
 			if (object && (object->id.tag & LIB_TAG_DOIT)) {
-				BKE_copybuffer_tag_ID(&group->id);
+				BKE_copybuffer_tag_ID(&collection->id);
 				/* don't expand out to all other objects */
-				group->id.tag &= ~LIB_TAG_NEED_EXPAND;
+				collection->id.tag &= ~LIB_TAG_NEED_EXPAND;
 				break;
 			}
 		}
-		FOREACH_GROUP_OBJECT_END;
 	}
 	
 	BLI_make_file_string("/", str, BKE_tempdir_base(), "copybuffer.blend");
@@ -112,7 +112,7 @@ static void VIEW3D_OT_copybuffer(wmOperatorType *ot)
 	
 	/* api callbacks */
 	ot->exec = view3d_copybuffer_exec;
-	ot->poll = ED_operator_view3d_active;
+	ot->poll = ED_operator_scene;
 }
 
 static int view3d_pastebuffer_exec(bContext *C, wmOperator *op)
@@ -149,7 +149,7 @@ static void VIEW3D_OT_pastebuffer(wmOperatorType *ot)
 	
 	/* api callbacks */
 	ot->exec = view3d_pastebuffer_exec;
-	ot->poll = ED_operator_view3d_active;
+	ot->poll = ED_operator_scene_editable;
 	
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
@@ -222,6 +222,7 @@ void view3d_operatortypes(void)
 	WM_operatortype_append(VIEW3D_OT_snap_cursor_to_active);
 
 	WM_operatortype_append(VIEW3D_OT_toggle_render);
+	WM_operatortype_append(VIEW3D_OT_toggle_xray_draw_option);
 
 	WM_operatortype_append(VIEW3D_OT_ruler_add);
 
@@ -402,18 +403,13 @@ void view3d_keymap(wmKeyConfig *keyconf)
 	RNA_int_set(WM_keymap_add_item(keymap, "VIEW3D_OT_layers", ZEROKEY, KM_PRESS, KM_ANY, 0)->ptr, "nr", 10);
 	
 	/* drawtype */
-
-	kmi = WM_keymap_add_item(keymap, "WM_OT_context_toggle_enum", ZKEY, KM_PRESS, 0, 0);
-	RNA_string_set(kmi->ptr, "data_path", "space_data.shading.type");
-	RNA_string_set(kmi->ptr, "value_1", "SOLID");
-	RNA_string_set(kmi->ptr, "value_2", "WIREFRAME");
-
 	kmi = WM_keymap_add_item(keymap, "WM_OT_context_toggle_enum", ZKEY, KM_PRESS, KM_ALT, 0);
 	RNA_string_set(kmi->ptr, "data_path", "space_data.shading.type");
 	RNA_string_set(kmi->ptr, "value_1", "SOLID");
 	RNA_string_set(kmi->ptr, "value_2", "TEXTURED");
 
 	WM_keymap_add_item(keymap, "VIEW3D_OT_toggle_render", ZKEY, KM_PRESS, KM_SHIFT, 0);
+	WM_keymap_add_item(keymap, "VIEW3D_OT_toggle_xray_draw_option", ZKEY, KM_PRESS, 0, 0);
 
 	kmi = WM_keymap_add_item(keymap, "WM_OT_context_toggle", ZKEY, KM_PRESS, 0, 0);
 	RNA_string_set(kmi->ptr, "data_path", "space_data.use_occlude_geometry");

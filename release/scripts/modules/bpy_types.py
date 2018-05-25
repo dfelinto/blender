@@ -60,7 +60,7 @@ class Library(bpy_types.ID):
         # See: readblenentry.c, IDTYPE_FLAGS_ISLINKABLE,
         # we could make this an attribute in rna.
         attr_links = ("actions", "armatures", "brushes", "cameras",
-                      "curves", "grease_pencil", "groups", "images",
+                      "curves", "grease_pencil", "collections", "images",
                       "lamps", "lattices", "materials", "metaballs",
                       "meshes", "node_groups", "objects", "scenes",
                       "sounds", "speakers", "textures", "texts",
@@ -96,12 +96,12 @@ class Texture(bpy_types.ID):
                      )
 
 
-class Group(bpy_types.ID):
+class Collection(bpy_types.ID):
     __slots__ = ()
 
     @property
     def users_dupli_group(self):
-        """The dupli group this group is used in"""
+        """The collection instance objects this collection is used in"""
         import bpy
         return tuple(obj for obj in bpy.data.objects
                      if self == obj.dupli_group)
@@ -118,11 +118,11 @@ class Object(bpy_types.ID):
                      if child.parent == self)
 
     @property
-    def users_group(self):
-        """The groups this object is in"""
+    def users_collection(self):
+        """The collections this object is in"""
         import bpy
-        return tuple(group for group in bpy.data.groups
-                     if self in group.objects[:])
+        return tuple(collection for collection in bpy.data.collections
+                     if self in collection.objects[:])
 
     @property
     def users_scene(self):
@@ -144,14 +144,14 @@ class WindowManager(bpy_types.ID):
         finally:
             self.popmenu_end__internal(popup)
 
-    def popover(self, draw_func, title="", icon='NONE'):
+    def popover(self, draw_func, keymap=None):
         import bpy
-        popup = self.popover_begin__internal(title, icon)
+        popup = self.popover_begin__internal()
 
         try:
             draw_func(popup, bpy.context)
         finally:
-            self.popover_end__internal(popup)
+            self.popover_end__internal(popup, keymap)
 
     def popup_menu_pie(self, event, draw_func, title="", icon='NONE'):
         import bpy

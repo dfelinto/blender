@@ -51,15 +51,12 @@ typedef struct Lamp {
 	
 	short type, flag;
 	int mode;
-	
-	short colormodel, totex;
+
 	float r, g, b, k;
 	float shdwr, shdwg, shdwb, shdwpad;
 	
 	float energy, dist, spotsize, spotblend;
-	float haint;
-	
-	
+
 	float att1, att2;	/* Quad1 and Quad2 attenuation */
 	float coeff_const, coeff_lin, coeff_quad, coeff_pad;
 	struct CurveMapping *curfalloff;
@@ -151,6 +148,8 @@ typedef struct Lamp {
 #define LA_AREA_RECT	1
 #define LA_AREA_CUBE	2
 #define LA_AREA_BOX		3
+#define LA_AREA_DISK	4
+#define LA_AREA_ELLIPSE	5
 
 #endif /* __DNA_LAMP_TYPES_H__ */
 

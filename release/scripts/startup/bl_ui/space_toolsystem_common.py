@@ -72,6 +72,8 @@ ToolDef = namedtuple(
         "text",
         # The name of the icon to use (found in ``release/datafiles/icons``) or None for no icon.
         "icon",
+        # An optional cursor to use when this tool is active.
+        "cursor",
         # An optional manipulator group to activate when the tool is set or None for no widget.
         "widget",
         # Optional keymap for tool, either:
@@ -101,6 +103,7 @@ def from_dict(kw_args):
     """
     kw = {
         "icon": None,
+        "cursor": None,
         "widget": None,
         "keymap": None,
         "data_block": None,
@@ -234,14 +237,11 @@ class ToolSelectPanelHelper:
         """
         Return the active Python tool definition and icon name.
         """
-
         workspace = context.workspace
         cls = ToolSelectPanelHelper._tool_class_from_space_type(space_type)
         if cls is not None:
-            tool_active_text = getattr(
-                ToolSelectPanelHelper._tool_active_from_context(context, space_type, mode),
-                "name", None)
-
+            tool_active = ToolSelectPanelHelper._tool_active_from_context(context, space_type, mode)
+            tool_active_text = getattr(tool_active, "name", None)
             for item in ToolSelectPanelHelper._tools_flatten(cls.tools_from_context(context, mode)):
                 if item is not None:
                     if item.text == tool_active_text:
@@ -249,8 +249,8 @@ class ToolSelectPanelHelper:
                             icon_value = ToolSelectPanelHelper._icon_value_from_icon_handle(item.icon)
                         else:
                             icon_value = 0
-                        return (item, icon_value)
-        return None, 0
+                        return (item, tool_active, icon_value)
+        return None, None, 0
 
     @staticmethod
     def _tool_get_by_name(context, space_type, text):
@@ -266,26 +266,10 @@ class ToolSelectPanelHelper:
         return None, -1
 
     @staticmethod
-    def _tool_vars_from_def(item):
-        # For now be strict about whats in this dict
-        # prevent accidental adding unknown keys.
-        text = item.text
-        icon_name = item.icon
-        mp_idname = item.widget
-        datablock_idname = item.data_block
-        keymap = item.keymap
-        if keymap is None:
-            km_idname = None
-        else:
-            km_idname = keymap[0].name
-        return (km_idname, mp_idname, datablock_idname), icon_name
-
-    @staticmethod
     def _tool_active_from_context(context, space_type, mode=None, create=False):
         if space_type == 'VIEW_3D':
             if mode is None:
-                obj = context.active_object
-                mode = obj.mode if obj is not None else 'OBJECT'
+                mode = context.mode
             tool = context.workspace.tools.from_space_view3d_mode(mode, create)
             if tool is not None:
                 return tool
@@ -443,7 +427,11 @@ class ToolSelectPanelHelper:
 
         return ui_gen, show_text
 
-    def draw(self, context):
+
+    @classmethod
+    def draw_cls(cls, layout, context, detect_layout=True):
+        # Use a classmethod so it can be called outside of a panel context.
+
         # XXX, this UI isn't very nice.
         # We might need to create new button types for this.
         # Since we probably want:
@@ -456,12 +444,16 @@ class ToolSelectPanelHelper:
             "name", None,
         )
 
-        ui_gen, show_text = self._layout_generator_detect_from_region(self.layout, context.region)
+        if detect_layout:
+            ui_gen, show_text = cls._layout_generator_detect_from_region(layout, context.region)
+        else:
+            ui_gen = ToolSelectPanelHelper._layout_generator_single_column(layout)
+            show_text = True
 
         # Start iteration
         ui_gen.send(None)
 
-        for item in self.tools_from_context(context):
+        for item in cls.tools_from_context(context):
             if item is None:
                 ui_gen.send(True)
                 continue
@@ -480,9 +472,9 @@ class ToolSelectPanelHelper:
 
                 if is_active:
                     # not ideal, write this every time :S
-                    self._tool_group_active[item[0].text] = index
+                    cls._tool_group_active[item[0].text] = index
                 else:
-                    index = self._tool_group_active.get(item[0].text, 0)
+                    index = cls._tool_group_active.get(item[0].text, 0)
 
                 item = item[index]
                 use_menu = True
@@ -490,10 +482,8 @@ class ToolSelectPanelHelper:
                 index = -1
                 use_menu = False
 
-            tool_def, icon_name = ToolSelectPanelHelper._tool_vars_from_def(item)
             is_active = (item.text == tool_active_text)
-
-            icon_value = ToolSelectPanelHelper._icon_value_from_icon_handle(icon_name)
+            icon_value = ToolSelectPanelHelper._icon_value_from_icon_handle(item.icon)
 
             sub = ui_gen.send(False)
 
@@ -515,20 +505,23 @@ class ToolSelectPanelHelper:
         # Signal to finish any remaining layout edits.
         ui_gen.send(None)
 
+    def draw(self, context):
+        self.draw_cls(self.layout, context)
+
     @staticmethod
     def draw_active_tool_header(context, layout):
         # BAD DESIGN WARNING: last used tool
         workspace = context.workspace
         space_type = workspace.tools_space_type
         mode = workspace.tools_mode
-        item, icon_value = ToolSelectPanelHelper._tool_get_active(context, space_type, mode, with_icon=True)
+        item, tool, icon_value = ToolSelectPanelHelper._tool_get_active(context, space_type, mode, with_icon=True)
         if item is None:
             return
         # Note: we could show 'item.text' here but it makes the layout jitter when switcuing tools.
         layout.label(" ", icon_value=icon_value)
         draw_settings = item.draw_settings
         if draw_settings is not None:
-            draw_settings(context, layout)
+            draw_settings(context, layout, tool)
 
 
 # The purpose of this menu is to be a generic popup to select between tools
@@ -563,8 +556,7 @@ class WM_MT_toolsystem_submenu(Menu):
             if item is None:
                 layout.separator()
                 continue
-            tool_def, icon_name = ToolSelectPanelHelper._tool_vars_from_def(item)
-            icon_value = ToolSelectPanelHelper._icon_value_from_icon_handle(icon_name)
+            icon_value = ToolSelectPanelHelper._icon_value_from_icon_handle(item.icon)
             layout.operator(
                 "wm.tool_set_by_name",
                 text=item.text,
@@ -576,17 +568,85 @@ def activate_by_name(context, space_type, text):
     item, index = ToolSelectPanelHelper._tool_get_by_name(context, space_type, text)
     if item is not None:
         tool = ToolSelectPanelHelper._tool_active_from_context(context, space_type, create=True)
-        tool_def, icon_name = ToolSelectPanelHelper._tool_vars_from_def(item)
         tool.setup(
             name=text,
-            keymap=tool_def[0] or "",
-            manipulator_group=tool_def[1] or "",
-            data_block=tool_def[2] or "",
+            keymap=item.keymap[0].name if item.keymap is not None else "",
+            cursor=item.cursor or 'DEFAULT',
+            manipulator_group=item.widget or "",
+            data_block=item.data_block or "",
             index=index,
         )
         return True
     return False
 
+
+def keymap_from_context(context, space_type):
+    """
+    Keymap for popup toolbar, currently generated each time.
+    """
+    use_simple_keymap = False
+    km_name = "Toolbar Popup"
+    wm = context.window_manager
+    keyconf = wm.keyconfigs.active
+    keymap = keyconf.keymaps.get(km_name)
+    if keymap is None:
+        keymap = keyconf.keymaps.new(km_name, space_type='EMPTY', region_type='TEMPORARY')
+    for kmi in keymap.keymap_items:
+        keymap.keymap_items.remove(kmi)
+
+
+    kmi_search = wm.keyconfigs.find_item_from_operator(idname="wm.toolbar")[1]
+    kmi_search_type = None if not kmi_search else kmi_search.type
+
+    items = []
+    cls = ToolSelectPanelHelper._tool_class_from_space_type(space_type)
+    for i, item in enumerate(
+            ToolSelectPanelHelper._tools_flatten(cls.tools_from_context(context))
+    ):
+        if item is not None:
+            if use_simple_keymap:
+                # Simply assign a key from A-Z
+                items.append(((chr(ord('A') + i)), item.text))
+                kmi = keymap.keymap_items.new("wm.tool_set_by_name", key, 'PRESS')
+                kmi.properties.name = item.text
+                continue
+
+            if not item.keymap:
+                continue
+
+            # Only check the first item in the tools key-map (a little arbitrary).
+            kmi_first = item.keymap[0].keymap_items[0]
+            kmi_found = wm.keyconfigs.find_item_from_operator(
+                idname=kmi_first.idname,
+                # properties=kmi_first.properties,  # prevents matches, don't use.
+            )[1]
+            if kmi_found is not None:
+                kmi_found_type = kmi_found.type
+                # Only for single keys.
+                if len(kmi_found_type) == 1:
+                    kmi = keymap.keymap_items.new(
+                        idname="wm.tool_set_by_name",
+                        type=kmi_found_type,
+                        value='PRESS',
+                        any=kmi_found.any,
+                        shift=kmi_found.shift,
+                        ctrl=kmi_found.ctrl,
+                        alt=kmi_found.alt,
+                        oskey=kmi_found.oskey,
+                        key_modifier=kmi_found.key_modifier,
+                    )
+                    kmi.properties.name = item.text
+
+                    # Disallow overlap
+                    if kmi_search_type == kmi_found_type:
+                        kmi_search_type = None
+
+    # Support double-tap for search.
+    if kmi_search_type:
+        keymap.keymap_items.new("wm.search_menu", type=kmi_search_type, value='PRESS')
+
+    wm.keyconfigs.update()
+    return keymap
 
 classes = (
     WM_MT_toolsystem_submenu,

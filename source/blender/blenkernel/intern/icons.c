@@ -322,7 +322,7 @@ PreviewImage **BKE_previewimg_id_get_p(const ID *id)
 		ID_PRV_CASE(ID_IM, Image);
 		ID_PRV_CASE(ID_BR, Brush);
 		ID_PRV_CASE(ID_OB, Object);
-		ID_PRV_CASE(ID_GR, Group);
+		ID_PRV_CASE(ID_GR, Collection);
 		ID_PRV_CASE(ID_SCE, Scene);
 		ID_PRV_CASE(ID_SCR, bScreen);
 #undef ID_PRV_CASE
@@ -806,7 +806,8 @@ struct Icon_Geom *BKE_icon_geom_from_file(const char *filename)
 
 /** \name Studio Light Icon
  * \{ */
-int BKE_icon_ensure_studio_light(struct StudioLight *sl) {
+int BKE_icon_ensure_studio_light(struct StudioLight *sl)
+{
 	int icon_id = get_next_free_id();
 	icon_create(icon_id, ICON_DATA_STUDIOLIGHT, sl);
 	return icon_id;

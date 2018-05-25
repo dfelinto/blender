@@ -39,6 +39,7 @@
 
 #include "BLT_translation.h"
 
+#include "DNA_anim_types.h"
 #include "DNA_armature_types.h"
 #include "DNA_lattice_types.h"
 #include "DNA_object_types.h"
@@ -53,6 +54,7 @@
 
 #include "BKE_context.h"
 #include "BKE_customdata.h"
+#include "BKE_fcurve.h"
 #include "BKE_global.h"
 #include "BKE_icons.h"
 #include "BKE_main.h"
@@ -70,6 +72,7 @@
 
 #include "DEG_depsgraph.h"
 
+#include "ED_anim_api.h"
 #include "ED_armature.h"
 #include "ED_clip.h"
 #include "ED_image.h"
@@ -141,6 +144,14 @@ int ED_operator_screen_mainwinactive(bContext *C)
 	if (screen == NULL) return 0;
 	if (screen->active_region != NULL) return 0;
 	return 1;
+}
+
+int ED_operator_scene(bContext *C)
+{
+	Scene *scene = CTX_data_scene(C);
+	if (scene)
+		return 1;
+	return 0;
 }
 
 int ED_operator_scene_editable(bContext *C)
@@ -707,7 +718,7 @@ AZone *is_in_area_actionzone(ScrArea *sa, const int xy[2])
 				}
 
 				/* XXX force redraw to show/hide the action zone */
-				ED_area_tag_redraw(sa);
+				ED_area_tag_redraw_no_rebuild(sa);
 				break;
 			}
 			else if (az->type == AZONE_REGION_SCROLL) {
@@ -759,7 +770,7 @@ AZone *is_in_area_actionzone(ScrArea *sa, const int xy[2])
 				}
 
 				if (redraw) {
-					ED_area_tag_redraw(sa);
+					ED_area_tag_redraw_no_rebuild(sa);
 				}
 				/* Don't return! */
 			}
@@ -839,11 +850,8 @@ static int actionzone_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 
 static int actionzone_modal(bContext *C, wmOperator *op, const wmEvent *event)
 {
-	wmWindow *win = CTX_wm_window(C);
 	bScreen *sc = CTX_wm_screen(C);
 	sActionzoneData *sad = op->customdata;
-	const int screen_size_x = WM_window_screen_pixels_x(win);
-	const int screen_size_y = WM_window_screen_pixels_y(win);
 
 	switch (event->type) {
 		case MOUSEMOVE:
@@ -864,11 +872,15 @@ static int actionzone_modal(bContext *C, wmOperator *op, const wmEvent *event)
 				sad->gesture_dir = 'w';
 			
 			if (sad->az->type == AZONE_AREA) {
+				const wmWindow *win = CTX_wm_window(C);
+				rcti screen_rect;
+
+				WM_window_screen_rect_calc(win, &screen_rect);
 				/* once we drag outside the actionzone, register a gesture
 				 * check we're not on an edge so join finds the other area */
 				is_gesture = ((is_in_area_actionzone(sad->sa1, &event->x) != sad->az) &&
 				              (screen_area_map_find_active_scredge(
-				                   AREAMAP_FROM_SCREEN(sc), screen_size_x, screen_size_y, event->x, event->y) == NULL));
+				                   AREAMAP_FROM_SCREEN(sc), &screen_rect, event->x, event->y) == NULL));
 			}
 			else {
 				const int delta_min = 1;
@@ -1183,10 +1195,10 @@ typedef struct sAreaMoveData {
 } sAreaMoveData;
 
 /* helper call to move area-edge, sets limits
- * need window size in order to get correct limits */
+ * need window bounds in order to get correct limits */
 static void area_move_set_limits(
         wmWindow *win, bScreen *sc, int dir,
-        const int winsize_x, const int winsize_y,
+        const rcti *screen_rect,
         int *bigger, int *smaller,
         bool *use_bigger_smaller_snap)
 {
@@ -1239,9 +1251,9 @@ static void area_move_set_limits(
 			int y1;
 			areamin = areaminy;
 			
-			if (sa->v1->vec.y > 0)
+			if (sa->v1->vec.y > screen_rect->ymin)
 				areamin += U.pixelsize;
-			if (sa->v2->vec.y < winsize_y - 1)
+			if (sa->v2->vec.y < (screen_rect->ymax - 1))
 				areamin += U.pixelsize;
 			
 			y1 = sa->v2->vec.y - sa->v1->vec.y + 1 - areamin;
@@ -1256,9 +1268,9 @@ static void area_move_set_limits(
 			int x1;
 			areamin = AREAMINX;
 			
-			if (sa->v1->vec.x > 0)
+			if (sa->v1->vec.x > screen_rect->xmin)
 				areamin += U.pixelsize;
-			if (sa->v4->vec.x < winsize_x - 1)
+			if (sa->v4->vec.x < (screen_rect->xmax - 1))
 				areamin += U.pixelsize;
 			
 			x1 = sa->v4->vec.x - sa->v1->vec.x + 1 - areamin;
@@ -1280,8 +1292,7 @@ static int area_move_init(bContext *C, wmOperator *op)
 	wmWindow *win = CTX_wm_window(C);
 	ScrEdge *actedge;
 	sAreaMoveData *md;
-	const int screen_size_x = WM_window_screen_pixels_x(win);
-	const int screen_size_y = WM_window_screen_pixels_y(win);
+	rcti screen_rect;
 	int x, y;
 	
 	/* required properties */
@@ -1305,8 +1316,10 @@ static int area_move_init(bContext *C, wmOperator *op)
 		v1->editflag = v1->flag;
 	}
 
+	WM_window_screen_rect_calc(win, &screen_rect);
+
 	bool use_bigger_smaller_snap = false;
-	area_move_set_limits(win, sc, md->dir, screen_size_x, screen_size_y,
+	area_move_set_limits(win, sc, md->dir, &screen_rect,
 	                     &md->bigger, &md->smaller,
 	                     &use_bigger_smaller_snap);
 
@@ -1769,14 +1782,15 @@ static int area_split_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 	wmWindow *win = CTX_wm_window(C);
 	bScreen *sc = CTX_wm_screen(C);
 	sAreaSplitData *sd;
-	const int screen_size_x = WM_window_screen_pixels_x(win);
-	const int screen_size_y = WM_window_screen_pixels_y(win);
+	rcti screen_rect;
 	int dir;
 	
 	/* no full window splitting allowed */
 	if (sc->state != SCREENNORMAL)
 		return OPERATOR_CANCELLED;
-	
+
+	WM_window_screen_rect_calc(win, &screen_rect);
+
 	if (event->type == EVT_ACTIONZONE_AREA) {
 		sActionzoneData *sad = event->customdata;
 		
@@ -1822,8 +1836,8 @@ static int area_split_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 			y = RNA_int_get(op->ptr, "mouse_y");
 		else
 			y = event->x;
-		
-		actedge = screen_area_map_find_active_scredge(AREAMAP_FROM_SCREEN(sc), screen_size_x, screen_size_y, x, y);
+
+		actedge = screen_area_map_find_active_scredge(AREAMAP_FROM_SCREEN(sc), &screen_rect, x, y);
 		if (actedge == NULL)
 			return OPERATOR_CANCELLED;
 		
@@ -1843,8 +1857,8 @@ static int area_split_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 		
 		/* do the split */
 		if (area_split_apply(C, op)) {
-			area_move_set_limits(win, sc, dir, screen_size_x, screen_size_y, &sd->bigger, &sd->smaller, NULL);
-			
+			area_move_set_limits(win, sc, dir, &screen_rect, &sd->bigger, &sd->smaller, NULL);
+
 			/* add temp handler for edge move or cancel */
 			WM_event_add_modal_handler(C, op);
 			
@@ -2728,7 +2742,8 @@ static int screen_maximize_area_poll(bContext *C)
 	const bScreen *screen = CTX_wm_screen(C);
 	const ScrArea *area = CTX_wm_area(C);
 	return ED_operator_areaactive(C) &&
-	       ((screen->state != SCREENNORMAL) || (area->spacetype != SPACE_TOPBAR));
+	        /* Don't allow maximizing global areas but allow minimizing from them. */
+	       ((screen->state != SCREENNORMAL) || !ED_area_is_global(area));
 }
 
 static void SCREEN_OT_screen_full_area(wmOperatorType *ot)
@@ -3044,17 +3059,16 @@ static void SCREEN_OT_area_join(wmOperatorType *ot)
 
 static int screen_area_options_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
-	wmWindow *win = CTX_wm_window(C);
-	bScreen *sc = CTX_wm_screen(C);
+	const wmWindow *win = CTX_wm_window(C);
+	const bScreen *sc = CTX_wm_screen(C);
 	uiPopupMenu *pup;
 	uiLayout *layout;
 	PointerRNA ptr;
 	ScrEdge *actedge;
-	const int screen_size_x = WM_window_screen_pixels_x(win);
-	const int screen_size_y = WM_window_screen_pixels_y(win);
+	rcti screen_rect;
 
-	actedge = screen_area_map_find_active_scredge(
-	              AREAMAP_FROM_SCREEN(sc), screen_size_x, screen_size_y, event->x, event->y);
+	WM_window_screen_rect_calc(win, &screen_rect);
+	actedge = screen_area_map_find_active_scredge(AREAMAP_FROM_SCREEN(sc), &screen_rect, event->x, event->y);
 	
 	if (actedge == NULL) return OPERATOR_CANCELLED;
 	
@@ -4162,7 +4176,7 @@ static void SCREEN_OT_back_to_previous(struct wmOperatorType *ot)
 static int userpref_show_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
 	int sizex = 800 * UI_DPI_FAC;
-	int sizey = 480 * UI_DPI_FAC;
+	int sizey = 500 * UI_DPI_FAC;
 	
 	/* changes context! */
 	if (WM_window_open_temp(C, event->x, event->y, sizex, sizey, WM_WINDOW_USERPREFS) != NULL) {
@@ -4184,6 +4198,74 @@ static void SCREEN_OT_userpref_show(struct wmOperatorType *ot)
 	
 	/* api callbacks */
 	ot->invoke = userpref_show_invoke;
+	ot->poll = ED_operator_screenactive;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Show Drivers Editor Operator
+ * \{ */
+
+static int drivers_editor_show_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+{
+	PointerRNA ptr = {{NULL}};
+	PropertyRNA *prop = NULL;
+	int index = -1;
+	uiBut *but = NULL;
+	
+	int sizex = 900 * UI_DPI_FAC;
+	int sizey = 580 * UI_DPI_FAC;
+	
+	/* Get active property to show driver for
+	 * - Need to grab it first, or else this info disappears
+	 *   after we've created the window
+	 */
+	but = UI_context_active_but_prop_get(C, &ptr, &prop, &index);
+	
+	/* changes context! */
+	if (WM_window_open_temp(C, event->x, event->y, sizex, sizey, WM_WINDOW_DRIVERS) != NULL) {
+		/* activate driver F-Curve for the property under the cursor */
+		if (but) {
+			FCurve *fcu;
+			bool driven, special;
+			
+			fcu = rna_get_fcurve_context_ui(C,
+			                                &ptr, prop, index,
+			                                NULL, NULL, &driven, &special);
+			if (fcu) {
+				/* Isolate this F-Curve... */
+				bAnimContext ac;
+				if (ANIM_animdata_get_context(C, &ac)) {
+					int filter = ANIMFILTER_DATA_VISIBLE | ANIMFILTER_NODUPLIS;
+					ANIM_deselect_anim_channels(&ac, ac.data, ac.datatype, 0, ACHANNEL_SETFLAG_CLEAR);
+					ANIM_set_active_channel(&ac, ac.data, ac.datatype, filter, fcu, ANIMTYPE_FCURVE);
+				}
+				else {
+					/* Just blindly isolate... This isn't the best, and shouldn't happen, but may be enough... */
+					fcu->flag |= (FCURVE_ACTIVE | FCURVE_SELECTED);
+				}
+			}
+		}
+		
+		return OPERATOR_FINISHED;
+	}
+	else {
+		BKE_report(op->reports, RPT_ERROR, "Failed to open window!");
+		return OPERATOR_CANCELLED;
+	}
+}
+
+
+static void SCREEN_OT_drivers_editor_show(struct wmOperatorType *ot)
+{
+	/* identifiers */
+	ot->name = "Show Drivers Editor";
+	ot->description = "Show drivers editor in a separate window";
+	ot->idname = "SCREEN_OT_drivers_editor_show";
+	
+	/* api callbacks */
+	ot->invoke = drivers_editor_show_invoke;
 	ot->poll = ED_operator_screenactive;
 }
 
@@ -4514,6 +4596,7 @@ void ED_operatortypes_screen(void)
 	WM_operatortype_append(SCREEN_OT_screenshot);
 	WM_operatortype_append(SCREEN_OT_screencast);
 	WM_operatortype_append(SCREEN_OT_userpref_show);
+	WM_operatortype_append(SCREEN_OT_drivers_editor_show);
 	WM_operatortype_append(SCREEN_OT_region_blend);
 	WM_operatortype_append(SCREEN_OT_space_context_cycle);
 	
@@ -4635,10 +4718,8 @@ void ED_keymap_screen(wmKeyConfig *keyconf)
 	
 	RNA_int_set(WM_keymap_add_item(keymap, "SCREEN_OT_screen_set", RIGHTARROWKEY, KM_PRESS, KM_CTRL, 0)->ptr, "delta", 1);
 	RNA_int_set(WM_keymap_add_item(keymap, "SCREEN_OT_screen_set", LEFTARROWKEY, KM_PRESS, KM_CTRL, 0)->ptr, "delta", -1);
-	WM_keymap_add_item(keymap, "SCREEN_OT_screen_full_area", UPARROWKEY, KM_PRESS, KM_CTRL, 0);
-	WM_keymap_add_item(keymap, "SCREEN_OT_screen_full_area", DOWNARROWKEY, KM_PRESS, KM_CTRL, 0);
 	WM_keymap_add_item(keymap, "SCREEN_OT_screen_full_area", SPACEKEY, KM_PRESS, KM_SHIFT, 0);
-	kmi = WM_keymap_add_item(keymap, "SCREEN_OT_screen_full_area", F10KEY, KM_PRESS, KM_ALT, 0);
+	kmi = WM_keymap_add_item(keymap, "SCREEN_OT_screen_full_area", SPACEKEY, KM_PRESS, KM_CTRL | KM_SHIFT, 0);
 	RNA_boolean_set(kmi->ptr, "use_hide_panels", true);
 
 	WM_keymap_add_item(keymap, "SCREEN_OT_screenshot", F3KEY, KM_PRESS, KM_CTRL, 0);

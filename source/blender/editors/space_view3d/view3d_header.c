@@ -221,6 +221,45 @@ void VIEW3D_OT_layers(wmOperatorType *ot)
 	RNA_def_boolean(ot->srna, "toggle", 1, "Toggle", "Toggle the layer");
 }
 
+/* -------------------------------------------------------------------- */
+/** \name Toggle Bone selection Overlay Operator
+ * \{ */
+
+static int toggle_show_xray(bContext *C, wmOperator *UNUSED(op))
+{
+	View3D *v3d = CTX_wm_view3d(C);
+	v3d->shading.flag ^= V3D_SHADING_XRAY;
+	ED_view3d_shade_update(CTX_data_main(C), v3d, CTX_wm_area(C));
+	WM_event_add_notifier(C, NC_SPACE | ND_SPACE_VIEW3D, v3d);
+	return OPERATOR_FINISHED;
+}
+
+static int toggle_show_xray_poll(bContext *C)
+{
+	bool result = (ED_operator_view3d_active(C) && !ED_operator_posemode(C) && !ED_operator_editmesh(C));
+	if (result) {
+		// Additional test for SOLID or TEXTURE mode
+		View3D *v3d = CTX_wm_view3d(C);
+		result = (v3d->drawtype & (OB_SOLID | OB_TEXTURE)) > 0;
+	}
+	return result;
+}
+
+void VIEW3D_OT_toggle_xray_draw_option(wmOperatorType *ot)
+{
+	/* identifiers */
+	ot->name = "Toggle Show X-Ray";
+	ot->description = "Toggle show X-Ray";
+	ot->idname = "VIEW3D_OT_toggle_xray_draw_option";
+
+	/* api callbacks */
+	ot->exec = toggle_show_xray;
+	ot->poll = toggle_show_xray_poll;
+}
+
+/** \} */
+
+
 static void do_view3d_header_buttons(bContext *C, void *UNUSED(arg), int event)
 {
 	wmWindow *win = CTX_wm_window(C);

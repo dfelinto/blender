@@ -48,6 +48,7 @@ struct Gwn_Batch *DRW_cache_screenspace_circle_get(void);
 
 /* Common Object */
 struct Gwn_Batch *DRW_cache_object_wire_outline_get(struct Object *ob);
+struct Gwn_Batch *DRW_cache_object_edge_detection_get(struct Object *ob);
 struct Gwn_Batch *DRW_cache_object_surface_get(struct Object *ob);
 struct Gwn_Batch **DRW_cache_object_surface_material_get(
         struct Object *ob, struct GPUMaterial **gpumat_array, uint gpumat_array_len,
@@ -77,7 +78,8 @@ struct Gwn_Batch *DRW_cache_field_cone_limit_get(void);
 struct Gwn_Batch *DRW_cache_lamp_get(void);
 struct Gwn_Batch *DRW_cache_lamp_shadows_get(void);
 struct Gwn_Batch *DRW_cache_lamp_sunrays_get(void);
-struct Gwn_Batch *DRW_cache_lamp_area_get(void);
+struct Gwn_Batch *DRW_cache_lamp_area_square_get(void);
+struct Gwn_Batch *DRW_cache_lamp_area_disk_get(void);
 struct Gwn_Batch *DRW_cache_lamp_hemi_get(void);
 struct Gwn_Batch *DRW_cache_lamp_spot_get(void);
 struct Gwn_Batch *DRW_cache_lamp_spot_square_get(void);
@@ -116,6 +118,7 @@ void DRW_cache_mesh_normals_overlay_get(
         struct Gwn_Batch **r_tris, struct Gwn_Batch **r_ledges, struct Gwn_Batch **r_lverts);
 struct Gwn_Batch *DRW_cache_face_centers_get(struct Object *ob);
 struct Gwn_Batch *DRW_cache_mesh_wire_outline_get(struct Object *ob);
+struct Gwn_Batch *DRW_cache_mesh_edge_detection_get(struct Object *ob);
 struct Gwn_Batch *DRW_cache_mesh_surface_get(struct Object *ob);
 struct Gwn_Batch *DRW_cache_mesh_surface_weights_get(struct Object *ob);
 struct Gwn_Batch *DRW_cache_mesh_surface_vert_colors_get(struct Object *ob);

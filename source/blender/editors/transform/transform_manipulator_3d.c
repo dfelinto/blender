@@ -65,6 +65,7 @@
 #include "WM_api.h"
 #include "WM_types.h"
 #include "WM_message.h"
+#include "WM_toolsystem.h"
 
 #include "ED_armature.h"
 #include "ED_curve.h"
@@ -595,8 +596,8 @@ int ED_transform_calc_manipulator_stats(
 	RegionView3D *rv3d = ar->regiondata;
 	Base *base;
 	Object *ob = OBACT(view_layer);
-	const Object *ob_eval = NULL;
-	const Object *obedit_eval = NULL;
+	Object *ob_eval = NULL;
+	Object *obedit_eval = NULL;
 	bGPdata *gpd = CTX_data_gpencil_data(C);
 	const bool is_gp_edit = ((gpd) && (gpd->flag & GP_DATA_STROKE_EDITMODE));
 	int a, totsel = 0;
@@ -628,7 +629,7 @@ int ED_transform_calc_manipulator_stats(
 			case V3D_MANIP_GIMBAL:
 			{
 				float mat[3][3];
-				if (gimbal_axis(ob, mat)) {
+				if (gimbal_axis(ob_eval, mat)) {
 					copy_m4_m3(rv3d->twmat, mat);
 					break;
 				}
@@ -946,7 +947,7 @@ int ED_transform_calc_manipulator_stats(
 		int mode = TFM_ROTATION; // mislead counting bones... bah. We don't know the manipulator mode, could be mixed
 		bool ok = false;
 
-		if ((pivot_point == V3D_AROUND_ACTIVE) && (pchan = BKE_pose_channel_active(ob))) {
+		if ((pivot_point == V3D_AROUND_ACTIVE) && (pchan = BKE_pose_channel_active(ob_eval))) {
 			/* doesn't check selection or visibility intentionally */
 			Bone *bone = pchan->bone;
 			if (bone) {
@@ -957,11 +958,11 @@ int ED_transform_calc_manipulator_stats(
 			}
 		}
 		else {
-			totsel = count_set_pose_transflags(&mode, 0, ob);
+			totsel = count_set_pose_transflags(&mode, 0, ob_eval);
 
 			if (totsel) {
 				/* use channels to get stats */
-				for (pchan = ob->pose->chanbase.first; pchan; pchan = pchan->next) {
+				for (pchan = ob_eval->pose->chanbase.first; pchan; pchan = pchan->next) {
 					Bone *bone = pchan->bone;
 					if (bone && (bone->flag & BONE_TRANSFORM)) {
 						calc_tw_center(tbounds, pchan->pose_head);
@@ -1017,7 +1018,7 @@ int ED_transform_calc_manipulator_stats(
 			if (!TESTBASELIB(base)) {
 				continue;
 			}
-			const Object *base_object_eval = DEG_get_evaluated_object(depsgraph, base->object);
+			Object *base_object_eval = DEG_get_evaluated_object(depsgraph, base->object);
 			if (ob == NULL) {
 				ob = base->object;
 				ob_eval = base_object_eval;
@@ -1131,7 +1132,7 @@ static void manipulator_line_range(const int twtype, const short axis_type, floa
 
 static void manipulator_xform_message_subscribe(
         wmManipulatorGroup *mgroup, struct wmMsgBus *mbus,
-        Scene *scene, bScreen *screen, ScrArea *sa, ARegion *ar, const void *type_fn)
+        Scene *scene, bScreen *UNUSED(screen), ScrArea *UNUSED(sa), ARegion *ar, const void *type_fn)
 {
 	/* Subscribe to view properties */
 	wmMsgSubscribeValue msg_sub_value_mpr_tag_refresh = {
@@ -1157,8 +1158,8 @@ static void manipulator_xform_message_subscribe(
 		}
 	}
 
-	PointerRNA space_ptr;
-	RNA_pointer_create(&screen->id, &RNA_SpaceView3D, sa->spacedata.first, &space_ptr);
+	PointerRNA toolsettings_ptr;
+	RNA_pointer_create(&scene->id, &RNA_ToolSettings, scene->toolsettings, &toolsettings_ptr);
 
 	if (type_fn == TRANSFORM_WGT_manipulator) {
 		extern PropertyRNA rna_ToolSettings_transform_pivot_point;
@@ -1166,7 +1167,7 @@ static void manipulator_xform_message_subscribe(
 			&rna_ToolSettings_transform_pivot_point
 		};
 		for (int i = 0; i < ARRAY_SIZE(props); i++) {
-			WM_msg_subscribe_rna(mbus, &space_ptr, props[i], &msg_sub_value_mpr_tag_refresh, __func__);
+			WM_msg_subscribe_rna(mbus, &toolsettings_ptr, props[i], &msg_sub_value_mpr_tag_refresh, __func__);
 		}
 	}
 	else if (type_fn == VIEW3D_WGT_xform_cage) {
@@ -1282,15 +1283,9 @@ static void WIDGETGROUP_manipulator_setup(const bContext *C, wmManipulatorGroup 
 	{
 		/* TODO: support mixing modes again? - it's supported but tool system makes it unobvious. */
 		man->twtype = 0;
-		WorkSpace *workspace = CTX_wm_workspace(C);
-		Scene *scene = CTX_data_scene(C);
 		ScrArea *sa = CTX_wm_area(C);
-		const bToolKey tkey = {
-			.space_type = sa->spacetype,
-			.mode = WM_toolsystem_mode_from_spacetype(workspace, scene, NULL, sa->spacetype),
-		};
-		bToolRef_Runtime *tref_rt = WM_toolsystem_runtime_find(workspace, &tkey);
-		wmKeyMap *km = WM_keymap_find_all(C, tref_rt->keymap, sa->spacetype, RGN_TYPE_WINDOW);
+		bToolRef_Runtime *tref_rt = sa->runtime.tool ? sa->runtime.tool->runtime : NULL;
+		wmKeyMap *km = tref_rt ? WM_keymap_find_all(C, tref_rt->keymap, sa->spacetype, RGN_TYPE_WINDOW) : NULL;
 		/* Weak, check first event */
 		wmKeyMapItem *kmi = km ? km->items.first : NULL;
 

@@ -41,11 +41,11 @@ def dopesheet_filter(layout, context, genericFiltersOnly=False):
         row.prop(dopesheet, "show_only_errors", text="")
 
     if not genericFiltersOnly:
-        if bpy.data.groups:
+        if bpy.data.collections:
             row = layout.row(align=True)
-            row.prop(dopesheet, "show_only_group_objects", text="")
-            if dopesheet.show_only_group_objects:
-                row.prop(dopesheet, "filter_group", text="")
+            row.prop(dopesheet, "show_only_collection_objects", text="")
+            if dopesheet.show_only_collection_objects:
+                row.prop(dopesheet, "filter_collection", text="")
 
     if not is_nla:
         row = layout.row(align=True)
@@ -255,9 +255,7 @@ class DOPESHEET_MT_view(Menu):
         layout.operator("action.view_frame")
 
         layout.separator()
-        layout.operator("screen.area_dupli")
-        layout.operator("screen.screen_full_area")
-        layout.operator("screen.screen_full_area", text="Toggle Fullscreen Area").use_hide_panels = True
+        layout.menu("INFO_MT_area")
 
 
 class DOPESHEET_MT_select(Menu):

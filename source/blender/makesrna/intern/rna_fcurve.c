@@ -1558,6 +1558,7 @@ static void rna_def_drivervar(BlenderRNA *brna)
 	prop = RNA_def_property(srna, "targets", PROP_COLLECTION, PROP_NONE);
 	RNA_def_property_collection_sdna(prop, NULL, "targets", "num_targets");
 	RNA_def_property_struct_type(prop, "DriverTarget");
+	RNA_def_property_flag(prop, PROP_OVERRIDABLE_STATIC);
 	RNA_def_property_ui_text(prop, "Targets", "Sources of input data for evaluating this variable");
 	
 	/* Name Validity Flags */
@@ -1634,15 +1635,11 @@ static void rna_def_channeldriver(BlenderRNA *brna)
 	prop = RNA_def_property(srna, "variables", PROP_COLLECTION, PROP_NONE);
 	RNA_def_property_collection_sdna(prop, NULL, "variables", NULL);
 	RNA_def_property_struct_type(prop, "DriverVariable");
+	RNA_def_property_flag(prop, PROP_OVERRIDABLE_STATIC);
 	RNA_def_property_ui_text(prop, "Variables", "Properties acting as inputs for this driver");
 	rna_def_channeldriver_variables(brna, prop);
 	
 	/* Settings */
-	prop = RNA_def_property(srna, "show_debug_info", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_sdna(prop, NULL, "flag", DRIVER_FLAG_SHOWDEBUG);
-	RNA_def_property_ui_text(prop, "Show Debug Info",
-	                         "Show intermediate values for the driver calculations to allow debugging of drivers");
-
 	prop = RNA_def_property(srna, "use_self", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "flag", DRIVER_FLAG_USE_SELF);
 	RNA_def_property_ui_text(prop, "Use Self",
@@ -1918,6 +1915,7 @@ static void rna_def_fcurve(BlenderRNA *brna)
 
 	/* Pointers */
 	prop = RNA_def_property(srna, "driver", PROP_POINTER, PROP_NONE);
+	RNA_def_property_flag(prop, PROP_OVERRIDABLE_STATIC);
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 	RNA_def_property_ui_text(prop, "Driver", "Channel Driver (only set for Driver F-Curves)");
 	

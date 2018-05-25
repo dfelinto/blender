@@ -80,6 +80,8 @@
 #include "WM_api.h"
 #include "WM_types.h"
 #include "WM_message.h"
+#include "WM_toolsystem.h"
+
 #include "wm.h"
 #include "wm_window.h"
 #include "wm_event_system.h"
@@ -788,7 +790,7 @@ void WM_reportf(ReportType type, const char *format, ...)
 /* (caller_owns_reports == true) when called from python */
 static void wm_operator_reports(bContext *C, wmOperator *op, int retval, bool caller_owns_reports)
 {
-	if (caller_owns_reports == false) { /* popup */
+	if (G.background == 0 && caller_owns_reports == false) { /* popup */
 		if (op->reports->list.first) {
 			/* FIXME, temp setting window, see other call to UI_popup_menu_reports for why */
 			wmWindow *win_prev = CTX_wm_window(C);
@@ -1235,7 +1237,8 @@ bool WM_operator_last_properties_store(wmOperator *UNUSED(op))
  */
 static int wm_operator_invoke(
         bContext *C, wmOperatorType *ot, wmEvent *event,
-        PointerRNA *properties, ReportList *reports, const bool poll_only)
+        PointerRNA *properties, ReportList *reports,
+        const bool poll_only, bool use_last_properties)
 {
 	int retval = OPERATOR_PASS_THROUGH;
 
@@ -1253,7 +1256,7 @@ static int wm_operator_invoke(
 		}
 
 		/* initialize setting from previous run */
-		if (!is_nested_call) { /* not called by py script */
+		if (!is_nested_call && use_last_properties) { /* not called by py script */
 			WM_operator_last_properties_init(op);
 		}
 
@@ -1301,7 +1304,7 @@ static int wm_operator_invoke(
 			/* do nothing, wm_operator_exec() has been called somewhere */
 		}
 		else if (retval & OPERATOR_FINISHED) {
-			const bool store = !is_nested_call;
+			const bool store = !is_nested_call && use_last_properties;
 			wm_operator_finished(C, op, false, store);
 		}
 		else if (retval & OPERATOR_RUNNING_MODAL) {
@@ -1464,7 +1467,7 @@ static int wm_operator_call_internal(
 						CTX_wm_region_set(C, ar1);
 				}
 				
-				retval = wm_operator_invoke(C, ot, event, properties, reports, poll_only);
+				retval = wm_operator_invoke(C, ot, event, properties, reports, poll_only, true);
 				
 				/* set region back */
 				CTX_wm_region_set(C, ar);
@@ -1478,7 +1481,7 @@ static int wm_operator_call_internal(
 				ARegion *ar = CTX_wm_region(C);
 
 				CTX_wm_region_set(C, NULL);
-				retval = wm_operator_invoke(C, ot, event, properties, reports, poll_only);
+				retval = wm_operator_invoke(C, ot, event, properties, reports, poll_only, true);
 				CTX_wm_region_set(C, ar);
 
 				return retval;
@@ -1492,7 +1495,7 @@ static int wm_operator_call_internal(
 
 				CTX_wm_region_set(C, NULL);
 				CTX_wm_area_set(C, NULL);
-				retval = wm_operator_invoke(C, ot, event, properties, reports, poll_only);
+				retval = wm_operator_invoke(C, ot, event, properties, reports, poll_only, true);
 				CTX_wm_area_set(C, area);
 				CTX_wm_region_set(C, ar);
 
@@ -1500,7 +1503,7 @@ static int wm_operator_call_internal(
 			}
 			case WM_OP_EXEC_DEFAULT:
 			case WM_OP_INVOKE_DEFAULT:
-				return wm_operator_invoke(C, ot, event, properties, reports, poll_only);
+				return wm_operator_invoke(C, ot, event, properties, reports, poll_only, true);
 		}
 	}
 	
@@ -1955,10 +1958,7 @@ static int wm_handler_operator_call(bContext *C, ListBase *handlers, wmEventHand
 
 				/* remove modal handler, operator itself should have been canceled and freed */
 				if (retval & (OPERATOR_CANCELLED | OPERATOR_FINISHED)) {
-					/* set cursor back to the default for the region */
-					wmWindow *win = CTX_wm_window(C);
-					WM_cursor_grab_disable(win, NULL);
-					ED_region_cursor_set(win, CTX_wm_area(C), CTX_wm_region(C));
+					WM_cursor_grab_disable(CTX_wm_window(C), NULL);
 
 					BLI_remlink(handlers, handler);
 					wm_event_free_handler(handler);
@@ -1975,9 +1975,21 @@ static int wm_handler_operator_call(bContext *C, ListBase *handlers, wmEventHand
 	else {
 		wmOperatorType *ot = WM_operatortype_find(event->keymap_idname, 0);
 
-		if (ot) {
-			if (wm_operator_check_locked_interface(C, ot)) {
-				retval = wm_operator_invoke(C, ot, event, properties, NULL, false);
+		if (ot && wm_operator_check_locked_interface(C, ot)) {
+			bool use_last_properties = true;
+			PointerRNA tool_properties = {{0}};
+			bool use_tool_properties = (handler->keymap_tool != NULL);
+			
+			if (use_tool_properties) {
+				WM_toolsystem_ref_properties_init_for_keymap(handler->keymap_tool, &tool_properties, properties, ot);
+				properties = &tool_properties;
+				use_last_properties = false;
+			}
+
+			retval = wm_operator_invoke(C, ot, event, properties, NULL, false, use_last_properties);
+
+			if (use_tool_properties) {
+				WM_operator_properties_free(&tool_properties);
 			}
 		}
 	}
@@ -2252,6 +2264,7 @@ static int wm_handlers_do_intern(bContext *C, wmEvent *event, ListBase *handlers
 
 					for (kmi = keymap->items.first; kmi; kmi = kmi->next) {
 						if (wm_eventmatch(event, kmi)) {
+							struct wmEventHandler_KeymapFn keymap_callback = handler->keymap_callback;
 
 							PRINT("%s:     item matched '%s'\n", __func__, kmi->idname);
 
@@ -2259,9 +2272,13 @@ static int wm_handlers_do_intern(bContext *C, wmEvent *event, ListBase *handlers
 							event->keymap_idname = kmi->idname;
 
 							action |= wm_handler_operator_call(C, handlers, handler, event, kmi->ptr);
+							
 							if (action & WM_HANDLER_BREAK) {
 								/* not always_pass here, it denotes removed handler */
 								CLOG_INFO(WM_LOG_HANDLERS, 2, "handled! '%s'", kmi->idname);
+								if (keymap_callback.handle_post_fn != NULL) {
+									keymap_callback.handle_post_fn(keymap, kmi, keymap_callback.user_data);
+								}
 								break;
 							}
 							else {
@@ -2388,15 +2405,16 @@ static int wm_handlers_do_intern(bContext *C, wmEvent *event, ListBase *handlers
 							continue;
 						}
 
-						const wmKeyMap *keymap = WM_keymap_active(wm, mgroup->type->keymap);
+						wmKeyMap *keymap = WM_keymap_active(wm, mgroup->type->keymap);
 						wmKeyMapItem *kmi;
 
 						PRINT("%s:   checking '%s' ...", __func__, keymap->idname);
 
-						if (!keymap->poll || keymap->poll(C)) {
+						if (WM_keymap_poll(C, keymap)) {
 							PRINT("pass\n");
 							for (kmi = keymap->items.first; kmi; kmi = kmi->next) {
 								if (wm_eventmatch(event, kmi)) {
+									struct wmEventHandler_KeymapFn keymap_callback = handler->keymap_callback;
 									wmOperator *op = handler->op;
 
 									PRINT("%s:     item matched '%s'\n", __func__, kmi->idname);
@@ -2414,6 +2432,10 @@ static int wm_handlers_do_intern(bContext *C, wmEvent *event, ListBase *handlers
 									CTX_wm_manipulator_group_set(C, NULL);
 
 									if (action & WM_HANDLER_BREAK) {
+										if (keymap_callback.handle_post_fn != NULL) {
+											keymap_callback.handle_post_fn(keymap, kmi, keymap_callback.user_data);
+										}
+
 										if (G.debug & (G_DEBUG_EVENTS | G_DEBUG_HANDLERS)) {
 											printf("%s:       handled - and pass on! '%s'\n",
 											       __func__, kmi->idname);
@@ -2874,17 +2896,14 @@ void wm_event_do_handlers(bContext *C)
 									 */
 									wmEventHandler sneaky_handler = {NULL};
 									if (ar->regiontype == RGN_TYPE_WINDOW) {
-										WorkSpace *workspace = WM_window_get_active_workspace(win);
-										const bToolKey tkey = {
-											.space_type = sa->spacetype,
-											.mode = WM_toolsystem_mode_from_spacetype(workspace, win->scene, sa, sa->spacetype),
-										};
-										bToolRef_Runtime *tref_rt = WM_toolsystem_runtime_find(workspace, &tkey);
+										bToolRef_Runtime *tref_rt = sa->runtime.tool ? sa->runtime.tool->runtime : NULL;
 										if (tref_rt && tref_rt->keymap[0]) {
 											wmKeyMap *km = WM_keymap_find_all(
 											        C, tref_rt->keymap, sa->spacetype, RGN_TYPE_WINDOW);
 											if (km != NULL) {
 												sneaky_handler.keymap = km;
+												sneaky_handler.keymap_tool = sa->runtime.tool;
+
 												/* Handle widgets first. */
 												wmEventHandler *handler_last = ar->handlers.last;
 												while (handler_last && handler_last->manipulator_map == NULL) {
@@ -3169,6 +3188,15 @@ void WM_event_remove_keymap_handler(ListBase *handlers, wmKeyMap *keymap)
 			break;
 		}
 	}
+}
+
+void WM_event_set_keymap_handler_callback(
+        wmEventHandler *handler,
+        void (keymap_tag)(wmKeyMap *keymap, wmKeyMapItem *kmi, void *user_data),
+        void *user_data)
+{
+	handler->keymap_callback.handle_post_fn = keymap_tag;
+	handler->keymap_callback.user_data = user_data;
 }
 
 wmEventHandler *WM_event_add_ui_handler(

@@ -239,7 +239,7 @@ bool DRW_check_psys_visible_within_active_context(
 			}
 			if ((part->childtype == 0) &&
 			    (psys->flag & PSYS_HAIR_DYNAMICS &&
-			     psys->pointcache->flag & PTCACHE_BAKED)==0)
+			     psys->pointcache->flag & PTCACHE_BAKED) == 0)
 			{
 				return false;
 			}
@@ -330,7 +330,7 @@ void DRW_transform_to_display(GPUTexture *tex)
 void DRW_multisamples_resolve(GPUTexture *src_depth, GPUTexture *src_color)
 {
 	drw_state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_PREMUL |
-	              DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS);
+	              DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS_EQUAL);
 
 	int samples = GPU_texture_samples(src_depth);
 
@@ -1015,7 +1015,7 @@ static void drw_engines_enable_external(void)
 /* TODO revisit this when proper layering is implemented */
 /* Gather all draw engines needed and store them in DST.enabled_engines
  * That also define the rendering order of engines */
-static void drw_engines_enable_from_engine(RenderEngineType *engine_type, int drawtype)
+static void drw_engines_enable_from_engine(RenderEngineType *engine_type, int drawtype, int shading_flags)
 {
 	switch (drawtype) {
 		case OB_WIRE:
@@ -1023,7 +1023,12 @@ static void drw_engines_enable_from_engine(RenderEngineType *engine_type, int dr
 
 		case OB_SOLID:
 		case OB_TEXTURE:
-			use_drw_engine(&draw_engine_workbench_solid);
+			if (shading_flags & V3D_SHADING_XRAY) {
+				use_drw_engine(&draw_engine_workbench_transparent);
+			}
+			else {
+				use_drw_engine(&draw_engine_workbench_solid);
+			}
 			break;
 
 		case OB_MATERIAL:
@@ -1118,7 +1123,7 @@ static void drw_engines_enable(ViewLayer *view_layer, RenderEngineType *engine_t
 	View3D * v3d = DST.draw_ctx.v3d;
 	const int drawtype = v3d->drawtype;
 
-	drw_engines_enable_from_engine(engine_type, drawtype);
+	drw_engines_enable_from_engine(engine_type, drawtype, v3d->shading.flag);
 
 	if (DRW_state_draw_support()) {
 		drw_engines_enable_from_overlays(v3d->overlay.flag);
@@ -1695,7 +1700,7 @@ void DRW_draw_select_loop(
 	DRW_state_lock(
 	        DRW_STATE_WRITE_DEPTH |
 	        DRW_STATE_DEPTH_ALWAYS |
-	        DRW_STATE_DEPTH_LESS |
+	        DRW_STATE_DEPTH_LESS_EQUAL |
 	        DRW_STATE_DEPTH_EQUAL |
 	        DRW_STATE_DEPTH_GREATER |
 	        DRW_STATE_DEPTH_ALWAYS);
@@ -2023,6 +2028,7 @@ void DRW_engines_register(void)
 	RE_engines_register(&DRW_engine_viewport_workbench_type);
 
 	DRW_engine_register(&draw_engine_workbench_solid);
+	DRW_engine_register(&draw_engine_workbench_transparent);
 
 	DRW_engine_register(&draw_engine_object_type);
 	DRW_engine_register(&draw_engine_edit_armature_type);

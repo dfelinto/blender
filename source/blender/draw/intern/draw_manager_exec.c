@@ -105,10 +105,14 @@ void drw_state_set(DRWState state)
 	/* Raster Discard */
 	{
 		if (CHANGED_ANY(DRW_STATE_WRITE_DEPTH | DRW_STATE_WRITE_COLOR |
-		                DRW_STATE_WRITE_STENCIL | DRW_STATE_WRITE_STENCIL_SHADOW))
+		                DRW_STATE_WRITE_STENCIL |
+		                DRW_STATE_WRITE_STENCIL_SHADOW_PASS |
+		                DRW_STATE_WRITE_STENCIL_SHADOW_FAIL))
 		{
 			if ((state & (DRW_STATE_WRITE_DEPTH | DRW_STATE_WRITE_COLOR |
-			              DRW_STATE_WRITE_STENCIL | DRW_STATE_WRITE_STENCIL_SHADOW)) != 0) {
+			              DRW_STATE_WRITE_STENCIL | DRW_STATE_WRITE_STENCIL_SHADOW_PASS |
+			              DRW_STATE_WRITE_STENCIL_SHADOW_FAIL)) != 0)
+			{
 				glDisable(GL_RASTERIZER_DISCARD);
 			}
 			else {
@@ -147,13 +151,17 @@ void drw_state_set(DRWState state)
 	{
 		DRWState test;
 		if (CHANGED_ANY_STORE_VAR(
-		        DRW_STATE_DEPTH_LESS | DRW_STATE_DEPTH_EQUAL | DRW_STATE_DEPTH_GREATER | DRW_STATE_DEPTH_ALWAYS,
+		        DRW_STATE_DEPTH_LESS | DRW_STATE_DEPTH_LESS_EQUAL | DRW_STATE_DEPTH_EQUAL |
+		        DRW_STATE_DEPTH_GREATER | DRW_STATE_DEPTH_GREATER_EQUAL | DRW_STATE_DEPTH_ALWAYS,
 		        test))
 		{
 			if (test) {
 				glEnable(GL_DEPTH_TEST);
 
 				if (state & DRW_STATE_DEPTH_LESS) {
+					glDepthFunc(GL_LESS);
+				}
+				else if (state & DRW_STATE_DEPTH_LESS_EQUAL) {
 					glDepthFunc(GL_LEQUAL);
 				}
 				else if (state & DRW_STATE_DEPTH_EQUAL) {
@@ -161,6 +169,9 @@ void drw_state_set(DRWState state)
 				}
 				else if (state & DRW_STATE_DEPTH_GREATER) {
 					glDepthFunc(GL_GREATER);
+				}
+				else if (state & DRW_STATE_DEPTH_GREATER_EQUAL) {
+					glDepthFunc(GL_GEQUAL);
 				}
 				else if (state & DRW_STATE_DEPTH_ALWAYS) {
 					glDepthFunc(GL_ALWAYS);
@@ -210,7 +221,8 @@ void drw_state_set(DRWState state)
 		int test;
 		if (CHANGED_ANY_STORE_VAR(
 		        DRW_STATE_BLEND | DRW_STATE_BLEND_PREMUL | DRW_STATE_ADDITIVE |
-		        DRW_STATE_MULTIPLY | DRW_STATE_TRANSMISSION | DRW_STATE_ADDITIVE_FULL,
+		        DRW_STATE_MULTIPLY | DRW_STATE_TRANSMISSION | DRW_STATE_ADDITIVE_FULL |
+		        DRW_STATE_TRANSPARENT_REVEALAGE,
 		        test))
 		{
 			if (test) {
@@ -228,6 +240,9 @@ void drw_state_set(DRWState state)
 				}
 				else if ((state & DRW_STATE_TRANSMISSION) != 0) {
 					glBlendFunc(GL_ONE, GL_SRC_ALPHA);
+				}
+				else if ((state & DRW_STATE_TRANSPARENT_REVEALAGE) != 0) {
+					glBlendFunc(GL_ZERO, GL_ONE_MINUS_SRC_COLOR);
 				}
 				else if ((state & DRW_STATE_ADDITIVE) != 0) {
 					/* Do not let alpha accumulate but premult the source RGB by it. */
@@ -298,7 +313,8 @@ void drw_state_set(DRWState state)
 		DRWState test;
 		if (CHANGED_ANY_STORE_VAR(
 		        DRW_STATE_WRITE_STENCIL |
-		        DRW_STATE_WRITE_STENCIL_SHADOW |
+		        DRW_STATE_WRITE_STENCIL_SHADOW_PASS |
+		        DRW_STATE_WRITE_STENCIL_SHADOW_FAIL |
 		        DRW_STATE_STENCIL_EQUAL |
 		        DRW_STATE_STENCIL_NEQUAL,
 		        test))
@@ -310,7 +326,12 @@ void drw_state_set(DRWState state)
 					glStencilMask(0xFF);
 					glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
 				}
-				else if ((state & DRW_STATE_WRITE_STENCIL_SHADOW) != 0) {
+				else if ((state & DRW_STATE_WRITE_STENCIL_SHADOW_PASS) != 0) {
+					glStencilMask(0xFF);
+					glStencilOpSeparate(GL_BACK,  GL_KEEP, GL_KEEP, GL_INCR_WRAP);
+					glStencilOpSeparate(GL_FRONT, GL_KEEP, GL_KEEP, GL_DECR_WRAP);
+				}
+				else if ((state & DRW_STATE_WRITE_STENCIL_SHADOW_FAIL) != 0) {
 					glStencilMask(0xFF);
 					glStencilOpSeparate(GL_BACK,  GL_KEEP, GL_INCR_WRAP, GL_KEEP);
 					glStencilOpSeparate(GL_FRONT, GL_KEEP, GL_DECR_WRAP, GL_KEEP);

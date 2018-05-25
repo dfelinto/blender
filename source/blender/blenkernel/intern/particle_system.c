@@ -3214,13 +3214,7 @@ static void do_hair_dynamics(ParticleSimulationData *sim)
 	            LIB_ID_COPY_NO_PREVIEW,
 	            false);
 	deformedVerts = BKE_mesh_vertexCos_get(psys->hair_out_mesh, NULL);
-
-	/* TODO(Sybren): after porting Cloth modifier, remove this conversion */
-	DerivedMesh *hair_in_dm = CDDM_from_mesh(psys->hair_in_mesh);
-	clothModifier_do(psys->clmd, sim->depsgraph, sim->scene, sim->ob, hair_in_dm, deformedVerts);
-	hair_in_dm->needsFree = 1;
-	hair_in_dm->release(hair_in_dm);
-
+	clothModifier_do(psys->clmd, sim->depsgraph, sim->scene, sim->ob, psys->hair_in_mesh, deformedVerts);
 	BKE_mesh_apply_vert_coords(psys->hair_out_mesh, deformedVerts);
 	
 	MEM_freeN(deformedVerts);
@@ -4259,9 +4253,6 @@ void particle_system_update(struct Depsgraph *depsgraph, Scene *scene, Object *o
 
 	/* to verify if we need to restore object afterwards */
 	psys->flag &= ~PSYS_OB_ANIM_RESTORE;
-
-	if (psys->recalc & PSYS_RECALC_TYPE)
-		psys_changed_type(sim.ob, sim.psys);
 
 	if (psys->recalc & PSYS_RECALC_RESET)
 		psys->totunexist = 0;

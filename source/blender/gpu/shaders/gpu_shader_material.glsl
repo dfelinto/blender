@@ -396,6 +396,11 @@ void math_abs(float val1, out float outval)
 	outval = abs(val1);
 }
 
+void math_atan2(float val1, float val2, out float outval)
+{
+	outval = atan(val1, val2);
+}
+
 void squeeze(float val, float width, float center, out float outval)
 {
 	outval = 1.0 / (1.0 + pow(2.71828183, -((val - center) * width)));
@@ -2554,7 +2559,7 @@ void node_eevee_specular(
 	result.ssr_id = int(ssr_id);
 }
 
-void node_shadertorgb(Closure cl, out vec4 outcol, out float outalpha)
+void node_shader_to_rgba(Closure cl, out vec4 outcol, out float outalpha)
 {
 	vec4 spec_accum = vec4(0.0);
 	if (ssrToggle && cl.ssr_id == outputSsrId) {
@@ -2571,9 +2576,9 @@ void node_shadertorgb(Closure cl, out vec4 outcol, out float outalpha)
 
 #   ifdef USE_SSS
 #		ifdef USE_SSS_ALBEDO
-	outcol += (cl.sss_data * cl.sss_albedo);
+	outcol.rgb += cl.sss_data.rgb * cl.sss_albedo;
 #   	else
-	outcol += cl.sss_data;
+	outcol.rgb += cl.sss_data.rgb;
 #		endif
 #	endif
 }

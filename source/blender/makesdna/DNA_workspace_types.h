@@ -56,10 +56,13 @@
 #
 #
 typedef struct bToolRef_Runtime {
-	/* One of these must be defined. */
+	int cursor;
+
+	/* One of these 3 must be defined. */
 	char keymap[64];
 	char manipulator_group[64];
 	char data_block[64];
+
 	/* index when a tool is a member of a group */
 	int index;
 } bToolRef_Runtime;
@@ -70,13 +73,25 @@ typedef struct bToolRef {
 	struct bToolRef *next, *prev;
 	char idname[64];
 
+	/** Use to avoid initializing the same tool multiple times. */
+	short tag;
+
 	/** bToolKey (spacetype, mode), used in 'WM_api.h' */
-	int space_type;
+	short space_type;
 	/**
 	 * Value depends ont the 'space_type', object mode for 3D view, image editor has own mode too.
 	 * RNA needs to handle using item function.
 	 */
 	int mode;
+
+	/**
+	 * Use for tool options, each group's name must match a tool name:
+	 *
+	 *    {"Tool Name": {"SOME_OT_operator": {...}, ..}, ..}
+	 *
+	 * This is done since different tools may call the same operators with their own options.
+	 */
+	IDProperty *properties;
 
 	/** Variables needed to operate the tool. */
 	bToolRef_Runtime *runtime;
@@ -111,12 +126,10 @@ typedef struct WorkSpace {
 	/* Store for each hook (so for each window) which layout has
 	 * been activated the last time this workspace was visible. */
 	ListBase hook_layout_relations DNA_PRIVATE_WORKSPACE_READ_WRITE; /* WorkSpaceDataRelation */
-	ListBase scene_viewlayer_relations DNA_PRIVATE_WORKSPACE_READ_WRITE; /* WorkSpaceDataRelation */
+	ListBase scene_layer_relations; /* WorkSpaceSceneRelation */
 
 	/* Feature tagging (use for addons) */
 	ListBase owner_ids DNA_PRIVATE_WORKSPACE_READ_WRITE; /* wmOwnerID */
-
-	struct ViewLayer *view_layer DNA_DEPRECATED;
 
 	/* should be: '#ifdef USE_WORKSPACE_TOOL'. */
 
@@ -170,6 +183,13 @@ typedef struct WorkSpaceDataRelation {
 } WorkSpaceDataRelation;
 
 #endif /* DNA_PRIVATE_WORKSPACE_READ_WRITE */
+
+typedef struct WorkSpaceSceneRelation {
+	struct WorkSpaceSceneRelation *next, *prev;
+
+	struct Scene *scene;
+	char view_layer[64]; /* MAX_NAME */
+} WorkSpaceSceneRelation;
 
 /**
  * Little wrapper to store data that is going to be per window, but comming from the workspace.

@@ -69,7 +69,6 @@ struct ImageFormatData;
 struct ARegion;
 struct ScrArea;
 struct Main;
-struct bToolDef;
 struct ViewLayer;
 struct GPUViewport;
 
@@ -103,8 +102,8 @@ void		WM_check			(struct bContext *C);
 
 int WM_window_pixels_x(const struct wmWindow *win);
 int WM_window_pixels_y(const struct wmWindow *win);
-int WM_window_screen_pixels_x(const struct wmWindow *win);
-int WM_window_screen_pixels_y(const struct wmWindow *win);
+void WM_window_rect_calc(const struct wmWindow *win, struct rcti *r_rect);
+void WM_window_screen_rect_calc(const struct wmWindow *win, struct rcti *r_rect);
 bool WM_window_is_fullscreen(struct wmWindow *win);
 
 void WM_windows_scene_data_sync(const ListBase *win_lb, struct Scene *scene) ATTR_NONNULL();
@@ -136,6 +135,7 @@ void WM_opengl_context_release(void *context);
 enum {
 	WM_WINDOW_RENDER = 1,
 	WM_WINDOW_USERPREFS,
+	WM_WINDOW_DRIVERS,
 	// WM_WINDOW_FILESEL // UNUSED
 };
 
@@ -157,6 +157,7 @@ void        WM_lib_reload(struct Library *lib, struct bContext *C, struct Report
 
 			/* mouse cursors */
 void		WM_cursor_set(struct wmWindow *win, int curs);
+bool		WM_cursor_set_from_tool(struct wmWindow *win, const ScrArea *sa, const ARegion *ar);
 void		WM_cursor_modal_set(struct wmWindow *win, int curs);
 void		WM_cursor_modal_restore(struct wmWindow *win);
 void		WM_cursor_wait		(bool val);
@@ -189,6 +190,11 @@ struct wmEventHandler *WM_event_add_keymap_handler_bb(ListBase *handlers, wmKeyM
 struct wmEventHandler *WM_event_add_keymap_handler_priority(ListBase *handlers, wmKeyMap *keymap, int priority);
 
 void		WM_event_remove_keymap_handler(ListBase *handlers, wmKeyMap *keymap);
+
+void WM_event_set_keymap_handler_callback(
+        struct wmEventHandler *handler,
+        void (keymap_tag)(wmKeyMap *keymap, wmKeyMapItem *kmi, void *user_data),
+        void *user_data);
 
 typedef int (*wmUIHandlerFunc)(struct bContext *C, const struct wmEvent *event, void *userdata);
 typedef void (*wmUIHandlerRemoveFunc)(struct bContext *C, void *userdata);
@@ -594,51 +600,6 @@ bool        WM_event_is_tablet(const struct wmEvent *event);
 #ifdef WITH_INPUT_IME
 bool        WM_event_is_ime_switch(const struct wmEvent *event);
 #endif
-
-/* wm_toolsystem.c  */
-
-/* Values that define a categoey of active tool. */
-typedef struct bToolKey { int space_type; int mode; } bToolKey;
-
-struct bToolRef *WM_toolsystem_ref_from_context(struct bContext *C);
-struct bToolRef *WM_toolsystem_ref_find(struct WorkSpace *workspace, const bToolKey *tkey);
-bool WM_toolsystem_ref_ensure(
-        struct WorkSpace *workspace, const bToolKey *tkey,
-        struct bToolRef **r_tref);
-
-struct bToolRef_Runtime *WM_toolsystem_runtime_from_context(struct bContext *C);
-struct bToolRef_Runtime *WM_toolsystem_runtime_find(struct WorkSpace *workspace, const bToolKey *tkey);
-
-void WM_toolsystem_unlink(struct bContext *C, struct WorkSpace *workspace, const bToolKey *tkey);
-void WM_toolsystem_link(struct bContext *C, struct WorkSpace *workspace, const bToolKey *tkey);
-void WM_toolsystem_refresh(struct bContext *C, struct WorkSpace *workspace, const bToolKey *tkey);
-
-void WM_toolsystem_unlink_all(struct bContext *C, struct WorkSpace *workspace);
-void WM_toolsystem_link_all(struct bContext *C, struct WorkSpace *workspace);
-void WM_toolsystem_refresh_all(struct bContext *C, struct WorkSpace *workspace);
-
-void WM_toolsystem_ref_set_from_runtime(
-        struct bContext *C, struct WorkSpace *workspace, struct bToolRef *tref,
-        const struct bToolRef_Runtime *tool, const char *idname);
-
-void WM_toolsystem_init(struct bContext *C);
-
-int WM_toolsystem_mode_from_spacetype(
-        struct WorkSpace *workspace, struct Scene *scene, struct ScrArea *sa,
-        int space_type);
-bool WM_toolsystem_key_from_context(
-        struct WorkSpace *workspace, struct Scene *scene, struct ScrArea *sa,
-        bToolKey *tkey);
-void WM_toolsystem_update_from_context(
-        struct bContext *C,
-        struct WorkSpace *workspace, struct Scene *scene, struct ScrArea *sa);
-
-void WM_toolsystem_update_from_context_view3d(struct bContext *C);
-
-bool WM_toolsystem_active_tool_is_brush(const struct bContext *C);
-
-void WM_toolsystem_do_msg_notify_tag_refresh(
-        struct bContext *C, struct wmMsgSubscribeKey *msg_key, struct wmMsgSubscribeValue *msg_val);
 
 /* wm_tooltip.c */
 typedef struct ARegion *(*wmTooltipInitFn)(struct bContext *, struct ARegion *, bool *);

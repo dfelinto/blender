@@ -506,7 +506,7 @@ static Mesh *applyModifier(ModifierData *md, const ModifierEvalContext *ctx, Mes
 		const bool use_trgt_faces = (wmd->proximity_flags & MOD_WVG_PROXIMITY_GEOM_FACES) != 0;
 
 		if (use_trgt_verts || use_trgt_edges || use_trgt_faces) {
-			Mesh *target_mesh = BKE_modifier_get_evaluated_mesh_from_object(obr, ctx->flag);
+			Mesh *target_mesh = BKE_modifier_get_evaluated_mesh_from_object(ctx, obr);
 
 			/* We must check that we do have a valid target_mesh! */
 			if (target_mesh != NULL) {
@@ -544,7 +544,7 @@ static Mesh *applyModifier(ModifierData *md, const ModifierEvalContext *ctx, Mes
 	do_map(ob, new_w, numIdx, wmd->min_dist, wmd->max_dist, wmd->falloff_type);
 
 	/* Do masking. */
-	weightvg_do_mask(numIdx, indices, org_w, new_w, ob, result, wmd->mask_constant,
+	weightvg_do_mask(ctx, numIdx, indices, org_w, new_w, ob, result, wmd->mask_constant,
 	                 wmd->mask_defgrp_name, wmd->modifier.scene, wmd->mask_texture,
 	                 wmd->mask_tex_use_channel, wmd->mask_tex_mapping,
 	                 wmd->mask_tex_map_obj, wmd->mask_tex_uvlayer_name);

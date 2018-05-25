@@ -175,7 +175,8 @@ typedef struct OBJECT_PrivateData {
 	DRWShadingGroup *lamp_distance;
 	DRWShadingGroup *lamp_buflimit;
 	DRWShadingGroup *lamp_buflimit_points;
-	DRWShadingGroup *lamp_area;
+	DRWShadingGroup *lamp_area_square;
+	DRWShadingGroup *lamp_area_disk;
 	DRWShadingGroup *lamp_hemi;
 	DRWShadingGroup *lamp_spot_cone;
 	DRWShadingGroup *lamp_spot_blend;
@@ -856,7 +857,7 @@ static void OBJECT_cache_init(void *vedata)
 	g_data = stl->g_data;
 
 	{
-		DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS | DRW_STATE_WIRE;
+		DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS_EQUAL | DRW_STATE_WIRE;
 		psl->outlines = DRW_pass_create("Outlines Depth Pass", state);
 
 		GPUShader *sh = e_data.outline_prepass_sh;
@@ -876,7 +877,7 @@ static void OBJECT_cache_init(void *vedata)
 	}
 
 	{
-		DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS;
+		DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS_EQUAL;
 		DRWPass *pass = psl->lightprobes = DRW_pass_create("Object Probe Pass", state);
 		struct Gwn_Batch *sphere = DRW_cache_sphere_get();
 		struct Gwn_Batch *quad = DRW_cache_quad_get();
@@ -987,25 +988,25 @@ static void OBJECT_cache_init(void *vedata)
 
 	{
 		/* Solid bones */
-		DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS | DRW_STATE_CULL_BACK;
+		DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS_EQUAL | DRW_STATE_CULL_BACK;
 		psl->bone_solid = DRW_pass_create("Bone Solid Pass", state);
 		psl->bone_outline = DRW_pass_create("Bone Outline Pass", state);
 	}
 
 	{
 		/* Wire bones */
-		DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS | DRW_STATE_BLEND;
+		DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS_EQUAL | DRW_STATE_BLEND;
 		psl->bone_wire = DRW_pass_create("Bone Wire Pass", state);
 	}
 
 	{
 		/* distance outline around envelope bones */
-		DRWState state = DRW_STATE_ADDITIVE | DRW_STATE_WRITE_COLOR | DRW_STATE_DEPTH_LESS | DRW_STATE_CULL_FRONT;
+		DRWState state = DRW_STATE_ADDITIVE | DRW_STATE_WRITE_COLOR | DRW_STATE_DEPTH_LESS_EQUAL | DRW_STATE_CULL_FRONT;
 		psl->bone_envelope = DRW_pass_create("Bone Envelope Outline Pass", state);
 	}
 
 	{
-		DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS | DRW_STATE_WIRE;
+		DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS_EQUAL | DRW_STATE_WIRE;
 		psl->bone_axes = DRW_pass_create("Bone Axes Pass", state);
 	}
 
@@ -1015,7 +1016,7 @@ static void OBJECT_cache_init(void *vedata)
 
 		DRWState state =
 		        DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH |
-		        DRW_STATE_DEPTH_LESS | DRW_STATE_BLEND | DRW_STATE_POINT;
+		        DRW_STATE_DEPTH_LESS_EQUAL | DRW_STATE_BLEND | DRW_STATE_POINT;
 		state |= DRW_STATE_WIRE;
 		psl->non_meshes = DRW_pass_create("Non Meshes Pass", state);
 
@@ -1164,8 +1165,11 @@ static void OBJECT_cache_init(void *vedata)
 		stl->g_data->lamp_groundline = shgroup_groundlines_uniform_color(psl->non_meshes, ts.colorLamp);
 		stl->g_data->lamp_groundpoint = shgroup_groundpoints_uniform_color(psl->non_meshes, ts.colorLamp);
 
-		geom = DRW_cache_lamp_area_get();
-		stl->g_data->lamp_area = shgroup_instance(psl->non_meshes, geom);
+		geom = DRW_cache_lamp_area_square_get();
+		stl->g_data->lamp_area_square = shgroup_instance(psl->non_meshes, geom);
+
+		geom = DRW_cache_lamp_area_disk_get();
+		stl->g_data->lamp_area_disk = shgroup_instance(psl->non_meshes, geom);
 
 		geom = DRW_cache_lamp_hemi_get();
 		stl->g_data->lamp_hemi = shgroup_instance(psl->non_meshes, geom);
@@ -1257,7 +1261,7 @@ static void OBJECT_cache_init(void *vedata)
 		/* Particle Pass */
 		psl->particle = DRW_pass_create(
 		        "Particle Pass",
-		        DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS |
+		        DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS_EQUAL |
 		        DRW_STATE_POINT | DRW_STATE_BLEND);
 	}
 
@@ -1265,7 +1269,7 @@ static void OBJECT_cache_init(void *vedata)
 		/* Empty/Background Image Pass */
 		psl->reference_image = DRW_pass_create(
 		        "Refrence Image Pass",
-		        DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS | DRW_STATE_BLEND);
+		        DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS_EQUAL | DRW_STATE_BLEND);
 	}
 }
 
@@ -1398,13 +1402,18 @@ static void DRW_shgroup_lamp(OBJECT_StorageList *stl, Object *ob, ViewLayer *vie
 	else if (la->type == LA_AREA) {
 		float size[3] = {1.0f, 1.0f, 1.0f}, sizemat[4][4];
 
-		if (la->area_shape == LA_AREA_RECT) {
+		if (ELEM(la->area_shape, LA_AREA_RECT, LA_AREA_ELLIPSE)) {
 			size[1] = la->area_sizey / la->area_size;
 			size_to_mat4(sizemat, size);
 			mul_m4_m4m4(shapemat, shapemat, sizemat);
 		}
 
-		DRW_shgroup_call_dynamic_add(stl->g_data->lamp_area, color, &la->area_size, shapemat);
+		if (ELEM(la->area_shape, LA_AREA_DISK, LA_AREA_ELLIPSE)) {
+			DRW_shgroup_call_dynamic_add(stl->g_data->lamp_area_disk, color, &la->area_size, shapemat);
+		}
+		else {
+			DRW_shgroup_call_dynamic_add(stl->g_data->lamp_area_square, color, &la->area_size, shapemat);
+		}
 	}
 
 	/* Line and point going to the ground */

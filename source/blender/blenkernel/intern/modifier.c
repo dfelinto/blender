@@ -66,6 +66,7 @@
 #include "BKE_library_query.h"
 #include "BKE_mesh.h"
 #include "BKE_multires.h"
+#include "BKE_object.h"
 #include "BKE_DerivedMesh.h"
 
 /* may move these, only for modifier_path_relbase */
@@ -74,6 +75,7 @@
 /* end */
 
 #include "DEG_depsgraph.h"
+#include "DEG_depsgraph_query.h"
 
 #include "MOD_modifiertypes.h"
 
@@ -890,7 +892,7 @@ void modifier_deformVerts(struct ModifierData *md, const ModifierEvalContext *ct
 	else {
 		DerivedMesh *dm = NULL;
 		if (mesh) {
-			dm = CDDM_from_mesh(mesh);
+			dm = CDDM_from_mesh_ex(mesh, CD_REFERENCE, CD_MASK_EVERYTHING);
 		}
 
 		mti->deformVerts_DM(md, ctx, dm, vertexCos, numVerts);
@@ -926,7 +928,7 @@ void modifier_deformMatrices(struct ModifierData *md, const ModifierEvalContext 
 	else {
 		DerivedMesh *dm = NULL;
 		if (mesh) {
-			dm = CDDM_from_mesh(mesh);
+			dm = CDDM_from_mesh_ex(mesh, CD_REFERENCE, CD_MASK_EVERYTHING);
 		}
 
 		mti->deformMatrices_DM(md, ctx, dm, vertexCos, defMats, numVerts);
@@ -949,7 +951,7 @@ void modifier_deformVertsEM(struct ModifierData *md, const ModifierEvalContext *
 	else {
 		DerivedMesh *dm = NULL;
 		if (mesh) {
-			dm = CDDM_from_mesh(mesh);
+			dm = CDDM_from_mesh_ex(mesh, CD_REFERENCE, CD_MASK_EVERYTHING);
 		}
 
 		mti->deformVertsEM_DM(md, ctx, editData, dm, vertexCos, numVerts);
@@ -972,7 +974,7 @@ void modifier_deformMatricesEM(struct ModifierData *md, const ModifierEvalContex
 	else {
 		DerivedMesh *dm = NULL;
 		if (mesh) {
-			dm = CDDM_from_mesh(mesh);
+			dm = CDDM_from_mesh_ex(mesh, CD_REFERENCE, CD_MASK_EVERYTHING);
 		}
 
 		mti->deformMatricesEM_DM(md, ctx, editData, dm, vertexCos, defMats, numVerts);
@@ -992,7 +994,7 @@ struct Mesh *modifier_applyModifier(struct ModifierData *md, const ModifierEvalC
 		return mti->applyModifier(md, ctx, mesh);
 	}
 	else {
-		DerivedMesh *dm = CDDM_from_mesh(mesh);
+		DerivedMesh *dm = CDDM_from_mesh_ex(mesh, CD_REFERENCE, CD_MASK_EVERYTHING);
 
 		DerivedMesh *ndm = mti->applyModifier_DM(md, ctx, dm);
 
@@ -1028,7 +1030,7 @@ struct Mesh *modifier_applyModifierEM(struct ModifierData *md, const ModifierEva
 		return mti->applyModifierEM(md, ctx, editData, mesh);
 	}
 	else {
-		DerivedMesh *dm = CDDM_from_mesh(mesh);
+		DerivedMesh *dm = CDDM_from_mesh_ex(mesh, CD_REFERENCE, CD_MASK_EVERYTHING);
 
 		DerivedMesh *ndm = mti->applyModifierEM_DM(md, ctx, editData, dm);
 
@@ -1164,7 +1166,7 @@ struct DerivedMesh *modifier_applyModifier_DM_deprecated(struct ModifierData *md
 		struct Mesh *new_mesh = mti->applyModifier(md, ctx, mesh);
 
 		/* Make a DM that doesn't reference new_mesh so we can free the latter. */
-		DerivedMesh *ndm = CDDM_from_mesh_ex(new_mesh, CD_DUPLICATE);
+		DerivedMesh *ndm = CDDM_from_mesh_ex(new_mesh, CD_DUPLICATE, CD_MASK_EVERYTHING);
 
 		if (new_mesh != mesh) {
 			BKE_id_free(NULL, new_mesh);
@@ -1197,7 +1199,7 @@ struct DerivedMesh *modifier_applyModifierEM_DM_deprecated(struct ModifierData *
 		struct Mesh *new_mesh = mti->applyModifierEM(md, ctx, editData, mesh);
 
 		/* Make a DM that doesn't reference new_mesh so we can free the latter. */
-		DerivedMesh *ndm = CDDM_from_mesh_ex(new_mesh, CD_DUPLICATE);
+		DerivedMesh *ndm = CDDM_from_mesh_ex(new_mesh, CD_DUPLICATE, CD_MASK_EVERYTHING);
 
 		if (new_mesh != mesh) {
 			BKE_id_free(NULL, new_mesh);
@@ -1213,13 +1215,10 @@ struct DerivedMesh *modifier_applyModifierEM_DM_deprecated(struct ModifierData *
 /** Get evaluated mesh for other object, which is used as an operand for the modifier,
  * i.e. second operand for boolean modifier.
  */
-Mesh *BKE_modifier_get_evaluated_mesh_from_object(Object *ob, const ModifierApplyFlag flag)
+Mesh *BKE_modifier_get_evaluated_mesh_from_object(const ModifierEvalContext *ctx, Object *ob)
 {
-	if (flag & MOD_APPLY_RENDER) {
-		/* TODO(sergey): Use proper derived render in the future. */
-		return ob->mesh_evaluated;
-	}
-	else {
-		return ob->mesh_evaluated;
-	}
+	/* Note: we do not care about RENDER setting here, since we get data from despgraph
+	 * (and render depsgraph shall be different from realtime one)
+	 */
+	return BKE_object_get_evaluated_mesh(ctx->depsgraph, ob);
 }

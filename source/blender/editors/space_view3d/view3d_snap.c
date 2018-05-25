@@ -51,6 +51,7 @@
 #include "BKE_tracking.h"
 
 #include "DEG_depsgraph.h"
+#include "DEG_depsgraph_query.h"
 
 #include "WM_api.h"
 #include "WM_types.h"
@@ -74,6 +75,7 @@ static bool snap_calc_active_center(bContext *C, const bool select_only, float r
 static int snap_sel_to_grid_exec(bContext *C, wmOperator *UNUSED(op))
 {
 	Depsgraph *depsgraph = CTX_data_depsgraph(C);
+	ViewLayer *view_layer_eval = DEG_get_evaluated_view_layer(depsgraph);
 	Object *obedit = CTX_data_edit_object(C);
 	Scene *scene = CTX_data_scene(C);
 	RegionView3D *rv3d = CTX_wm_region_data(C);
@@ -132,34 +134,36 @@ static int snap_sel_to_grid_exec(bContext *C, wmOperator *UNUSED(op))
 	else {
 		struct KeyingSet *ks = ANIM_get_keyingset_for_autokeying(scene, ANIM_KS_LOCATION_ID);
 
-		CTX_DATA_BEGIN (C, Object *, ob, selected_editable_objects)
+		FOREACH_SELECTED_EDITABLE_OBJECT_BEGIN(view_layer_eval, ob_eval)
 		{
+			Object *ob = DEG_get_original_object(ob_eval);
 			if (ob->mode & OB_MODE_POSE) {
-				bPoseChannel *pchan;
-				bArmature *arm = ob->data;
+				bPoseChannel *pchan_eval;
+				bArmature *arm_eval = ob_eval->data;
 				
-				invert_m4_m4(ob->imat, ob->obmat);
+				invert_m4_m4(ob_eval->imat, ob_eval->obmat);
 				
-				for (pchan = ob->pose->chanbase.first; pchan; pchan = pchan->next) {
-					if (pchan->bone->flag & BONE_SELECTED) {
-						if (pchan->bone->layer & arm->layer) {
-							if ((pchan->bone->flag & BONE_CONNECTED) == 0) {
+				for (pchan_eval = ob_eval->pose->chanbase.first; pchan_eval; pchan_eval = pchan_eval->next) {
+					if (pchan_eval->bone->flag & BONE_SELECTED) {
+						if (pchan_eval->bone->layer & arm_eval->layer) {
+							if ((pchan_eval->bone->flag & BONE_CONNECTED) == 0) {
 								float nLoc[3];
 								
 								/* get nearest grid point to snap to */
-								copy_v3_v3(nLoc, pchan->pose_mat[3]);
+								copy_v3_v3(nLoc, pchan_eval->pose_mat[3]);
 								/* We must operate in world space! */
-								mul_m4_v3(ob->obmat, nLoc);
+								mul_m4_v3(ob_eval->obmat, nLoc);
 								vec[0] = gridf * floorf(0.5f + nLoc[0] / gridf);
 								vec[1] = gridf * floorf(0.5f + nLoc[1] / gridf);
 								vec[2] = gridf * floorf(0.5f + nLoc[2] / gridf);
 								/* Back in object space... */
-								mul_m4_v3(ob->imat, vec);
+								mul_m4_v3(ob_eval->imat, vec);
 								
 								/* Get location of grid point in pose space. */
-								BKE_armature_loc_pose_to_bone(pchan, vec, vec);
+								BKE_armature_loc_pose_to_bone(pchan_eval, vec, vec);
 								
-								/* adjust location */
+								/* adjust location on the original pchan*/
+								bPoseChannel *pchan = BKE_pose_channel_find_name(ob->pose, pchan_eval->name);
 								if ((pchan->protectflag & OB_LOCK_LOCX) == 0)
 									pchan->loc[0] = vec[0];
 								if ((pchan->protectflag & OB_LOCK_LOCY) == 0)
@@ -181,9 +185,9 @@ static int snap_sel_to_grid_exec(bContext *C, wmOperator *UNUSED(op))
 				DEG_id_tag_update(&ob->id, OB_RECALC_DATA);
 			}
 			else {
-				vec[0] = -ob->obmat[3][0] + gridf * floorf(0.5f + ob->obmat[3][0] / gridf);
-				vec[1] = -ob->obmat[3][1] + gridf * floorf(0.5f + ob->obmat[3][1] / gridf);
-				vec[2] = -ob->obmat[3][2] + gridf * floorf(0.5f + ob->obmat[3][2] / gridf);
+				vec[0] = -ob_eval->obmat[3][0] + gridf * floorf(0.5f + ob_eval->obmat[3][0] / gridf);
+				vec[1] = -ob_eval->obmat[3][1] + gridf * floorf(0.5f + ob_eval->obmat[3][1] / gridf);
+				vec[2] = -ob_eval->obmat[3][2] + gridf * floorf(0.5f + ob_eval->obmat[3][2] / gridf);
 				
 				if (ob->parent) {
 					float originmat[3][3];
@@ -193,11 +197,11 @@ static int snap_sel_to_grid_exec(bContext *C, wmOperator *UNUSED(op))
 					mul_m3_v3(imat, vec);
 				}
 				if ((ob->protectflag & OB_LOCK_LOCX) == 0)
-					ob->loc[0] += vec[0];
+					ob->loc[0] = ob_eval->loc[0] + vec[0];
 				if ((ob->protectflag & OB_LOCK_LOCY) == 0)
-					ob->loc[1] += vec[1];
+					ob->loc[1] = ob_eval->loc[1] + vec[1];
 				if ((ob->protectflag & OB_LOCK_LOCZ) == 0)
-					ob->loc[2] += vec[2];
+					ob->loc[2] = ob_eval->loc[2] + vec[2];
 				
 				/* auto-keyframing */
 				ED_autokeyframe_object(C, scene, ob, ks);
@@ -205,7 +209,7 @@ static int snap_sel_to_grid_exec(bContext *C, wmOperator *UNUSED(op))
 				DEG_id_tag_update(&ob->id, OB_RECALC_OB);
 			}
 		}
-		CTX_DATA_END;
+		FOREACH_SELECTED_EDITABLE_OBJECT_END;
 	}
 
 	WM_event_add_notifier(C, NC_OBJECT | ND_TRANSFORM, NULL);
@@ -498,6 +502,7 @@ static int snap_curs_to_grid_exec(bContext *C, wmOperator *UNUSED(op))
 	curs[2] = gridf * floorf(0.5f + curs[2] / gridf);
 	
 	WM_event_add_notifier(C, NC_SPACE | ND_SPACE_VIEW3D, v3d);  /* hrm */
+	DEG_id_tag_update(&scene->id, DEG_TAG_COPY_ON_WRITE);
 
 	return OPERATOR_FINISHED;
 }
@@ -573,6 +578,8 @@ static void bundle_midpoint(Scene *scene, Object *ob, float vec[3])
 
 static bool snap_curs_to_sel_ex(bContext *C, float cursor[3])
 {
+	const Depsgraph *depsgraph = CTX_data_depsgraph(C);
+	ViewLayer *view_layer_eval = DEG_get_evaluated_view_layer(depsgraph);
 	Object *obedit = CTX_data_edit_object(C);
 	Scene *scene = CTX_data_scene(C);
 	View3D *v3d = CTX_wm_view3d(C);
@@ -586,7 +593,6 @@ static bool snap_curs_to_sel_ex(bContext *C, float cursor[3])
 	zero_v3(centroid);
 
 	if (obedit) {
-
 		if (ED_transverts_check_obedit(obedit))
 			ED_transverts_create_from_obedit(&tvs, obedit, TM_ALL_JOINTS | TM_SKIP_HANDLES);
 
@@ -594,13 +600,14 @@ static bool snap_curs_to_sel_ex(bContext *C, float cursor[3])
 			return false;
 		}
 
-		copy_m3_m4(bmat, obedit->obmat);
+		Object *obedit_eval = DEG_get_evaluated_object(depsgraph, obedit);
+		copy_m3_m4(bmat, obedit_eval->obmat);
 		
 		tv = tvs.transverts;
 		for (a = 0; a < tvs.transverts_tot; a++, tv++) {
 			copy_v3_v3(vec, tv->loc);
 			mul_m3_v3(bmat, vec);
-			add_v3_v3(vec, obedit->obmat[3]);
+			add_v3_v3(vec, obedit_eval->obmat[3]);
 			add_v3_v3(centroid, vec);
 			minmax_v3v3_v3(min, max, vec);
 		}
@@ -617,15 +624,16 @@ static bool snap_curs_to_sel_ex(bContext *C, float cursor[3])
 	}
 	else {
 		Object *obact = CTX_data_active_object(C);
-		
+
 		if (obact && (obact->mode & OB_MODE_POSE)) {
-			bArmature *arm = obact->data;
+			Object *obact_eval = DEG_get_evaluated_object(depsgraph, obact);
+			bArmature *arm = obact_eval->data;
 			bPoseChannel *pchan;
-			for (pchan = obact->pose->chanbase.first; pchan; pchan = pchan->next) {
+			for (pchan = obact_eval->pose->chanbase.first; pchan; pchan = pchan->next) {
 				if (arm->layer & pchan->bone->layer) {
 					if (pchan->bone->flag & BONE_SELECTED) {
 						copy_v3_v3(vec, pchan->pose_head);
-						mul_m4_v3(obact->obmat, vec);
+						mul_m4_v3(obact_eval->obmat, vec);
 						add_v3_v3(centroid, vec);
 						minmax_v3v3_v3(min, max, vec);
 						count++;
@@ -634,15 +642,15 @@ static bool snap_curs_to_sel_ex(bContext *C, float cursor[3])
 			}
 		}
 		else {
-			CTX_DATA_BEGIN (C, Object *, ob, selected_objects)
+			FOREACH_SELECTED_OBJECT_BEGIN(view_layer_eval, ob_eval)
 			{
-				copy_v3_v3(vec, ob->obmat[3]);
+				copy_v3_v3(vec, ob_eval->obmat[3]);
 
 				/* special case for camera -- snap to bundles */
-				if (ob->type == OB_CAMERA) {
+				if (ob_eval->type == OB_CAMERA) {
 					/* snap to bundles should happen only when bundles are visible */
 					if (v3d->flag2 & V3D_SHOW_RECONSTRUCTION) {
-						bundle_midpoint(scene, ob, vec);
+						bundle_midpoint(scene, DEG_get_original_object(ob_eval), vec);
 					}
 				}
 
@@ -650,7 +658,7 @@ static bool snap_curs_to_sel_ex(bContext *C, float cursor[3])
 				minmax_v3v3_v3(min, max, vec);
 				count++;
 			}
-			CTX_DATA_END;
+			FOREACH_SELECTED_OBJECT_END;
 		}
 
 		if (count == 0) {
@@ -678,6 +686,7 @@ static int snap_curs_to_sel_exec(bContext *C, wmOperator *UNUSED(op))
 
 	if (snap_curs_to_sel_ex(C, curs)) {
 		WM_event_add_notifier(C, NC_SPACE | ND_SPACE_VIEW3D, v3d);
+		DEG_id_tag_update(&scene->id, DEG_TAG_COPY_ON_WRITE);
 
 		return OPERATOR_FINISHED;
 	}
@@ -708,31 +717,36 @@ void VIEW3D_OT_snap_cursor_to_selected(wmOperatorType *ot)
 
 static bool snap_calc_active_center(bContext *C, const bool select_only, float r_center[3])
 {
+	const Depsgraph *depsgraph = CTX_data_depsgraph(C);
 	Object *obedit = CTX_data_edit_object(C);
 
 	if (obedit) {
-		if (ED_object_editmode_calc_active_center(obedit, select_only, r_center)) {
-			mul_m4_v3(obedit->obmat, r_center);
+		Object *ob_edit_eval = DEG_get_evaluated_object(depsgraph, obedit);
+
+		if (ED_object_editmode_calc_active_center(ob_edit_eval, select_only, r_center)) {
+			mul_m4_v3(ob_edit_eval->obmat, r_center);
 			return true;
 		}
 	}
 	else {
 		Object *ob = CTX_data_active_object(C);
-
 		if (ob) {
+			Object *ob_eval = DEG_get_evaluated_object(depsgraph, ob);
+
 			if (ob->mode & OB_MODE_POSE) {
-				bPoseChannel *pchan = BKE_pose_channel_active(ob);
+				bPoseChannel *pchan = BKE_pose_channel_active(ob_eval);
 				if (pchan) {
 					if (!select_only || (pchan->bone->flag & BONE_SELECTED)) {
 						copy_v3_v3(r_center, pchan->pose_head);
-						mul_m4_v3(ob->obmat, r_center);
+						mul_m4_v3(ob_eval->obmat, r_center);
 						return true;
 					}
 				}
 			}
 			else {
-				if (!select_only || (ob->flag & SELECT)) {
-					copy_v3_v3(r_center, ob->obmat[3]);
+
+				if (!select_only || (ob_eval->flag & SELECT)) {
+					copy_v3_v3(r_center, ob_eval->obmat[3]);
 					return true;
 				}
 			}
@@ -752,6 +766,8 @@ static int snap_curs_to_active_exec(bContext *C, wmOperator *UNUSED(op))
 
 	if (snap_calc_active_center(C, false, curs)) {
 		WM_event_add_notifier(C, NC_SPACE | ND_SPACE_VIEW3D, v3d);
+		DEG_id_tag_update(&scene->id, DEG_TAG_COPY_ON_WRITE);
+
 		return OPERATOR_FINISHED;
 	}
 	else {
@@ -786,7 +802,8 @@ static int snap_curs_to_center_exec(bContext *C, wmOperator *UNUSED(op))
 	zero_v3(curs);
 	
 	WM_event_add_notifier(C, NC_SPACE | ND_SPACE_VIEW3D, v3d);
-	
+	DEG_id_tag_update(&scene->id, DEG_TAG_COPY_ON_WRITE);
+
 	return OPERATOR_FINISHED;
 }
 

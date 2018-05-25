@@ -865,13 +865,14 @@ void wm_manipulatormap_highlight_set(
 
 			if (C && mpr->type->cursor_get) {
 				wmWindow *win = CTX_wm_window(C);
+				win->lastcursor = win->cursor;
 				WM_cursor_set(win, mpr->type->cursor_get(mpr));
 			}
 		}
 		else {
 			if (C) {
 				wmWindow *win = CTX_wm_window(C);
-				WM_cursor_set(win, CURSOR_STD);
+				WM_cursor_set(win, win->lastcursor);
 			}
 		}
 
@@ -1150,6 +1151,7 @@ void WM_manipulatorconfig_update(struct Main *bmain)
 				{
 					wgt_ref_next = wgt_ref->next;
 					if (wgt_ref->type->type_update_flag & WM_MANIPULATORMAPTYPE_UPDATE_REMOVE) {
+						wgt_ref->type->type_update_flag &= ~WM_MANIPULATORMAPTYPE_UPDATE_REMOVE;
 						WM_manipulatormaptype_group_unlink(NULL, bmain, mmap_type, wgt_ref->type);
 					}
 				}

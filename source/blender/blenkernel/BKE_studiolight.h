@@ -38,6 +38,8 @@
 
 #include "DNA_space_types.h"
 
+#include "IMB_imbuf_types.h"
+
 /*
  * These defines are the indexes in the StudioLight.diffuse_light
  * X_POS means the light that is traveling towards the positive X
@@ -50,17 +52,16 @@
 #define STUDIOLIGHT_Z_POS 4
 #define STUDIOLIGHT_Z_NEG 5
 
-enum StudioLightFlag
-{
-	STUDIOLIGHT_DIFFUSE_LIGHT_CALCULATED   = (1 << 0),
-	STUDIOLIGHT_LIGHT_DIRECTION_CALCULATED = (1 << 1),
-	STUDIOLIGHT_EXTERNAL_FILE              = (1 << 2),
-	STUDIOLIGHT_ORIENTATION_CAMERA         = (1 << 3),
-	STUDIOLIGHT_ORIENTATION_WORLD          = (1 << 4),
+enum StudioLightFlag {
+	STUDIOLIGHT_DIFFUSE_LIGHT_CALCULATED      = (1 << 0),
+	STUDIOLIGHT_LIGHT_DIRECTION_CALCULATED    = (1 << 1),
+	STUDIOLIGHT_EXTERNAL_FILE                 = (1 << 2),
+	STUDIOLIGHT_ORIENTATION_CAMERA            = (1 << 3),
+	STUDIOLIGHT_ORIENTATION_WORLD             = (1 << 4),
+	STUDIOLIGHT_RADIANCE_BUFFERS_CALCULATED   = (1 << 5),
 } StudioLightFlag;
 
-typedef struct StudioLight
-{
+typedef struct StudioLight {
 	struct StudioLight *next, *prev;
 	int flag;
 	char name[FILE_MAXFILE];
@@ -69,11 +70,12 @@ typedef struct StudioLight
 	int index;
 	float diffuse_light[6][3];
 	float light_direction[3];
+	ImBuf *radiance_buffers[6];
 } StudioLight;
 
 void BKE_studiolight_init(void);
 void BKE_studiolight_free(void);
-struct StudioLight *BKE_studiolight_find(const char* name);
+struct StudioLight *BKE_studiolight_find(const char *name);
 struct StudioLight *BKE_studiolight_findindex(int index);
 unsigned int *BKE_studiolight_preview(StudioLight *sl, int icon_size);
 const struct ListBase *BKE_studiolight_listbase(void);

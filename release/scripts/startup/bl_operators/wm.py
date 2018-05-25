@@ -2356,6 +2356,38 @@ class WM_OT_tool_set_by_name(Operator):
             return {'CANCELLED'}
 
 
+class WM_OT_toolbar(Operator):
+    bl_idname = "wm.toolbar"
+    bl_label = "Toolbar"
+
+    def execute(self, context):
+        from bl_ui.space_toolsystem_common import (
+            ToolSelectPanelHelper,
+            keymap_from_context,
+        )
+        space_type = context.space_data.type
+
+        cls = ToolSelectPanelHelper._tool_class_from_space_type(space_type)
+        if cls is None:
+            # self.report({'WARNING'}, f"Toolbar not found for {space_type!r}")
+            # Passthrough to running search directly.
+            bpy.ops.wm.search_menu('INVOKE_DEFAULT')
+            return {'CANCELLED'}
+
+        wm = context.window_manager
+        keymap = keymap_from_context(context, space_type)
+
+        def draw_menu(popover, context):
+            layout = popover.layout
+            cls.draw_cls(layout, context, detect_layout=False)
+
+            layout.operator_context = 'INVOKE_DEFAULT'
+            layout.operator("wm.search_menu")
+
+        wm.popover(draw_menu, keymap=keymap)
+        return {'FINISHED'}
+
+
 classes = (
     BRUSH_OT_active_index_set,
     WM_OT_addon_disable,
@@ -2411,4 +2443,5 @@ classes = (
     WM_OT_owner_enable,
     WM_OT_url_open,
     WM_OT_tool_set_by_name,
+    WM_OT_toolbar,
 )

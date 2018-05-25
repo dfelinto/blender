@@ -1563,6 +1563,8 @@ bool calculateTransformCenter(bContext *C, int centerMode, float cent3d[3], floa
 	TransInfo *t = MEM_callocN(sizeof(TransInfo), "TransInfo data");
 	bool success;
 
+	t->context = C;
+
 	t->state = TRANS_RUNNING;
 
 	/* avoid calculating PET */
@@ -3005,7 +3007,7 @@ static void Bend(TransInfo *t, const int UNUSED(mval[2]))
 #else
 	/* hrmf, snapping radius is using 'angle' steps, need to convert to something else
 	 * this isnt essential but nicer to give reasonable snapping values for radius */
-	if (t->tsnap.mode == SCE_SNAP_MODE_INCREMENT) {
+	if (t->tsnap.mode & SCE_SNAP_MODE_INCREMENT) {
 		const float radius_snap = 0.1f;
 		const float snap_hack = (t->snap[1] * data->warp_init_dist) / radius_snap;
 		values.scale *= snap_hack;

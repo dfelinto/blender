@@ -227,7 +227,7 @@ typedef struct uiPreview {           /* some preview UI data need to be saved in
 } uiPreview;
 
 /* These two lines with # tell makesdna this struct can be excluded.
- * Should be: #ifndef WITH_TOPBAR_WRITING */
+ * Should be: #ifndef WITH_GLOBAL_AREA_WRITING */
 #
 #
 typedef struct ScrGlobalAreaData {
@@ -240,13 +240,26 @@ typedef struct ScrGlobalAreaData {
 	 * if they are 'collapsed' or not. Value is set on area creation and not
 	 * touched afterwards. */
 	short size_min, size_max;
+	short align; /* GlobalAreaAlign */
 
 	short flag; /* GlobalAreaFlag */
+	short pad;
 } ScrGlobalAreaData;
 
 enum GlobalAreaFlag {
 	GLOBAL_AREA_IS_HIDDEN = (1 << 0),
 };
+
+typedef enum GlobalAreaAlign {
+	GLOBAL_AREA_ALIGN_TOP,
+	GLOBAL_AREA_ALIGN_BOTTOM,
+} GlobalAreaAlign;
+
+typedef struct ScrArea_Runtime {
+	struct bToolRef *tool;
+	char          is_tool_set;
+	char _pad0[7];
+} ScrArea_Runtime;
 
 typedef struct ScrArea {
 	struct ScrArea *next, *prev;
@@ -288,6 +301,8 @@ typedef struct ScrArea {
 	ListBase handlers;   /* wmEventHandler */
 
 	ListBase actionzones;	/* AZone */
+
+	ScrArea_Runtime runtime;
 } ScrArea;
 
 typedef struct ARegion {

@@ -141,6 +141,8 @@ void BLO_update_defaults_startup_blend(Main *bmain)
 		if (scene->toolsettings) {
 			ToolSettings *ts = scene->toolsettings;
 
+			ts->uvcalc_flag |= UVCALC_TRANSFORM_CORRECT;
+
 			if (ts->sculpt) {
 				Sculpt *sculpt = ts->sculpt;
 				sculpt->paint.symmetry_flags |= PAINT_SYMM_X;
@@ -219,7 +221,6 @@ void BLO_update_defaults_startup_blend(Main *bmain)
 		scene->r.ffcodecdata.audio_mixrate = 48000;
 		
 		/* set av sync by default */
-		printf("setting new default audio\n");
 		scene->audio.flag |= AUDIO_SYNC;
 		scene->flag &= ~SCE_FRAME_DROP;
 	}
@@ -355,6 +356,7 @@ void BLO_update_defaults_startup_blend(Main *bmain)
 		for (Scene *scene = bmain->scene.first; scene; scene = scene->id.next) {
 			scene->r.displaymode = R_OUTPUT_WINDOW;
 			scene->r.size = 100;
+			scene->r.dither_intensity = 1.0f;
 			scene->unit.system = USER_UNIT_METRIC;
 			STRNCPY(scene->view_settings.view_transform, "Filmic");
 		}

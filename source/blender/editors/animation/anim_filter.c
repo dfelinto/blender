@@ -84,12 +84,12 @@
 #include "BLI_ghash.h"
 #include "BLI_string.h"
 
-#include "BKE_animsys.h"
 #include "BKE_action.h"
-#include "BKE_fcurve.h"
+#include "BKE_animsys.h"
+#include "BKE_collection.h"
 #include "BKE_context.h"
+#include "BKE_fcurve.h"
 #include "BKE_global.h"
-#include "BKE_group.h"
 #include "BKE_key.h"
 #include "BKE_layer.h"
 #include "BKE_main.h"
@@ -392,6 +392,7 @@ bool ANIM_animdata_get_context(const bContext *C, bAnimContext *ac)
 	if (scene) {
 		ac->markers = ED_context_get_markers(C);
 	}
+	ac->depsgraph = CTX_data_depsgraph(C);
 	ac->view_layer = CTX_data_view_layer(C);
 	ac->obact = (ac->view_layer->basact) ? ac->view_layer->basact->object : NULL;
 	ac->sa = sa;
@@ -1727,7 +1728,7 @@ static size_t animdata_filter_gpencil(bAnimContext *ac, ListBase *anim_data, voi
 				 *	- used to ease the process of doing multiple-character choreographies
 				 */
 				if (ads->filterflag & ADS_FILTER_ONLYOBGROUP) {
-					if (BKE_group_object_exists(ads->filter_grp, ob) == 0)
+					if (BKE_collection_has_object_recursive(ads->filter_grp, ob) == 0)
 						continue;
 				}
 				
@@ -2894,7 +2895,7 @@ static bool animdata_filter_base_is_ok(bDopeSheet *ads, Base *base, int filter_m
 	 *	- used to ease the process of doing multiple-character choreographies
 	 */
 	if (ads->filterflag & ADS_FILTER_ONLYOBGROUP) {
-		if (BKE_group_object_exists(ads->filter_grp, ob) == 0)
+		if (BKE_collection_has_object_recursive(ads->filter_grp, ob) == 0)
 			return false;
 	}
 	

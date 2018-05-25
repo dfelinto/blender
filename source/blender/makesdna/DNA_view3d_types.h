@@ -146,6 +146,9 @@ typedef struct View3DShading {
 
 	float studiolight_rot_z;
 	float pad2;
+
+	float object_outline_color[3];
+	float pad3;
 } View3DShading;
 
 /* 3D Viewport Overlay setings */
@@ -335,6 +338,7 @@ enum {
 /* View3DShading->flag */
 enum {
 	V3D_SHADING_OBJECT_OUTLINE = (1 << 0),
+	V3D_SHADING_XRAY   = (1 << 1),
 	V3D_SHADING_SHADOW         = (1 << 2),
 };
 

@@ -92,7 +92,7 @@ extern "C" {
 #endif
 
 bool DEG_depsgraph_use_copy_on_write(void);
-void DEG_depsgraph_enable_copy_on_write(void);
+void DEG_depsgraph_disable_copy_on_write(void);
 
 /* ************************************************ */
 /* Depsgraph API */
@@ -262,11 +262,9 @@ void DEG_debug_print_eval_parent_typed(struct Depsgraph *depsgraph,
                                        const char *function_name,
                                        const char *object_name,
                                        const void *object_address,
-                                       const char *object_type,
                                        const char *parent_comment,
                                        const char *parent_name,
-                                       const void *parent_address,
-                                       const char *parent_type);
+                                       const void *parent_address);
 
 void DEG_debug_print_eval_time(struct Depsgraph *depsgraph,
                                const char* function_name,
