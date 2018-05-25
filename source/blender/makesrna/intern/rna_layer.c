@@ -244,6 +244,7 @@ static void rna_OverriddenCollection_link(
 {
 	if (BKE_view_layer_override_set_collection_link(override_set, collection)) {
 		Scene *scene = (Scene *)id;
+		DEG_id_tag_update(&scene->id, DEG_TAG_COPY_ON_WRITE);
 		WM_main_add_notifier(NC_SCENE | ND_DYN_OVERRIDES, scene);
 	}
 	else {
@@ -267,6 +268,7 @@ static void rna_OverriddenCollection_unlink(
 	}
 	else {
 		Scene *scene = (Scene *)id;
+		DEG_id_tag_update(&scene->id, DEG_TAG_COPY_ON_WRITE);
 		WM_main_add_notifier(NC_SCENE | ND_DYN_OVERRIDES, scene);
 	}
 }
@@ -334,6 +336,7 @@ static OverrideSet *rna_OverrideSet_new(ID *id, ViewLayer *view_layer, const cha
 {
 	Scene *scene = (Scene *)id;
 	OverrideSet *override_set = BKE_view_layer_override_set_add(view_layer, name);
+	DEG_id_tag_update(&scene->id, DEG_TAG_COPY_ON_WRITE);
 	WM_main_add_notifier(NC_SCENE | ND_DYN_OVERRIDES, scene);
 	return override_set;
 }
@@ -354,6 +357,7 @@ static void rna_OverrideSet_remove(
 	}
 
 	RNA_POINTER_INVALIDATE(ptr);
+	DEG_id_tag_update(&scene->id, DEG_TAG_COPY_ON_WRITE);
 	WM_main_add_notifier(NC_SCENE | ND_DYN_OVERRIDES, scene);
 }
 

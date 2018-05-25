@@ -293,8 +293,10 @@ static void SCENE_OT_delete(wmOperatorType *ot)
 
 static int view_layer_override_set_add_exec(bContext *C, wmOperator *UNUSED(op))
 {
+	Scene *scene = CTX_data_scene(C);
 	BKE_view_layer_override_set_add(CTX_data_view_layer(C), "New Override Set");
-	WM_event_add_notifier(C, NC_SCENE | ND_DYN_OVERRIDES, CTX_data_scene(C));
+	DEG_id_tag_update(&scene->id, DEG_TAG_COPY_ON_WRITE);
+	WM_event_add_notifier(C, NC_SCENE | ND_DYN_OVERRIDES, scene);
 	return OPERATOR_FINISHED;
 }
 
@@ -314,6 +316,7 @@ static void SCENE_OT_view_layer_override_set_add(wmOperatorType *ot)
 
 static int view_layer_override_set_remove_exec(bContext *C, wmOperator *op)
 {
+	Scene *scene = CTX_data_scene(C);
 	ViewLayer *view_layer = CTX_data_view_layer(C);
 	OverrideSet *override_set = BLI_findlink(&view_layer->override_sets, view_layer->active_override_set);
 
@@ -323,8 +326,9 @@ static int view_layer_override_set_remove_exec(bContext *C, wmOperator *op)
 	}
 
 	BKE_view_layer_override_set_remove(view_layer, override_set);
-	WM_event_add_notifier(C, NC_SCENE | ND_DYN_OVERRIDES, CTX_data_scene(C));
 
+	DEG_id_tag_update(&scene->id, DEG_TAG_COPY_ON_WRITE);
+	WM_event_add_notifier(C, NC_SCENE | ND_DYN_OVERRIDES, scene);
 	return OPERATOR_FINISHED;
 }
 
@@ -379,6 +383,7 @@ static int view_layer_override_set_collection_link_exec(bContext *C, wmOperator 
 	OverrideSet *override_set = BLI_findlink(&view_layer->override_sets, view_layer->active_override_set);
 
 	if (BKE_view_layer_override_set_collection_link(override_set, collection)) {
+		DEG_id_tag_update(&scene->id, DEG_TAG_COPY_ON_WRITE);
 		WM_event_add_notifier(C, NC_SCENE | ND_DYN_OVERRIDES, scene);
 		return OPERATOR_FINISHED;
 	}
@@ -553,14 +558,16 @@ static void SCENE_OT_override_set_collection_link(wmOperatorType *ot)
 
 static int view_layer_override_set_collection_unlink_exec(bContext *C, wmOperator *UNUSED(op))
 {
+	Scene *scene = CTX_data_scene(C);
 	ViewLayer *view_layer = CTX_data_view_layer(C);
 	OverrideSet *override_set = BLI_findlink(&view_layer->override_sets, view_layer->active_override_set);
 	LinkData *link = BLI_findlink(&override_set->affected_collections, override_set->active_affected_collection);
 	Collection *collection = link->data;
 
 	BKE_view_layer_override_set_collection_unlink(override_set, collection);
-	WM_event_add_notifier(C, NC_SCENE | ND_DYN_OVERRIDES, CTX_data_scene(C));
 
+	DEG_id_tag_update(&scene->id, DEG_TAG_COPY_ON_WRITE);
+	WM_event_add_notifier(C, NC_SCENE | ND_DYN_OVERRIDES, scene);
 	return OPERATOR_FINISHED;
 }
 
@@ -611,6 +618,7 @@ static int view_layer_override_add_exec(bContext *C, wmOperator *op)
 	ID *id = override_property_data.ptr.id.data;
 	BLI_assert(id != NULL);
 
+	Scene *scene = CTX_data_scene(C);
 	ViewLayer *view_layer = CTX_data_view_layer(C);
 	OverrideSet *override_set;
 
@@ -637,7 +645,8 @@ static int view_layer_override_add_exec(bContext *C, wmOperator *op)
 	                                     override_property_data.prop,
 	                                     override_property_data.index);
 
-	WM_event_add_notifier(C, NC_SCENE | ND_DYN_OVERRIDES, CTX_data_scene(C));
+	DEG_id_tag_update(&scene->id, DEG_TAG_COPY_ON_WRITE);
+	WM_event_add_notifier(C, NC_SCENE | ND_DYN_OVERRIDES, scene);
 	return OPERATOR_FINISHED;
 }
 
@@ -731,6 +740,7 @@ static void SCENE_OT_view_layer_override_add(wmOperatorType *ot)
 
 static int view_layer_override_remove_exec(bContext *C, wmOperator *op)
 {
+	Scene *scene = CTX_data_scene(C);
 	ViewLayer *view_layer = CTX_data_view_layer(C);
 	OverrideSet *override_set = BLI_findlink(&view_layer->override_sets, view_layer->active_override_set);
 
@@ -767,6 +777,9 @@ static int view_layer_override_remove_exec(bContext *C, wmOperator *op)
 	}
 
 	BKE_view_layer_override_property_remove(override_set, dyn_prop);
+
+	DEG_id_tag_update(&scene->id, DEG_TAG_COPY_ON_WRITE);
+	WM_event_add_notifier(C, NC_SCENE | ND_DYN_OVERRIDES, scene);
 	return OPERATOR_FINISHED;
 }
 
