@@ -198,10 +198,7 @@ class VIEWLAYER_OT_overrides(ViewLayerButtonsPanel, Panel):
 
         if override_mode_support:
             subrow.prop(dyn_prop, "override_mode", text="")
-            if dyn_prop.override_mode == 'MULTIPLY':
-                subrow.prop(dyn_prop, "multiply_factor", text="")
-            else:
-                subrow.prop(dyn_prop, value_propname, text="")
+            subrow.prop(dyn_prop, value_propname, text="")
         elif value_propname is not None:
             subrow.prop(dyn_prop, value_propname, text="")
 

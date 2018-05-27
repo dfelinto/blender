@@ -237,12 +237,6 @@ void RNA_def_dynamic_override(BlenderRNA *brna)
 	                         "Method of override the original values");
 	RNA_def_property_update(prop, NC_SCENE | ND_DYN_OVERRIDES, NULL);
 
-	prop = RNA_def_property(srna, "multiply_factor", PROP_FLOAT, PROP_NONE);
-	RNA_def_property_range(prop, -FLT_MAX, FLT_MAX);
-	RNA_def_property_ui_range(prop, -10.0f, 10.0f, 5, 3);
-	RNA_def_property_ui_text(prop, "Factor", "Multiplication factor");
-	RNA_def_property_update(prop, NC_SCENE | ND_DYN_OVERRIDES, NULL);
-
 	prop = RNA_def_property(srna, "data_type", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_items(prop, rna_enum_property_type_items);
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
