@@ -1178,6 +1178,8 @@ static void view3d_header_region_message_subscribe(
 
 	/* Only subscribe to types. */
 	StructRNA *type_array[] = {
+		&RNA_DynamicOverrideProperty,
+		&RNA_OverrideSet,
 		&RNA_View3DShading,
 	};
 
