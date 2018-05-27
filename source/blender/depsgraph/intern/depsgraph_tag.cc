@@ -592,6 +592,14 @@ void DEG_id_type_tag(Main *bmain, short id_type)
 	bmain->id_tag_update[BKE_idcode_to_index(id_type)] = 1;
 }
 
+void DEG_graph_id_type_tag_update(Main *bmain, Depsgraph *depsgraph, short id_type, int flag)
+{
+	ListBase *data = BKE_idtype_to_main_data(bmain, id_type);
+	LISTBASE_FOREACH (ID *, id, data) {
+		DEG_graph_id_tag_update(bmain, depsgraph, id, flag);
+	}
+}
+
 void DEG_graph_flush_update(Main *bmain, Depsgraph *depsgraph)
 {
 	if (depsgraph == NULL) {
