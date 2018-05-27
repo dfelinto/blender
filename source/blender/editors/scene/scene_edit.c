@@ -388,6 +388,7 @@ static int view_layer_override_set_collection_link_exec(bContext *C, wmOperator 
 
 	if (BKE_view_layer_override_set_collection_link(override_set, collection)) {
 		DEG_id_tag_update(&scene->id, DEG_TAG_COPY_ON_WRITE);
+		DEG_graph_id_type_tag_update(CTX_data_main(C), CTX_data_depsgraph(C), ID_OB, DEG_TAG_COPY_ON_WRITE);
 		WM_event_add_notifier(C, NC_SCENE | ND_DYN_OVERRIDES, scene);
 		return OPERATOR_FINISHED;
 	}
@@ -571,6 +572,8 @@ static int view_layer_override_set_collection_unlink_exec(bContext *C, wmOperato
 	BKE_view_layer_override_set_collection_unlink(override_set, collection);
 
 	DEG_id_tag_update(&scene->id, DEG_TAG_COPY_ON_WRITE);
+	DEG_graph_id_type_tag_update(CTX_data_main(C), CTX_data_depsgraph(C), ID_OB, DEG_TAG_COPY_ON_WRITE);
+
 	WM_event_add_notifier(C, NC_SCENE | ND_DYN_OVERRIDES, scene);
 	return OPERATOR_FINISHED;
 }

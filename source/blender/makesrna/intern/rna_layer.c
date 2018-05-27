@@ -240,24 +240,26 @@ static void rna_OverriddenCollections_active_set(PointerRNA *ptr, PointerRNA val
 }
 
 static void rna_OverriddenCollection_link(
-        ID *id, OverrideSet *override_set, Main *UNUSED(bmain), ReportList *reports, Collection *collection)
+        ID *id, OverrideSet *override_set, Main *bmain, bContext *C, ReportList *reports, Collection *collection)
 {
-	if (BKE_view_layer_override_set_collection_link(override_set, collection)) {
-		Scene *scene = (Scene *)id;
-		DEG_id_tag_update(&scene->id, DEG_TAG_COPY_ON_WRITE);
-		WM_main_add_notifier(NC_SCENE | ND_DYN_OVERRIDES, scene);
-	}
-	else {
+	if (!BKE_view_layer_override_set_collection_link(override_set, collection)) {
 		BKE_reportf(reports,
 		            RPT_ERROR,
 		            "Collection '%s' already affected by override set '%s'",
 		            collection->id.name + 2,
 		            override_set->name);
+		return;
 	}
+
+	Depsgraph *depsgraph = CTX_data_depsgraph(C);
+	Scene *scene = (Scene *)id;
+	DEG_graph_id_tag_update(bmain, depsgraph, &scene->id, DEG_TAG_COPY_ON_WRITE);
+	DEG_graph_id_type_tag_update(bmain, depsgraph, ID_OB, DEG_TAG_COPY_ON_WRITE);
+	WM_main_add_notifier(NC_SCENE | ND_DYN_OVERRIDES, scene);
 }
 
 static void rna_OverriddenCollection_unlink(
-        ID *id, OverrideSet *override_set, Main *UNUSED(bmain), ReportList *reports, Collection *collection)
+        ID *id, OverrideSet *override_set, Main *bmain, bContext *C, ReportList *reports, Collection *collection)
 {
 	if (!BKE_view_layer_override_set_collection_unlink(override_set, collection)) {
 		BKE_reportf(reports,
@@ -265,12 +267,14 @@ static void rna_OverriddenCollection_unlink(
 		            "Collection '%s' is not affected by override set '%s'",
 		            collection->id.name + 2,
 		            override_set->name);
+		return;
 	}
-	else {
-		Scene *scene = (Scene *)id;
-		DEG_id_tag_update(&scene->id, DEG_TAG_COPY_ON_WRITE);
-		WM_main_add_notifier(NC_SCENE | ND_DYN_OVERRIDES, scene);
-	}
+
+	Depsgraph *depsgraph = CTX_data_depsgraph(C);
+	Scene *scene = (Scene *)id;
+	DEG_graph_id_tag_update(bmain, depsgraph, &scene->id, DEG_TAG_COPY_ON_WRITE);
+	DEG_graph_id_type_tag_update(bmain, depsgraph, ID_OB, DEG_TAG_COPY_ON_WRITE);
+	WM_main_add_notifier(NC_SCENE | ND_DYN_OVERRIDES, scene);
 }
 
 static char *rna_OverrideSet_path(PointerRNA *ptr)
@@ -532,13 +536,13 @@ static void rna_def_overridden_collections(BlenderRNA *brna, PropertyRNA *cprop)
 
 	func = RNA_def_function(srna, "link", "rna_OverriddenCollection_link");
 	RNA_def_function_ui_description(func, "Link collection to override set");
-	RNA_def_function_flag(func, FUNC_USE_SELF_ID | FUNC_USE_MAIN | FUNC_USE_REPORTS);
+	RNA_def_function_flag(func, FUNC_USE_SELF_ID | FUNC_USE_MAIN | FUNC_USE_CONTEXT | FUNC_USE_REPORTS);
 	parm = RNA_def_pointer(func, "collection", "Collection", "", "Collection to link to override set");
 	RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED);
 
 	func = RNA_def_function(srna, "unlink", "rna_OverriddenCollection_unlink");
 	RNA_def_function_ui_description(func, "Unlink a collection from override set");
-	RNA_def_function_flag(func, FUNC_USE_SELF_ID | FUNC_USE_MAIN | FUNC_USE_REPORTS);
+	RNA_def_function_flag(func, FUNC_USE_SELF_ID | FUNC_USE_MAIN | FUNC_USE_CONTEXT | FUNC_USE_REPORTS);
 	parm = RNA_def_pointer(func, "collection", "Collection", "", "Collection to unlink from override set");
 	RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED);
 
