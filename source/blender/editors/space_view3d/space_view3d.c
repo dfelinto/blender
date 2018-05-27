@@ -1153,6 +1153,7 @@ static void view3d_header_region_listener(
 				case ND_TOOLSETTINGS:
 				case ND_LAYER_CONTENT:
 				case ND_RENDER_OPTIONS:
+				case ND_DYN_OVERRIDES:
 					ED_region_tag_redraw(ar);
 					break;
 			}
