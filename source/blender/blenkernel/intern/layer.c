@@ -68,6 +68,7 @@
 /* prototype */
 static void override_set_copy_data(struct OverrideSet *override_set_dst, struct OverrideSet *override_set_src);
 static void override_set_free(struct OverrideSet *override_set);
+static void dynamic_override_apply_post(const struct Depsgraph *depsgraph, struct GSet **dynamic_override_cache);
 static void object_bases_iterator_next(BLI_Iterator *iter, const int flag);
 
 
@@ -1242,6 +1243,82 @@ bool BKE_view_layer_override_property_remove(
 	return true;
 }
 
+static void dynamic_override_apply_cache_populate(GSet *objects, Collection *collection)
+{
+	for (CollectionObject *collection_object = collection->gobject.first;
+	     collection_object != NULL;
+	     collection_object = collection_object->next)
+	{
+		BLI_gset_add(objects, &collection_object->ob->id);
+	}
+
+	for (CollectionChild *collection_iter = collection->children.first;
+	     collection_iter != NULL;
+	     collection_iter = collection_iter->next)
+	{
+		dynamic_override_apply_cache_populate(objects, collection_iter->collection);
+	}
+}
+
+static GSet **dynamic_override_apply_pre(const struct Depsgraph *depsgraph)
+{
+	Scene *scene = DEG_get_evaluated_scene(depsgraph);
+	ViewLayer *view_layer = DEG_get_evaluated_view_layer(depsgraph);
+	Collection *master_collection = BKE_collection_master(scene);
+	const int len_override_sets = BLI_listbase_count(&view_layer->override_sets);
+
+	if (len_override_sets == 0) {
+		return NULL;
+	}
+
+	GSet **dynamic_override_cache = MEM_callocN(
+	                                    sizeof(GSet *) * len_override_sets,
+	                                    __func__);
+
+	int i = 0;
+	for (OverrideSet *override_set = view_layer->override_sets.first;
+	     override_set != NULL;
+	     override_set = override_set->next, i++)
+	{
+		if ((override_set->flag & DYN_OVERRIDE_SET_USE) == 0) {
+			continue;
+		}
+
+		/* If no collection, then all collections are affected. */
+		if (BLI_listbase_is_empty(&override_set->affected_collections)) {
+			continue;
+		}
+
+		/* Quick check to see if we can ignore all collections. */
+		bool has_master_collection = false;
+		for (AffectedCollection *affected = override_set->affected_collections.first;
+		     affected != NULL;
+		     affected = affected->next)
+		{
+			if (affected->collection == master_collection) {
+				has_master_collection = true;
+				break;
+			}
+		}
+		if (has_master_collection) {
+			continue;
+		}
+
+		dynamic_override_cache[i] = BLI_gset_ptr_new(__func__);
+
+		/* List all the affected objects. */
+		for (AffectedCollection *affected = override_set->affected_collections.first;
+		     affected != NULL;
+		     affected = affected->next)
+		{
+			Collection *collection_iter = affected->collection;
+			BLI_assert(collection_iter != NULL);
+			dynamic_override_apply_cache_populate(dynamic_override_cache[i], collection_iter);
+		}
+	}
+	return dynamic_override_cache;
+}
+
 void BKE_dynamic_override_apply(const struct Depsgraph *depsgraph, ID *id)
 {
 	const ID_Type id_type = GS(id->name);
@@ -1249,10 +1326,17 @@ void BKE_dynamic_override_apply(const struct Depsgraph *depsgraph, ID *id)
 		return;
 	}
 
+	GSet **dynamic_override_cache = dynamic_override_apply_pre(depsgraph);
+
+	if (dynamic_override_cache == NULL) {
+		return;
+	}
+
 	ViewLayer *view_layer = DEG_get_evaluated_view_layer(depsgraph);
+	int i = 0;
 	for (OverrideSet *override_set = view_layer->override_sets.first;
 	     override_set != NULL;
-	     override_set = override_set->next)
+	     override_set = override_set->next, i++)
 	{
 		if ((override_set->flag & DYN_OVERRIDE_SET_USE) == 0) {
 			continue;
@@ -1274,6 +1358,12 @@ void BKE_dynamic_override_apply(const struct Depsgraph *depsgraph, ID *id)
 			}
 		}
 		else {
+			if (dynamic_override_cache[i] != NULL &&
+			    !BLI_gset_haskey(dynamic_override_cache[i], id->orig_id))
+			{
+				continue;
+			}
+
 			/** Check if object is in one of the affected collections.
 			 *  If it is, apply all the overrides for the object and its material, mesh, ...
 			 **/
@@ -1292,6 +1382,27 @@ void BKE_dynamic_override_apply(const struct Depsgraph *depsgraph, ID *id)
 			}
 		}
 	}
+
+	dynamic_override_apply_post(depsgraph, dynamic_override_cache);
+}
+
+static void dynamic_override_apply_post(const Depsgraph *depsgraph, GSet **dynamic_override_cache)
+{
+	if (dynamic_override_cache == NULL) {
+		return;
+	}
+
+	ViewLayer *view_layer = DEG_get_evaluated_view_layer(depsgraph);
+	const int len_override_sets = BLI_listbase_count(&view_layer->override_sets);
+
+	for (int i = 0; i < len_override_sets; i++) {
+		if (dynamic_override_cache[i] != NULL) {
+			BLI_gset_free(dynamic_override_cache[i], NULL);
+		}
+	}
+
+	MEM_freeN(dynamic_override_cache);
+	dynamic_override_cache = NULL;
 }
 
 /** \} */
