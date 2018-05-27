@@ -40,6 +40,7 @@
 #include "BLT_translation.h"
 
 #include "BKE_library.h"
+#include "BKE_main.h"
 #include "BKE_idcode.h"
 
 typedef struct {
@@ -121,6 +122,86 @@ static IDType *idtype_from_code(short idcode)
 		if (idcode == idtypes[i].code)
 			return &idtypes[i];
 	
+	return NULL;
+}
+
+ListBase *BKE_idtype_to_main_data(Main *bmain, short id_type)
+{
+	switch (id_type)
+	{
+		case ID_SCE:
+			return &bmain->scene;
+		case ID_LI:
+			return &bmain->library;
+		case ID_OB:
+			return &bmain->object;
+		case ID_ME:
+			return &bmain->mesh;
+		case ID_CU:
+			return &bmain->curve;
+		case ID_MB:
+			return &bmain->mball;
+		case ID_MA:
+			return &bmain->mat;
+		case ID_TE:
+			return &bmain->tex;
+		case ID_IM:
+			return &bmain->image;
+		case ID_LT:
+			return &bmain->latt;
+		case ID_LA:
+			return &bmain->lamp;
+		case ID_CA:
+			return &bmain->camera;
+		case ID_IP:
+			return &bmain->ipo;
+		case ID_KE:
+			return &bmain->key;
+		case ID_WO:
+			return &bmain->world;
+		case ID_SCR:
+			return &bmain->screen;
+		case ID_VF:
+			return &bmain->vfont;
+		case ID_TXT:
+			return &bmain->text;
+		case ID_SPK:
+			return &bmain->speaker;
+		case ID_SO:
+			return &bmain->sound;
+		case ID_GR:
+			return &bmain->collection;
+		case ID_AR:
+			return &bmain->armature;
+		case ID_AC:
+			return &bmain->action;
+		case ID_NT:
+			return &bmain->nodetree;
+		case ID_BR:
+			return &bmain->brush;
+		case ID_PA:
+			return &bmain->particle;
+		case ID_GD:
+			return &bmain->gpencil;
+		case ID_WM:
+			return &bmain->wm;
+		case ID_MC:
+			return &bmain->movieclip;
+		case ID_MSK:
+			return &bmain->mask;
+		case ID_LS:
+			return &bmain->linestyle;
+		case ID_PAL:
+			return &bmain->palettes;
+		case ID_PC:
+			return &bmain->paintcurves;
+		case ID_CF:
+			return &bmain->cachefiles;
+		case ID_WS:
+			return &bmain->workspaces;
+		case ID_LP:
+			return &bmain->lightprobe;
+	}
 	return NULL;
 }
 

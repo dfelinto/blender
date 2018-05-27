@@ -32,6 +32,11 @@
  *  \ingroup bke
  */
 
+struct ListBase;
+struct Main;
+
+struct ListBase *BKE_idtype_to_main_data(struct Main *bmain, short id_type);
+
 const char *BKE_idcode_to_name(short idcode);
 const char *BKE_idcode_to_name_plural(short idcode);
 const char *BKE_idcode_to_translation_context(short idcode);
