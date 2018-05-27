@@ -1257,7 +1257,6 @@ void BKE_dynamic_override_apply(const struct Depsgraph *depsgraph, ID *id)
 		}
 
 		if (id_type == ID_SCE) {
-#if 1
 			/** Apply all the scene properties. */
 			for (DynamicOverrideProperty *dyn_prop = override_set->scene_properties.first;
 				 dyn_prop != NULL;
@@ -1271,10 +1270,8 @@ void BKE_dynamic_override_apply(const struct Depsgraph *depsgraph, ID *id)
 				RNA_id_pointer_create(id, &ptr);
 				RNA_struct_dynamic_override_apply(&ptr, dyn_prop);
 			}
-#endif
 		}
 		else {
-#if 1
 			/** Check if object is in one of the affected collections.
 			 *  If it is, apply all the overrides for the object and its material, mesh, ...
 			 **/
@@ -1291,7 +1288,6 @@ void BKE_dynamic_override_apply(const struct Depsgraph *depsgraph, ID *id)
 				RNA_id_pointer_create(id, &ptr);
 				RNA_struct_dynamic_override_apply(&ptr, dyn_prop);
 			}
-#endif
 		}
 	}
 }
