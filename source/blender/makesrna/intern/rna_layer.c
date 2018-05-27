@@ -191,13 +191,13 @@ static void rna_ObjectBase_select_update(Main *UNUSED(bmain), Scene *UNUSED(scen
 
 static void rna_OverriddenCollection_name_get(PointerRNA *ptr, char *value)
 {
-	Collection *collection = ((LinkData *)ptr->data)->data;
+	Collection *collection = ((AffectedCollection *)ptr->data)->collection;
 	strcpy(value, collection->id.name + 2);
 }
 
 static int rna_OverriddenCollection_name_length(PointerRNA *ptr)
 {
-	Collection *collection = ((LinkData *)ptr->data)->data;
+	Collection *collection = ((AffectedCollection *)ptr->data)->collection;
 	return strnlen(collection->id.name + 2, sizeof(collection->id.name));
 }
 
