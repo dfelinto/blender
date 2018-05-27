@@ -317,6 +317,27 @@ ViewLayer *BKE_view_layer_find_from_override_set(const Scene *scene, OverrideSet
 	return NULL;
 }
 
+/**
+ * Return the view layer that owns the dynamic override property
+ */
+ViewLayer *BKE_view_layer_find_from_dynamic_override_property(const Scene *scene, DynamicOverrideProperty *dyn_prop)
+{
+	for (ViewLayer *view_layer = scene->view_layers.first; view_layer; view_layer = view_layer->next) {
+		for (OverrideSet *override_set = view_layer->override_sets.first;
+		     override_set != NULL;
+		     override_set = override_set->next)
+		{
+			if (BLI_findindex(&override_set->scene_properties, dyn_prop) != -1) {
+				return view_layer;
+			}
+			else if (BLI_findindex(&override_set->collection_properties, dyn_prop) != -1) {
+				return view_layer;
+			}
+		}
+	}
+	return NULL;
+}
+
 /* Base */
 
 static void view_layer_bases_hash_create(ViewLayer *view_layer)

@@ -75,6 +75,7 @@ void BKE_view_layer_selected_objects_tag(struct ViewLayer *view_layer, const int
 
 struct Object *BKE_view_layer_camera_find(struct ViewLayer *view_layer);
 struct ViewLayer *BKE_view_layer_find_from_override_set(const struct Scene *scene, struct OverrideSet *override_set);
+struct ViewLayer *BKE_view_layer_find_from_dynamic_override_property(const struct Scene *scene, struct DynamicOverrideProperty *dyn_prop);
 struct ViewLayer *BKE_view_layer_find_from_collection(const struct Scene *scene, struct LayerCollection *lc);
 struct Base *BKE_view_layer_base_find(struct ViewLayer *view_layer, struct Object *ob);
 void BKE_view_layer_base_deselect_all(struct ViewLayer *view_layer);
