@@ -2461,7 +2461,7 @@ static void write_view_layer(WriteData *wd, ViewLayer *view_layer)
 
 	writelist(wd, DATA, OverrideSet, &view_layer->override_sets);
 	for (OverrideSet *override_set = view_layer->override_sets.first; override_set; override_set = override_set->next) {
-		writelist(wd, DATA, LinkData, &override_set->affected_collections);
+		writelist(wd, DATA, AffectedCollection, &override_set->affected_collections);
 		writelist(wd, DATA, DynamicOverrideProperty, &override_set->scene_properties);
 		write_dynamic_properties(wd, &override_set->scene_properties);
 		writelist(wd, DATA, DynamicOverrideProperty, &override_set->collection_properties);

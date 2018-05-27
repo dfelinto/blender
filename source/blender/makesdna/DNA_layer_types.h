@@ -60,6 +60,11 @@ typedef struct LayerCollection {
 	ListBase layer_collections; /* synced with collection->children */
 } LayerCollection;
 
+typedef struct AffectedCollection {
+	struct AffectedCollection *next, *prev;
+	struct Collection *collection;
+} AffectedCollection;
+
 typedef struct DynamicOverridePropertyData {
 	int i[4];
 	float f[4];  /*TODO 16 to support 4x4 matrices? Not sure we actually need that though... */
@@ -87,7 +92,7 @@ typedef struct OverrideSet {
 	short flag;
 	short pad[2];
 	short active_affected_collection;
-	ListBase affected_collections; /* (Collection *)LinkData->data */
+	ListBase affected_collections; /* AffectedCollection */
 	ListBase scene_properties;
 	ListBase collection_properties;
 } OverrideSet;

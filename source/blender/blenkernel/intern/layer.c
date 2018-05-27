@@ -1060,11 +1060,13 @@ bool BKE_view_layer_override_set_remove(struct ViewLayer *view_layer, struct Ove
 bool BKE_view_layer_override_set_collection_link(OverrideSet *override_set, Collection *collection)
 {
 	/* We don't support duplicated collections in the override set. */
-	if (BLI_findptr(&override_set->affected_collections, collection, offsetof(LinkData, data)) != NULL) {
+	if (BLI_findptr(&override_set->affected_collections, collection, offsetof(AffectedCollection, collection)) != NULL) {
 		return false;
 	};
 
-	BLI_addtail(&override_set->affected_collections, BLI_genericNodeN(collection));
+	AffectedCollection *affected = MEM_callocN(sizeof(AffectedCollection), __func__);
+	affected->collection = collection;
+	BLI_addtail(&override_set->affected_collections, affected);
 	return true;
 }
 
@@ -1074,15 +1076,15 @@ bool BKE_view_layer_override_set_collection_link(OverrideSet *override_set, Coll
  */
 bool BKE_view_layer_override_set_collection_unlink(struct OverrideSet *override_set, struct Collection *collection)
 {
-	LinkData *link = BLI_findptr(&override_set->affected_collections, collection, offsetof(LinkData, data));
-	if (link == NULL) {
+	AffectedCollection *affected = BLI_findptr(&override_set->affected_collections, collection, offsetof(AffectedCollection, collection));
+	if (affected == NULL) {
 		return false;
 	}
 
-	const int collection_index = BLI_findindex(&override_set->affected_collections, link);
+	const int collection_index = BLI_findindex(&override_set->affected_collections, affected);
 
-	BLI_remlink(&override_set->affected_collections, link);
-	MEM_freeN(link);
+	BLI_remlink(&override_set->affected_collections, affected);
+	MEM_freeN(affected);
 
 	if (override_set->active_affected_collection > collection_index) {
 		override_set->active_affected_collection -= 1;

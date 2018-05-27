@@ -565,8 +565,8 @@ static int view_layer_override_set_collection_unlink_exec(bContext *C, wmOperato
 	Scene *scene = CTX_data_scene(C);
 	ViewLayer *view_layer = CTX_data_view_layer(C);
 	OverrideSet *override_set = BLI_findlink(&view_layer->override_sets, view_layer->active_override_set);
-	LinkData *link = BLI_findlink(&override_set->affected_collections, override_set->active_affected_collection);
-	Collection *collection = link->data;
+	AffectedCollection *affected_collection = BLI_findlink(&override_set->affected_collections, override_set->active_affected_collection);
+	Collection *collection = affected_collection->collection;
 
 	BKE_view_layer_override_set_collection_unlink(override_set, collection);
 

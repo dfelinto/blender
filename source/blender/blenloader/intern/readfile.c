@@ -5609,8 +5609,11 @@ static void direct_link_view_layer(FileData *fd, ViewLayer *view_layer)
 	link_list(fd, &(view_layer->override_sets));
 	for (OverrideSet *override_set = view_layer->override_sets.first; override_set; override_set = override_set->next) {
 		link_list(fd, &override_set->affected_collections);
-		for (LinkData *link = override_set->affected_collections.first; link; link = link->next) {
-			link->data = newdataadr(fd, link->data);
+		for (AffectedCollection *affected = override_set->affected_collections.first;
+		     affected != NULL;
+		     affected = affected->next)
+		{
+			affected->collection = newdataadr(fd, affected->collection);
 		}
 		link_list(fd, &override_set->scene_properties);
 		direct_link_dynamic_properties(fd, &override_set->scene_properties);
@@ -9687,6 +9690,18 @@ static void expand_scene(FileData *fd, Main *mainvar, Scene *sce)
 				expand_doit(fd, mainvar, lineset->group);
 			}
 			expand_doit(fd, mainvar, lineset->linestyle);
+		}
+
+		for (OverrideSet *override_set = view_layer->override_sets.first;
+		     override_set != NULL;
+		     override_set = override_set->next)
+		{
+			for (AffectedCollection *affected = override_set->affected_collections.first;
+			     affected != NULL;
+			     affected = affected->next)
+			{
+				expand_doit(fd, mainvar, affected->collection);
+			}
 		}
 	}
 
