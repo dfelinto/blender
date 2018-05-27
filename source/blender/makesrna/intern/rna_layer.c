@@ -294,6 +294,19 @@ static void rna_OverrideSet_name_set(PointerRNA *ptr, const char *value)
 	               sizeof(override_set->name));
 }
 
+static void  rna_OverrideSet_update(Main *bmain, Scene *scene, PointerRNA *ptr)
+{
+	OverrideSet *override_set = (OverrideSet *)ptr->data;
+	ViewLayer *view_layer = BKE_view_layer_find_from_override_set(scene, override_set);
+	Depsgraph *depsgraph =
+	        (Depsgraph *)BKE_scene_get_depsgraph(scene,
+	                                             view_layer,
+	                                             false);
+
+	DEG_graph_id_tag_update(bmain, depsgraph, &scene->id, DEG_TAG_COPY_ON_WRITE);
+	DEG_graph_id_type_tag_update(bmain, depsgraph, ID_OB, DEG_TAG_COPY_ON_WRITE);
+}
+
 static int rna_OverrideSets_active_override_set_index_get(PointerRNA *ptr)
 {
 	ViewLayer *view_layer = (ViewLayer *)ptr->data;
@@ -550,7 +563,7 @@ static void rna_def_override_set(BlenderRNA *brna)
 	prop = RNA_def_property(srna, "use", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "flag", DYN_OVERRIDE_SET_USE);
 	RNA_def_property_ui_text(prop, "Enabled", "Disable or enable the override set");
-	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, "rna_OverrideSet_update");
 
 	prop = RNA_def_property(srna, "affected_collections", PROP_COLLECTION, PROP_NONE);
 	RNA_def_property_collection_sdna(prop, NULL, "affected_collections", NULL);

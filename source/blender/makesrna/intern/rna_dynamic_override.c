@@ -49,6 +49,9 @@ const EnumPropertyItem rna_enum_dynamic_override_property_type_items[] = {
 #include "RNA_access.h"
 
 #include "BKE_layer.h"
+#include "BKE_scene.h"
+
+#include "DEG_depsgraph.h"
 
 static void rna_DynamicOverrideProperty_name_get(PointerRNA *ptr, char *value)
 {
@@ -182,6 +185,25 @@ static void rna_DynamicOverrideProperty_value_color_set(PointerRNA *ptr, const f
 	}
 }
 
+static void  rna_DynamicOverrideProperty_update(Main *bmain, Scene *scene, PointerRNA *ptr)
+{
+	DynamicOverrideProperty *dyn_prop = ptr->data;
+	ViewLayer *view_layer = BKE_view_layer_find_from_dynamic_override_property(scene, dyn_prop);
+	Depsgraph *depsgraph =
+	        (Depsgraph *)BKE_scene_get_depsgraph(scene,
+	                                             view_layer,
+	                                             false);
+
+	switch (dyn_prop->property_type) {
+		case DYN_OVERRIDE_PROP_TYPE_SCENE:
+			DEG_graph_id_tag_update(bmain, depsgraph, &scene->id, DEG_TAG_COPY_ON_WRITE);
+			break;
+		case DYN_OVERRIDE_PROP_TYPE_COLLECTION:
+			DEG_graph_id_type_tag_update(bmain, depsgraph, ID_OB, DEG_TAG_COPY_ON_WRITE);
+			break;
+	}
+}
+
 #else
 
 void RNA_def_dynamic_override(BlenderRNA *brna)
@@ -209,7 +231,7 @@ void RNA_def_dynamic_override(BlenderRNA *brna)
 	prop = RNA_def_property(srna, "use", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "flag", DYN_OVERRIDE_PROP_USE);
 	RNA_def_property_ui_text(prop, "Enabled", "Disable or enable the overridden property");
-	RNA_def_property_update(prop, NC_SCENE | ND_DYN_OVERRIDES, NULL);
+	RNA_def_property_update(prop, NC_SCENE | ND_DYN_OVERRIDES, "rna_DynamicOverrideProperty_update");
 
 	prop = RNA_def_property(srna, "type", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_sdna(prop, NULL, "property_type");
@@ -235,7 +257,7 @@ void RNA_def_dynamic_override(BlenderRNA *brna)
 	RNA_def_property_enum_items(prop, rna_enum_dynamic_override_mode_items);
 	RNA_def_property_ui_text(prop, "Override Mode",
 	                         "Method of override the original values");
-	RNA_def_property_update(prop, NC_SCENE | ND_DYN_OVERRIDES, NULL);
+	RNA_def_property_update(prop, NC_SCENE | ND_DYN_OVERRIDES, "rna_DynamicOverrideProperty_update");
 
 	prop = RNA_def_property(srna, "data_type", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_items(prop, rna_enum_property_type_items);
@@ -254,21 +276,21 @@ void RNA_def_dynamic_override(BlenderRNA *brna)
 	RNA_def_property_boolean_funcs(prop,
 	                               "rna_DynamicOverrideProperty_value_boolean_get",
 	                               "rna_DynamicOverrideProperty_value_boolean_set");
-	RNA_def_property_update(prop, NC_SCENE | ND_DYN_OVERRIDES, NULL);
+	RNA_def_property_update(prop, NC_SCENE | ND_DYN_OVERRIDES, "rna_DynamicOverrideProperty_update");
 
 	prop = RNA_def_property(srna, "value_int", PROP_INT, PROP_NONE);
 	RNA_def_property_int_funcs(prop,
 	                           "rna_DynamicOverrideProperty_value_int_get",
 	                           "rna_DynamicOverrideProperty_value_int_set",
 	                           "rna_DynamicOverrideProperty_value_int_range");
-	RNA_def_property_update(prop, NC_SCENE | ND_DYN_OVERRIDES, NULL);
+	RNA_def_property_update(prop, NC_SCENE | ND_DYN_OVERRIDES, "rna_DynamicOverrideProperty_update");
 
 	prop = RNA_def_property(srna, "value_float", PROP_FLOAT, PROP_NONE);
 	RNA_def_property_float_funcs(prop,
 	                             "rna_DynamicOverrideProperty_value_float_get",
 	                             "rna_DynamicOverrideProperty_value_float_set",
 	                             "rna_DynamicOverrideProperty_value_float_range");
-	RNA_def_property_update(prop, NC_SCENE | ND_DYN_OVERRIDES, NULL);
+	RNA_def_property_update(prop, NC_SCENE | ND_DYN_OVERRIDES, "rna_DynamicOverrideProperty_update");
 
 	prop = RNA_def_property(srna, "value_color", PROP_FLOAT, PROP_COLOR);
 	RNA_def_property_flag(prop, PROP_DYNAMIC);
@@ -278,7 +300,7 @@ void RNA_def_dynamic_override(BlenderRNA *brna)
 	                             "rna_DynamicOverrideProperty_value_color_get",
 	                             "rna_DynamicOverrideProperty_value_color_set",
 	                             NULL);
-	RNA_def_property_update(prop, NC_SCENE | ND_DYN_OVERRIDES, NULL);
+	RNA_def_property_update(prop, NC_SCENE | ND_DYN_OVERRIDES, "rna_DynamicOverrideProperty_update");
 }
 
 #endif

@@ -316,6 +316,8 @@ static void SCENE_OT_view_layer_override_set_add(wmOperatorType *ot)
 
 static int view_layer_override_set_remove_exec(bContext *C, wmOperator *op)
 {
+	Main *bmain = CTX_data_main(C);
+	Depsgraph *depsgraph = CTX_data_depsgraph(C);
 	Scene *scene = CTX_data_scene(C);
 	ViewLayer *view_layer = CTX_data_view_layer(C);
 	OverrideSet *override_set = BLI_findlink(&view_layer->override_sets, view_layer->active_override_set);
@@ -327,7 +329,9 @@ static int view_layer_override_set_remove_exec(bContext *C, wmOperator *op)
 
 	BKE_view_layer_override_set_remove(view_layer, override_set);
 
-	DEG_id_tag_update(&scene->id, DEG_TAG_COPY_ON_WRITE);
+	DEG_graph_id_tag_update(bmain, depsgraph, &scene->id, DEG_TAG_COPY_ON_WRITE);
+	DEG_graph_id_type_tag_update(bmain, depsgraph, ID_OB, DEG_TAG_COPY_ON_WRITE);
+
 	WM_event_add_notifier(C, NC_SCENE | ND_DYN_OVERRIDES, scene);
 	return OPERATOR_FINISHED;
 }
