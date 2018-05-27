@@ -7434,15 +7434,16 @@ static bool rna_property_override_operation_apply(
         PropertyRNA *prop_local, PropertyRNA *prop_override, PropertyRNA *prop_storage,
         IDOverrideStaticPropertyOperation *opop, DynamicOverrideProperty *dyn_prop)
 {
+	const bool is_dynamic_override = (opop == NULL);
 	int len_local, len_reference, len_storage = 0;
 
-	const short override_op = opop != NULL ? opop->operation : dyn_prop->operation;
+	const short override_op = is_dynamic_override ? dyn_prop->operation : opop->operation;
 
 	if (override_op == IDOVERRIDESTATIC_OP_NOOP) {
 		return true;
 	}
 
-	if (opop != NULL) {
+	if (!is_dynamic_override) {
 		if (ELEM(override_op, IDOVERRIDESTATIC_OP_ADD, IDOVERRIDESTATIC_OP_SUBTRACT, IDOVERRIDESTATIC_OP_MULTIPLY) &&
 		    !ptr_storage)
 		{
@@ -7462,20 +7463,30 @@ static bool rna_property_override_operation_apply(
 
 	RNAPropOverrideApply override_apply = NULL;
 	/* Special case for IDProps, we use default callback then. */
-	if (prop_local->magic != RNA_MAGIC) {
-		override_apply = rna_property_override_apply_default;
-		if (prop_override->magic == RNA_MAGIC && prop_override->override_apply != override_apply) {
-			override_apply = NULL;
+	if (is_dynamic_override) {
+		if (prop_local->magic != RNA_MAGIC) {
+			override_apply = rna_property_override_apply_default;
+		}
+		else {
+			override_apply = prop_local->override_apply;
 		}
 	}
-	else if (prop_override->magic != RNA_MAGIC) {
-		override_apply = rna_property_override_apply_default;
-		if (prop_local->override_apply != override_apply) {
-			override_apply = NULL;
+	else {
+		if (prop_local->magic != RNA_MAGIC) {
+			override_apply = rna_property_override_apply_default;
+			if (prop_override->magic == RNA_MAGIC && prop_override->override_apply != override_apply) {
+				override_apply = NULL;
+			}
 		}
-	}
-	else if (prop_local->override_apply == prop_override->override_apply) {
-		override_apply = prop_local->override_apply;
+		if (prop_override->magic != RNA_MAGIC) {
+			override_apply = rna_property_override_apply_default;
+			if (prop_local->override_apply != override_apply) {
+				override_apply = NULL;
+			}
+		}
+		else if (prop_local->override_apply == prop_override->override_apply) {
+			override_apply = prop_local->override_apply;
+		}
 	}
 
 	if (ptr_storage && prop_storage->magic == RNA_MAGIC && prop_storage->override_apply != override_apply) {
@@ -7484,9 +7495,16 @@ static bool rna_property_override_operation_apply(
 
 	if (override_apply == NULL) {
 #ifndef NDEBUG
-		printf("'%s' gives unmatching or NULL RNA copy callbacks, should not happen (%d vs. %d).\n",
-		       prop_local->magic != RNA_MAGIC ? ((IDProperty *)prop_local)->name : prop_local->identifier,
-		       prop_local->magic == RNA_MAGIC, prop_override->magic == RNA_MAGIC);
+		if (is_dynamic_override) {
+			printf("'%s' gives NULL RNA copy callback, should not happen (%d).\n",
+			       prop_local->magic != RNA_MAGIC ? ((IDProperty *)prop_local)->name : prop_local->identifier,
+			       prop_local->magic == RNA_MAGIC);
+		}
+		else {
+			printf("'%s' gives unmatching or NULL RNA copy callbacks, should not happen (%d vs. %d).\n",
+			       prop_local->magic != RNA_MAGIC ? ((IDProperty *)prop_local)->name : prop_local->identifier,
+			       prop_local->magic == RNA_MAGIC, prop_override->magic == RNA_MAGIC);
+		}
 #endif
 		BLI_assert(0);
 		return false;
@@ -7494,7 +7512,7 @@ static bool rna_property_override_operation_apply(
 
 	/* get the length of the array to work with */
 	len_local = RNA_property_array_length(ptr_local, prop_local);
-	len_reference = opop != NULL ? RNA_property_array_length(ptr_override, prop_override) : len_local;
+	len_reference = is_dynamic_override ? len_local : RNA_property_array_length(ptr_override, prop_override);
 	if (ptr_storage) {
 		len_storage = RNA_property_array_length(ptr_storage, prop_storage);
 	}

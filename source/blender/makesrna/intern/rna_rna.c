@@ -2010,25 +2010,27 @@ bool rna_property_override_apply_default(
 	BLI_assert(len_dst == len_src && (!ptr_storage || len_dst == len_storage));
 	UNUSED_VARS_NDEBUG(len_src, len_storage);
 
+	const bool is_dynamic_override = (opop == NULL);
+
 	/* Dynamic override does not support sub-item array currently... */
 	const bool is_array = len_dst > 0;
-	const int index = is_array ? (opop != NULL ? opop->subitem_reference_index : -1) : 0;
-	const short override_op = opop != NULL ? opop->operation : dyn_prop->operation;
+	const int index = is_array ? (!is_dynamic_override ? opop->subitem_reference_index : -1) : 0;
+	const short override_op = !is_dynamic_override ? opop->operation : dyn_prop->operation;
 
-	const bool do_free_array = (opop != NULL) && (len_dst > RNA_STACK_ARRAY);
+	const bool do_free_array = !is_dynamic_override && (len_dst > RNA_STACK_ARRAY);
 	switch (RNA_property_type(prop_dst)) {
 		case PROP_BOOLEAN:
 			if (is_array && index == -1) {
 				int array_stack_a[RNA_STACK_ARRAY];
 				int *array_a;
 
-				if (opop != NULL) {
+				if (is_dynamic_override) {
+					array_a = dyn_prop->data.i;
+				}
+				else {
 					array_a = (len_dst > RNA_STACK_ARRAY) ? MEM_mallocN(sizeof(*array_a) * len_dst, __func__) :
 					                                        array_stack_a;
 					RNA_property_boolean_get_array(ptr_src, prop_src, array_a);
-				}
-				else {
-					array_a = dyn_prop->data.i;
 				}
 
 				switch (override_op) {
@@ -2043,8 +2045,8 @@ bool rna_property_override_apply_default(
 				if (do_free_array) MEM_freeN(array_a);
 			}
 			else {
-				const int value = opop != NULL ? RNA_PROPERTY_GET_SINGLE(boolean, ptr_src, prop_src, index) :
-				                                 dyn_prop->data.i[index];
+				const int value = !is_dynamic_override ? RNA_PROPERTY_GET_SINGLE(boolean, ptr_src, prop_src, index) :
+				                                         dyn_prop->data.i[index];
 
 				switch (override_op) {
 					case IDOVERRIDESTATIC_OP_REPLACE:
@@ -2063,13 +2065,13 @@ bool rna_property_override_apply_default(
 
 				switch (override_op) {
 					case IDOVERRIDESTATIC_OP_REPLACE:
-						if (opop != NULL) {
+						if (is_dynamic_override) {
+							array_a = dyn_prop->data.i;
+						}
+						else {
 							array_a = (len_dst > RNA_STACK_ARRAY) ? MEM_mallocN(sizeof(*array_a) * len_dst, __func__) :
 							                                        array_stack_a;
 							RNA_property_int_get_array(ptr_src, prop_src, array_a);
-						}
-						else {
-							array_a = dyn_prop->data.i;
 						}
 						RNA_property_int_set_array(ptr_dst, prop_dst, array_a);
 						if (do_free_array) MEM_freeN(array_a);
@@ -2079,13 +2081,13 @@ bool rna_property_override_apply_default(
 						array_a = (len_dst > RNA_STACK_ARRAY) ? MEM_mallocN(sizeof(*array_a) * len_dst, __func__) :
 						                                        array_stack_a;
 						RNA_property_int_get_array(ptr_dst, prop_dst, array_a);
-						if (opop != NULL) {
+						if (is_dynamic_override) {
+							array_b = dyn_prop->data.i;
+						}
+						else {
 							array_b = (len_dst > RNA_STACK_ARRAY) ? MEM_mallocN(sizeof(*array_b) * len_dst, __func__) :
 							                                        array_stack_b;
 							RNA_property_int_get_array(ptr_storage, prop_storage, array_b);
-						}
-						else {
-							array_b = dyn_prop->data.i;
 						}
 						if (override_op == IDOVERRIDESTATIC_OP_ADD) {
 							for (int i = len_dst; i--;) array_a[i] += array_b[i];
@@ -2103,14 +2105,15 @@ bool rna_property_override_apply_default(
 				}
 			}
 			else {
-				const int storage_value = opop != NULL ? (ptr_storage ? RNA_PROPERTY_GET_SINGLE(int, ptr_storage, prop_storage, index) : 0) :
-				                                         dyn_prop->data.i[index];
+				const int storage_value = !is_dynamic_override ?
+				                              (ptr_storage ? RNA_PROPERTY_GET_SINGLE(int, ptr_storage, prop_storage, index) : 0) :
+				                              dyn_prop->data.i[index];
 
 				switch (override_op) {
 					case IDOVERRIDESTATIC_OP_REPLACE:
 					{
-						const int value = opop != NULL ? RNA_PROPERTY_GET_SINGLE(int, ptr_src, prop_src, index) :
-						                                 dyn_prop->data.i[index];
+						const int value = !is_dynamic_override ? RNA_PROPERTY_GET_SINGLE(int, ptr_src, prop_src, index) :
+						                                         dyn_prop->data.i[index];
 						RNA_PROPERTY_SET_SINGLE(int, ptr_dst, prop_dst, index, value);
 						break;
 					}
@@ -2139,13 +2142,13 @@ bool rna_property_override_apply_default(
 
 				switch (override_op) {
 					case IDOVERRIDESTATIC_OP_REPLACE:
-						if (opop != NULL) {
+						if (is_dynamic_override) {
+							array_a = dyn_prop->data.f;
+						}
+						else {
 							array_a = (len_dst > RNA_STACK_ARRAY) ? MEM_mallocN(sizeof(*array_a) * len_dst, __func__) :
 							                                        array_stack_a;
 							RNA_property_float_get_array(ptr_src, prop_src, array_a);
-						}
-						else {
-							array_a = dyn_prop->data.f;
 						}
 						RNA_property_float_set_array(ptr_dst, prop_dst, array_a);
 						if (do_free_array) MEM_freeN(array_a);
@@ -2156,13 +2159,13 @@ bool rna_property_override_apply_default(
 						array_a = (len_dst > RNA_STACK_ARRAY) ? MEM_mallocN(sizeof(*array_a) * len_dst, __func__) :
 						                                        array_stack_a;
 						RNA_property_float_get_array(ptr_dst, prop_dst, array_a);
-						if (opop != NULL) {
+						if (is_dynamic_override) {
+							array_b = dyn_prop->data.f;
+						}
+						else {
 							array_b = (len_dst > RNA_STACK_ARRAY) ? MEM_mallocN(sizeof(*array_b) * len_dst, __func__) :
 							                                        array_stack_b;
 							RNA_property_float_get_array(ptr_storage, prop_storage, array_b);
-						}
-						else {
-							array_b = dyn_prop->data.f;
 						}
 						if (override_op == IDOVERRIDESTATIC_OP_ADD) {
 							for (int i = len_dst; i--;) array_a[i] += array_b[i];
@@ -2183,8 +2186,9 @@ bool rna_property_override_apply_default(
 				}
 			}
 			else {
-				const float storage_value = opop != NULL ? (ptr_storage ? RNA_PROPERTY_GET_SINGLE(float, ptr_storage, prop_storage, index) : 0.0f) :
-				                                           dyn_prop->data.f[index];
+				const float storage_value = !is_dynamic_override ?
+				                                (ptr_storage ? RNA_PROPERTY_GET_SINGLE(float, ptr_storage, prop_storage, index) : 0.0f) :
+				                                dyn_prop->data.f[index];
 
 				switch (override_op) {
 					case IDOVERRIDESTATIC_OP_REPLACE:
@@ -2220,7 +2224,7 @@ bool rna_property_override_apply_default(
 			return true;
 		case PROP_ENUM:
 		{
-			const int value = opop != NULL ? RNA_property_enum_get(ptr_src, prop_src) : dyn_prop->data.i[0];
+			const int value = !is_dynamic_override ? RNA_property_enum_get(ptr_src, prop_src) : dyn_prop->data.i[0];
 
 			switch (override_op) {
 				case IDOVERRIDESTATIC_OP_REPLACE:
@@ -2236,11 +2240,11 @@ bool rna_property_override_apply_default(
 		case PROP_POINTER:
 		{
 			PointerRNA value;
-			if (opop != NULL) {
-				value = RNA_property_pointer_get(ptr_src, prop_src);
+			if (is_dynamic_override) {
+				RNA_id_pointer_create(dyn_prop->data.id, &value);
 			}
 			else {
-				RNA_id_pointer_create(dyn_prop->data.id, &value);
+				value = RNA_property_pointer_get(ptr_src, prop_src);
 			}
 
 			switch (override_op) {
@@ -2258,12 +2262,12 @@ bool rna_property_override_apply_default(
 			char buff[256];
 			char *value;
 			bool do_free_value = false;
-			if (opop != NULL) {
-				value = RNA_property_string_get_alloc(ptr_src, prop_src, buff, sizeof(buff), NULL);
-				do_free_value = value != buff;
+			if (is_dynamic_override) {
+				value = dyn_prop->data.str;
 			}
 			else {
-				value = dyn_prop->data.str;
+				value = RNA_property_string_get_alloc(ptr_src, prop_src, buff, sizeof(buff), NULL);
+				do_free_value = value != buff;
 			}
 
 			switch (override_op) {
