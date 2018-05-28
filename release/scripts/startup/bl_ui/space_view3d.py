@@ -3530,13 +3530,13 @@ class VIEW3D_PT_shading(Panel):
             col.separator()
 
             row = col.row()
-            row.prop(shading, "show_see_through")
+            row.prop(shading, "show_xray")
 
             row = col.row()
-            row.active = not shading.show_see_through
+            row.active = not shading.show_xray
             row.prop(shading, "show_shadows")
             sub = row.row()
-            sub.active = shading.show_shadows and not shading.show_see_through
+            sub.active = shading.show_shadows and not shading.show_xray
             sub.prop(shading, "shadow_intensity", text="")
 
             row = col.row()
@@ -3544,6 +3544,11 @@ class VIEW3D_PT_shading(Panel):
             sub = row.row()
             sub.active = shading.show_object_outline
             sub.prop(shading, "object_outline_color", text="")
+
+        elif shading.type in ('MATERIAL'):
+            col.row().template_icon_view(shading, "studio_light")
+            if shading.studio_light_orientation == 'WORLD':
+                col.row().prop(shading, "studiolight_rot_z")
 
 
 class VIEW3D_PT_overlay(Panel):
@@ -3628,7 +3633,7 @@ class VIEW3D_PT_overlay(Panel):
 
             col = layout.column()
             col.active = display_all
-            col.prop(overlay, "transparent_bones")
+            col.prop(overlay, "show_transparent_bones")
             col.prop(overlay, "show_bone_selection")
 
         elif context.mode == 'EDIT_ARMATURE':
@@ -3637,7 +3642,7 @@ class VIEW3D_PT_overlay(Panel):
 
             col = layout.column()
             col.active = display_all
-            col.prop(overlay, "transparent_bones")
+            col.prop(overlay, "show_transparent_bones")
 
         elif context.mode in {'PAINT_WEIGHT', 'PAINT_VERTEX', 'PAINT_TEXTURE'}:
             col.separator()

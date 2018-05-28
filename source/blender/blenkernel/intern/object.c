@@ -379,9 +379,9 @@ void BKE_object_free_caches(Object *object)
 			if (psmd->mesh_final) {
 				BKE_id_free(NULL, psmd->mesh_final);
 				psmd->mesh_final = NULL;
-				if (psmd->mesh_deformed) {
-					BKE_id_free(NULL, psmd->mesh_deformed);
-					psmd->mesh_deformed = NULL;
+				if (psmd->mesh_original) {
+					BKE_id_free(NULL, psmd->mesh_original);
+					psmd->mesh_original = NULL;
 				}
 				psmd->flag |= eParticleSystemFlag_file_loaded;
 				update_flag |= OB_RECALC_DATA;
@@ -891,8 +891,7 @@ ParticleSystem *BKE_object_copy_particlesystem(ParticleSystem *psys, const int f
 	BLI_listbase_clear(&psysn->pathcachebufs);
 	BLI_listbase_clear(&psysn->childcachebufs);
 	
-	/* XXX Never copy caches here? */
-	psysn->pointcache = BKE_ptcache_copy_list(&psysn->ptcaches, &psys->ptcaches, flag & ~LIB_ID_COPY_CACHES);
+	psysn->pointcache = BKE_ptcache_copy_list(&psysn->ptcaches, &psys->ptcaches, flag);
 
 	/* XXX - from reading existing code this seems correct but intended usage of
 	 * pointcache should /w cloth should be added in 'ParticleSystem' - campbell */
