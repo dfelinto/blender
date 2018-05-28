@@ -5609,12 +5609,6 @@ static void direct_link_view_layer(FileData *fd, ViewLayer *view_layer)
 	link_list(fd, &(view_layer->override_sets));
 	for (OverrideSet *override_set = view_layer->override_sets.first; override_set; override_set = override_set->next) {
 		link_list(fd, &override_set->affected_collections);
-		for (AffectedCollection *affected = override_set->affected_collections.first;
-		     affected != NULL;
-		     affected = affected->next)
-		{
-			affected->collection = newdataadr(fd, affected->collection);
-		}
 		link_list(fd, &override_set->scene_properties);
 		direct_link_dynamic_properties(fd, &override_set->scene_properties);
 		link_list(fd, &override_set->collection_properties);
@@ -5674,6 +5668,18 @@ static void lib_link_view_layer(FileData *fd, Library *lib, ViewLayer *view_laye
 	for (OverrideSet *override_set = view_layer->override_sets.first; override_set; override_set = override_set->next) {
 		lib_link_dynamic_properties(fd, lib, &override_set->scene_properties);
 		lib_link_dynamic_properties(fd, lib, &override_set->collection_properties);
+
+		for (AffectedCollection *affected = override_set->affected_collections.first, *affected_next = NULL;
+		     affected != NULL;
+		     affected = affected_next)
+		{
+			affected_next = affected->next;
+			affected->collection = newlibadr(fd, lib, affected->collection);
+
+			if (affected->collection == NULL) {
+				BLI_freelinkN(&override_set->affected_collections, affected);
+			}
+		}
 	}
 
 	IDP_LibLinkProperty(view_layer->id_properties, fd);
