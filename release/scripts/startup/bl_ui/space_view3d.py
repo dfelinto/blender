@@ -3527,6 +3527,9 @@ class VIEW3D_PT_shading(Panel):
                 if shading.studio_light_orientation == 'WORLD':
                     col.row().prop(shading, "studiolight_rot_z")
 
+            row = col.row()
+            row.prop(shading, "show_specular_highlight")
+
             col.separator()
 
             row = col.row()
@@ -3549,6 +3552,8 @@ class VIEW3D_PT_shading(Panel):
             col.row().template_icon_view(shading, "studio_light")
             if shading.studio_light_orientation == 'WORLD':
                 col.row().prop(shading, "studiolight_rot_z")
+                col.row().prop(shading, "studiolight_background")
+            col.row().prop(shading, "use_scene_light")
 
 
 class VIEW3D_PT_overlay(Panel):
@@ -3564,6 +3569,7 @@ class VIEW3D_PT_overlay(Panel):
         layout = self.layout
 
         view = context.space_data
+        shading = view.shading
         overlay = view.overlay
         scene = context.scene
         toolsettings = context.tool_settings
@@ -3577,6 +3583,9 @@ class VIEW3D_PT_overlay(Panel):
         col.prop(overlay, "show_cursor", text="3D Cursor")
 
         col.prop(view, "show_manipulator", text="Manipulators")
+
+        if shading.type == "MATERIAL":
+            col.prop(overlay, "show_look_dev")
 
         col = layout.column()
         col.active = display_all
@@ -3802,7 +3811,7 @@ class VIEW3D_PT_view3d_meshdisplay(Panel):
         col.prop(mesh, "show_extra_face_area", text="Area")
         col.prop(mesh, "show_extra_face_angle", text="Angle")
         if bpy.app.debug:
-            layout.prop(mesh, "show_extra_indices")
+            layout.prop(mesh, "show_extra_indices", text="Indices")
 
 
 class VIEW3D_PT_view3d_meshstatvis(Panel):

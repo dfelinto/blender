@@ -81,9 +81,11 @@ void BKE_object_copy_proxy_drivers(struct Object *ob, struct Object *target);
 bool BKE_object_exists_check(const struct Object *obtest);
 bool BKE_object_is_in_editmode(const struct Object *ob);
 bool BKE_object_is_in_editmode_vgroup(const struct Object *ob);
-bool BKE_object_is_in_editmode_and_selected(const struct Object *ob);
 bool BKE_object_is_in_wpaint_select_vert(const struct Object *ob);
 bool BKE_object_has_mode_data(const struct Object *ob, eObjectMode object_mode);
+bool BKE_object_is_mode_compat(const struct Object *ob, eObjectMode object_mode);
+
+bool BKE_object_data_is_in_editmode(const struct ID *id);
 
 typedef enum eObjectVisibilityCheck {
 	OB_VISIBILITY_CHECK_FOR_VIEWPORT,
@@ -142,7 +144,7 @@ struct Base **BKE_object_pose_base_array_get_unique(struct ViewLayer *view_layer
 struct Base **BKE_object_pose_base_array_get(struct ViewLayer *view_layer, unsigned int *r_bases_len);
 
 void BKE_object_get_parent_matrix(
-        struct Scene *scene, struct Object *ob,
+        struct Depsgraph *depsgraph, struct Scene *scene, struct Object *ob,
         struct Object *par, float parentmat[4][4]);
 void BKE_object_where_is_calc(
         struct Depsgraph *depsgraph, struct Scene *scene, struct Object *ob);
@@ -154,7 +156,8 @@ void BKE_object_where_is_calc_time(
 void BKE_object_where_is_calc_time_ex(
         struct Depsgraph *depsgraph, struct Scene *scene, struct Object *ob, float ctime,
         struct RigidBodyWorld *rbw, float r_originmat[3][3]);
-void BKE_object_where_is_calc_mat4(struct Scene *scene, struct Object *ob, float obmat[4][4]);
+void BKE_object_where_is_calc_mat4(
+        struct Depsgraph *depsgraph, struct Scene *scene, struct Object *ob, float obmat[4][4]);
 
 /* possibly belong in own moduke? */
 struct BoundBox *BKE_boundbox_alloc_unit(void);
@@ -291,6 +294,8 @@ void BKE_object_relink(struct Object *ob);
 void BKE_object_data_relink(struct Object *ob);
 
 struct MovieClip *BKE_object_movieclip_get(struct Scene *scene, struct Object *ob, bool use_default);
+
+void BKE_object_runtime_reset(struct Object *object);
 
 /* this function returns a superset of the scenes selection based on relationships */
 

@@ -63,7 +63,7 @@ static struct {
 	struct GPUTexture *composite_buffer_tx; /* ref only, not alloced */
 	int next_object_id;
 	float normal_world_matrix[3][3];
-} e_data = {NULL};
+} e_data = {{NULL}};
 
 /* Shaders */
 extern char datatoc_workbench_forward_composite_frag_glsl[];
@@ -252,6 +252,8 @@ void workbench_forward_engine_init(WORKBENCH_Data *vedata)
 	}
 	WORKBENCH_PrivateData *wpd = stl->g_data;
 	workbench_private_data_init(wpd);
+	float light_direction[3];
+	workbench_private_data_get_light_direction(wpd, light_direction);
 
 	if (!e_data.next_object_id) {
 		e_data.next_object_id = 1;

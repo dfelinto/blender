@@ -716,7 +716,7 @@ void DM_to_mesh(DerivedMesh *dm, Mesh *me, Object *ob, CustomDataMask mask, bool
 	Mesh tmp = *me;
 	int totvert, totedge /*, totface */ /* UNUSED */, totloop, totpoly;
 	int did_shapekeys = 0;
-	int alloctype = CD_DUPLICATE;
+	eCDAllocType alloctype = CD_DUPLICATE;
 
 	if (take_ownership && dm->type == DM_TYPE_CDDM && dm->needsFree) {
 		bool has_any_referenced_layers =
@@ -911,27 +911,27 @@ static void mesh_set_only_copy(Mesh *mesh, CustomDataMask mask)
 #endif
 }
 
-void DM_add_vert_layer(DerivedMesh *dm, int type, int alloctype, void *layer)
+void DM_add_vert_layer(DerivedMesh *dm, int type, eCDAllocType alloctype, void *layer)
 {
 	CustomData_add_layer(&dm->vertData, type, alloctype, layer, dm->numVertData);
 }
 
-void DM_add_edge_layer(DerivedMesh *dm, int type, int alloctype, void *layer)
+void DM_add_edge_layer(DerivedMesh *dm, int type, eCDAllocType alloctype, void *layer)
 {
 	CustomData_add_layer(&dm->edgeData, type, alloctype, layer, dm->numEdgeData);
 }
 
-void DM_add_tessface_layer(DerivedMesh *dm, int type, int alloctype, void *layer)
+void DM_add_tessface_layer(DerivedMesh *dm, int type, eCDAllocType alloctype, void *layer)
 {
 	CustomData_add_layer(&dm->faceData, type, alloctype, layer, dm->numTessFaceData);
 }
 
-void DM_add_loop_layer(DerivedMesh *dm, int type, int alloctype, void *layer)
+void DM_add_loop_layer(DerivedMesh *dm, int type, eCDAllocType alloctype, void *layer)
 {
 	CustomData_add_layer(&dm->loopData, type, alloctype, layer, dm->numLoopData);
 }
 
-void DM_add_poly_layer(DerivedMesh *dm, int type, int alloctype, void *layer)
+void DM_add_poly_layer(DerivedMesh *dm, int type, eCDAllocType alloctype, void *layer)
 {
 	CustomData_add_layer(&dm->polyData, type, alloctype, layer, dm->numPolyData);
 }
@@ -1294,7 +1294,11 @@ static Mesh *create_orco_mesh(Object *ob, Mesh *me, BMEditMesh *em, int layer)
 	else {
 		BKE_id_copy_ex(
 		        NULL, &me->id, (ID **)&mesh,
-		        LIB_ID_CREATE_NO_MAIN | LIB_ID_CREATE_NO_USER_REFCOUNT | LIB_ID_CREATE_NO_DEG_TAG, false);
+		        (LIB_ID_CREATE_NO_MAIN |
+		         LIB_ID_CREATE_NO_USER_REFCOUNT |
+		         LIB_ID_CREATE_NO_DEG_TAG |
+		         LIB_ID_COPY_CD_REFERENCE),
+		        false);
 	}
 
 	orco = get_orco_coords_dm(ob, em, layer, &free);
@@ -2125,7 +2129,11 @@ static void mesh_calc_modifiers(
 		if (r_deform_mesh) {
 			BKE_id_copy_ex(
 			        NULL, &me->id, (ID **)r_deform_mesh,
-			        LIB_ID_CREATE_NO_MAIN | LIB_ID_CREATE_NO_USER_REFCOUNT | LIB_ID_CREATE_NO_DEG_TAG, false);
+			        (LIB_ID_CREATE_NO_MAIN |
+			         LIB_ID_CREATE_NO_USER_REFCOUNT |
+			         LIB_ID_CREATE_NO_DEG_TAG |
+			         LIB_ID_COPY_CD_REFERENCE),
+			        false);
 
 			/* XXX: Is build_shapekey_layers ever even true? This should have crashed long ago... */
 			BLI_assert(!build_shapekey_layers);
@@ -2268,7 +2276,11 @@ static void mesh_calc_modifiers(
 			else {
 				BKE_id_copy_ex(
 				        NULL, &me->id, (ID **)&mesh,
-				        LIB_ID_CREATE_NO_MAIN | LIB_ID_CREATE_NO_USER_REFCOUNT | LIB_ID_CREATE_NO_DEG_TAG, false);
+				        (LIB_ID_CREATE_NO_MAIN |
+				         LIB_ID_CREATE_NO_USER_REFCOUNT |
+				         LIB_ID_CREATE_NO_DEG_TAG |
+				         LIB_ID_COPY_CD_REFERENCE),
+				        false);
 				ASSERT_IS_VALID_MESH(mesh);
 
 				// XXX: port to Mesh if build_shapekey_layers can ever be true
@@ -2439,7 +2451,11 @@ static void mesh_calc_modifiers(
 	else {
 		BKE_id_copy_ex(
 		        NULL, &me->id, (ID **)&final_mesh,
-		        LIB_ID_CREATE_NO_MAIN | LIB_ID_CREATE_NO_USER_REFCOUNT | LIB_ID_CREATE_NO_DEG_TAG, false);
+		        (LIB_ID_CREATE_NO_MAIN |
+		         LIB_ID_CREATE_NO_USER_REFCOUNT |
+		         LIB_ID_CREATE_NO_DEG_TAG |
+		         LIB_ID_COPY_CD_REFERENCE),
+		        false);
 
 		//if (build_shapekey_layers) {
 		//	add_shapekey_layers(final_mesh, me, ob);
@@ -2916,6 +2932,47 @@ static bool calc_modifiers_skip_orco(Depsgraph *depsgraph,
 }
 #endif
 
+static void mesh_finalize_eval(Object *object)
+{
+	if (!DEG_depsgraph_use_copy_on_write()) {
+		return;
+	}
+	Mesh *mesh = (Mesh *)object->data;
+	Mesh *mesh_eval = object->runtime.mesh_eval;
+	/* Special Tweaks for cases when evaluated mesh came from
+	 * BKE_mesh_new_nomain_from_template().
+	 */
+	BLI_strncpy(mesh_eval->id.name, mesh->id.name, sizeof(mesh_eval->id.name));
+	if (mesh_eval->mat != NULL) {
+		MEM_freeN(mesh_eval->mat);
+	}
+	mesh_eval->mat = MEM_dupallocN(mesh->mat);
+	mesh_eval->totcol = mesh->totcol;
+	/* Make evaluated mesh to share same edit mesh pointer as original
+	 * and copied meshes.
+	 */
+	mesh_eval->edit_btmesh = mesh->edit_btmesh;
+	/* Special flags to help debugging and also to allow copy-on-write core
+	 * to understand that on re-evaluation this mesh is to be preserved and
+	 * to be remapped back to copied original mesh when used as object data.
+	 */
+	mesh_eval->id.tag |= LIB_TAG_COPY_ON_WRITE_EVAL;
+	mesh_eval->id.orig_id = &mesh->id;
+	/* Copy autosmooth settings from original mesh.
+	 * This is not done by BKE_mesh_new_nomain_from_template(), so need to take
+	 * extra care here.
+	 */
+	mesh_eval->flag |= (mesh->flag & ME_AUTOSMOOTH);
+	mesh_eval->smoothresh = mesh->smoothresh;
+	/* Replace evaluated object's data with fully evaluated mesh. */
+	/* TODO(sergey): There was statement done by Sybren and Mai that this
+	 * caused modifiers to be applied twice. which is weirtd and shouldn't
+	 * really happen. But since there is no reference to the report, can not
+	 * do much about this.
+	 */
+	object->data = mesh_eval;
+}
+
 static void mesh_build_data(
         struct Depsgraph *depsgraph, Scene *scene, Object *ob, CustomDataMask dataMask,
         const bool build_shapekey_layers, const bool need_mapping)
@@ -2931,12 +2988,21 @@ static void mesh_build_data(
 	}
 #endif
 
-	mesh_calc_modifiers_dm(
+	mesh_calc_modifiers(
 	        depsgraph, scene, ob, NULL, 1, need_mapping, dataMask, -1, true, build_shapekey_layers,
 	        true,
-	        &ob->derivedDeform, &ob->derivedFinal);
+	        &ob->runtime.mesh_deform_eval, &ob->runtime.mesh_eval);
+
+	mesh_finalize_eval(ob);
+
+	ob->derivedDeform = CDDM_from_mesh_ex(ob->runtime.mesh_deform_eval, CD_REFERENCE, CD_MASK_MESH);
+	ob->derivedFinal = CDDM_from_mesh_ex(ob->runtime.mesh_eval, CD_REFERENCE, CD_MASK_MESH);
 
 	DM_set_object_boundbox(ob, ob->derivedFinal);
+	/* TODO(sergey): Convert bounding box calculation to use mesh, then
+	 * we can skip this copy.
+	 */
+	BKE_mesh_texspace_copy_from_object(ob->runtime.mesh_eval, ob);
 
 	ob->derivedFinal->needsFree = 0;
 	ob->derivedDeform->needsFree = 0;

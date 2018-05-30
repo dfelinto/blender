@@ -10,7 +10,6 @@ uniform float lightMultiplier;
 uniform float shadowShift = 0.1;
 uniform mat3 normalWorldMatrix;
 
-uniform vec3 lightDirection; /* light direction in view space */
 
 layout(std140) uniform world_block {
 	WorldData world_data;
@@ -57,22 +56,32 @@ void main()
 
 
 #ifdef V3D_LIGHTING_STUDIO
-#ifdef STUDIOLIGHT_ORIENTATION_CAMERA
+  #ifdef STUDIOLIGHT_ORIENTATION_CAMERA
 	vec3 diffuse_light = get_camera_diffuse_light(world_data, normal_viewport);
-#endif
-#ifdef STUDIOLIGHT_ORIENTATION_WORLD
+  #endif
+
+  #ifdef STUDIOLIGHT_ORIENTATION_WORLD
 	vec3 normal_world = normalWorldMatrix * normal_viewport;
 	vec3 diffuse_light = get_world_diffuse_light(world_data, normal_world);
-#endif
-	vec3 shaded_color = diffuse_light * diffuse_color.rgb;
+  #endif
+
+	vec3 specular_color = get_world_specular_light(world_data, normal_viewport, vec3(0.0, 0.0, 1.0));
+	vec3 shaded_color = diffuse_light * diffuse_color.rgb + specular_color;
 
 #else /* V3D_LIGHTING_STUDIO */
+  #ifdef V3D_SHADING_SPECULAR_HIGHLIGHT
+	vec3 specular_color = get_world_specular_light(world_data, normal_viewport, vec3(0.0, 0.0, 1.0));
+	vec3 shaded_color = diffuse_color.rgb + specular_color;
+
+  #else /* V3D_SHADING_SPECULAR_HIGHLIGHT */
 	vec3 shaded_color = diffuse_color.rgb;
+
+  #endif /* V3D_SHADING_SPECULAR_HIGHLIGHT */
 
 #endif /* V3D_LIGHTING_STUDIO */
 
 #ifdef V3D_SHADING_SHADOW
-	float shadow_mix = step(-shadowShift, dot(normal_viewport, lightDirection));
+	float shadow_mix = step(-shadowShift, dot(normal_viewport, world_data.light_direction_vs.xyz));
 	float light_multiplier;
 	light_multiplier = mix(lightMultiplier, shadowMultiplier, shadow_mix);
 

@@ -92,6 +92,11 @@ extern struct DrawEngineType draw_engine_eevee_type;
 	}                                              \
 } ((void)0)
 
+#define OVERLAY_ENABLED(v3d) ((v3d) && (v3d->flag2 & V3D_RENDER_OVERRIDE) == 0)
+#define LOOK_DEV_MODE_ENABLED(v3d) ((v3d) && (v3d->drawtype == OB_MATERIAL))
+#define LOOK_DEV_OVERLAY_ENABLED(v3d) (LOOK_DEV_MODE_ENABLED(v3d) && OVERLAY_ENABLED(v3d) && ((v3d->overlay.flag & V3D_OVERLAY_LOOK_DEV) > 0))
+#define USE_SCENE_LIGHT(v3d) ((!v3d) || (!LOOK_DEV_MODE_ENABLED(v3d)) || ((LOOK_DEV_MODE_ENABLED(v3d) && (v3d->shading.flag & V3D_SHADING_SCENE_LIGHT))))
+
 /* World shader variations */
 enum {
 	VAR_WORLD_BACKGROUND    = 0,
@@ -207,6 +212,7 @@ typedef struct EEVEE_PassList {
 	struct DRWPass *background_pass;
 	struct DRWPass *update_noise_pass;
 	struct DRWPass *lookdev_pass;
+	struct DRWPass *hair_tf_pass;
 } EEVEE_PassList;
 
 typedef struct EEVEE_FramebufferList {
@@ -937,7 +943,7 @@ void EEVEE_render_draw(EEVEE_Data *vedata, struct RenderEngine *engine, struct R
 void EEVEE_render_update_passes(struct RenderEngine *engine, struct Scene *scene, struct ViewLayer *view_layer);
 
 /** eevee_lookdev.c */
-void EEVEE_lookdev_cache_init(EEVEE_Data *vedata, DRWShadingGroup **grp, GPUShader *shader, DRWPass *pass, EEVEE_LightProbesInfo *pinfo);
+void EEVEE_lookdev_cache_init(EEVEE_Data *vedata, DRWShadingGroup **grp, GPUShader *shader, DRWPass *pass, struct World *world, EEVEE_LightProbesInfo *pinfo);
 void EEVEE_lookdev_draw_background(EEVEE_Data *vedata);
 
 /* Shadow Matrix */

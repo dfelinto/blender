@@ -28,33 +28,48 @@
 #include "BKE_studiolight.h"
 
 #include "DNA_screen_types.h"
+#include "DNA_world_types.h"
 
 #include "eevee_private.h"
 
-void EEVEE_lookdev_cache_init(EEVEE_Data *vedata, DRWShadingGroup **grp, GPUShader *shader, DRWPass *pass, EEVEE_LightProbesInfo *pinfo)
+void EEVEE_lookdev_cache_init(
+        EEVEE_Data *vedata, DRWShadingGroup **grp, GPUShader *shader, DRWPass *pass,
+        World *world, EEVEE_LightProbesInfo *pinfo)
 {
 	EEVEE_StorageList *stl = vedata->stl;
 	const DRWContextState *draw_ctx = DRW_context_state_get();
 	View3D *v3d = draw_ctx->v3d;
-	if (v3d && v3d->drawtype == OB_MATERIAL)
-	{
+	if (LOOK_DEV_MODE_ENABLED(v3d)) {
 		StudioLight *sl = BKE_studiolight_find(v3d->shading.studio_light, STUDIOLIGHT_ORIENTATION_WORLD);
 		if ((sl->flag & STUDIOLIGHT_ORIENTATION_WORLD)) {
 			struct Gwn_Batch *geom = DRW_cache_fullscreen_quad_get();
+			GPUTexture *tex;
 
-			BKE_studiolight_ensure_flag(sl, STUDIOLIGHT_EQUIRECTANGULAR_GPUTEXTURE);
 			*grp = DRW_shgroup_create(shader, pass);
-			GPUTexture *tex = sl->equirectangular_gputexture;
-			DRW_shgroup_uniform_texture(*grp, "image", tex);
-
 			axis_angle_to_mat3_single(stl->g_data->studiolight_matrix, 'Z', v3d->shading.studiolight_rot_z);
 			DRW_shgroup_uniform_mat3(*grp, "StudioLightMatrix", stl->g_data->studiolight_matrix);
 
+			DRW_shgroup_uniform_vec3(*grp, "color", &world->horr, 1);
 			DRW_shgroup_uniform_float(*grp, "backgroundAlpha", &stl->g_data->background_alpha, 1);
 			DRW_shgroup_call_add(*grp, geom, NULL);
+			if (!pinfo) {
+				/* Do not fadeout when doing probe rendering, only when drawing the background */
+				DRW_shgroup_uniform_float(*grp, "studioLightBackground", &v3d->shading.studiolight_background, 1);
+
+				BKE_studiolight_ensure_flag(sl, STUDIOLIGHT_EQUIRECTANGULAR_IRRADIANCE_GPUTEXTURE);
+				tex = sl->equirectangular_irradiance_gputexture;
+			}
+			else {
+				BKE_studiolight_ensure_flag(sl, STUDIOLIGHT_EQUIRECTANGULAR_RADIANCE_GPUTEXTURE);
+				tex = sl->equirectangular_radiance_gputexture;
+			}
+			DRW_shgroup_uniform_texture(*grp, "image", tex);
 
 			/* Do we need to recalc the lightprobes? */
-			if (pinfo && (pinfo->studiolight_index != sl->index || pinfo->studiolight_rot_z != v3d->shading.studiolight_rot_z)) {
+			if (pinfo &&
+			    ((pinfo->studiolight_index != sl->index) ||
+			     (pinfo->studiolight_rot_z != v3d->shading.studiolight_rot_z)))
+			{
 				pinfo->update_world |= PROBE_UPDATE_ALL;
 				pinfo->studiolight_index = sl->index;
 				pinfo->studiolight_rot_z = v3d->shading.studiolight_rot_z;
@@ -74,7 +89,7 @@ void EEVEE_lookdev_draw_background(EEVEE_Data *vedata)
 	
 	const DRWContextState *draw_ctx = DRW_context_state_get();
 
-	if (psl->lookdev_pass && draw_ctx->v3d) {
+	if (psl->lookdev_pass && LOOK_DEV_OVERLAY_ENABLED(draw_ctx->v3d)) {
 		DRW_stats_group_start("Look Dev");
 		CameraParams params;
 		BKE_camera_params_init(&params);
@@ -84,14 +99,20 @@ void EEVEE_lookdev_draw_background(EEVEE_Data *vedata)
 
 		BKE_camera_params_from_view3d(&params, draw_ctx->depsgraph, v3d, rv3d);
 		params.is_ortho = true;
-		params.ortho_scale = 4.0;
+		params.ortho_scale = 4.0f;
 		params.zoom = CAMERA_PARAM_ZOOM_INIT_PERSP;
+		params.offsetx = 0.0f;
+		params.offsety = 0.0f;
+		params.shiftx = 0.0f;
+		params.shifty = 0.0f;
+		params.clipsta = 0.001f;
+		params.clipend = 20.0f;
 		BKE_camera_params_compute_viewplane(&params, ar->winx, ar->winy, 1.0f, 1.0f);
 		BKE_camera_params_compute_matrix(&params);
 
 		const float *viewport_size = DRW_viewport_size_get();
-		int viewport_inset_x = viewport_size[0]/4;
-		int viewport_inset_y = viewport_size[1]/4;
+		int viewport_inset_x = viewport_size[0] / 4;
+		int viewport_inset_y = viewport_size[1] / 4;
 
 		EEVEE_CommonUniformBuffer *common = &sldata->common_data;
 		common->la_num_light = 0;
@@ -121,7 +142,7 @@ void EEVEE_lookdev_draw_background(EEVEE_Data *vedata)
 
 		GPUFrameBuffer *fb = effects->final_fb;
 		GPU_framebuffer_bind(fb);
-		GPU_framebuffer_viewport_set(fb, viewport_size[0]-viewport_inset_x, 0, viewport_inset_x, viewport_inset_y);
+		GPU_framebuffer_viewport_set(fb, viewport_size[0] - viewport_inset_x, 0, viewport_inset_x, viewport_inset_y);
 		DRW_draw_pass(psl->lookdev_pass);
 
 		DRW_viewport_matrix_override_unset_all();

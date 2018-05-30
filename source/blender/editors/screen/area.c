@@ -1753,7 +1753,7 @@ int ED_area_header_switchbutton(const bContext *C, uiBlock *block, int yco)
 	RNA_pointer_create(&(scr->id), &RNA_Area, sa, &areaptr);
 
 	uiDefButR(block, UI_BTYPE_MENU, 0, "", xco, yco, 1.6 * U.widget_unit, U.widget_unit,
-	          &areaptr, "type", 0, 0.0f, 0.0f, 0.0f, 0.0f, "");
+	          &areaptr, "ui_type", 0, 0.0f, 0.0f, 0.0f, 0.0f, "");
 
 	return xco + 1.7 * U.widget_unit;
 }
@@ -2242,8 +2242,7 @@ void ED_region_info_draw_multiline(ARegion *ar, const char *text_array[], float 
 		}
 	}
 
-	rect.ymin = BLI_rcti_size_y(&ar->winrct) - header_height * num_lines;
-	rect.ymax = BLI_rcti_size_y(&ar->winrct);
+	rect.ymin = BLI_rcti_size_y(&rect) - header_height * num_lines;
 
 	/* setup scissor */
 	glGetIntegerv(GL_SCISSOR_BOX, scissor);
