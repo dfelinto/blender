@@ -917,6 +917,8 @@ typedef struct AnimData {
 	ListBase    drivers;    /* standard user-created Drivers/Expressions (used as part of a rig) */
 	ListBase    overrides;  /* temp storage (AnimOverride) of values for settings that are animated (but the value hasn't been keyframed) */
 
+	FCurve **driver_array;  /* runtime data, for depsgraph evaluation */
+
 		/* settings for animation evaluation */
 	int flag;               /* user-defined settings */
 	int recalc;             /* depsgraph recalculation flags */
@@ -961,8 +963,6 @@ typedef enum eAnimData_Flag {
 typedef enum eAnimData_Recalc {
 	ADT_RECALC_DRIVERS      = (1 << 0),
 	ADT_RECALC_ANIM         = (1 << 1),
-	/* Only apply f-curve value if its original DNA value matches current DNA value. */
-	ADT_RECALC_CHECK_ORIG_DNA = (1 << 2),
 	ADT_RECALC_ALL          = (ADT_RECALC_DRIVERS | ADT_RECALC_ANIM)
 } eAnimData_Recalc;
 

@@ -91,9 +91,6 @@ enum {
 extern "C" {
 #endif
 
-bool DEG_depsgraph_use_copy_on_write(void);
-void DEG_depsgraph_disable_copy_on_write(void);
-
 /* ************************************************ */
 /* Depsgraph API */
 
@@ -236,6 +233,12 @@ typedef void (*DEG_EditorUpdateSceneCb)(
 /* Set callbacks which are being called when depsgraph changes. */
 void DEG_editors_set_update_cb(DEG_EditorUpdateIDCb id_func,
                                DEG_EditorUpdateSceneCb scene_func);
+
+/* Evaluation  ----------------------------------- */
+
+bool DEG_is_active(const struct Depsgraph *depsgraph);
+void DEG_make_active(struct Depsgraph *depsgraph);
+void DEG_make_inactive(struct Depsgraph *depsgraph);
 
 /* Evaluation Debug ------------------------------ */
 

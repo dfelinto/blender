@@ -2819,6 +2819,7 @@ static void direct_link_animdata(FileData *fd, AnimData *adt)
 	/* link drivers */
 	link_list(fd, &adt->drivers);
 	direct_link_fcurves(fd, &adt->drivers);
+	adt->driver_array = NULL;
 	
 	/* link overrides */
 	// TODO...
@@ -8310,7 +8311,7 @@ static BHead *read_libblock(FileData *fd, Main *main, BHead *bhead, const short 
 		}
 		else {
 			DEBUG_PRINTF("... in %s (%s): ", main->curlib ? main->curlib->id.name : "<NULL>", main->curlib ? main->curlib->name : "<NULL>");
-			if ((id = BKE_libblock_find_name_ex(main, GS(idname), idname + 2))) {
+			if ((id = BKE_libblock_find_name(main, GS(idname), idname + 2))) {
 				DEBUG_PRINTF("FOUND!\n");
 				/* Even though we found our linked ID, there is no guarantee its address is still the same... */
 				if (id != bhead->old) {

@@ -427,6 +427,12 @@ void DepsgraphRelationBuilder::build_id(ID *id)
 
 void DepsgraphRelationBuilder::build_collection(Object *object, Collection *collection)
 {
+	const int restrict_flag = (graph_->mode == DAG_EVAL_VIEWPORT) ?
+		COLLECTION_RESTRICT_VIEW : COLLECTION_RESTRICT_RENDER;
+	if (collection->flag & restrict_flag) {
+		return;
+	}
+
 	const bool group_done = built_map_.checkIsBuiltAndTag(collection);
 	OperationKey object_local_transform_key(object != NULL ? &object->id : NULL,
 	                                        DEG_NODE_TYPE_TRANSFORM,
@@ -1022,14 +1028,12 @@ void DepsgraphRelationBuilder::build_animdata_curves_targets(
 		/* It is possible that animation is writing to a nested ID datablock,
 		 * need to make sure animation is evaluated after target ID is copied.
 		 */
-		if (DEG_depsgraph_use_copy_on_write()) {
-			const IDDepsNode *id_node_from = operation_from->owner->owner;
-			const IDDepsNode *id_node_to = operation_to->owner->owner;
-			if (id_node_from != id_node_to) {
-				ComponentKey cow_key(id_node_to->id_orig,
-				                     DEG_NODE_TYPE_COPY_ON_WRITE);
-				add_relation(cow_key, adt_key, "Target CoW -> Animation", true);
-			}
+		const IDDepsNode *id_node_from = operation_from->owner->owner;
+		const IDDepsNode *id_node_to = operation_to->owner->owner;
+		if (id_node_from != id_node_to) {
+			ComponentKey cow_key(id_node_to->id_orig,
+			                     DEG_NODE_TYPE_COPY_ON_WRITE);
+			add_relation(cow_key, adt_key, "Target CoW -> Animation", true);
 		}
 	}
 }
@@ -1203,7 +1207,7 @@ void DepsgraphRelationBuilder::build_driver_data(ID *id, FCurve *fcu)
 		 * datablock, which means driver execution should wait for that
 		 * datablock to be copied.
 		 */
-		if (DEG_depsgraph_use_copy_on_write()) {
+		{
 			PointerRNA id_ptr;
 			PointerRNA ptr;
 			RNA_id_pointer_create(id, &id_ptr);
@@ -1880,18 +1884,16 @@ void DepsgraphRelationBuilder::build_lamp(Object *object)
 		build_nested_nodetree(&lamp->id, lamp->nodetree);
 	}
 
-	if (DEG_depsgraph_use_copy_on_write()) {
-		/* Make sure copy on write of lamp data is always properly updated for
-		 * visible lamps.
-		 */
-		OperationKey ob_copy_on_write_key(&object->id,
-		                                  DEG_NODE_TYPE_COPY_ON_WRITE,
-		                                  DEG_OPCODE_COPY_ON_WRITE);
-		OperationKey lamp_copy_on_write_key(&lamp->id,
-		                                    DEG_NODE_TYPE_COPY_ON_WRITE,
-		                                    DEG_OPCODE_COPY_ON_WRITE);
-		add_relation(lamp_copy_on_write_key, ob_copy_on_write_key, "Eval Order");
-	}
+	/* Make sure copy on write of lamp data is always properly updated for
+	 * visible lamps.
+	 */
+	OperationKey ob_copy_on_write_key(&object->id,
+	                                  DEG_NODE_TYPE_COPY_ON_WRITE,
+	                                  DEG_OPCODE_COPY_ON_WRITE);
+	OperationKey lamp_copy_on_write_key(&lamp->id,
+	                                    DEG_NODE_TYPE_COPY_ON_WRITE,
+	                                    DEG_OPCODE_COPY_ON_WRITE);
+	add_relation(lamp_copy_on_write_key, ob_copy_on_write_key, "Eval Order");
 }
 
 void DepsgraphRelationBuilder::build_nodetree(bNodeTree *ntree)
@@ -2079,9 +2081,6 @@ void DepsgraphRelationBuilder::build_copy_on_write_relations()
  */
 void DepsgraphRelationBuilder::build_nested_datablock(ID *owner, ID *id)
 {
-	if (!DEG_depsgraph_use_copy_on_write()) {
-		return;
-	}
 	OperationKey owner_copy_on_write_key(owner,
 	                                     DEG_NODE_TYPE_COPY_ON_WRITE,
 	                                     DEG_OPCODE_COPY_ON_WRITE);
@@ -2136,12 +2135,18 @@ void DepsgraphRelationBuilder::build_copy_on_write_relations(IDDepsNode *id_node
 			/* Component explicitly requests to not add relation. */
 			continue;
 		}
+		int rel_flag = 0;
+		if (comp_node->type == DEG_NODE_TYPE_ANIMATION) {
+			rel_flag |= DEPSREL_FLAG_NO_FLUSH;
+		}
 		/* All entry operations of each component should wait for a proper
 		 * copy of ID.
 		 */
 		OperationDepsNode *op_entry = comp_node->get_entry_operation();
 		if (op_entry != NULL) {
-			graph_->add_new_relation(op_cow, op_entry, "CoW Dependency");
+			DepsRelation *rel = graph_->add_new_relation(
+			        op_cow, op_entry, "CoW Dependency");
+			rel->flag |= rel_flag;
 		}
 		/* All dangling operations should also be executed after copy-on-write. */
 		GHASH_FOREACH_BEGIN(OperationDepsNode *, op_node, comp_node->operations_map)
@@ -2150,22 +2155,27 @@ void DepsgraphRelationBuilder::build_copy_on_write_relations(IDDepsNode *id_node
 				continue;
 			}
 			if (op_node->inlinks.size() == 0) {
-				graph_->add_new_relation(op_cow, op_node, "CoW Dependency");
+				DepsRelation *rel = graph_->add_new_relation(
+				        op_cow, op_node, "CoW Dependency");
+				rel->flag |= rel_flag;
 			}
 			else {
 				bool has_same_comp_dependency = false;
-				foreach (DepsRelation *rel, op_node->inlinks) {
-					if (rel->from->type != DEG_NODE_TYPE_OPERATION) {
+				foreach (DepsRelation *rel_current, op_node->inlinks) {
+					if (rel_current->from->type != DEG_NODE_TYPE_OPERATION) {
 						continue;
 					}
-					OperationDepsNode *op_node_from = (OperationDepsNode *)rel->from;
+					OperationDepsNode *op_node_from =
+					        (OperationDepsNode *)rel_current->from;
 					if (op_node_from->owner == op_node->owner) {
 						has_same_comp_dependency = true;
 						break;
 					}
 				}
 				if (!has_same_comp_dependency) {
-					graph_->add_new_relation(op_cow, op_node, "CoW Dependency");
+					DepsRelation *rel = graph_->add_new_relation(
+					        op_cow, op_node, "CoW Dependency");
+					rel->flag |= rel_flag;
 				}
 			}
 		}

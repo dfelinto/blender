@@ -150,9 +150,6 @@ DepsgraphNodeBuilder::~DepsgraphNodeBuilder()
 
 IDDepsNode *DepsgraphNodeBuilder::add_id_node(ID *id)
 {
-	if (!DEG_depsgraph_use_copy_on_write()) {
-		return graph_->add_id_node(id);
-	}
 	IDDepsNode *id_node = NULL;
 	ID *id_cow = (ID *)BLI_ghash_lookup(cow_id_hash_, id);
 	if (id_cow != NULL) {
@@ -324,22 +321,21 @@ ID *DepsgraphNodeBuilder::ensure_cow_id(ID *id_orig)
 
 /* **** Build functions for entity nodes **** */
 
-void DepsgraphNodeBuilder::begin_build() {
-	if (DEG_depsgraph_use_copy_on_write()) {
-		/* Store existing copy-on-write versions of datablock, so we can re-use
-		 * them for new ID nodes.
-		 */
-		cow_id_hash_ = BLI_ghash_ptr_new("Depsgraph id hash");
-		foreach (IDDepsNode *id_node, graph_->id_nodes) {
-			if (deg_copy_on_write_is_expanded(id_node->id_cow)) {
-				if (id_node->id_orig == id_node->id_cow) {
-					continue;
-				}
-				BLI_ghash_insert(cow_id_hash_,
-				                 id_node->id_orig,
-				                 id_node->id_cow);
-				id_node->id_cow = NULL;
+void DepsgraphNodeBuilder::begin_build()
+{
+	/* Store existing copy-on-write versions of datablock, so we can re-use
+	 * them for new ID nodes.
+	 */
+	cow_id_hash_ = BLI_ghash_ptr_new("Depsgraph id hash");
+	foreach (IDDepsNode *id_node, graph_->id_nodes) {
+		if (deg_copy_on_write_is_expanded(id_node->id_cow)) {
+			if (id_node->id_orig == id_node->id_cow) {
+				continue;
 			}
+			BLI_ghash_insert(cow_id_hash_,
+			                 id_node->id_orig,
+			                 id_node->id_cow);
+			id_node->id_cow = NULL;
 		}
 	}
 
@@ -424,6 +420,13 @@ void DepsgraphNodeBuilder::build_collection(Collection *collection)
 	if (built_map_.checkIsBuiltAndTag(collection)) {
 		return;
 	}
+
+	const int restrict_flag = (graph_->mode == DAG_EVAL_VIEWPORT) ?
+		COLLECTION_RESTRICT_VIEW : COLLECTION_RESTRICT_RENDER;
+	if (collection->flag & restrict_flag) {
+		return;
+	}
+
 	/* Build collection objects. */
 	LISTBASE_FOREACH (CollectionObject *, cob, &collection->gobject) {
 		build_object(-1, cob->ob, DEG_ID_LINKED_INDIRECTLY);
@@ -704,9 +707,10 @@ void DepsgraphNodeBuilder::build_animdata(ID *id)
 		}
 
 		/* drivers */
+		int driver_index = 0;
 		LISTBASE_FOREACH (FCurve *, fcu, &adt->drivers) {
 			/* create driver */
-			build_driver(id, fcu);
+			build_driver(id, fcu, driver_index++);
 		}
 	}
 }
@@ -715,16 +719,21 @@ void DepsgraphNodeBuilder::build_animdata(ID *id)
  * Build graph node(s) for Driver
  * \param id: ID-Block that driver is attached to
  * \param fcu: Driver-FCurve
+ * \param driver_index: Index in animation data drivers list
  */
-void DepsgraphNodeBuilder::build_driver(ID *id, FCurve *fcurve)
+void DepsgraphNodeBuilder::build_driver(ID *id, FCurve *fcurve, int driver_index)
 {
-	ID *id_cow = get_cow_id(id);
-
 	/* Create data node for this driver */
-	/* TODO(sergey): Shall we use COW of fcu itself here? */
+	ID *id_cow = get_cow_id(id);
+	ChannelDriver *driver_orig = fcurve->driver;
+
+	/* TODO(sergey): ideally we could pass the COW of fcu, but since it
+	 * has not yet been allocated at this point we can't. As a workaround
+	 * the animation systems allocates an array so we can do a fast lookup
+	 * with the driver index. */
 	ensure_operation_node(id,
 	                      DEG_NODE_TYPE_PARAMETERS,
-	                      function_bind(BKE_animsys_eval_driver, _1, id_cow, fcurve),
+	                      function_bind(BKE_animsys_eval_driver, _1, id_cow, driver_index, driver_orig),
 	                      DEG_OPCODE_DRIVER,
 	                      fcurve->rna_path ? fcurve->rna_path : "",
 	                      fcurve->array_index);
