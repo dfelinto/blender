@@ -76,11 +76,6 @@ class VIEWLAYER_PT_eevee_layer_passes(ViewLayerButtonsPanel, Panel):
         row.prop(view_layer, "use_pass_subsurface_color", text="Color", toggle=True)
 
 
-class VIEWLAYER_UL_override_set_collections(UIList):
-    def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
-        layout.row().label(text=item.name, icon_value=icon)
-
-
 class VIEWLAYER_UL_override_sets(UIList):
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
         row = layout.row(align=True)
@@ -88,67 +83,10 @@ class VIEWLAYER_UL_override_sets(UIList):
         row.prop(item, "name", text="", index=index, icon_value=icon, emboss=False)
 
 
-class VIEWLAYER_OT_overrides(ViewLayerButtonsPanel, Panel):
-    bl_label = "Overrides"
-    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_CLAY', 'BLENDER_EEVEE', 'BLENDER_WORKBENCH'}
-
-    def draw(self, context):
-        layout = self.layout
-
-        scene = context.scene
-        view_layer = context.view_layer
-
-        row = layout.row(align=True)
-        row.label(text="Override Sets")
-
-        row = layout.row()
-        col = row.column()
-
-        col.template_list("VIEWLAYER_UL_override_sets", "name", view_layer, "override_sets", view_layer.override_sets, "active_index", rows=2)
-
-        col = row.column(align=True)
-        col.operator("scene.view_layer_override_set_add", icon='ZOOMIN', text="")
-        col.operator("scene.view_layer_override_set_remove", icon='ZOOMOUT', text="")
-
-        override_set = view_layer.override_sets.active
-        if not override_set:
-            return
-
-        row = layout.row(align=True)
-        row.prop(scene, "show_view_layer_overrides_scene_property", emboss=False, text="")
-        row.label(text="Scene Properties")
-
-        if scene.show_view_layer_overrides_scene_property:
-            if override_set.scene_properties:
-                for i, dyn_prop in enumerate(override_set.scene_properties):
-                    self._draw_property(layout, dyn_prop, i, 'SCENE')
-            else:
-                layout.label(text="No scene property")
-
-        row = layout.row(align=True)
-        row.prop(scene, "show_view_layer_overrides_affected_collections", emboss=False, text="")
-        row.label(text="Affected Collections")
-
-        if scene.show_view_layer_overrides_affected_collections:
-            row = layout.row()
-            col = row.column()
-
-            col.template_list("VIEWLAYER_UL_override_set_collections", "", override_set, "affected_collections", override_set.affected_collections, "active_index", rows=1)
-
-            col = row.column(align=True)
-            col.operator("scene.override_set_collection_link", icon='ZOOMIN', text="")
-            col.operator("scene.override_set_collection_unlink", icon='ZOOMOUT', text="")
-
-        row = layout.row(align=True)
-        row.prop(scene, "show_view_layer_overrides_collections_property", emboss=False, text="")
-        row.label(text="Collection Properties")
-
-        if scene.show_view_layer_overrides_collections_property:
-            if override_set.collection_properties:
-                for i, dyn_prop in enumerate(override_set.collection_properties):
-                    self._draw_property(layout, dyn_prop, i, 'COLLECTION')
-            else:
-                layout.label(text="No collection property")
+class ViewLayerOverridesPanel():
+    @classmethod
+    def poll(cls, context):
+        return context.view_layer.override_sets.active
 
     @staticmethod
     def _icon_from_id_type(id_type):
@@ -207,12 +145,99 @@ class VIEWLAYER_OT_overrides(ViewLayerButtonsPanel, Panel):
         ops.property_type = property_type
 
 
+class VIEWLAYER_OT_overrides(ViewLayerButtonsPanel, Panel):
+    bl_label = "Overrides"
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_CLAY', 'BLENDER_EEVEE', 'BLENDER_WORKBENCH'}
+
+    def draw(self, context):
+        layout = self.layout
+
+        scene = context.scene
+        view_layer = context.view_layer
+
+        row = layout.row(align=True)
+        row.label(text="Override Sets")
+
+        row = layout.row()
+        col = row.column()
+
+        col.template_list("VIEWLAYER_UL_override_sets", "name", view_layer, "override_sets", view_layer.override_sets, "active_index", rows=2)
+
+        col = row.column(align=True)
+        col.operator("scene.view_layer_override_set_add", icon='ZOOMIN', text="")
+        col.operator("scene.view_layer_override_set_remove", icon='ZOOMOUT', text="")
+
+        override_set = view_layer.override_sets.active
+
+
+class VIEWLAYER_OT_overrides_scene_properties(ViewLayerOverridesPanel, ViewLayerButtonsPanel, Panel):
+    bl_label = "Scene Properties"
+    bl_parent_id = "VIEWLAYER_OT_overrides"
+    bl_options = {'DEFAULT_CLOSED'}
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_CLAY', 'BLENDER_EEVEE', 'BLENDER_WORKBENCH'}
+
+    def draw(self, context):
+        layout = self.layout
+        override_set = context.view_layer.override_sets.active
+
+        if override_set.scene_properties:
+            for i, dyn_prop in enumerate(override_set.scene_properties):
+                self._draw_property(layout, dyn_prop, i, 'SCENE')
+        else:
+            layout.label(text="No scene property")
+
+
+class VIEWLAYER_UL_override_set_collections(UIList):
+    def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
+        layout.row().label(text=item.name, icon_value=icon)
+
+
+class VIEWLAYER_OT_overrides_affected_collections(ViewLayerOverridesPanel, ViewLayerButtonsPanel, Panel):
+    bl_label = "Affected Collections"
+    bl_parent_id = "VIEWLAYER_OT_overrides"
+    bl_options = {'DEFAULT_CLOSED'}
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_CLAY', 'BLENDER_EEVEE', 'BLENDER_WORKBENCH'}
+
+    def draw(self, context):
+        layout = self.layout
+        override_set = context.view_layer.override_sets.active
+
+        row = layout.row()
+        col = row.column()
+
+        col.template_list("VIEWLAYER_UL_override_set_collections", "", override_set, "affected_collections", override_set.affected_collections, "active_index", rows=1)
+
+        col = row.column(align=True)
+        col.operator("scene.override_set_collection_link", icon='ZOOMIN', text="")
+        col.operator("scene.override_set_collection_unlink", icon='ZOOMOUT', text="")
+
+
+class VIEWLAYER_OT_overrides_collection_properties(ViewLayerOverridesPanel, ViewLayerButtonsPanel, Panel):
+    bl_label = "Collection Properties"
+    bl_parent_id = "VIEWLAYER_OT_overrides"
+    bl_options = {'DEFAULT_CLOSED'}
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_CLAY', 'BLENDER_EEVEE', 'BLENDER_WORKBENCH'}
+
+    def draw(self, context):
+        layout = self.layout
+        override_set = context.view_layer.override_sets.active
+
+        if override_set.collection_properties:
+            for i, dyn_prop in enumerate(override_set.collection_properties):
+                self._draw_property(layout, dyn_prop, i, 'COLLECTION')
+        else:
+            layout.label(text="No collection property")
+
+
 classes = (
     VIEWLAYER_PT_layer,
     VIEWLAYER_PT_eevee_layer_passes,
     VIEWLAYER_UL_override_set_collections,
     VIEWLAYER_UL_override_sets,
     VIEWLAYER_OT_overrides,
+    VIEWLAYER_OT_overrides_scene_properties,
+    VIEWLAYER_OT_overrides_affected_collections,
+    VIEWLAYER_OT_overrides_collection_properties,
 )
 
 if __name__ == "__main__":  # only for live edit.
