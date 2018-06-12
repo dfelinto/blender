@@ -71,7 +71,8 @@ GHOST_ContextWGL::GHOST_ContextWGL(
       m_contextFlags(contextFlags),
       m_alphaBackground(alphaBackground),
       m_contextResetNotificationStrategy(contextResetNotificationStrategy),
-      m_hGLRC(NULL)
+      m_hGLRC(NULL),
+      m_init(false)
 #ifndef NDEBUG
       ,
       m_dummyVendor(NULL),
@@ -145,6 +146,10 @@ GHOST_TSuccess GHOST_ContextWGL::getSwapInterval(int &intervalOut)
 
 GHOST_TSuccess GHOST_ContextWGL::activateDrawingContext()
 {
+	if (m_init == false) {
+		initContext();
+	}
+
 	if (WIN32_CHK(::wglMakeCurrent(m_hDC, m_hGLRC))) {
 		return GHOST_kSuccess;
 	}
@@ -958,8 +963,32 @@ GHOST_TSuccess GHOST_ContextWGL::initializeDrawingContext()
 		goto error;
 	}
 
+	/* Only init the non-offscreen context directly */
+	if (!create_hDC) {
+		initContext();
+
+		initClearGL();
+		::SwapBuffers(m_hDC);
+	}
+
+	return GHOST_kSuccess;
+error:
+	if (m_dummyPbuffer) {
+		if (m_hDC != NULL)
+			WIN32_CHK(::wglReleasePbufferDCARB(m_dummyPbuffer, m_hDC));
+
+		WIN32_CHK(::wglDestroyPbufferARB(m_dummyPbuffer));
+	}
+	::wglMakeCurrent(prevHDC, prevHGLRC);
+	return GHOST_kFailure;
+
+}
+
+
+GHOST_TSuccess GHOST_ContextWGL::initContext()
+{
 	if (!WIN32_CHK(::wglMakeCurrent(m_hDC, m_hGLRC))) {
-		goto error;
+		return GHOST_kFailure;
 	}
 
 	initContextGLEW();
@@ -973,8 +1002,7 @@ GHOST_TSuccess GHOST_ContextWGL::initializeDrawingContext()
 		glEnable(GL_POINT_SPRITE);
 	}
 
-	initClearGL();
-	::SwapBuffers(m_hDC);
+	m_init = true;
 
 #ifndef NDEBUG
 	const char *vendor = reinterpret_cast<const char*>(glGetString(GL_VENDOR));
@@ -989,16 +1017,6 @@ GHOST_TSuccess GHOST_ContextWGL::initializeDrawingContext()
 #endif
 
 	return GHOST_kSuccess;
-error:
-	if (m_dummyPbuffer) {
-		if (m_hDC != NULL)
-			WIN32_CHK(::wglReleasePbufferDCARB(m_dummyPbuffer, m_hDC));
-
-		WIN32_CHK(::wglDestroyPbufferARB(m_dummyPbuffer));
-	}
-	::wglMakeCurrent(prevHDC, prevHGLRC);
-	return GHOST_kFailure;
-
 }
 
 

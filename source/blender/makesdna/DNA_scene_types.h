@@ -1371,7 +1371,6 @@ typedef struct DisplaySafeAreas {
 typedef struct SceneDisplay {
 	float light_direction[3];      /* light direction for shadows/highlight */
 	float shadow_shift;
-	float roughness;               /* Roughness for the specular highlights */
 
 	int matcap_icon;
 	int matcap_type;
@@ -1386,7 +1385,6 @@ typedef struct SceneDisplay {
 	float matcap_hair_brightness_randomness;
 	int matcap_ssao_samples;
 
-	int pad;
 } SceneDisplay;
 
 typedef struct SceneEEVEE {
@@ -1625,7 +1623,7 @@ enum {
 /* #define R_DEPRECATED		0x10000 */
 /* #define R_RECURS_PROTECTION	0x20000 */
 #define R_TEXNODE_PREVIEW	0x40000
-#define R_VIEWPORT_PREVIEW	0x80000
+/* #define R_VIEWPORT_PREVIEW	0x80000 */
 #define R_EXR_CACHE_FILE	0x100000
 #define R_MULTIVIEW			0x200000
 

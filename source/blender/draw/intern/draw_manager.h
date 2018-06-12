@@ -126,6 +126,7 @@ typedef struct DRWCallState {
 
 typedef enum {
 	DRW_CALL_SINGLE,                 /* A single batch */
+	DRW_CALL_RANGE,                  /* Like single but only draw a range of vertices/indices. */
 	DRW_CALL_INSTANCES,              /* Draw instances without any instancing attribs. */
 	DRW_CALL_GENERATE,               /* Uses a callback to draw with any number of batches. */
 	DRW_CALL_PROCEDURAL,             /* Generate a drawcall without any Gwn_Batch. */
@@ -139,6 +140,10 @@ typedef struct DRWCall {
 		struct { /* type == DRW_CALL_SINGLE */
 			Gwn_Batch *geometry;
 		} single;
+		struct { /* type == DRW_CALL_RANGE */
+			Gwn_Batch *geometry;
+			uint start, count;
+		} range;
 		struct { /* type == DRW_CALL_INSTANCES */
 			Gwn_Batch *geometry;
 			/* Count can be adjusted between redraw. If needed, we can add fixed count. */
@@ -177,6 +182,8 @@ typedef enum {
 	DRW_UNIFORM_BLOCK_PERSIST
 } DRWUniformType;
 
+#define MAX_UNIFORM_NAME 13
+
 struct DRWUniform {
 	DRWUniform *next; /* single-linked list */
 	union {
@@ -190,6 +197,9 @@ struct DRWUniform {
 	char type; /* DRWUniformType */
 	char length; /* cannot be more than 16 */
 	char arraysize; /* cannot be more than 16 too */
+#ifndef NDEBUG
+	char name[MAX_UNIFORM_NAME];
+#endif
 };
 
 typedef enum {
@@ -324,6 +334,7 @@ typedef struct DRWManager {
 		uint is_image_render : 1;
 		uint is_scene_render : 1;
 		uint draw_background : 1;
+		uint draw_text : 1;
 	} options;
 
 	/* Current rendering context */
@@ -358,11 +369,11 @@ typedef struct DRWManager {
 
 	/* ---------- Nothing after this point is cleared after use ----------- */
 
-	/* ogl_context serves as the offset for clearing only
+	/* gl_context serves as the offset for clearing only
 	 * the top portion of the struct so DO NOT MOVE IT! */
-	void *ogl_context;                /* Unique ghost context used by the draw manager. */
+	void *gl_context;                /* Unique ghost context used by the draw manager. */
 	Gwn_Context *gwn_context;
-	ThreadMutex ogl_context_mutex;    /* Mutex to lock the drw manager and avoid concurent context usage. */
+	ThreadMutex gl_context_mutex;    /* Mutex to lock the drw manager and avoid concurent context usage. */
 
 	/** GPU Resource State: Memory storage between drawing. */
 	struct {

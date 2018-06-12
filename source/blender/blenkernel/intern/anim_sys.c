@@ -141,7 +141,7 @@ AnimData *BKE_animdata_from_id(ID *id)
 
 /* Add AnimData to the given ID-block. In order for this to work, we assume that 
  * the AnimData pointer is stored immediately after the given ID-block in the struct,
- * as per IdAdtTemplate. Also note that 
+ * as per IdAdtTemplate. Also note that
  */
 AnimData *BKE_animdata_add_id(ID *id)
 {
@@ -423,8 +423,8 @@ static bool animpath_matches_basepath(const char path[], const char basepath[])
 }
 
 /* Move F-Curves in src action to dst action, setting up all the necessary groups 
- * for this to happen, but only if the F-Curves being moved have the appropriate 
- * "base path". 
+ * for this to happen, but only if the F-Curves being moved have the appropriate
+ * "base path".
  *	- This is used when data moves from one datablock to another, causing the
  *	  F-Curves to need to be moved over too
  */
@@ -2660,7 +2660,7 @@ static void animsys_evaluate_nla(Depsgraph *depsgraph, ListBase *echannels, Poin
 }
 
 /* NLA Evaluation function (mostly for use through do_animdata) 
- *	- All channels that will be affected are not cleared anymore. Instead, we just evaluate into 
+ *	- All channels that will be affected are not cleared anymore. Instead, we just evaluate into
  *		some temp channels, where values can be accumulated in one go.
  */
 static void animsys_calculate_nla(Depsgraph *depsgraph, PointerRNA *ptr, AnimData *adt, float ctime)
@@ -2714,7 +2714,7 @@ static void animsys_evaluate_overrides(PointerRNA *ptr, AnimData *adt)
 /* Evaluation System - Public API */
 
 /* Overview of how this system works:
- *	1) Depsgraph sorts data as necessary, so that data is in an order that means 
+ *	1) Depsgraph sorts data as necessary, so that data is in an order that means
  *		that all dependencies are resolved before dependents.
  *	2) All normal animation is evaluated, so that drivers have some basis values to
  *		work with
@@ -2722,33 +2722,33 @@ static void animsys_evaluate_overrides(PointerRNA *ptr, AnimData *adt)
  *			which modify the effects of the NLA-stacks
  *		b.	Active Action is evaluated as per normal, on top of the results of the NLA tracks
  *
- * --------------< often in a separate phase... >------------------ 
+ * --------------< often in a separate phase... >------------------
  *
  *	3) Drivers/expressions are evaluated on top of this, in an order where dependencies are
- *		resolved nicely. 
+ *		resolved nicely.
  *	   Note: it may be necessary to have some tools to handle the cases where some higher-level
  *		drivers are added and cause some problematic dependencies that didn't exist in the local levels...
  *
- * --------------< always executed >------------------ 
+ * --------------< always executed >------------------
  *
  * Maintenance of editability of settings (XXX):
  *	In order to ensure that settings that are animated can still be manipulated in the UI without requiring
- *	that keyframes are added to prevent these values from being overwritten, we use 'overrides'. 
+ *	that keyframes are added to prevent these values from being overwritten, we use 'overrides'.
  *
  * Unresolved things:
  *	- Handling of multi-user settings (i.e. time-offset, group-instancing) -> big cache grids or nodal system? but stored where?
- *	- Multiple-block dependencies (i.e. drivers for settings are in both local and higher levels) -> split into separate lists? 
+ *	- Multiple-block dependencies (i.e. drivers for settings are in both local and higher levels) -> split into separate lists?
  *
  * Current Status:
- *	- Currently (as of September 2009), overrides we haven't needed to (fully) implement overrides. 
+ *	- Currently (as of September 2009), overrides we haven't needed to (fully) implement overrides.
  *    However, the code for this is relatively harmless, so is left in the code for now.
  */
 
 /* Evaluation loop for evaluation animation data 
  *
  * This assumes that the animation-data provided belongs to the ID block in question,
- * and that the flags for which parts of the anim-data settings need to be recalculated 
- * have been set already by the depsgraph. Now, we use the recalc 
+ * and that the flags for which parts of the anim-data settings need to be recalculated
+ * have been set already by the depsgraph. Now, we use the recalc
  */
 void BKE_animsys_evaluate_animdata(Depsgraph *depsgraph, Scene *scene, ID *id, AnimData *adt, float ctime, short recalc)
 {
@@ -2970,7 +2970,7 @@ void BKE_animsys_update_driver_array(ID *id)
 		BLI_assert(!adt->driver_array);
 
 		int num_drivers = BLI_listbase_count(&adt->drivers);
-		adt->driver_array = MEM_mallocN(sizeof(FCurve*) * num_drivers, "adt->driver_array");
+		adt->driver_array = MEM_mallocN(sizeof(FCurve *) * num_drivers, "adt->driver_array");
 
 		int driver_index = 0;
 		for (FCurve *fcu = adt->drivers.first; fcu; fcu = fcu->next) {
@@ -2990,7 +2990,7 @@ void BKE_animsys_eval_driver(Depsgraph *depsgraph,
 
 	/* Lookup driver, accelerated with driver array map. */
 	const AnimData *adt = BKE_animdata_from_id(id);
-	FCurve* fcu;
+	FCurve *fcu;
 
 	if (adt->driver_array) {
 		fcu = adt->driver_array[driver_index];
@@ -3017,7 +3017,7 @@ void BKE_animsys_eval_driver(Depsgraph *depsgraph,
 			PathResolvedRNA anim_rna;
 			if (animsys_store_rna_setting(&id_ptr, NULL, fcu->rna_path, fcu->array_index, &anim_rna)) {
 				const float ctime = DEG_get_ctime(depsgraph);
-				const float curval = calculate_fcurve(&anim_rna, fcu, ctime);
+				const float curval = evaluate_fcurve_driver(&anim_rna, fcu, driver_orig, ctime);
 				ok = animsys_write_rna_setting(&anim_rna, curval);
 				if (ok && DEG_is_active(depsgraph)) {
 					animsys_write_orig_anim_rna(&id_ptr, NULL, fcu, curval);

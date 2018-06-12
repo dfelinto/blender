@@ -140,6 +140,7 @@
 #include "BKE_material.h"
 #include "BKE_main.h" // for Main
 #include "BKE_mesh.h" // for ME_ defines (patching)
+#include "BKE_mesh_runtime.h"
 #include "BKE_modifier.h"
 #include "BKE_multires.h"
 #include "BKE_node.h" // for tree type defines
@@ -1680,7 +1681,6 @@ void blo_end_image_pointer_map(FileData *fd, Main *oldmain)
 		if (ima->cache == NULL) {
 			ima->tpageflag &= ~IMA_GLBIND_IS_DATA;
 			for (i = 0; i < TEXTARGET_COUNT; i++) {
-				ima->bindcode[i] = 0;
 				ima->gputexture[i] = NULL;
 			}
 			ima->rr = NULL;
@@ -2716,7 +2716,7 @@ static void lib_link_nladata(FileData *fd, ID *id, ListBase *list)
 }
 
 /* This handles Animato NLA-Strips linking 
- * NOTE: this assumes that link_list has already been called on the list 
+ * NOTE: this assumes that link_list has already been called on the list
  */
 static void direct_link_nladata_strips(FileData *fd, ListBase *list)
 {
@@ -2965,6 +2965,10 @@ static void direct_link_motionpath(FileData *fd, bMotionPath *mpath)
 	
 	/* relink points cache */
 	mpath->points = newdataadr(fd, mpath->points);
+
+	mpath->points_vbo = NULL;
+	mpath->batch_line = NULL;
+	mpath->batch_points = NULL;
 }
 
 /* ************ READ NODE TREE *************** */
@@ -3911,7 +3915,6 @@ static void direct_link_image(FileData *fd, Image *ima)
 	if (!ima->cache) {
 		ima->tpageflag &= ~IMA_GLBIND_IS_DATA;
 		for (int i = 0; i < TEXTARGET_COUNT; i++) {
-			ima->bindcode[i] = 0;
 			ima->gputexture[i] = NULL;
 		}
 		ima->rr = NULL;
@@ -6435,19 +6438,24 @@ static void direct_link_gpencil(FileData *fd, bGPdata *gpd)
 
 /* *********** READ AREA **************** */
 
-static void direct_link_region(FileData *fd, ARegion *ar, int spacetype)
+static void direct_link_panel_list(FileData *fd, ListBase *lb)
 {
-	Panel *pa;
-	uiList *ui_list;
+	link_list(fd, lb);
 
-	link_list(fd, &ar->panels);
-
-	for (pa = ar->panels.first; pa; pa = pa->next) {
+	for (Panel *pa = lb->first; pa; pa = pa->next) {
 		pa->paneltab = newdataadr(fd, pa->paneltab);
 		pa->runtime_flag = 0;
 		pa->activedata = NULL;
 		pa->type = NULL;
+		direct_link_panel_list(fd, &pa->children);
 	}
+}
+
+static void direct_link_region(FileData *fd, ARegion *ar, int spacetype)
+{
+	uiList *ui_list;
+
+	direct_link_panel_list(fd, &ar->panels);
 
 	link_list(fd, &ar->panels_category_active);
 
@@ -8522,11 +8530,11 @@ static BHead *read_global(BlendFileData *bfd, FileData *fd, BHead *bhead)
 	if (bfd->filename[0] == 0) {
 		if (fd->fileversion < 265 || (fd->fileversion == 265 && fg->subversion < 1))
 			if ((G.fileflags & G_FILE_RECOVER)==0)
-				BLI_strncpy(bfd->filename, bfd->main->name, sizeof(bfd->filename));
+				BLI_strncpy(bfd->filename, BKE_main_blendfile_path(bfd->main), sizeof(bfd->filename));
 		
 		/* early 2.50 version patch - filename not in FileGlobal struct at all */
 		if (fd->fileversion <= 250)
-			BLI_strncpy(bfd->filename, bfd->main->name, sizeof(bfd->filename));
+			BLI_strncpy(bfd->filename, BKE_main_blendfile_path(bfd->main), sizeof(bfd->filename));
 	}
 	
 	if (G.fileflags & G_FILE_RECOVER)
@@ -8866,6 +8874,7 @@ BlendFileData *blo_read_file_internal(FileData *fd, const char *filepath)
 	/* Now that all our data-blocks are loaded, we can re-generate overrides from their references. */
 	if (fd->memfile == NULL) {
 		/* Do not apply in undo case! */
+		lib_verify_nodetree(bfd->main, true);  /* Needed to ensure we have typeinfo in nodes... */
 		BKE_main_override_static_update(bfd->main);
 		BKE_collections_after_lib_link(bfd->main);
 	}
@@ -10046,13 +10055,15 @@ static void add_loose_objects_to_scene(
 		if ((ob->id.tag & LIB_TAG_INDIRECT) && (ob->id.tag & LIB_TAG_PRE_EXISTING) == 0) {
 			bool do_it = false;
 
-			if (ob->id.us == 0) {
-				do_it = true;
-			}
-			else if (!is_link && (ob->id.lib == lib) && (object_in_any_scene(bmain, ob) == 0)) {
-				/* When appending, make sure any indirectly loaded objects get a base, else they cant be accessed at all
-				 * (see T27437). */
-				do_it = true;
+			if (!is_link) {
+				if (ob->id.us == 0) {
+					do_it = true;
+				}
+				else if ((ob->id.lib == lib) && (object_in_any_scene(bmain, ob) == 0)) {
+					/* When appending, make sure any indirectly loaded objects get a base, else they cant be accessed at all
+					 * (see T27437). */
+					do_it = true;
+				}
 			}
 
 			if (do_it) {
@@ -10109,6 +10120,7 @@ static void add_collections_to_scene(
 
 				/* Assign the collection. */
 				ob->dup_group = collection;
+				id_us_plus(&collection->id);
 				ob->transflag |= OB_DUPLICOLLECTION;
 				copy_v3_v3(ob->loc, scene->cursor.location);
 			}
@@ -10364,7 +10376,7 @@ static Main *library_link_begin(Main *mainvar, FileData **fd, const char *filepa
 	blo_split_main((*fd)->mainlist, mainvar);
 	
 	/* which one do we need? */
-	mainl = blo_find_main(*fd, filepath, G.main->name);
+	mainl = blo_find_main(*fd, filepath, BKE_main_blendfile_path(mainvar));
 	
 	/* needed for do_version */
 	mainl->versionfile = (*fd)->fileversion;
@@ -10439,7 +10451,7 @@ static void library_link_end(Main *mainl, FileData **fd, const short flag, Main 
 		BLI_strncpy(curlib->name, curlib->filepath, sizeof(curlib->name));
 
 		/* uses current .blend file as reference */
-		BLI_path_rel(curlib->name, G.main->name);
+		BLI_path_rel(curlib->name, BKE_main_blendfile_path_from_global());
 	}
 
 	blo_join_main((*fd)->mainlist);
@@ -10469,7 +10481,7 @@ static void library_link_end(Main *mainl, FileData **fd, const short flag, Main 
 	BKE_main_id_tag_all(mainvar, LIB_TAG_NEW, false);
 
 	lib_verify_nodetree(mainvar, false);
-	fix_relpaths_library(G.main->name, mainvar); /* make all relative paths, relative to the open blend file */
+	fix_relpaths_library(BKE_main_blendfile_path(mainvar), mainvar); /* make all relative paths, relative to the open blend file */
 
 	/* Give a base to loose objects and collections.
 	 * Only directly linked objects & collections are instantiated by `BLO_library_link_named_part_ex()` & co,
@@ -10590,7 +10602,7 @@ static void read_libraries(FileData *basefd, ListBase *mainlist)
 						while (fd == NULL) {
 							char newlib_path[FILE_MAX] = {0};
 							printf("Missing library...'\n");
-							printf("	current file: %s\n", G.main->name);
+							printf("	current file: %s\n", BKE_main_blendfile_path_from_global());
 							printf("	absolute lib: %s\n", mainptr->curlib->filepath);
 							printf("	relative lib: %s\n", mainptr->curlib->name);
 							printf("  enter a new path:\n");
@@ -10598,7 +10610,7 @@ static void read_libraries(FileData *basefd, ListBase *mainlist)
 							if (scanf("%1023s", newlib_path) > 0) {  /* Warning, keep length in sync with FILE_MAX! */
 								BLI_strncpy(mainptr->curlib->name, newlib_path, sizeof(mainptr->curlib->name));
 								BLI_strncpy(mainptr->curlib->filepath, newlib_path, sizeof(mainptr->curlib->filepath));
-								BLI_cleanup_path(G.main->name, mainptr->curlib->filepath);
+								BLI_cleanup_path(BKE_main_blendfile_path_from_global(), mainptr->curlib->filepath);
 								
 								fd = blo_openblenderfile(mainptr->curlib->filepath, basefd->reports);
 

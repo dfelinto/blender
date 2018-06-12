@@ -72,6 +72,8 @@ extern struct GPUUniformBuffer *globals_ubo; /* draw_common.c */
 extern struct GPUTexture *globals_ramp; /* draw_common.c */
 extern GlobalsUboStorage ts;
 
+extern char datatoc_object_outline_prepass_vert_glsl[];
+extern char datatoc_object_outline_prepass_geom_glsl[];
 extern char datatoc_object_outline_prepass_frag_glsl[];
 extern char datatoc_object_outline_resolve_frag_glsl[];
 extern char datatoc_object_outline_detect_frag_glsl[];
@@ -250,9 +252,11 @@ static struct {
 
 	/* fullscreen shaders */
 	GPUShader *outline_prepass_sh;
+	GPUShader *outline_prepass_wire_sh;
 	GPUShader *outline_resolve_sh;
 	GPUShader *outline_resolve_aa_sh;
 	GPUShader *outline_detect_sh;
+	GPUShader *outline_detect_wire_sh;
 	GPUShader *outline_fade_sh;
 
 	/* regular shaders */
@@ -341,6 +345,11 @@ static void OBJECT_engine_init(void *vedata)
 		/* Outline */
 		e_data.outline_prepass_sh = DRW_shader_create_3D(datatoc_object_outline_prepass_frag_glsl, NULL);
 
+		e_data.outline_prepass_wire_sh = DRW_shader_create(
+		            datatoc_object_outline_prepass_vert_glsl,
+		            datatoc_object_outline_prepass_geom_glsl,
+		            datatoc_object_outline_prepass_frag_glsl, NULL);
+
 		e_data.outline_resolve_sh = DRW_shader_create_fullscreen(datatoc_object_outline_resolve_frag_glsl, NULL);
 
 		e_data.outline_resolve_aa_sh = DRW_shader_create_with_lib(
@@ -355,6 +364,14 @@ static void OBJECT_engine_init(void *vedata)
 		            datatoc_object_outline_detect_frag_glsl,
 		            datatoc_common_globals_lib_glsl,
 		            "#extension GL_ARB_texture_gather : enable\n");
+
+		e_data.outline_detect_wire_sh = DRW_shader_create_with_lib(
+		            datatoc_common_fullscreen_vert_glsl, NULL,
+		            datatoc_object_outline_detect_frag_glsl,
+		            datatoc_common_globals_lib_glsl,
+		            "#define WIRE\n"
+		            "#extension GL_ARB_texture_gather : enable\n");
+
 
 		e_data.outline_fade_sh = DRW_shader_create_fullscreen(datatoc_object_outline_expand_frag_glsl, NULL);
 
@@ -580,9 +597,11 @@ static void OBJECT_engine_free(void)
 	MEM_SAFE_FREE(e_data.empty_image_format);
 	MEM_SAFE_FREE(e_data.empty_image_wire_format);
 	DRW_SHADER_FREE_SAFE(e_data.outline_prepass_sh);
+	DRW_SHADER_FREE_SAFE(e_data.outline_prepass_wire_sh);
 	DRW_SHADER_FREE_SAFE(e_data.outline_resolve_sh);
 	DRW_SHADER_FREE_SAFE(e_data.outline_resolve_aa_sh);
 	DRW_SHADER_FREE_SAFE(e_data.outline_detect_sh);
+	DRW_SHADER_FREE_SAFE(e_data.outline_detect_wire_sh);
 	DRW_SHADER_FREE_SAFE(e_data.outline_fade_sh);
 	DRW_SHADER_FREE_SAFE(e_data.object_empty_image_sh);
 	DRW_SHADER_FREE_SAFE(e_data.object_empty_image_wire_sh);
@@ -854,6 +873,8 @@ static void OBJECT_cache_init(void *vedata)
 	OBJECT_StorageList *stl = ((OBJECT_Data *)vedata)->stl;
 	DefaultTextureList *dtxl = DRW_viewport_texture_list_get();
 	OBJECT_PrivateData *g_data;
+	const DRWContextState *draw_ctx = DRW_context_state_get();
+	const bool xray_enabled = ((draw_ctx->v3d->shading.flag & V3D_SHADING_XRAY) != 0);
 	/* TODO : use dpi setting for enabling the second pass */
 	const bool do_outline_expand = false;
 
@@ -870,13 +891,12 @@ static void OBJECT_cache_init(void *vedata)
 
 		GPUShader *sh = e_data.outline_prepass_sh;
 
-		/* Select */
+		if (xray_enabled) {
+			sh = e_data.outline_prepass_wire_sh;
+		}
+
 		g_data->outlines_select = shgroup_outline(psl->outlines, &g_data->id_ofs_select, sh);
-
-		/* Transform */
 		g_data->outlines_transform = shgroup_outline(psl->outlines, &g_data->id_ofs_transform, sh);
-
-		/* Active */
 		g_data->outlines_active = shgroup_outline(psl->outlines, &g_data->id_ofs_active, sh);
 
 		g_data->id_ofs_select = 0;
@@ -908,19 +928,21 @@ static void OBJECT_cache_init(void *vedata)
 	{
 		DRWState state = DRW_STATE_WRITE_COLOR;
 		struct Gwn_Batch *quad = DRW_cache_fullscreen_quad_get();
-		static float alphaOcclu = 0.35f;
+		/* Don't occlude the "outline" detection pass if in xray mode (too much flickering). */
+		float alphaOcclu = (xray_enabled) ? 1.0f : 0.35f;
 		/* Reminder : bool uniforms need to be 4 bytes. */
 		static const int bTrue = true;
 		static const int bFalse = false;
 
 		psl->outlines_search = DRW_pass_create("Outlines Detect Pass", state);
 
-		DRWShadingGroup *grp = DRW_shgroup_create(e_data.outline_detect_sh, psl->outlines_search);
+		GPUShader *sh = (xray_enabled) ? e_data.outline_detect_wire_sh : e_data.outline_detect_sh;
+		DRWShadingGroup *grp = DRW_shgroup_create(sh, psl->outlines_search);
 		DRW_shgroup_uniform_texture_ref(grp, "outlineId", &e_data.outlines_id_tx);
 		DRW_shgroup_uniform_texture_ref(grp, "outlineDepth", &e_data.outlines_depth_tx);
 		DRW_shgroup_uniform_texture_ref(grp, "sceneDepth", &dtxl->depth);
 		DRW_shgroup_uniform_block(grp, "globalsBlock", globals_ubo);
-		DRW_shgroup_uniform_float(grp, "alphaOcclu", &alphaOcclu, 1);
+		DRW_shgroup_uniform_float_copy(grp, "alphaOcclu", alphaOcclu);
 		DRW_shgroup_uniform_int(grp, "idOffsets", &stl->g_data->id_ofs_active, 3);
 		DRW_shgroup_call_add(grp, quad, NULL);
 
@@ -1895,8 +1917,13 @@ static void DRW_shgroup_lightprobe(OBJECT_StorageList *stl, OBJECT_PassList *psl
 static void DRW_shgroup_relationship_lines(OBJECT_StorageList *stl, Object *ob)
 {
 	if (ob->parent && DRW_check_object_visible_within_active_context(ob->parent)) {
-		DRW_shgroup_call_dynamic_add(stl->g_data->relationship_lines, ob->parent->obmat[3]);
-		DRW_shgroup_call_dynamic_add(stl->g_data->relationship_lines, ob->obmat[3]);
+		/* Only draw relationship lines when object or its parent are selected
+		 * as a way of reducing visual clutter.
+		 */
+		if ((ob->base_flag & BASE_SELECTED) || (ob->parent->base_flag & BASE_SELECTED)) {
+			DRW_shgroup_call_dynamic_add(stl->g_data->relationship_lines, ob->parent->obmat[3]);
+			DRW_shgroup_call_dynamic_add(stl->g_data->relationship_lines, ob->obmat[3]);
+		}
 	}
 }
 
@@ -1992,15 +2019,11 @@ static void OBJECT_cache_populate_particles(Object *ob,
 			continue;
 		}
 		if (!DRW_check_psys_visible_within_active_context(ob, psys)) {
-			return;
+			continue;
 		}
 
 		ParticleSettings *part = psys->part;
 		int draw_as = (part->draw_as == PART_DRAW_REND) ? part->ren_as : part->draw_as;
-
-		if (draw_as == PART_DRAW_PATH && !psys->pathcache && !psys->childcache) {
-			draw_as = PART_DRAW_DOT;
-		}
 
 		static float mat[4][4];
 		unit_m4(mat);
@@ -2082,10 +2105,17 @@ static void OBJECT_cache_populate(void *vedata, Object *ob)
 	}
 
 	bool do_outlines = ((ob->base_flag & BASE_SELECTED) != 0);
+	bool show_relations = ((draw_ctx->v3d->flag & V3D_HIDE_HELPLINES) == 0);
 
 	if (do_outlines) {
 		if ((ob != draw_ctx->object_edit) && !((ob == draw_ctx->obact) && (draw_ctx->object_mode & OB_MODE_ALL_PAINT))) {
-			struct Gwn_Batch *geom = DRW_cache_object_surface_get(ob);
+			struct Gwn_Batch *geom;
+			if (v3d->shading.flag & V3D_SHADING_XRAY) {
+				geom = DRW_cache_object_edge_detection_get(ob, NULL);
+			}
+			else {
+				geom = DRW_cache_object_surface_get(ob);
+			}
 			if (geom) {
 				theme_id = DRW_object_wire_theme_get(ob, view_layer, NULL);
 				DRWShadingGroup *shgroup = shgroup_theme_id_to_outline_or(stl, theme_id, NULL);
@@ -2101,28 +2131,26 @@ static void OBJECT_cache_populate(void *vedata, Object *ob)
 		{
 			if (ob != draw_ctx->object_edit) {
 				Mesh *me = ob->data;
-				if (me->totpoly == 0) {
-					if (me->totedge == 0) {
-						struct Gwn_Batch *geom = DRW_cache_mesh_verts_get(ob);
-						if (geom) {
-							if (theme_id == TH_UNDEFINED) {
-								theme_id = DRW_object_wire_theme_get(ob, view_layer, NULL);
-							}
-
-							DRWShadingGroup *shgroup = shgroup_theme_id_to_point_or(stl, theme_id, stl->g_data->points);
-							DRW_shgroup_call_object_add(shgroup, geom, ob);
+				if (me->totedge == 0) {
+					struct Gwn_Batch *geom = DRW_cache_mesh_verts_get(ob);
+					if (geom) {
+						if (theme_id == TH_UNDEFINED) {
+							theme_id = DRW_object_wire_theme_get(ob, view_layer, NULL);
 						}
+
+						DRWShadingGroup *shgroup = shgroup_theme_id_to_point_or(stl, theme_id, stl->g_data->points);
+						DRW_shgroup_call_object_add(shgroup, geom, ob);
 					}
-					else {
-						struct Gwn_Batch *geom = DRW_cache_mesh_edges_get(ob);
-						if (geom) {
-							if (theme_id == TH_UNDEFINED) {
-								theme_id = DRW_object_wire_theme_get(ob, view_layer, NULL);
-							}
-
-							DRWShadingGroup *shgroup = shgroup_theme_id_to_wire_or(stl, theme_id, stl->g_data->wire);
-							DRW_shgroup_call_object_add(shgroup, geom, ob);
+				}
+				else {
+					struct Gwn_Batch *geom = DRW_cache_mesh_loose_edges_get(ob);
+					if (geom) {
+						if (theme_id == TH_UNDEFINED) {
+							theme_id = DRW_object_wire_theme_get(ob, view_layer, NULL);
 						}
+
+						DRWShadingGroup *shgroup = shgroup_theme_id_to_wire_or(stl, theme_id, stl->g_data->wire);
+						DRW_shgroup_call_object_add(shgroup, geom, ob);
 					}
 				}
 			}
@@ -2209,7 +2237,9 @@ static void OBJECT_cache_populate(void *vedata, Object *ob)
 
 		DRW_shgroup_object_center(stl, ob, view_layer, v3d);
 
-		DRW_shgroup_relationship_lines(stl, ob);
+		if (show_relations) {
+			DRW_shgroup_relationship_lines(stl, ob);
+		}
 
 		if ((ob->dtx != 0) && theme_id == TH_UNDEFINED) {
 			theme_id = DRW_object_wire_theme_get(ob, view_layer, NULL);

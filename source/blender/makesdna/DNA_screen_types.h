@@ -121,7 +121,9 @@ typedef struct Panel {		/* the part from uiBlock that needs saved in file */
 
 	char panelname[64], tabname[64];	/* defined as UI_MAX_NAME_STR */
 	char drawname[64];					/* panelname is identifier for restoring location */
-	int ofsx, ofsy, sizex, sizey;
+	int ofsx, ofsy;                     /* offset within the region */
+	int sizex, sizey;                   /* panel size including children */
+	int blocksizex, blocksizey;         /* panel size excluding children */
 	short labelofs, pad;
 	short flag, runtime_flag;
 	short control;
@@ -129,6 +131,7 @@ typedef struct Panel {		/* the part from uiBlock that needs saved in file */
 	int sortorder;			/* panels are aligned according to increasing sortorder */
 	struct Panel *paneltab;		/* this panel is tabbed in *paneltab */
 	void *activedata;			/* runtime for panel manipulation */
+	ListBase children;          /* sub panels */
 } Panel;
 
 
@@ -306,6 +309,12 @@ typedef struct ScrArea {
 	ScrArea_Runtime runtime;
 } ScrArea;
 
+
+typedef struct ARegion_Runtime {
+	/* Panel category to use between 'layout' and 'draw'. */
+	const char *category;
+} ARegion_Runtime;
+
 typedef struct ARegion {
 	struct ARegion *next, *prev;
 	
@@ -344,6 +353,8 @@ typedef struct ARegion {
 
 	char *headerstr;			/* use this string to draw info */
 	void *regiondata;			/* XXX 2.50, need spacedata equivalent? */
+
+	ARegion_Runtime runtime;
 } ARegion;
 
 /* area->flag */
@@ -387,6 +398,7 @@ enum {
 	/*PNL_TABBED    = (1 << 3), */ /*UNUSED*/
 	PNL_OVERLAP     = (1 << 4),
 	PNL_PIN         = (1 << 5),
+	PNL_POPOVER     = (1 << 6),
 };
 
 /* Panel->snap - for snapping to screen edges */
@@ -451,7 +463,8 @@ enum {
 	RGN_TYPE_UI = 4,
 	RGN_TYPE_TOOLS = 5,
 	RGN_TYPE_TOOL_PROPS = 6,
-	RGN_TYPE_PREVIEW = 7
+	RGN_TYPE_PREVIEW = 7,
+	RGN_TYPE_HUD = 8,
 };
 /* use for function args */
 #define RGN_TYPE_ANY -1

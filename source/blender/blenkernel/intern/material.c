@@ -113,10 +113,10 @@ void BKE_material_init(Material *ma)
 
 	ma->r = ma->g = ma->b = 0.8;
 	ma->specr = ma->specg = ma->specb = 1.0;
-	ma->alpha = 1.0;
+	// ma->alpha = 1.0;  /* DEPRECATED */
 	ma->spec = 0.5;
 
-	ma->gloss_mir = 1.0;
+	ma->roughness = 0.25f;
 	
 	ma->pr_lamp = 3;         /* two lamps, is bits */
 	ma->pr_type = MA_SPHERE;
@@ -1315,7 +1315,5 @@ void paste_matcopybuf(Main *bmain, Material *ma)
 void BKE_material_eval(struct Depsgraph *depsgraph, Material *material)
 {
 	DEG_debug_print_eval(depsgraph, __func__, material->id.name, material);
-	if ((BLI_listbase_is_empty(&material->gpumaterial) == false)) {
-		GPU_material_uniform_buffer_tag_dirty(&material->gpumaterial);
-	}
+	GPU_material_free(&material->gpumaterial);
 }

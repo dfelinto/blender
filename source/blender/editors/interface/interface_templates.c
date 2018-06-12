@@ -2266,13 +2266,20 @@ void uiTemplateIconView(uiLayout *layout, PointerRNA *ptr, const char *propname,
 	value = RNA_property_enum_get(ptr, prop);
 	RNA_enum_icon_from_value(items, value, &icon);
 
-	cb_args = MEM_callocN(sizeof(IconViewMenuArgs), __func__);
-	cb_args->ptr = *ptr;
-	cb_args->prop = prop;
-	cb_args->show_labels = show_labels;
-	cb_args->icon_scale = icon_scale;
+	
+	if (RNA_property_editable(ptr, prop)) {
+		cb_args = MEM_callocN(sizeof(IconViewMenuArgs), __func__);
+		cb_args->ptr = *ptr;
+		cb_args->prop = prop;
+		cb_args->show_labels = show_labels;
+		cb_args->icon_scale = icon_scale;
 
-	but = uiDefBlockButN(block, ui_icon_view_menu_cb, cb_args, "", 0, 0, UI_UNIT_X * 6, UI_UNIT_Y * 6, "");
+		but = uiDefBlockButN(block, ui_icon_view_menu_cb, cb_args, "", 0, 0, UI_UNIT_X * 6, UI_UNIT_Y * 6, "");
+	}
+	else {
+		but = uiDefIconBut(block, UI_BTYPE_LABEL, 0, ICON_X, 0, 0, UI_UNIT_X * 6, UI_UNIT_Y * 6, NULL, 0.0, 0.0, 0.0, 0.0, "");
+	}
+
 
 	ui_def_but_icon(but, icon, UI_HAS_ICON | UI_BUT_ICON_PREVIEW);
 
@@ -3970,7 +3977,9 @@ eAutoPropButsReturn uiTemplateOperatorPropertyButs(
 #endif
 
 	/* set various special settings for buttons */
-	{
+
+	/* Only do this if we're not refreshing an existing UI. */
+	if (block->oldblock == NULL) {
 		const bool is_popup = (block->flag & UI_BLOCK_KEEP_OPEN) != 0;
 		uiBut *but;
 

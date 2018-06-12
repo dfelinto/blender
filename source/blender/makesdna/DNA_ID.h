@@ -229,7 +229,7 @@ typedef struct ID {
 	/* Only set for datablocks which are coming from copy-on-write, points to
 	 * the original version of it.
 	 */
-	void *orig_id;
+	struct ID *orig_id;
 
 	void *py_instance;
 } ID;
@@ -381,7 +381,8 @@ typedef enum ID_Type {
 
 #define ID_CHECK_UNDO(id) ((GS((id)->name) != ID_SCR) && (GS((id)->name) != ID_WM) && (GS((id)->name) != ID_WS))
 
-#define ID_BLEND_PATH(_bmain, _id) ((_id)->lib ? (_id)->lib->filepath : (_bmain)->name)
+#define ID_BLEND_PATH(_bmain, _id) ((_id)->lib ? (_id)->lib->filepath : BKE_main_blendfile_path((_bmain)))
+#define ID_BLEND_PATH_FROM_GLOBAL(_id) ((_id)->lib ? (_id)->lib->filepath : BKE_main_blendfile_path_from_global())
 
 #define ID_MISSING(_id) (((_id)->tag & LIB_TAG_MISSING) != 0)
 
@@ -467,8 +468,8 @@ enum {
 	LIB_TAG_PRE_EXISTING    = 1 << 11,
 
 	/* The datablock is a copy-on-write/localized version. */
-	LIB_TAG_COPY_ON_WRITE   = 1 << 12,
-	LIB_TAG_COPY_ON_WRITE_EVAL = 1 << 13,
+	LIB_TAG_COPIED_ON_WRITE               = 1 << 12,
+	LIB_TAG_COPIED_ON_WRITE_EVAL_RESULT   = 1 << 13,
 	LIB_TAG_LOCALIZED = 1 << 14,
 
 	/* RESET_NEVER tag datablock for freeing etc. behavior (usually set when copying real one into temp/runtime one). */

@@ -4,7 +4,7 @@
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
  * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version. 
+ * of the License, or (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -836,7 +836,7 @@ bool nodeIsChildOf(const bNode *parent, const bNode *child)
 /**
  * Iterate over a chain of nodes, starting with \a node_start, executing
  * \a callback for each node (which can return false to end iterator).
- * 
+ *
  * \param reversed for backwards iteration
  * \note Recursive
  */
@@ -868,7 +868,7 @@ void nodeChainIter(
 
 /**
  * Iterate over all parents of \a node, executing \a callback for each parent (which can return false to end iterator)
- * 
+ *
  * \note Recursive
  */
 void nodeParentsIter(bNode *node, bool (*callback)(bNode *, void *), void *userdata)
@@ -2050,11 +2050,11 @@ void ntreeLocalSync(bNodeTree *localtree, bNodeTree *ntree)
 
 /* merge local tree results back, and free local tree */
 /* we have to assume the editor already changed completely */
-void ntreeLocalMerge(bNodeTree *localtree, bNodeTree *ntree)
+void ntreeLocalMerge(Main *bmain, bNodeTree *localtree, bNodeTree *ntree)
 {
 	if (ntree && localtree) {
 		if (ntree->typeinfo->local_merge)
-			ntree->typeinfo->local_merge(localtree, ntree);
+			ntree->typeinfo->local_merge(bmain, localtree, ntree);
 		
 		ntreeFreeTree(localtree);
 		MEM_freeN(localtree);
@@ -3739,43 +3739,9 @@ void BKE_nodetree_remove_layer_n(bNodeTree *ntree, Scene *scene, const int layer
 	}
 }
 
-static void node_copy_default_values_list(ListBase *sockets_dst,
-                                          const ListBase *sockets_src)
-{
-	bNodeSocket *sock_dst = sockets_dst->first;
-	const bNodeSocket *sock_src = sockets_src->first;
-	while (sock_dst != NULL) {
-		node_socket_copy_default_value(sock_dst, sock_src);
-		sock_dst = sock_dst->next;
-		sock_src = sock_src->next;
-	}
-}
-
-static void node_copy_default_values(bNode *node_dst, const bNode *node_src)
-{
-	node_copy_default_values_list(&node_dst->inputs, &node_src->inputs);
-	node_copy_default_values_list(&node_dst->outputs, &node_src->outputs);
-}
-
-void BKE_nodetree_copy_default_values(bNodeTree *ntree_dst,
-                                      const bNodeTree *ntree_src)
-{
-	if (ntree_dst == ntree_src) {
-		return;
-	}
-	bNode *node_dst = ntree_dst->nodes.first;
-	const bNode *node_src = ntree_src->nodes.first;
-	while (node_dst != NULL) {
-		node_copy_default_values(node_dst, node_src);
-		node_dst = node_dst->next;
-		node_src = node_src->next;
-	}
-}
-
 void BKE_nodetree_shading_params_eval(struct Depsgraph *depsgraph,
                                       bNodeTree *ntree_dst,
                                       const bNodeTree *ntree_src)
 {
 	DEG_debug_print_eval(depsgraph, __func__, ntree_src->id.name, ntree_dst);
-	BKE_nodetree_copy_default_values(ntree_dst, ntree_src);
 }

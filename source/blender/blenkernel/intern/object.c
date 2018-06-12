@@ -330,21 +330,14 @@ void BKE_object_free_derived_caches(Object *ob)
 		ob->bb = NULL;
 	}
 
-	if (ob->derivedFinal) {
-		ob->derivedFinal->needsFree = 1;
-		ob->derivedFinal->release(ob->derivedFinal);
-		ob->derivedFinal = NULL;
-	}
-	if (ob->derivedDeform) {
-		ob->derivedDeform->needsFree = 1;
-		ob->derivedDeform->release(ob->derivedDeform);
-		ob->derivedDeform = NULL;
-	}
+	BKE_object_free_derived_mesh_caches(ob);
 
 	if (ob->runtime.mesh_eval != NULL) {
 		Mesh *mesh_eval = ob->runtime.mesh_eval;
 		/* Restore initial pointer. */
-		ob->data = mesh_eval->id.orig_id;
+		if (ob->data == mesh_eval) {
+			ob->data = ob->runtime.mesh_orig;
+		}
 		/* Evaluated mesh points to edit mesh, but does not own it. */
 		mesh_eval->edit_btmesh = NULL;
 		BKE_mesh_free(mesh_eval);
@@ -361,6 +354,20 @@ void BKE_object_free_derived_caches(Object *ob)
 	}
 
 	BKE_object_free_curve_cache(ob);
+}
+
+void BKE_object_free_derived_mesh_caches(struct Object *ob)
+{
+	if (ob->derivedFinal) {
+		ob->derivedFinal->needsFree = 1;
+		ob->derivedFinal->release(ob->derivedFinal);
+		ob->derivedFinal = NULL;
+	}
+	if (ob->derivedDeform) {
+		ob->derivedDeform->needsFree = 1;
+		ob->derivedDeform->release(ob->derivedDeform);
+		ob->derivedDeform = NULL;
+	}
 }
 
 void BKE_object_free_caches(Object *object)
@@ -1228,7 +1235,8 @@ void BKE_object_copy_data(Main *UNUSED(bmain), Object *ob_dst, const Object *ob_
 	BLI_listbase_clear(&ob_dst->drawdata);
 	BLI_listbase_clear(&ob_dst->pc_ids);
 
-	ob_dst->mpath = NULL;
+	ob_dst->avs = ob_src->avs;
+	ob_dst->mpath = animviz_copy_motionpath(ob_src->mpath);
 
 	copy_object_lod(ob_dst, ob_src, flag_subdata);
 	
@@ -2848,6 +2856,60 @@ Mesh *BKE_object_get_evaluated_mesh(const Depsgraph *depsgraph, Object *ob)
 	return ob_eval->runtime.mesh_eval;
 }
 
+/* Get object's mesh with all modifiers applied. */
+Mesh *BKE_object_get_final_mesh(Object *object)
+{
+	if (object->runtime.mesh_eval != NULL) {
+		BLI_assert((object->id.tag & LIB_TAG_COPIED_ON_WRITE) != 0);
+		BLI_assert(object->runtime.mesh_eval == object->data);
+		BLI_assert((object->runtime.mesh_eval->id.tag & LIB_TAG_COPIED_ON_WRITE_EVAL_RESULT) != 0);
+		return object->runtime.mesh_eval;
+	}
+	/* Wasn't evaluated yet. */
+	return object->data;
+}
+
+/* Get mesh which is not affected by modifiers:
+ * - For original objects it will be same as object->data, and it is a mesh
+ *   which is in the corresponding bmain.
+ * - For copied-on-write objects it will give pointer to a copied-on-write
+ *   mesh which corresponds to original object's mesh.
+ */
+Mesh *BKE_object_get_pre_modified_mesh(Object *object)
+{
+	if (object->runtime.mesh_orig != NULL) {
+		BLI_assert(object->id.tag & LIB_TAG_COPIED_ON_WRITE);
+		BLI_assert(object->id.orig_id != NULL);
+		BLI_assert(object->runtime.mesh_orig->id.orig_id == ((Object *)object->id.orig_id)->data);
+		Mesh *result = object->runtime.mesh_orig;
+		BLI_assert((result->id.tag & LIB_TAG_COPIED_ON_WRITE) != 0);
+		BLI_assert((result->id.tag & LIB_TAG_COPIED_ON_WRITE_EVAL_RESULT) == 0);
+		return result;
+	}
+	BLI_assert((object->id.tag & LIB_TAG_COPIED_ON_WRITE) == 0);
+	return object->data;
+}
+
+/* Get a mesh which corresponds to very very original mesh from bmain.
+ * - For original objects it will be object->data.
+ * - For evaluated objects it will be same mesh as corresponding original
+ *   object uses as data.
+ */
+Mesh *BKE_object_get_original_mesh(Object *object)
+{
+	Mesh *result = NULL;
+	if (object->id.orig_id == NULL) {
+		BLI_assert((object->id.tag & LIB_TAG_COPIED_ON_WRITE) == 0);
+		result = object->data;
+	}
+	else {
+		BLI_assert((object->id.tag & LIB_TAG_COPIED_ON_WRITE) != 0);
+		result = ((Object *)object->id.orig_id)->data;
+	}
+	BLI_assert(result != NULL);
+	BLI_assert((result->id.tag & (LIB_TAG_COPIED_ON_WRITE | LIB_TAG_COPIED_ON_WRITE_EVAL_RESULT)) == 0);
+	return result;
+}
 
 static int pc_cmp(const void *a, const void *b)
 {
@@ -3393,7 +3455,7 @@ static void obrel_list_add(LinkNode **links, Object *ob)
  * Iterates over all objects of the given scene layer.
  * Depending on the eObjectSet flag:
  * collect either OB_SET_ALL, OB_SET_VISIBLE or OB_SET_SELECTED objects.
- * If OB_SET_VISIBLE or OB_SET_SELECTED are collected, 
+ * If OB_SET_VISIBLE or OB_SET_SELECTED are collected,
  * then also add related objects according to the given includeFilters.
  */
 LinkNode *BKE_object_relational_superset(struct ViewLayer *view_layer, eObjectSet objectSet, eObRelationTypes includeFilter)

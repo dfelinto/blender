@@ -66,6 +66,7 @@ void BKE_object_free_curve_cache(struct Object *ob);
 
 void BKE_object_free(struct Object *ob);
 void BKE_object_free_derived_caches(struct Object *ob);
+void BKE_object_free_derived_mesh_caches(struct Object *ob);
 void BKE_object_free_caches(struct Object *object);
 
 void BKE_object_modifier_hook_reset(struct Object *ob, struct HookModifierData *hmd);
@@ -257,12 +258,10 @@ void BKE_object_eval_flush_base_flags(
         struct Object *object, int base_index,
         const bool is_from_set);
 
-void BKE_object_handle_data_update(
-        struct Depsgraph *depsgraph,
+void BKE_object_handle_data_update(struct Depsgraph *depsgraph,
         struct Scene *scene,
         struct Object *ob);
-void BKE_object_handle_update(
-        struct Depsgraph *depsgraph,
+void BKE_object_handle_update(struct Depsgraph *depsgraph,
         struct Scene *scene, struct Object *ob);
 void BKE_object_handle_update_ex(
         struct Depsgraph *depsgraph,
@@ -274,6 +273,9 @@ void BKE_object_sculpt_modifiers_changed(struct Object *ob);
 int BKE_object_obdata_texspace_get(struct Object *ob, short **r_texflag, float **r_loc, float **r_size, float **r_rot);
 
 struct Mesh *BKE_object_get_evaluated_mesh(const struct Depsgraph *depsgraph, struct Object *ob);
+struct Mesh *BKE_object_get_final_mesh(struct Object *object);
+struct Mesh *BKE_object_get_pre_modified_mesh(struct Object *object);
+struct Mesh *BKE_object_get_original_mesh(struct Object *object);
 
 int BKE_object_insert_ptcache(struct Object *ob);
 void BKE_object_delete_ptcache(struct Object *ob, int index);

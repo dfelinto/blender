@@ -222,7 +222,7 @@ void drw_state_set(DRWState state)
 		if (CHANGED_ANY_STORE_VAR(
 		        DRW_STATE_BLEND | DRW_STATE_BLEND_PREMUL | DRW_STATE_ADDITIVE |
 		        DRW_STATE_MULTIPLY | DRW_STATE_TRANSMISSION | DRW_STATE_ADDITIVE_FULL |
-		        DRW_STATE_TRANSPARENT_REVEALAGE,
+		        DRW_STATE_BLEND_OIT,
 		        test))
 		{
 			if (test) {
@@ -241,8 +241,9 @@ void drw_state_set(DRWState state)
 				else if ((state & DRW_STATE_TRANSMISSION) != 0) {
 					glBlendFunc(GL_ONE, GL_SRC_ALPHA);
 				}
-				else if ((state & DRW_STATE_TRANSPARENT_REVEALAGE) != 0) {
-					glBlendFunc(GL_ZERO, GL_ONE_MINUS_SRC_COLOR);
+				else if ((state & DRW_STATE_BLEND_OIT) != 0) {
+					glBlendFuncSeparate(GL_ONE, GL_ONE, /* RGB */
+					                    GL_ZERO, GL_ONE_MINUS_SRC_ALPHA); /* Alpha */
 				}
 				else if ((state & DRW_STATE_ADDITIVE) != 0) {
 					/* Do not let alpha accumulate but premult the source RGB by it. */
@@ -516,12 +517,12 @@ static void draw_clipping_setup_from_view(void)
 	for (int p = 0; p < 6; p++) {
 		int q, r;
 		switch (p) {
-			case 0:  q = 1; r = 2; break;
-			case 1:  q = 0; r = 5; break;
-			case 2:  q = 1; r = 5; break;
-			case 3:  q = 2; r = 6; break;
-			case 4:  q = 0; r = 3; break;
-			default: q = 4; r = 7; break;
+			case 0:  q = 1; r = 2; break; /* -X */
+			case 1:  q = 0; r = 5; break; /* -Y */
+			case 2:  q = 1; r = 5; break; /* +Z (far) */
+			case 3:  q = 2; r = 6; break; /* +Y */
+			case 4:  q = 0; r = 3; break; /* -Z (near) */
+			default: q = 4; r = 7; break; /* +X */
 		}
 		if (DST.frontface == GL_CW) {
 			SWAP(int, q, r);
@@ -711,6 +712,13 @@ void DRW_culling_frustum_corners_get(BoundBox *corners)
 {
 	draw_clipping_setup_from_view();
 	memcpy(corners, &DST.clipping.frustum_corners, sizeof(BoundBox));
+}
+
+/* See draw_clipping_setup_from_view() for the plane order. */
+void DRW_culling_frustum_planes_get(float planes[6][4])
+{
+	draw_clipping_setup_from_view();
+	memcpy(planes, &DST.clipping.frustum_planes, sizeof(DST.clipping.frustum_planes));
 }
 
 /** \} */
@@ -1149,6 +1157,9 @@ static void draw_shgroup(DRWShadingGroup *shgroup, DRWState pass_state)
 			switch (call->type) {
 				case DRW_CALL_SINGLE:
 					draw_geometry_execute(shgroup, call->single.geometry);
+					break;
+				case DRW_CALL_RANGE:
+					draw_geometry_execute_ex(shgroup, call->range.geometry, call->range.start, call->range.count, false);
 					break;
 				case DRW_CALL_INSTANCES:
 					draw_geometry_execute_ex(shgroup, call->instances.geometry, 0, *call->instances.count, true);

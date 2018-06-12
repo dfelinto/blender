@@ -145,6 +145,11 @@ typedef struct ObjectDisplay {
 
 /* Not saved in file! */
 typedef struct Object_Runtime {
+	/* Original mesh pointer, before object->data was changed to point
+	 * to mesh_eval.
+	 * Is assigned by dependency graph's copy-on-write evaluation.
+	 */
+	struct Mesh *mesh_orig;
 	/* Mesh structure created during object evaluation.
 	 * It has all modifiers applied.
 	 */
@@ -336,26 +341,6 @@ typedef struct ObHook {
 	short type, active;		/* active is only first hook, for button menu */
 	float force;
 } ObHook;
-
-/* runtime only, but include here for rna access */
-typedef struct DupliObject {
-	struct DupliObject *next, *prev;
-	struct Object *ob;
-	float mat[4][4];
-	float orco[3], uv[2];
-
-	short type; /* from Object.transflag */
-	char no_draw, animated;
-
-	/* persistent identifier for a dupli object, for inter-frame matching of
-	 * objects with motion blur, or inter-update matching for syncing */
-	int persistent_id[16]; /* 2*MAX_DUPLI_RECUR */
-
-	/* particle this dupli was generated from */
-	struct ParticleSystem *particle_system;
-	unsigned int random_id;
-	unsigned int pad;
-} DupliObject;
 
 /* **************** OBJECT ********************* */
 

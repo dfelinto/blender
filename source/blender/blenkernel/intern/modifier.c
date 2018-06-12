@@ -400,9 +400,9 @@ void modifier_setError(ModifierData *md, const char *_format, ...)
 
 /* used for buttons, to find out if the 'draw deformed in editmode' option is
  * there
- * 
+ *
  * also used in transform_conversion.c, to detect CrazySpace [tm] (2nd arg
- * then is NULL) 
+ * then is NULL)
  * also used for some mesh tools to give warnings
  */
 int modifiers_getCageIndex(struct Scene *scene, Object *ob, int *r_lastPossibleCageIndex, bool is_virtual)
@@ -801,6 +801,18 @@ const char *modifier_path_relbase(Main *bmain, Object *ob)
 {
 	if (G.relbase_valid || ID_IS_LINKED(ob)) {
 		return ID_BLEND_PATH(bmain, &ob->id);
+	}
+	else {
+		/* last resort, better then using "" which resolves to the current
+		 * working directory */
+		return BKE_tempdir_session();
+	}
+}
+
+const char *modifier_path_relbase_from_global(Object *ob)
+{
+	if (G.relbase_valid || ID_IS_LINKED(ob)) {
+		return ID_BLEND_PATH_FROM_GLOBAL(&ob->id);
 	}
 	else {
 		/* last resort, better then using "" which resolves to the current

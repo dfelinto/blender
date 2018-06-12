@@ -112,11 +112,11 @@ void RE_engines_register(RenderEngineType *render_type)
 RenderEngineType *RE_engines_find(const char *idname)
 {
 	RenderEngineType *type;
-	
+
 	type = BLI_findstring(&R_engines, idname, offsetof(RenderEngineType, idname));
 	if (!type)
 		type = BLI_findstring(&R_engines, "BLENDER_EEVEE", offsetof(RenderEngineType, idname));
-	
+
 	return type;
 }
 
@@ -320,7 +320,7 @@ int RE_engine_test_break(RenderEngine *engine)
 
 	if (re)
 		return re->test_break(re->tbh);
-	
+
 	return 0;
 }
 
@@ -497,7 +497,7 @@ static void engine_depsgraph_init(RenderEngine *engine, ViewLayer *view_layer)
 	engine->depsgraph = DEG_graph_new(scene, view_layer, DAG_EVAL_RENDER);
 	DEG_debug_name_set(engine->depsgraph, "RENDER");
 
-	BKE_scene_graph_update_tagged(engine->depsgraph, bmain);
+	BKE_scene_graph_update_for_newframe(engine->depsgraph, bmain);
 }
 
 static void engine_depsgraph_free(RenderEngine *engine)
@@ -513,6 +513,10 @@ void RE_engine_frame_set(RenderEngine *engine, int frame, float subframe)
 		return;
 	}
 
+#ifdef WITH_PYTHON
+	BPy_BEGIN_ALLOW_THREADS;
+#endif
+
 	Render *re = engine->re;
 	double cfra = (double)frame + (double)subframe;
 
@@ -520,15 +524,11 @@ void RE_engine_frame_set(RenderEngine *engine, int frame, float subframe)
 	BKE_scene_frame_set(re->scene, cfra);
 	BKE_scene_graph_update_for_newframe(engine->depsgraph, re->main);
 
-#ifdef WITH_PYTHON
-	BPy_BEGIN_ALLOW_THREADS;
-#endif
+	BKE_scene_camera_switch_update(re->scene);
 
 #ifdef WITH_PYTHON
 	BPy_END_ALLOW_THREADS;
 #endif
-
-	BKE_scene_camera_switch_update(re->scene);
 }
 
 /* Bake */
@@ -776,7 +776,7 @@ int RE_engine_render(Render *re, int do_all)
 
 	if (BKE_reports_contain(re->reports, RPT_ERROR))
 		G.is_break = true;
-	
+
 #ifdef WITH_FREESTYLE
 	if (re->r.mode & R_EDGE_FRS)
 		RE_RenderFreestyleExternal(re);

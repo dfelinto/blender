@@ -32,6 +32,8 @@
 #include "BLI_blenlib.h"
 #include "BLI_utildefines.h"
 #include "BLI_math_base.h"
+#include "BLI_listbase.h"
+#include "BLI_threads.h"
 
 #include "BKE_global.h"
 
@@ -48,6 +50,9 @@ static struct GPUTextureGlobal {
 	GPUTexture *invalid_tex_2D;
 	GPUTexture *invalid_tex_3D;
 } GG = {NULL, NULL, NULL};
+
+static ListBase g_orphaned_tex = {NULL, NULL};
+static ThreadMutex g_orphan_lock;
 
 /* Maximum number of FBOs a texture can be attached to. */
 #define GPU_TEX_MAX_FBO_ATTACHED 8
@@ -74,7 +79,6 @@ struct GPUTexture {
 	GLenum target_base; /* same as target, (but no multisample)
 	                     * use it for unbinding */
 	GLuint bindcode;    /* opengl identifier for texture */
-	int fromblender;    /* we got the texture from Blender */
 
 	GPUTextureFormat format;
 	GPUTextureFormatFlag format_flag;
@@ -668,39 +672,21 @@ GPUTexture *GPU_texture_create_buffer(GPUTextureFormat data_type, const GLuint b
 	return tex;
 }
 
-GPUTexture *GPU_texture_from_blender(Image *ima, ImageUser *iuser, int textarget, bool is_data, double UNUSED(time), int mipmap)
+GPUTexture *GPU_texture_from_bindcode(int textarget, int bindcode)
 {
-	int gputt;
-	/* this binds a texture, so that's why to restore it to 0 */
-	GLint bindcode = GPU_verify_image(ima, iuser, textarget, 0, mipmap, is_data);
-
 	/* see GPUInput::textarget: it can take two values - GL_TEXTURE_2D and GL_TEXTURE_CUBE_MAP
 	 * these values are correct for glDisable, so textarget can be safely used in
 	 * GPU_texture_bind/GPU_texture_unbind through tex->target_base */
 	/* (is any of this obsolete now that we don't glEnable/Disable textures?) */
-	if (textarget == GL_TEXTURE_2D)
-		gputt = TEXTARGET_TEXTURE_2D;
-	else
-		gputt = TEXTARGET_TEXTURE_CUBE_MAP;
-
-	if (ima->gputexture[gputt]) {
-		ima->gputexture[gputt]->bindcode = bindcode;
-		glBindTexture(textarget, 0);
-		return ima->gputexture[gputt];
-	}
-
 	GPUTexture *tex = MEM_callocN(sizeof(GPUTexture), "GPUTexture");
 	tex->bindcode = bindcode;
 	tex->number = -1;
 	tex->refcount = 1;
 	tex->target = textarget;
 	tex->target_base = textarget;
-	tex->fromblender = 1;
 	tex->format = -1;
 	tex->components = -1;
 	tex->samples = 0;
-
-	ima->gputexture[gputt] = tex;
 
 	if (!glIsTexture(tex->bindcode)) {
 		GPU_print_error_debug("Blender Texture Not Loaded");
@@ -720,9 +706,8 @@ GPUTexture *GPU_texture_from_blender(Image *ima, ImageUser *iuser, int textarget
 		glGetTexLevelParameteriv(gettarget, 0, GL_TEXTURE_HEIGHT, &h);
 		tex->w = w;
 		tex->h = h;
+		glBindTexture(textarget, 0);
 	}
-
-	glBindTexture(textarget, 0);
 
 	return tex;
 }
@@ -731,10 +716,10 @@ GPUTexture *GPU_texture_from_preview(PreviewImage *prv, int mipmap)
 {
 	GPUTexture *tex = prv->gputexture[0];
 	GLuint bindcode = 0;
-	
+
 	if (tex)
 		bindcode = tex->bindcode;
-	
+
 	/* this binds a texture, so that's why we restore it to 0 */
 	if (bindcode == 0) {
 		GPU_create_gl_tex(&bindcode, prv->rect[0], NULL, prv->w[0], prv->h[0], GL_TEXTURE_2D, mipmap, 0, NULL);
@@ -753,9 +738,9 @@ GPUTexture *GPU_texture_from_preview(PreviewImage *prv, int mipmap)
 	tex->target_base = GL_TEXTURE_2D;
 	tex->format = -1;
 	tex->components = -1;
-	
+
 	prv->gputexture[0] = tex;
-	
+
 	if (!glIsTexture(tex->bindcode)) {
 		GPU_print_error_debug("Blender Texture Not Loaded");
 	}
@@ -765,13 +750,13 @@ GPUTexture *GPU_texture_from_preview(PreviewImage *prv, int mipmap)
 		glBindTexture(GL_TEXTURE_2D, tex->bindcode);
 		glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &w);
 		glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &h);
-		
+
 		tex->w = w;
 		tex->h = h;
 	}
-	
+
 	glBindTexture(GL_TEXTURE_2D, 0);
-	
+
 	return tex;
 
 }
@@ -1083,13 +1068,23 @@ void GPU_texture_wrap_mode(GPUTexture *tex, bool use_repeat)
 		glTexParameteri(tex->target_base, GL_TEXTURE_WRAP_R, repeat);
 }
 
+static void gpu_texture_delete(GPUTexture *tex)
+{
+	if (tex->bindcode)
+		glDeleteTextures(1, &tex->bindcode);
+
+	gpu_texture_memory_footprint_remove(tex);
+
+	MEM_freeN(tex);
+}
+
 void GPU_texture_free(GPUTexture *tex)
 {
 	tex->refcount--;
 
 	if (tex->refcount < 0)
 		fprintf(stderr, "GPUTexture: negative refcount\n");
-	
+
 	if (tex->refcount == 0) {
 		for (int i = 0; i < GPU_TEX_MAX_FBO_ATTACHED; ++i) {
 			if (tex->fb[i] != NULL) {
@@ -1097,13 +1092,38 @@ void GPU_texture_free(GPUTexture *tex)
 			}
 		}
 
-		if (tex->bindcode && !tex->fromblender)
-			glDeleteTextures(1, &tex->bindcode);
-
-		gpu_texture_memory_footprint_remove(tex);
-
-		MEM_freeN(tex);
+		/* TODO(fclem): Check if the thread has an ogl context. */
+		if (BLI_thread_is_main()) {
+			gpu_texture_delete(tex);
+		}
+		else {
+			BLI_mutex_lock(&g_orphan_lock);
+			BLI_addtail(&g_orphaned_tex, BLI_genericNodeN(tex));
+			BLI_mutex_unlock(&g_orphan_lock);
+		}
 	}
+}
+
+void GPU_texture_orphans_init(void)
+{
+	BLI_mutex_init(&g_orphan_lock);
+}
+
+void GPU_texture_orphans_delete(void)
+{
+	BLI_mutex_lock(&g_orphan_lock);
+	LinkData *link;
+	while ((link = BLI_pophead(&g_orphaned_tex))) {
+		gpu_texture_delete((GPUTexture *)link->data);
+		MEM_freeN(link);
+	}
+	BLI_mutex_unlock(&g_orphan_lock);
+}
+
+void GPU_texture_orphans_exit(void)
+{
+	GPU_texture_orphans_delete();
+	BLI_mutex_end(&g_orphan_lock);
 }
 
 void GPU_texture_ref(GPUTexture *tex)

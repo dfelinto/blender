@@ -4,7 +4,7 @@
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
  * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version. 
+ * of the License, or (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -18,7 +18,7 @@
  * The Original Code is Copyright (C) 2008 Blender Foundation.
  * All rights reserved.
  *
- * 
+ *
  * Contributor(s): Blender Foundation
  *
  * ***** END GPL LICENSE BLOCK *****
@@ -126,22 +126,22 @@ enum {
 	EM_NO_CONTEXT       = (1 << 4),
 };
 bool ED_object_editmode_exit_ex(
-        struct Scene *scene, struct Object *obedit, int flag);
+        struct Main *bmain, struct Scene *scene, struct Object *obedit, int flag);
 bool ED_object_editmode_exit(struct bContext *C, int flag);
 
-bool ED_object_editmode_enter_ex(struct Scene *scene, struct Object *ob, int flag);
+bool ED_object_editmode_enter_ex(struct Main *bmain, struct Scene *scene, struct Object *ob, int flag);
 bool ED_object_editmode_enter(struct bContext *C, int flag);
-bool ED_object_editmode_load(struct Object *obedit);
+bool ED_object_editmode_load(struct Main *bmain, struct Object *obedit);
 
 bool ED_object_editmode_calc_active_center(struct Object *obedit, const bool select_only, float r_center[3]);
 
 
 void ED_object_vpaintmode_enter_ex(
-        struct Depsgraph *depsgraph, struct wmWindowManager *wm,
+        struct Main *bmain, struct Depsgraph *depsgraph, struct wmWindowManager *wm,
         struct Scene *scene, struct Object *ob);
 void ED_object_vpaintmode_enter(struct bContext *C);
 void ED_object_wpaintmode_enter_ex(
-        struct Depsgraph *depsgraph, struct wmWindowManager *wm,
+        struct Main *bmain, struct Depsgraph *depsgraph, struct wmWindowManager *wm,
         struct Scene *scene, struct Object *ob);
 void ED_object_wpaintmode_enter(struct bContext *C);
 
@@ -151,7 +151,7 @@ void ED_object_wpaintmode_exit_ex(struct Object *ob);
 void ED_object_wpaintmode_exit(struct bContext *C);
 
 void ED_object_sculptmode_enter_ex(
-        struct Depsgraph *depsgraph,
+        struct Main *bmain, struct Depsgraph *depsgraph,
         struct Scene *scene, struct Object *ob,
         struct ReportList *reports);
 void ED_object_sculptmode_enter(struct bContext *C, struct ReportList *reports);

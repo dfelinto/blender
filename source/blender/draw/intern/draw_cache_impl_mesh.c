@@ -112,6 +112,10 @@ typedef struct EdgeAdjacentPolys {
 	int face_index[2];
 } EdgeAdjacentPolys;
 
+typedef struct EdgeAdjacentVerts {
+	int vert_index[2]; /* -1 if none */
+} EdgeAdjacentVerts;
+
 typedef struct EdgeDrawAttr {
 	unsigned char v_flag;
 	unsigned char e_flag;
@@ -1544,6 +1548,7 @@ typedef struct MeshBatchCache {
 	Gwn_IndexBuf *edges_in_order;
 	Gwn_IndexBuf *edges_adjacency; /* Store edges with adjacent vertices. */
 	Gwn_IndexBuf *triangles_in_order;
+	Gwn_IndexBuf *ledges_in_order;
 
 	GPUTexture *pos_in_order_tx; /* Depending on pos_in_order */
 
@@ -1563,6 +1568,7 @@ typedef struct MeshBatchCache {
 	Gwn_VertBuf *ed_vert_pos;
 
 	Gwn_Batch *triangles_with_normals;
+	Gwn_Batch *ledges_with_normals;
 
 	/* Skip hidden (depending on paint select mode) */
 	Gwn_Batch *triangles_with_weights;
@@ -1585,8 +1591,9 @@ typedef struct MeshBatchCache {
 
 	Gwn_Batch *edge_detection;
 
+	Gwn_VertBuf *edges_face_overlay;
 	GPUTexture *edges_face_overlay_tx;
-	int edges_face_overlay_tri_count; /* Number of tri in edges_face_overlay_tx */
+	int edges_face_overlay_tri_count; /* Number of tri in edges_face_overlay(_adj)_tx */
 
 	/* Maybe have shaded_triangles_data split into pos_nor and uv_tangent
 	 * to minimise data transfer for skinned mesh. */
@@ -1787,6 +1794,7 @@ static void mesh_batch_cache_clear_selective(Mesh *me, Gwn_VertBuf *vert)
 		GWN_BATCH_DISCARD_SAFE(cache->triangles_with_select_id);
 		GWN_BATCH_DISCARD_SAFE(cache->triangles_with_select_mask);
 		GWN_BATCH_DISCARD_SAFE(cache->points_with_normals);
+		GWN_BATCH_DISCARD_SAFE(cache->ledges_with_normals);
 		if (cache->shaded_triangles) {
 			for (int i = 0; i < cache->mat_len; ++i) {
 				GWN_BATCH_DISCARD_SAFE(cache->shaded_triangles[i]);
@@ -1823,6 +1831,7 @@ static void mesh_batch_cache_clear(Mesh *me)
 	DRW_TEXTURE_FREE_SAFE(cache->pos_in_order_tx);
 	GWN_INDEXBUF_DISCARD_SAFE(cache->edges_in_order);
 	GWN_INDEXBUF_DISCARD_SAFE(cache->triangles_in_order);
+	GWN_INDEXBUF_DISCARD_SAFE(cache->ledges_in_order);
 
 	GWN_VERTBUF_DISCARD_SAFE(cache->ed_tri_pos);
 	GWN_VERTBUF_DISCARD_SAFE(cache->ed_tri_nor);
@@ -1846,6 +1855,7 @@ static void mesh_batch_cache_clear(Mesh *me)
 
 	GWN_BATCH_DISCARD_SAFE(cache->triangles_with_normals);
 	GWN_BATCH_DISCARD_SAFE(cache->points_with_normals);
+	GWN_BATCH_DISCARD_SAFE(cache->ledges_with_normals);
 	GWN_VERTBUF_DISCARD_SAFE(cache->pos_with_normals);
 	GWN_BATCH_DISCARD_SAFE(cache->triangles_with_weights);
 	GWN_BATCH_DISCARD_SAFE(cache->triangles_with_vert_colors);
@@ -1864,6 +1874,7 @@ static void mesh_batch_cache_clear(Mesh *me)
 	GWN_INDEXBUF_DISCARD_SAFE(cache->edges_adjacency);
 	GWN_BATCH_DISCARD_SAFE(cache->edge_detection);
 
+	GWN_VERTBUF_DISCARD_SAFE(cache->edges_face_overlay);
 	DRW_TEXTURE_FREE_SAFE(cache->edges_face_overlay_tx);
 
 	GWN_VERTBUF_DISCARD_SAFE(cache->shaded_triangles_data);
@@ -3334,28 +3345,66 @@ static Gwn_IndexBuf *mesh_batch_cache_get_edges_adjacency(MeshRenderData *rdata,
 }
 #undef NO_EDGE
 
-static GPUTexture *mesh_batch_cache_get_edges_overlay_texture_buf(MeshRenderData *rdata, MeshBatchCache *cache)
+static EdgeHash *create_looptri_edge_adjacency_hash(MeshRenderData *rdata)
 {
-	BLI_assert(rdata->types & (MR_DATATYPE_VERT | MR_DATATYPE_EDGE | MR_DATATYPE_LOOP | MR_DATATYPE_LOOPTRI));
+	const int tri_len = mesh_render_data_looptri_len_get(rdata);
+	/* Create adjacency info in looptri */
+	EdgeHash *eh = BLI_edgehash_new_ex(__func__, tri_len * 3);
+	/* Create edges for each pair of triangles sharing an edge. */
+	for (int i = 0; i < tri_len; i++) {
+		for (int e = 0; e < 3; ++e) {
+			uint v0, v1, v2;
+			if (rdata->edit_bmesh) {
+				const BMLoop **bm_looptri = (const BMLoop **)rdata->edit_bmesh->looptris[i];
+				if (BM_elem_flag_test(bm_looptri[0]->f, BM_ELEM_HIDDEN)) {
+					break;
+				}
+				v0 = BM_elem_index_get(bm_looptri[e]->v);
+				v1 = BM_elem_index_get(bm_looptri[(e + 1) % 3]->v);
+				v2 = BM_elem_index_get(bm_looptri[(e + 2) % 3]->v);
+			}
+			else {
+				MLoop *mloop = rdata->mloop;
+				MLoopTri *mlt = rdata->mlooptri + i;
+				v0 = mloop[mlt->tri[e]].v;
+				v1 = mloop[mlt->tri[(e + 1) % 3]].v;
+				v2 = mloop[mlt->tri[(e + 2) % 3]].v;
+			}
 
-	BLI_assert(rdata->edit_bmesh == NULL); /* Not supported in edit mode */
-
-	if (cache->edges_face_overlay_tx != NULL) {
-		return cache->edges_face_overlay_tx;
+			EdgeAdjacentVerts **eav;
+			bool value_is_init = BLI_edgehash_ensure_p(eh, v1, v2, (void ***)&eav);
+			if (!value_is_init) {
+				*eav = MEM_mallocN(sizeof(**eav), "EdgeAdjacentVerts");
+				(*eav)->vert_index[0] = v0;
+				(*eav)->vert_index[1] = -1;
+			}
+			else {
+				if ((*eav)->vert_index[1] == -1) {
+					(*eav)->vert_index[1] = v0;
+				}
+				else {
+					/* Not a manifold edge. */
+				}
+			}
+		}
 	}
+	return eh;
+}
 
+static Gwn_VertBuf *mesh_batch_cache_create_edges_overlay_texture_buf(MeshRenderData *rdata)
+{
 	const int tri_len = mesh_render_data_looptri_len_get(rdata);
 
-	cache->is_manifold = true;
-
 	Gwn_VertFormat format = {0};
-	uint index_id = GWN_vertformat_attr_add(&format, "index", GWN_COMP_I32, 1, GWN_FETCH_INT);
+	uint index_id = GWN_vertformat_attr_add(&format, "index", GWN_COMP_U32, 1, GWN_FETCH_INT);
 	Gwn_VertBuf *vbo = GWN_vertbuf_create_with_format(&format);
 
 	int vbo_len_capacity = tri_len * 3;
 	GWN_vertbuf_data_alloc(vbo, vbo_len_capacity);
 
 	int vidx = 0;
+	EdgeHash *eh = NULL;
+	eh = create_looptri_edge_adjacency_hash(rdata);
 
 	for (int i = 0; i < tri_len; i++) {
 		bool edge_is_real[3] = {false, false, false};
@@ -3377,12 +3426,23 @@ static GPUTexture *mesh_batch_cache_get_edges_overlay_texture_buf(MeshRenderData
 		}
 
 		for (int e = 0; e < 3; ++e) {
-			/* Save if there is an edge or not inside the sign bit. */
-			int value = (int)mloop[mlt->tri[e]].v + 1; /* Int 0 cannot be signed */
-			value = (edge_is_real[e]) ? -value : value;
+			int v0 = mloop[mlt->tri[e]].v;
+			int v1 = mloop[mlt->tri[(e + 1) % 3]].v;
+			EdgeAdjacentVerts *eav = BLI_edgehash_lookup(eh, v0, v1);
+			uint value = (uint)v0;
+			/* Real edge */
+			if (edge_is_real[e]) {
+				value |= (1 << 30);
+			}
+			/* Non-manifold edge */
+			if (eav->vert_index[1] == -1) {
+				value |= (1 << 31);
+			}
 			GWN_vertbuf_attr_set(vbo, index_id, vidx++, &value);
 		}
 	}
+
+	BLI_edgehash_free(eh, MEM_freeN);
 
 	int vbo_len_used = vidx;
 
@@ -3390,10 +3450,25 @@ static GPUTexture *mesh_batch_cache_get_edges_overlay_texture_buf(MeshRenderData
 		GWN_vertbuf_data_resize(vbo, vbo_len_used);
 	}
 
+	return vbo;
+}
+
+static GPUTexture *mesh_batch_cache_get_edges_overlay_texture_buf(MeshRenderData *rdata, MeshBatchCache *cache)
+{
+	BLI_assert(rdata->types & (MR_DATATYPE_VERT | MR_DATATYPE_EDGE | MR_DATATYPE_LOOP | MR_DATATYPE_LOOPTRI));
+
+	BLI_assert(rdata->edit_bmesh == NULL); /* Not supported in edit mode */
+
+	if (cache->edges_face_overlay_tx != NULL) {
+		return cache->edges_face_overlay_tx;
+	}
+
+	Gwn_VertBuf *vbo = cache->edges_face_overlay = mesh_batch_cache_create_edges_overlay_texture_buf(rdata);
+
 	/* Upload data early because we need to create the texture for it. */
 	GWN_vertbuf_use(vbo);
 	cache->edges_face_overlay_tx = GPU_texture_create_from_vertbuf(vbo);
-	cache->edges_face_overlay_tri_count = vbo_len_used / 3;
+	cache->edges_face_overlay_tri_count = vbo->vertex_alloc / 3;
 
 	return cache->edges_face_overlay_tx;
 }
@@ -3444,6 +3519,45 @@ static Gwn_IndexBuf *mesh_batch_cache_get_triangles_in_order(MeshRenderData *rda
 	}
 
 	return cache->triangles_in_order;
+}
+
+
+static Gwn_IndexBuf *mesh_batch_cache_get_loose_edges(MeshRenderData *rdata, MeshBatchCache *cache)
+{
+	BLI_assert(rdata->types & (MR_DATATYPE_VERT | MR_DATATYPE_LOOPTRI));
+
+	if (cache->ledges_in_order == NULL) {
+		const int vert_len = mesh_render_data_verts_len_get(rdata);
+		const int edge_len = mesh_render_data_edges_len_get(rdata);
+
+		/* Alloc max (edge_len) and upload only needed range. */
+		Gwn_IndexBufBuilder elb;
+		GWN_indexbuf_init(&elb, GWN_PRIM_LINES, edge_len, vert_len);
+
+		if (rdata->edit_bmesh) {
+			/* No need to support since edit mesh already draw them.
+			 * But some engines may want them ... */
+			BMesh *bm = rdata->edit_bmesh->bm;
+			BMIter eiter;
+			BMEdge *eed;
+			BM_ITER_MESH(eed, &eiter, bm, BM_EDGES_OF_MESH) {
+				if (!BM_elem_flag_test(eed, BM_ELEM_HIDDEN) && BM_edge_is_wire(eed)) {
+					GWN_indexbuf_add_line_verts(&elb, BM_elem_index_get(eed->v1),  BM_elem_index_get(eed->v2));
+				}
+			}
+		}
+		else {
+			for (int i = 0; i < edge_len; ++i) {
+				const MEdge *medge = &rdata->medge[i];
+				if (medge->flag & ME_LOOSEEDGE) {
+					GWN_indexbuf_add_line_verts(&elb, medge->v1, medge->v2);
+				}
+			}
+		}
+		cache->ledges_in_order = GWN_indexbuf_build(&elb);
+	}
+
+	return cache->ledges_in_order;
 }
 
 static Gwn_IndexBuf **mesh_batch_cache_get_triangles_in_order_split_by_material(
@@ -3671,7 +3785,7 @@ Gwn_Batch *DRW_mesh_batch_cache_get_all_edges(Mesh *me)
 
 		cache->all_edges = GWN_batch_create(
 		         GWN_PRIM_LINES, mesh_batch_cache_get_vert_pos_and_nor_in_order(rdata, cache),
-		         mesh_batch_cache_get_edges_in_order(rdata, cache));
+		                         mesh_batch_cache_get_edges_in_order(rdata, cache));
 
 		mesh_render_data_free(rdata);
 	}
@@ -3713,6 +3827,24 @@ Gwn_Batch *DRW_mesh_batch_cache_get_triangles_with_normals(Mesh *me)
 	}
 
 	return cache->triangles_with_normals;
+}
+
+Gwn_Batch *DRW_mesh_batch_cache_get_loose_edges_with_normals(Mesh *me)
+{
+	MeshBatchCache *cache = mesh_batch_cache_get(me);
+
+	if (cache->ledges_with_normals == NULL) {
+		const int datatype = MR_DATATYPE_VERT | MR_DATATYPE_EDGE | MR_DATATYPE_LOOPTRI | MR_DATATYPE_LOOP | MR_DATATYPE_POLY;
+		MeshRenderData *rdata = mesh_render_data_create(me, datatype);
+
+		cache->ledges_with_normals = GWN_batch_create(
+		        GWN_PRIM_LINES, mesh_batch_cache_get_vert_pos_and_nor_in_order(rdata, cache),
+		                        mesh_batch_cache_get_loose_edges(rdata, cache));
+
+		mesh_render_data_free(rdata);
+	}
+
+	return cache->ledges_with_normals;
 }
 
 Gwn_Batch *DRW_mesh_batch_cache_get_triangles_with_normals_and_weights(Mesh *me, int defgroup)

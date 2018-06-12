@@ -1449,7 +1449,7 @@ static void integrate_particle(ParticleSettings *part, ParticleData *pa, float d
 }
 
 /*********************************************************************************************************
- *                    SPH fluid physics 
+ *                    SPH fluid physics
  *
  * In theory, there could be unlimited implementation of SPH simulators
  *
@@ -3807,8 +3807,9 @@ static void cached_step(ParticleSimulationData *sim, float cfra, const bool use_
 	}
 }
 
-static void particles_fluid_step(Main *bmain, ParticleSimulationData *sim, int UNUSED(cfra), const bool use_render_params)
-{	
+static void particles_fluid_step(
+        Main *bmain, ParticleSimulationData *sim, int UNUSED(cfra), const bool use_render_params)
+{
 	ParticleSystem *psys = sim->psys;
 	if (psys->particles) {
 		MEM_freeN(psys->particles);
@@ -4149,7 +4150,7 @@ void psys_check_boid_data(ParticleSystem *psys)
 		}
 }
 
-static void fluid_default_settings(ParticleSettings *part)
+void BKE_particlesettings_fluid_default_settings(ParticleSettings *part)
 {
 	SPHFluidSettings *fluid = part->fluid;
 
@@ -4181,24 +4182,12 @@ static void psys_prepare_physics(ParticleSimulationData *sim)
 		sim->psys->flag &= ~PSYS_KEYED;
 	}
 
-	if (part->phystype == PART_PHYS_BOIDS && part->boids == NULL) {
-		BoidState *state;
-
-		part->boids = MEM_callocN(sizeof(BoidSettings), "Boid Settings");
-		boid_default_settings(part->boids);
-
-		state = boid_new_state(part->boids);
-		BLI_addtail(&state->rules, boid_new_rule(eBoidRuleType_Separate));
-		BLI_addtail(&state->rules, boid_new_rule(eBoidRuleType_Flock));
-
-		((BoidRule*)state->rules.first)->flag |= BOIDRULE_CURRENT;
-
-		state->flag |= BOIDSTATE_CURRENT;
-		BLI_addtail(&part->boids->states, state);
+	/* RNA Update must ensure this is true. */
+	if (part->phystype == PART_PHYS_BOIDS) {
+		BLI_assert(part->boids != NULL);
 	}
-	else if (part->phystype == PART_PHYS_FLUID && part->fluid == NULL) {
-		part->fluid = MEM_callocN(sizeof(SPHFluidSettings), "SPH Fluid Settings");
-		fluid_default_settings(part);
+	else if (part->phystype == PART_PHYS_FLUID) {
+		BLI_assert(part->fluid != NULL);
 	}
 
 	psys_check_boid_data(sim->psys);
@@ -4227,6 +4216,18 @@ void particle_system_update(struct Depsgraph *depsgraph, Scene *scene, Object *o
 
 	if (!psys_check_enabled(ob, psys, use_render_params))
 		return;
+
+	if (DEG_is_active(depsgraph)) {
+		if (psys->orig_psys != NULL && psys->orig_psys->edit != NULL) {
+			psys_cache_edit_paths(
+			        depsgraph,
+			        (Scene *)DEG_get_original_id(&scene->id),
+			        DEG_get_original_object(ob),
+			        psys->orig_psys->edit,
+			        DEG_get_ctime(depsgraph),
+			        DEG_get_mode(depsgraph) == DAG_EVAL_RENDER);
+		}
+	}
 
 	cfra = DEG_get_ctime(depsgraph);
 

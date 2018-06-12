@@ -42,9 +42,9 @@
  * Evaluation Engine
  * =================
  *
- * The evaluation takes the operation-nodes the Depsgraph has tagged for updating, 
+ * The evaluation takes the operation-nodes the Depsgraph has tagged for updating,
  * and schedules them up for being evaluated/executed such that the all dependency
- * relationship constraints are satisfied. 
+ * relationship constraints are satisfied.
  */
 
 /* ************************************************* */
@@ -70,8 +70,7 @@ struct ViewLayer;
 
 typedef enum eEvaluationMode {
 	DAG_EVAL_VIEWPORT       = 0,    /* evaluate for OpenGL viewport */
-	DAG_EVAL_PREVIEW        = 1,    /* evaluate for render with preview settings */
-	DAG_EVAL_RENDER         = 2,    /* evaluate for render purposes */
+	DAG_EVAL_RENDER         = 1,    /* evaluate for render purposes */
 } eEvaluationMode;
 
 /* DagNode->eval_flags */

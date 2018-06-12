@@ -2008,11 +2008,20 @@ static void widget_draw_text_icon(uiFontStyle *fstyle, uiWidgetColors *wcol, uiB
 	else if (but->flag & UI_HAS_ICON || show_menu_icon) {
 		const bool is_tool = UI_but_is_tool(but);
 
+		/* XXX add way to draw icons at a different size!
+		 * Use small icons for popup. */
+#ifdef USE_UI_TOOLBAR_HACK
+		const float aspect_orig = but->block->aspect;
+		if (is_tool && (but->block->flag & UI_BLOCK_POPOVER)) {
+			but->block->aspect *= 2.0f;
+		}
+#endif
+
 		const BIFIconID icon = (but->flag & UI_HAS_ICON) ? but->icon + but->iconadd : ICON_NONE;
 		int icon_size_init = is_tool ? ICON_DEFAULT_HEIGHT_TOOLBAR : ICON_DEFAULT_HEIGHT;
 		const float icon_size = icon_size_init / (but->block->aspect / UI_DPI_FAC);
 
-#ifdef USE_TOOLBAR_HACK
+#ifdef USE_UI_TOOLBAR_HACK
 		if (is_tool) {
 			/* pass (even if its a menu toolbar) */
 			but->drawflag |= UI_BUT_TEXT_LEFT;
@@ -2033,6 +2042,10 @@ static void widget_draw_text_icon(uiFontStyle *fstyle, uiWidgetColors *wcol, uiB
 			rect->xmin += 0.3f * U.widget_unit;
 
 		widget_draw_icon(but, icon, alpha, rect, show_menu_icon);
+
+#ifdef USE_UI_TOOLBAR_HACK
+		but->block->aspect = aspect_orig;
+#endif
 
 		rect->xmin += icon_size;
 		/* without this menu keybindings will overlap the arrow icon [#38083] */
@@ -2626,15 +2639,9 @@ static void widget_state_nothing(uiWidgetType *wt, int UNUSED(state))
 }
 
 /* special case, button that calls pulldown */
-static void widget_state_pulldown(uiWidgetType *wt, int state)
+static void widget_state_pulldown(uiWidgetType *wt, int UNUSED(state))
 {
 	wt->wcol = *(wt->wcol_theme);
-
-	copy_v4_v4_char(wt->wcol.inner, wt->wcol.inner_sel);
-	copy_v3_v3_char(wt->wcol.outline, wt->wcol.inner);
-
-	if (state & UI_ACTIVE)
-		copy_v3_v3_char(wt->wcol.text, wt->wcol.text_sel);
 }
 
 /* special case, pie menu items */
@@ -3812,9 +3819,22 @@ static void widget_menunodebut(uiWidgetColors *wcol, rcti *rect, int UNUSED(stat
 
 static void widget_pulldownbut(uiWidgetColors *wcol, rcti *rect, int state, int roundboxalign)
 {
-	if (state & UI_ACTIVE) {
+	float back[4];
+	UI_GetThemeColor4fv(TH_BACK, back);
+
+	if ((state & UI_ACTIVE) || (back[3] < 1.0f)) {
 		uiWidgetBase wtb;
 		const float rad = wcol->roundness * U.widget_unit;
+
+		if (state & UI_ACTIVE) {
+			copy_v4_v4_char(wcol->inner, wcol->inner_sel);
+			copy_v3_v3_char(wcol->text, wcol->text_sel);
+			copy_v3_v3_char(wcol->outline, wcol->inner);
+		}
+		else {
+			wcol->inner[3] *= 1.0f - back[3];
+			wcol->outline[3] = 0.0f;
+		}
 
 		widget_init(&wtb);
 
@@ -4352,7 +4372,7 @@ void ui_draw_but(const bContext *C, ARegion *ar, uiStyle *style, uiBut *but, rct
 	uiFontStyle *fstyle = &style->widget;
 	uiWidgetType *wt = NULL;
 
-#ifdef USE_POPOVER_ONCE
+#ifdef USE_UI_POPOVER_ONCE
 	const rcti rect_orig = *rect;
 #endif
 
@@ -4403,10 +4423,11 @@ void ui_draw_but(const bContext *C, ARegion *ar, uiStyle *style, uiBut *but, rct
 
 			case UI_BTYPE_SEPR:
 			case UI_BTYPE_SEPR_LINE:
+			case UI_BTYPE_SEPR_SPACER:
 				break;
 
 			case UI_BTYPE_BUT:
-#ifdef USE_TOOLBAR_HACK
+#ifdef USE_UI_TOOLBAR_HACK
 				if (UI_but_is_tool(but)) {
 					wt = widget_type(UI_WTYPE_TOOLBAR_ITEM);
 				}
@@ -4632,7 +4653,7 @@ void ui_draw_but(const bContext *C, ARegion *ar, uiStyle *style, uiBut *but, rct
 		if (disabled)
 			glEnable(GL_BLEND);
 
-#ifdef USE_POPOVER_ONCE
+#ifdef USE_UI_POPOVER_ONCE
 		if (but->block->flag & UI_BLOCK_POPOVER_ONCE) {
 			if ((state & UI_ACTIVE) && ui_but_is_popover_once_compat(but)) {
 				uiWidgetType wt_back = *wt;
@@ -4895,6 +4916,24 @@ uiWidgetColors *ui_tooltip_get_theme(void)
 	return wt->wcol_theme;
 }
 
+/**
+ * Generic drawing for background.
+ */
+void ui_draw_widget_back(uiWidgetTypeEnum type, bool use_shadow, const rcti *rect)
+{
+	uiWidgetType *wt = widget_type(type);
+
+	if (use_shadow) {
+		glEnable(GL_BLEND);
+		widget_softshadow(rect, UI_CNR_ALL, 0.25f * U.widget_unit);
+		glDisable(GL_BLEND);
+	}
+
+	rcti rect_copy = *rect;
+	wt->state(wt, 0);
+	wt->draw(&wt->wcol, &rect_copy, 0, UI_CNR_ALL);
+}
+
 void ui_draw_tooltip_background(uiStyle *UNUSED(style), uiBlock *UNUSED(block), rcti *rect)
 {
 	uiWidgetType *wt = widget_type(UI_WTYPE_TOOLTIP);
@@ -4902,22 +4941,6 @@ void ui_draw_tooltip_background(uiStyle *UNUSED(style), uiBlock *UNUSED(block), 
 	/* wt->draw ends up using same function to draw the tooltip as menu_back */
 	wt->draw(&wt->wcol, rect, 0, 0);
 }
-
-void ui_draw_search_back(uiStyle *UNUSED(style), uiBlock *block, rcti *rect)
-{
-	uiWidgetType *wt = widget_type(UI_WTYPE_BOX);
-
-	glEnable(GL_BLEND);
-	widget_softshadow(rect, UI_CNR_ALL, 0.25f * U.widget_unit);
-	glDisable(GL_BLEND);
-
-	wt->state(wt, 0);
-	if (block)
-		wt->draw(&wt->wcol, rect, block->flag, UI_CNR_ALL);
-	else
-		wt->draw(&wt->wcol, rect, 0, UI_CNR_ALL);
-}
-
 
 /* helper call to draw a menu item without button */
 /* state: UI_ACTIVE or 0 */
