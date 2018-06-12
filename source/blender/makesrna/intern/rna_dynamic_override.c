@@ -53,20 +53,6 @@ const EnumPropertyItem rna_enum_dynamic_override_property_type_items[] = {
 
 #include "DEG_depsgraph.h"
 
-static void rna_DynamicOverrideProperty_name_get(PointerRNA *ptr, char *value)
-{
-	DynamicOverrideProperty *dyn_prop = ptr->data;
-	/* TODO: Get the name from data_path. */
-	strcpy(value, dyn_prop->rna_path);
-}
-
-static int rna_DynamicOverrideProperty_length(PointerRNA *ptr)
-{
-	DynamicOverrideProperty *dyn_prop = ptr->data;
-	/* TODO: Get the name from data_path. */
-	return strlen(dyn_prop->rna_path);
-}
-
 static PropertyRNA *rna_DynamicOverride_property_get(PointerRNA *ptr)
 {
 	DynamicOverrideProperty *dyn_prop = ptr->data;
@@ -93,6 +79,30 @@ static PropertyRNA *rna_DynamicOverride_property_get(PointerRNA *ptr)
 	/* Note that we have no 'invalid' value for PropertyRNA type... :/ */
 	return prop_elem ? prop_elem->prop : NULL;
 
+}
+
+static void rna_DynamicOverrideProperty_name_get(PointerRNA *ptr, char *value)
+{
+	PropertyRNA *prop = rna_DynamicOverride_property_get(ptr);
+	if (prop == NULL) {
+		DynamicOverrideProperty *dyn_prop = ptr->data;
+		strcpy(value, dyn_prop->rna_path);
+	}
+
+	const char *name = RNA_property_ui_name(prop);
+	strcpy(value, name);
+}
+
+static int rna_DynamicOverrideProperty_length(PointerRNA *ptr)
+{
+	PropertyRNA *prop = rna_DynamicOverride_property_get(ptr);
+	if (prop == NULL) {
+		DynamicOverrideProperty *dyn_prop = ptr->data;
+		return strlen(dyn_prop->rna_path);
+	}
+
+	const char *name = RNA_property_ui_name(prop);
+	return strlen(name);
 }
 
 static int rna_DynamicOverrideProperty_data_type_get(PointerRNA *ptr)
