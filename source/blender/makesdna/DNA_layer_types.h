@@ -77,7 +77,7 @@ typedef struct DynamicOverrideProperty {
 	struct DynamicOverridePropertyData data;
 	struct ID *root;
 	char *rna_path;
-	struct ListBase data_path; /* runtime: (RNAProperty *)LinkData->data */
+	struct ListBase data_path; /* runtime: PropertyElemRNA */
 	short flag;
 	short property_type; /* eDynamicOverridePropertyType */
 	short operation; /* See IDOVERRIDESTATIC_OP_ enums in DNA_ID.h */
