@@ -524,6 +524,15 @@ void DepsgraphRelationBuilder::build_object(Base *base, Object *object)
 		             parent_transform_key,
 		             "ObLocal -> ObParent");
 	}
+	/* Handle dynamic override update. */
+	OperationKey scene_cow_key(&scene_->id,
+	                       DEG_NODE_TYPE_COPY_ON_WRITE,
+	                       DEG_OPCODE_COPY_ON_WRITE);
+	OperationKey ob_cow_key(&object->id,
+	                        DEG_NODE_TYPE_COPY_ON_WRITE,
+	                        DEG_OPCODE_COPY_ON_WRITE);
+	add_relation(scene_cow_key, ob_cow_key, "Dynamic Override CoW Relation");
+
 	/* Modifiers. */
 	if (object->modifiers.first != NULL) {
 		BuilderWalkUserData data;
