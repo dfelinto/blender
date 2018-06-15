@@ -2120,7 +2120,6 @@ static void createTransParticleVerts(bContext *C, TransInfo *t)
 void flushTransParticles(TransInfo *t)
 {
 	FOREACH_TRANS_DATA_CONTAINER (t, tc) {
-
 		Scene *scene = t->scene;
 		ViewLayer *view_layer = t->view_layer;
 		Object *ob = OBACT(view_layer);
@@ -8632,6 +8631,10 @@ void createTransData(bContext *C, TransInfo *t)
 			t->flag |= T_POINTS | T_2D_EDIT;
 			createTransPaintCurveVerts(C, t);
 			countAndCleanTransDataContainer(t);
+		}
+		/* Mark as initialized if above checks fail. */
+		if (t->data_len_all == -1) {
+			t->data_len_all = 0;
 		}
 	}
 	else {

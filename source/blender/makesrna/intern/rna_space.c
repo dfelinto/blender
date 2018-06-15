@@ -719,8 +719,8 @@ static const EnumPropertyItem *rna_View3DShading_light_itemf(
 static int rna_View3DShading_studio_light_get(PointerRNA *ptr)
 {
 	View3D *v3d = (View3D *)ptr->data;
-	char* dna_storage = v3d->shading.studio_light;
-	
+	char *dna_storage = v3d->shading.studio_light;
+
 	int flag = STUDIOLIGHT_ORIENTATIONS_SOLID;
 	if (v3d->drawtype == OB_SOLID && v3d->shading.light == V3D_LIGHTING_MATCAP) {
 		flag = STUDIOLIGHT_ORIENTATION_VIEWNORMAL;
@@ -737,8 +737,8 @@ static int rna_View3DShading_studio_light_get(PointerRNA *ptr)
 static void rna_View3DShading_studio_light_set(PointerRNA *ptr, int value)
 {
 	View3D *v3d = (View3D *)ptr->data;
-	char* dna_storage = v3d->shading.studio_light;
-	
+	char *dna_storage = v3d->shading.studio_light;
+
 	int flag = STUDIOLIGHT_ORIENTATIONS_SOLID;
 	if (v3d->drawtype == OB_SOLID && v3d->shading.light == V3D_LIGHTING_MATCAP) {
 		flag = STUDIOLIGHT_ORIENTATION_VIEWNORMAL;
@@ -763,7 +763,7 @@ static const EnumPropertyItem *rna_View3DShading_studio_light_itemf(
 		const int flags = (STUDIOLIGHT_EXTERNAL_FILE | STUDIOLIGHT_ORIENTATION_VIEWNORMAL);
 
 		LISTBASE_FOREACH(StudioLight *, sl, BKE_studiolight_listbase()) {
-			int icon_id = sl->irradiance_icon_id;
+			int icon_id = (v3d->shading.flag & V3D_SHADING_MATCAP_FLIP_X) ? sl->icon_id_matcap_flipped: sl->icon_id_matcap;
 			if ((sl->flag & flags) == flags) {
 				EnumPropertyItem tmp = {sl->index, sl->name, icon_id, sl->name, ""};
 				RNA_enum_item_add(&item, &totitem, &tmp);
@@ -772,7 +772,7 @@ static const EnumPropertyItem *rna_View3DShading_studio_light_itemf(
 	}
 	else {
 		LISTBASE_FOREACH(StudioLight *, sl, BKE_studiolight_listbase()) {
-			int icon_id = sl->irradiance_icon_id;
+			int icon_id = sl->icon_id_irradiance;
 			bool show_studiolight = false;
 
 			if ((sl->flag & STUDIOLIGHT_INTERNAL)) {
@@ -788,7 +788,7 @@ static const EnumPropertyItem *rna_View3DShading_studio_light_itemf(
 
 					case OB_MATERIAL:
 						show_studiolight = (sl->flag & STUDIOLIGHT_ORIENTATION_WORLD) > 0;
-						icon_id = sl->radiance_icon_id;
+						icon_id = sl->icon_id_radiance;
 						break;
 				}
 			}

@@ -1014,10 +1014,10 @@ static void region_overlap_fix(ScrArea *sa, ARegion *ar)
 /* overlapping regions only in the following restricted cases */
 bool ED_region_is_overlap(int spacetype, int regiontype)
 {
+	if (regiontype == RGN_TYPE_HUD) {
+		return 1;
+	}
 	if (U.uiflag2 & USER_REGION_OVERLAP) {
-		if (regiontype == RGN_TYPE_HUD) {
-			return 1;
-		}
 		if (ELEM(spacetype, SPACE_VIEW3D, SPACE_SEQ, SPACE_IMAGE)) {
 			if (ELEM(regiontype, RGN_TYPE_TOOLS, RGN_TYPE_UI, RGN_TYPE_TOOL_PROPS))
 				return 1;
@@ -1099,8 +1099,8 @@ static void region_rect_recursive(wmWindow *win, ScrArea *sa, ARegion *ar, rcti 
 		        max_ii(0, BLI_rcti_size_y(overlap_remainder) - UI_UNIT_Y / 2));
 		ar->winrct.xmin = overlap_remainder_margin.xmin;
 		ar->winrct.ymin = overlap_remainder_margin.ymin;
-		ar->winrct.xmax = ar->winrct.xmin + ar->sizex;
-		ar->winrct.ymax = ar->winrct.ymin + ar->sizey;
+		ar->winrct.xmax = ar->winrct.xmin + ar->sizex - 1;
+		ar->winrct.ymax = ar->winrct.ymin + ar->sizey - 1;
 
 		BLI_rcti_isect(&ar->winrct, &overlap_remainder_margin, &ar->winrct);
 		if (BLI_rcti_size_x(&ar->winrct) < UI_UNIT_X ||
@@ -1455,7 +1455,7 @@ void ED_area_initialize(wmWindowManager *wm, wmWindow *win, ScrArea *sa)
 	}
 
 	for (ar = sa->regionbase.first; ar; ar = ar->next)
-		ar->type = BKE_regiontype_from_id(sa->type, ar->regiontype);
+		ar->type = BKE_regiontype_from_id_or_first(sa->type, ar->regiontype);
 
 	/* area sizes */
 	area_calc_totrct(sa, &window_rect);
@@ -1840,15 +1840,16 @@ BLI_INLINE bool streq_array_any(const char *s, const char *arr[])
 	return false;
 }
 
-static void ed_panel_draw(const bContext *C,
-                          ScrArea *sa,
-                          ARegion *ar,
-                          ListBase *lb,
-                          PanelType *pt,
-                          Panel *panel,
-                          int w,
-                          int em,
-                          bool vertical)
+static void ed_panel_draw(
+        const bContext *C,
+        ScrArea *sa,
+        ARegion *ar,
+        ListBase *lb,
+        PanelType *pt,
+        Panel *panel,
+        int w,
+        int em,
+        bool vertical)
 {
 	uiStyle *style = UI_style_get_dpi();
 
@@ -1860,6 +1861,21 @@ static void ed_panel_draw(const bContext *C,
 
 	/* bad fixed values */
 	int xco, yco, h = 0;
+
+	if (pt->draw_header_preset && !(pt->flag & PNL_NO_HEADER) && (open || vertical)) {
+		/* for preset menu */
+		panel->layout = UI_block_layout(
+		        block, UI_LAYOUT_HORIZONTAL, UI_LAYOUT_HEADER,
+		        0, (UI_UNIT_Y * 1.1f) + style->panelspace, UI_UNIT_Y, 1, 0, style);
+
+		pt->draw_header_preset(C, panel);
+
+		int headerend = w - UI_UNIT_X;
+
+		UI_block_layout_resolve(block, &xco, &yco);
+		UI_block_translate(block, headerend - xco, 0);
+		panel->layout = NULL;
+	}
 
 	if (pt->draw_header && !(pt->flag & PNL_NO_HEADER) && (open || vertical)) {
 		int labelx, labely;
@@ -2063,7 +2079,7 @@ void ED_region_panels_layout_ex(
 		Panel *panel = ar->panels.last;
 		if (panel != NULL) {
 			int size_dyn[2] = {
-				UI_UNIT_X * 12,
+				UI_UNIT_X * ((panel->flag & PNL_CLOSED) ? 8 : 14),
 				UI_panel_size_y(panel),
 			};
 			/* region size is layout based and needs to be updated */
@@ -2121,6 +2137,10 @@ void ED_region_panels_layout_ex(
 		ar->runtime.category = category;
 	}
 }
+void ED_region_panels_layout(const bContext *C, ARegion *ar)
+{
+	ED_region_panels_layout_ex(C, ar, NULL, -1, true);
+}
 
 void ED_region_panels_draw(const bContext *C, ARegion *ar)
 {
@@ -2166,7 +2186,7 @@ void ED_region_panels_ex(
 void ED_region_panels(const bContext *C, ARegion *ar)
 {
 	/* TODO: remove? */
-	ED_region_panels_layout_ex(C, ar, NULL, -1, true);
+	ED_region_panels_layout(C, ar);
 	ED_region_panels_draw(C, ar);
 }
 
@@ -2189,13 +2209,12 @@ void ED_region_header_layout(const bContext *C, ARegion *ar)
 	Header header = {NULL};
 	int maxco, xco, yco;
 	int headery = ED_area_headersize();
-	const int start_ofs = UI_HEADER_OFFSET_START;
 	bool region_layout_based = ar->flag & RGN_FLAG_DYNAMIC_SIZE;
 
 	/* set view2d view matrix for scrolling (without scrollers) */
 	UI_view2d_view_ortho(&ar->v2d);
 
-	xco = maxco = start_ofs;
+	xco = maxco = UI_HEADER_OFFSET;
 	yco = headery + (ar->winy - headery) / 2 - floor(0.2f * UI_UNIT_Y);
 
 	/* XXX workaround for 1 px alignment issue. Not sure what causes it... Would prefer a proper fix - Julian */
@@ -2226,7 +2245,7 @@ void ED_region_header_layout(const bContext *C, ARegion *ar)
 		if (xco > maxco)
 			maxco = xco;
 
-		int new_sizex = (maxco + start_ofs) / UI_DPI_FAC;
+		int new_sizex = (maxco + UI_HEADER_OFFSET) / UI_DPI_FAC;
 
 		if (region_layout_based && (ar->sizex != new_sizex)) {
 			/* region size is layout based and needs to be updated */
@@ -2239,8 +2258,12 @@ void ED_region_header_layout(const bContext *C, ARegion *ar)
 		UI_block_end(C, block);
 	}
 
+	if (!region_layout_based) {
+		maxco += UI_HEADER_OFFSET;
+	}
+
 	/* always as last  */
-	UI_view2d_totRect_set(&ar->v2d, maxco + (region_layout_based ? 0 : UI_UNIT_X + 80), headery);
+	UI_view2d_totRect_set(&ar->v2d, maxco, headery);
 
 	/* restore view matrix */
 	UI_view2d_view_restore(C);
@@ -2248,10 +2271,10 @@ void ED_region_header_layout(const bContext *C, ARegion *ar)
 
 void ED_region_header_draw(const bContext *C, ARegion *ar)
 {
-	UI_view2d_view_ortho(&ar->v2d);
-
 	/* clear */
 	region_clear_color(C, ar, region_background_color_id(C, ar));
+
+	UI_view2d_view_ortho(&ar->v2d);
 
 	/* View2D matrix might have changed due to dynamic sized regions. */
 	UI_blocklist_update_window_matrix(C, &ar->uiblocks);
