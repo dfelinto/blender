@@ -7855,9 +7855,10 @@ void RNA_struct_dynamic_override_apply(PointerRNA *ptr, DynamicOverrideProperty 
 
 	/* XXX For now, later we can use cached path in dyn_prop->data_path, even if only partially evaluated
 	 * (i.e. with no actual data), would still save us the whole string path parsing. */
-	if (RNA_path_resolve_elements(ptr, dyn_prop->rna_path, &dyn_prop->data_path)) {
-		rna_property_override_operation_apply(&((PropertyElemRNA *)dyn_prop->data_path.last)->ptr, NULL, NULL,
-		                                      ((PropertyElemRNA *)dyn_prop->data_path.last)->prop, NULL, NULL,
+	ListBase data_path = {0};
+	if (RNA_path_resolve_elements(ptr, dyn_prop->rna_path, &data_path)) {
+		rna_property_override_operation_apply(&((PropertyElemRNA *)data_path.last)->ptr, NULL, NULL,
+		                                      ((PropertyElemRNA *)data_path.last)->prop, NULL, NULL,
 		                                      NULL, dyn_prop);
 	}
 #ifndef NDEBUG
@@ -7866,6 +7867,7 @@ void RNA_struct_dynamic_override_apply(PointerRNA *ptr, DynamicOverrideProperty 
 		       ((ID *)ptr->id.data)->name, dyn_prop->rna_path);
 	}
 #endif
+	BLI_freelistN(&data_path);
 #ifdef DEBUG_OVERRIDE_TIMEIT
 	TIMEIT_END_AVERAGED(RNA_struct_dynamic_override_apply);
 #endif
