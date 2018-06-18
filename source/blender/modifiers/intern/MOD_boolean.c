@@ -310,6 +310,7 @@ static Mesh *applyModifier(ModifierData *md, const ModifierEvalContext *ctx, Mes
 				        use_dissolve,
 				        use_island_connect,
 				        false,
+				        false,
 				        bmd->operation,
 				        bmd->double_threshold);
 
@@ -345,7 +346,7 @@ static CustomDataMask requiredDataMask(Object *UNUSED(ob), ModifierData *UNUSED(
 	CustomDataMask dataMask = CD_MASK_MTFACE | CD_MASK_MEDGE;
 
 	dataMask |= CD_MASK_MDEFORMVERT;
-	
+
 	return dataMask;
 }
 

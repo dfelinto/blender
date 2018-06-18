@@ -77,17 +77,17 @@ static void studiolight_free(struct StudioLight *sl)
 		GPU_texture_free(sl->equirectangular_radiance_gputexture);
 		sl->equirectangular_radiance_gputexture = NULL;
 	}
-	
+
 	if (sl->equirectangular_irradiance_gputexture) {
 		GPU_texture_free(sl->equirectangular_irradiance_gputexture);
 		sl->equirectangular_irradiance_gputexture = NULL;
 	}
-	
+
 	if (sl->equirectangular_radiance_buffer) {
 		IMB_freeImBuf(sl->equirectangular_radiance_buffer);
 		sl->equirectangular_radiance_buffer = NULL;
 	}
-	
+
 	if (sl->equirectangular_irradiance_buffer) {
 		IMB_freeImBuf(sl->equirectangular_irradiance_buffer);
 		sl->equirectangular_irradiance_buffer = NULL;
@@ -95,6 +95,10 @@ static void studiolight_free(struct StudioLight *sl)
 	if (sl->path_irr) {
 		MEM_freeN(sl->path_irr);
 		sl->path_irr = NULL;
+	}
+	if (sl->gpu_matcap_3components) {
+		MEM_freeN(sl->gpu_matcap_3components);
+		sl->gpu_matcap_3components = NULL;
 	}
 	MEM_freeN(sl);
 }
@@ -169,7 +173,7 @@ static void studiolight_calculate_radiance_buffer(
 	}
 }
 
-static void studiolight_load_equierectangular_image(StudioLight *sl)
+static void studiolight_load_equirectangular_image(StudioLight *sl)
 {
 	if (sl->flag & STUDIOLIGHT_EXTERNAL_FILE) {
 		ImBuf *ibuf = NULL;
@@ -182,29 +186,47 @@ static void studiolight_load_equierectangular_image(StudioLight *sl)
 	sl->flag |= STUDIOLIGHT_EXTERNAL_IMAGE_LOADED;
 }
 
-static void studiolight_create_equierectangular_radiance_gputexture(StudioLight *sl)
+static void studiolight_create_equirectangular_radiance_gputexture(StudioLight *sl)
 {
 	if (sl->flag & STUDIOLIGHT_EXTERNAL_FILE) {
 		char error[256];
 		BKE_studiolight_ensure_flag(sl, STUDIOLIGHT_EXTERNAL_IMAGE_LOADED);
 		ImBuf *ibuf = sl->equirectangular_radiance_buffer;
-		sl->equirectangular_radiance_gputexture = GPU_texture_create_2D(ibuf->x, ibuf->y, GPU_RGBA16F, ibuf->rect_float, error);
-		GPUTexture *tex = sl->equirectangular_radiance_gputexture;
-		GPU_texture_bind(tex, 0);
-		GPU_texture_filter_mode(tex, true);
-		GPU_texture_wrap_mode(tex, true);
-		GPU_texture_unbind(tex);
+
+		if (sl->flag & STUDIOLIGHT_ORIENTATION_VIEWNORMAL) {
+			sl->gpu_matcap_3components = MEM_callocN(sizeof(float[3]) * ibuf->x * ibuf->y, __func__);
+
+			float *offset4 = ibuf->rect_float;
+			float *offset3 = sl->gpu_matcap_3components;
+			for (int i = 0 ; i < ibuf->x * ibuf->y; i++) {
+				copy_v3_v3(offset3, offset4);
+				offset3 += 3;
+				offset4 += 4;
+			}
+			sl->equirectangular_radiance_gputexture = GPU_texture_create_2D(
+			        ibuf->x, ibuf->y, GPU_R11F_G11F_B10F, sl->gpu_matcap_3components, error);
+		}
+		else {
+			sl->equirectangular_radiance_gputexture = GPU_texture_create_2D(
+			        ibuf->x, ibuf->y, GPU_RGBA16F, ibuf->rect_float, error);
+			GPUTexture *tex = sl->equirectangular_radiance_gputexture;
+			GPU_texture_bind(tex, 0);
+			GPU_texture_filter_mode(tex, true);
+			GPU_texture_wrap_mode(tex, true);
+			GPU_texture_unbind(tex);
+		}
 	}
 	sl->flag |= STUDIOLIGHT_EQUIRECTANGULAR_RADIANCE_GPUTEXTURE;
 }
 
-static void studiolight_create_equierectangular_irradiance_gputexture(StudioLight *sl)
+static void studiolight_create_equirectangular_irradiance_gputexture(StudioLight *sl)
 {
 	if (sl->flag & STUDIOLIGHT_EXTERNAL_FILE) {
 		char error[256];
 		BKE_studiolight_ensure_flag(sl, STUDIOLIGHT_EQUIRECTANGULAR_IRRADIANCE_IMAGE_CALCULATED);
 		ImBuf *ibuf = sl->equirectangular_irradiance_buffer;
-		sl->equirectangular_irradiance_gputexture = GPU_texture_create_2D(ibuf->x, ibuf->y, GPU_RGBA16F, ibuf->rect_float, error);
+		sl->equirectangular_irradiance_gputexture = GPU_texture_create_2D(
+		        ibuf->x, ibuf->y, GPU_RGBA16F, ibuf->rect_float, error);
 		GPUTexture *tex = sl->equirectangular_irradiance_gputexture;
 		GPU_texture_bind(tex, 0);
 		GPU_texture_filter_mode(tex, true);
@@ -376,7 +398,7 @@ static float texel_coord_solid_angle(float a_U, float a_V, int a_Size)
 }
 
 BLI_INLINE void studiolight_evaluate_specular_radiance_buffer(
-        ImBuf *radiance_buffer, const float normal[3], float color[3], 
+        ImBuf *radiance_buffer, const float normal[3], float color[3],
         int xoffset, int yoffset, int zoffset, float zvalue)
 {
 	if (radiance_buffer == NULL) {
@@ -451,7 +473,7 @@ static void studiolight_calculate_irradiance_equirectangular_image(StudioLight *
 {
 	if (sl->flag & STUDIOLIGHT_EXTERNAL_FILE) {
 		/* check for cached irr file */
-		
+
 		BKE_studiolight_ensure_flag(sl, STUDIOLIGHT_RADIANCE_BUFFERS_CALCULATED);
 
 		float *colbuf = MEM_mallocN(STUDIOLIGHT_IRRADIANCE_EQUIRECTANGULAR_WIDTH * STUDIOLIGHT_IRRADIANCE_EQUIRECTANGULAR_HEIGHT * sizeof(float[4]), __func__);
@@ -527,7 +549,7 @@ static void studiolight_add_files_from_datafolder(const int folder_id, const cha
 			if ((dir[i].type & S_IFREG)) {
 				const char *filename = dir[i].relname;
 				const char *path = dir[i].path;
-				if (BLI_testextensie_array(filename, imb_ext_image)) {
+				if (BLI_path_extension_check_array(filename, imb_ext_image)) {
 					sl = studiolight_create(STUDIOLIGHT_EXTERNAL_FILE | flag);
 					BLI_strncpy(sl->name, filename, FILE_MAXFILE);
 					BLI_strncpy(sl->path, path, FILE_MAXFILE);
@@ -571,45 +593,54 @@ static int studiolight_cmp(const void *a, const void *b)
 }
 
 /* icons */
+
+/* Takes normalized uvs as parameter (range from 0 to 1).
+ * inner_edge and outer_edge are distances (from the center)
+ * in uv space for the alpha mask falloff. */
+static uint alpha_circle_mask(float u, float v, float inner_edge, float outer_edge)
+{
+	/* Coords from center. */
+	float co[2] = {u - 0.5f, v - 0.5f};
+	float dist = len_v2(co);
+	float alpha = 1.0f + (inner_edge - dist) / (outer_edge - inner_edge);
+	uint mask = (uint)floorf(255.0f * min_ff(max_ff(alpha, 0.0f), 1.0f));
+	return mask << 24;
+}
+
+#define STUDIOLIGHT_DIAMETER 0.95f
+
 static uint *studiolight_radiance_preview(StudioLight *sl, int icon_size)
 {
 	BKE_studiolight_ensure_flag(sl, STUDIOLIGHT_EXTERNAL_IMAGE_LOADED);
 
 	uint *rect = MEM_mallocN(icon_size * icon_size * sizeof(uint), __func__);
-	int icon_center = icon_size / 2;
-	float sphere_radius = icon_center * 0.9;
+	float pixel_size = 1.0f / (float)icon_size;
 
 	int offset = 0;
 	for (int y = 0; y < icon_size; y++) {
-		float dy = y - icon_center;
+		float dy = (y + 0.5f) / (float)icon_size;
+		dy = dy / STUDIOLIGHT_DIAMETER - (1.0f - STUDIOLIGHT_DIAMETER) / 2.0f;
 		for (int x = 0; x < icon_size; x++) {
-			float dx = x - icon_center;
-			/* calculate aliasing */
-			float alias = 0;
-			const float alias_step = 0.333;
-			for (float ay = dy - 0.5; ay < dy + 0.5; ay += alias_step) {
-				for (float ax = dx - 0.5; ax < dx + 0.5; ax += alias_step) {
-					if (sqrt(ay * ay + ax * ax) < sphere_radius) {
-						alias += alias_step * alias_step;
-					}
-				}
-			}
+			float dx = (x + 0.5f) / (float)icon_size;
+			dx = dx / STUDIOLIGHT_DIAMETER - (1.0f - STUDIOLIGHT_DIAMETER) / 2.0f;
+
 			uint pixelresult = 0x0;
-			uint alias_i = clamp_i(alias * 256, 0, 255);
-			if (alias_i != 0) {
-				/* calculate normal */
-				uint alias_mask = alias_i << 24;
-				float incoming[3];
-				copy_v3_fl3(incoming, 0.0, 1.0, 0.0);
+			uint alphamask = alpha_circle_mask(dx, dy, 0.5f - pixel_size, 0.5f);
+			if (alphamask != 0) {
+				float incoming[3] = {0.0f, 0.0f, -1.0f};
 
 				float normal[3];
-				normal[0] = dx / sphere_radius;
-				normal[2] = dy / sphere_radius;
-				normal[1] = -sqrt(-(normal[0] * normal[0]) - (normal[2] * normal[2]) + 1);
-				normalize_v3(normal);
+				normal[0] = dx * 2.0f - 1.0f;
+				normal[1] = dy * 2.0f - 1.0f;
+				float dist = len_v2(normal);
+				normal[2] = sqrtf(1.0f - SQUARE(dist));
 
 				float direction[3];
 				reflect_v3_v3v3(direction, incoming, normal);
+
+				/* We want to see horizon not poles. */
+				SWAP(float, direction[1], direction[2]);
+				direction[1] = -direction[1];
 
 				float color[4];
 				studiolight_calculate_radiance(sl->equirectangular_radiance_buffer, color, direction);
@@ -617,7 +648,7 @@ static uint *studiolight_radiance_preview(StudioLight *sl, int icon_size)
 				pixelresult = rgb_to_cpack(
 				        linearrgb_to_srgb(color[0]),
 				        linearrgb_to_srgb(color[1]),
-				        linearrgb_to_srgb(color[2])) | alias_mask;
+				        linearrgb_to_srgb(color[2])) | alphamask;
 			}
 			rect[offset++] = pixelresult;
 		}
@@ -630,22 +661,25 @@ static uint *studiolight_matcap_preview(StudioLight *sl, int icon_size, bool fli
 	BKE_studiolight_ensure_flag(sl, STUDIOLIGHT_EXTERNAL_IMAGE_LOADED);
 
 	uint *rect = MEM_mallocN(icon_size * icon_size * sizeof(uint), __func__);
-	const uint alphamask = 0xff000000;
 	float color[4];
 	float fx, fy;
+	float pixel_size = 1.0f / (float)icon_size;
 	int offset = 0;
 	ImBuf *ibuf = sl->equirectangular_radiance_buffer;
 
 	for (int y = 0; y < icon_size; y++) {
-		fy = y * ibuf->y / icon_size;
+		fy = (y + 0.5f) / (float)icon_size;
+		fy = fy / STUDIOLIGHT_DIAMETER - (1.0f - STUDIOLIGHT_DIAMETER) / 2.0f;
 		for (int x = 0; x < icon_size; x++) {
+			fx = (x + 0.5f) / (float)icon_size;
+			fx = fx / STUDIOLIGHT_DIAMETER - (1.0f - STUDIOLIGHT_DIAMETER) / 2.0f;
 			if (flipped) {
-				fx = ibuf->x - (x * ibuf->x / icon_size) - 1;
+				fx = 1.0f - fx;
 			}
-			else {
-				fx = x * ibuf->x / icon_size;
-			}
-			nearest_interpolation_color(ibuf, NULL, color, fx, fy);
+			nearest_interpolation_color(ibuf, NULL, color, fx * ibuf->x, fy * ibuf->y);
+
+			uint alphamask = alpha_circle_mask(fx, fy, 0.5f - pixel_size, 0.5f);
+
 			rect[offset++] = rgb_to_cpack(
 			        linearrgb_to_srgb(color[0]),
 			        linearrgb_to_srgb(color[1]),
@@ -665,34 +699,25 @@ static uint *studiolight_irradiance_preview(StudioLight *sl, int icon_size)
 		BKE_studiolight_ensure_flag(sl, STUDIOLIGHT_DIFFUSE_LIGHT_CALCULATED);
 
 		uint *rect = MEM_mallocN(icon_size * icon_size * sizeof(uint), __func__);
-		int icon_center = icon_size / 2;
-		float sphere_radius = icon_center * 0.9;
+		float pixel_size = 1.0f / (float)icon_size;
 
 		int offset = 0;
 		for (int y = 0; y < icon_size; y++) {
-			float dy = y - icon_center;
+			float dy = (y + 0.5f) / (float)icon_size;
+			dy = dy / STUDIOLIGHT_DIAMETER - (1.0f - STUDIOLIGHT_DIAMETER) / 2.0f;
 			for (int x = 0; x < icon_size; x++) {
-				float dx = x - icon_center;
-				/* calculate aliasing */
-				float alias = 0;
-				const float alias_step = 0.333;
-				for (float ay = dy - 0.5; ay < dy + 0.5; ay += alias_step) {
-					for (float ax = dx - 0.5; ax < dx + 0.5; ax += alias_step) {
-						if (sqrt(ay * ay + ax * ax) < sphere_radius) {
-							alias += alias_step * alias_step;
-						}
-					}
-				}
+				float dx = (x + 0.5f) / (float)icon_size;
+				dx = dx / STUDIOLIGHT_DIAMETER - (1.0f - STUDIOLIGHT_DIAMETER) / 2.0f;
+
 				uint pixelresult = 0x0;
-				uint alias_i = clamp_i(alias * 256, 0, 255);
-				if (alias_i != 0) {
+				uint alphamask = alpha_circle_mask(dx, dy, 0.5f - pixel_size, 0.5f);
+				if (alphamask != 0) {
 					/* calculate normal */
-					uint alias_mask = alias_i << 24;
 					float normal[3];
-					normal[0] = dx / sphere_radius;
-					normal[1] = dy / sphere_radius;
-					normal[2] = sqrt(-(normal[0] * normal[0]) - (normal[1] * normal[1]) + 1);
-					normalize_v3(normal);
+					normal[0] = dx * 2.0f - 1.0f;
+					normal[1] = dy * 2.0f - 1.0f;
+					float dist = len_v2(normal);
+					normal[2] = sqrtf(1.0f - SQUARE(dist));
 
 					float color[3];
 					mul_v3_v3fl(color, sl->diffuse_light[STUDIOLIGHT_X_POS], clamp_f(normal[0], 0.0, 1.0));
@@ -704,7 +729,7 @@ static uint *studiolight_irradiance_preview(StudioLight *sl, int icon_size)
 					pixelresult = rgb_to_cpack(
 					        linearrgb_to_srgb(color[0]),
 					        linearrgb_to_srgb(color[1]),
-					        linearrgb_to_srgb(color[2])) | alias_mask;
+					        linearrgb_to_srgb(color[2])) | alphamask;
 				}
 				rect[offset++] = pixelresult;
 			}
@@ -869,7 +894,7 @@ void BKE_studiolight_ensure_flag(StudioLight *sl, int flag)
 	}
 
 	if ((flag & STUDIOLIGHT_EXTERNAL_IMAGE_LOADED)) {
-		studiolight_load_equierectangular_image(sl);
+		studiolight_load_equirectangular_image(sl);
 	}
 	if ((flag & STUDIOLIGHT_RADIANCE_BUFFERS_CALCULATED)) {
 		studiolight_calculate_radiance_cubemap_buffers(sl);
@@ -878,13 +903,13 @@ void BKE_studiolight_ensure_flag(StudioLight *sl, int flag)
 		studiolight_calculate_diffuse_light(sl);
 	}
 	if ((flag & STUDIOLIGHT_EQUIRECTANGULAR_RADIANCE_GPUTEXTURE)) {
-		studiolight_create_equierectangular_radiance_gputexture(sl);
+		studiolight_create_equirectangular_radiance_gputexture(sl);
 	}
 	if ((flag & STUDIOLIGHT_LIGHT_DIRECTION_CALCULATED)) {
 		studiolight_calculate_light_direction(sl);
 	}
 	if ((flag & STUDIOLIGHT_EQUIRECTANGULAR_IRRADIANCE_GPUTEXTURE)) {
-		studiolight_create_equierectangular_irradiance_gputexture(sl);
+		studiolight_create_equirectangular_irradiance_gputexture(sl);
 	}
 	if ((flag & STUDIOLIGHT_EQUIRECTANGULAR_IRRADIANCE_IMAGE_CALCULATED)) {
 		if (!studiolight_load_irradiance_equirectangular_image(sl)) {

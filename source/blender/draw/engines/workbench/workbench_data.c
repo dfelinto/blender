@@ -10,6 +10,7 @@ void workbench_private_data_init(WORKBENCH_PrivateData *wpd)
 	const DRWContextState *draw_ctx = DRW_context_state_get();
 	const Scene *scene = draw_ctx->scene;
 	wpd->material_hash = BLI_ghash_ptr_new(__func__);
+	wpd->user_preferences = &U;
 
 	View3D *v3d = draw_ctx->v3d;
 	if (v3d) {
@@ -36,6 +37,7 @@ void workbench_private_data_init(WORKBENCH_PrivateData *wpd)
 
 	WORKBENCH_UBO_World *wd = &wpd->world_data;
 	wd->matcap_orientation = (wpd->shading.flag & V3D_SHADING_MATCAP_FLIP_X) > 0;
+	wd->background_alpha = 1.0f;
 
 	if ((v3d->flag3 & V3D_SHOW_WORLD) &&
 	    (scene->world != NULL))
