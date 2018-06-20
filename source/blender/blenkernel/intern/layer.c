@@ -1333,6 +1333,9 @@ void BKE_dynamic_override_apply(const struct Depsgraph *depsgraph, ID *id)
 		return;
 	}
 
+	PointerRNA ptr;
+	RNA_id_pointer_create(id, &ptr);
+
 	ViewLayer *view_layer = DEG_get_evaluated_view_layer(depsgraph);
 	int i = 0;
 	for (OverrideSet *override_set = view_layer->override_sets.first;
@@ -1352,9 +1355,6 @@ void BKE_dynamic_override_apply(const struct Depsgraph *depsgraph, ID *id)
 				if ((dyn_prop->flag & DYN_OVERRIDE_PROP_USE) == 0) {
 					continue;
 				}
-
-				PointerRNA ptr;
-				RNA_id_pointer_create(id, &ptr);
 				RNA_struct_dynamic_override_apply(&ptr, dyn_prop);
 			}
 		}
@@ -1375,10 +1375,7 @@ void BKE_dynamic_override_apply(const struct Depsgraph *depsgraph, ID *id)
 				if ((dyn_prop->flag & DYN_OVERRIDE_PROP_USE) == 0) {
 					continue;
 				}
-
 				/* If object is in collection ... */
-				PointerRNA ptr;
-				RNA_id_pointer_create(id, &ptr);
 				RNA_struct_dynamic_override_apply(&ptr, dyn_prop);
 			}
 		}
