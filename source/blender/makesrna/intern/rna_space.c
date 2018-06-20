@@ -674,7 +674,7 @@ static PointerRNA rna_View3DShading_selected_studio_light_get(PointerRNA *ptr)
 {
 	View3D *v3d = (View3D *)ptr->data;
 	StudioLight *sl;
-	if (v3d->shading.light == V3D_LIGHTING_MATCAP) {
+	if (v3d->drawtype == OB_SOLID && v3d->shading.light == V3D_LIGHTING_MATCAP) {
 		sl = BKE_studiolight_find(v3d->shading.matcap, STUDIOLIGHT_FLAG_ALL);
 	}
 	else {
@@ -778,7 +778,7 @@ static const EnumPropertyItem *rna_View3DShading_studio_light_itemf(
 			int icon_id = sl->icon_id_irradiance;
 			bool show_studiolight = false;
 
-			if ((sl->flag & STUDIOLIGHT_INTERNAL)) {
+			if (sl->flag & STUDIOLIGHT_INTERNAL) {
 				/* always show internal lights */
 				show_studiolight = true;
 			}
@@ -2436,10 +2436,10 @@ static void rna_def_space_view3d_shading(BlenderRNA *brna)
 	RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
 
-	prop = RNA_def_property(srna, "studiolight_background", PROP_FLOAT, PROP_FACTOR);
+	prop = RNA_def_property(srna, "studiolight_background_alpha", PROP_FLOAT, PROP_FACTOR);
 	RNA_def_property_float_sdna(prop, NULL, "shading.studiolight_background");
 	RNA_def_property_float_default(prop, 0.0);
-	RNA_def_property_ui_text(prop, "Show Background", "Show the studiolight in the background");
+	RNA_def_property_ui_text(prop, "Background", "Show the studiolight in the background");
 	RNA_def_property_range(prop, 0.0f, 1.0f);
 	RNA_def_property_ui_range(prop, 0.00f, 1.0f, 1, 3);
 	RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
