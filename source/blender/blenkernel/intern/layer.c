@@ -1320,6 +1320,19 @@ static GSet **dynamic_override_apply_pre(const struct Depsgraph *depsgraph)
 	return dynamic_override_cache;
 }
 
+static void dynamic_override_apply_properties(PointerRNA *ptr, ListBase *properties_new)
+{
+	for (DynamicOverrideProperty *dyn_prop = properties_new->first;
+	     dyn_prop != NULL;
+	     dyn_prop = dyn_prop->next)
+	{
+		if ((dyn_prop->flag & DYN_OVERRIDE_PROP_USE) == 0) {
+			continue;
+		}
+		RNA_struct_dynamic_override_apply(ptr, dyn_prop);
+	}
+}
+
 void BKE_dynamic_override_apply(const struct Depsgraph *depsgraph, ID *id)
 {
 	const ID_Type id_type = GS(id->name);
@@ -1348,15 +1361,7 @@ void BKE_dynamic_override_apply(const struct Depsgraph *depsgraph, ID *id)
 
 		if (id_type == ID_SCE) {
 			/** Apply all the scene properties. */
-			for (DynamicOverrideProperty *dyn_prop = override_set->scene_properties.first;
-				 dyn_prop != NULL;
-				 dyn_prop = dyn_prop->next)
-			{
-				if ((dyn_prop->flag & DYN_OVERRIDE_PROP_USE) == 0) {
-					continue;
-				}
-				RNA_struct_dynamic_override_apply(&ptr, dyn_prop);
-			}
+			dynamic_override_apply_properties(&ptr, &override_set->scene_properties);
 		}
 		else {
 			if (dynamic_override_cache[i] != NULL &&
@@ -1364,20 +1369,10 @@ void BKE_dynamic_override_apply(const struct Depsgraph *depsgraph, ID *id)
 			{
 				continue;
 			}
-
 			/** Check if object is in one of the affected collections.
 			 *  If it is, apply all the overrides for the object and its material, mesh, ...
 			 **/
-			for (DynamicOverrideProperty *dyn_prop = override_set->collection_properties.first;
-				 dyn_prop != NULL;
-				 dyn_prop = dyn_prop->next)
-			{
-				if ((dyn_prop->flag & DYN_OVERRIDE_PROP_USE) == 0) {
-					continue;
-				}
-				/* If object is in collection ... */
-				RNA_struct_dynamic_override_apply(&ptr, dyn_prop);
-			}
+			dynamic_override_apply_properties(&ptr, &override_set->collection_properties);
 		}
 	}
 
