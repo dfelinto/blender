@@ -238,17 +238,22 @@ RigidBodyCon *BKE_rigidbody_copy_constraint(const Object *ob, const int UNUSED(f
 /* get the appropriate DerivedMesh based on rigid body mesh source */
 static Mesh *rigidbody_get_mesh(Object *ob)
 {
-	/* TODO(Sybren): turn this into a switch statement */
-	if (ob->rigidbody_object->mesh_source == RBO_MESH_DEFORM) {
-		return ob->runtime.mesh_deform_eval;
+	switch (ob->rigidbody_object->mesh_source) {
+		case RBO_MESH_DEFORM:
+			return ob->runtime.mesh_deform_eval;
+		case RBO_MESH_FINAL:
+			return ob->runtime.mesh_eval;
+		case RBO_MESH_BASE:
+			/* This mesh may be used for computing looptris, which should be done
+			 * on the original; otherwise every time the CoW is recreated it will
+			 * have to be recomputed. */
+			BLI_assert(ob->rigidbody_object->mesh_source == RBO_MESH_BASE);
+			return DEG_get_original_object(ob)->data;
 	}
-	else if (ob->rigidbody_object->mesh_source == RBO_MESH_FINAL) {
-		return ob->runtime.mesh_eval;
-	}
-	else {
-		BLI_assert(ob->rigidbody_object->mesh_source == RBO_MESH_BASE);
-		return ob->data;
-	}
+
+	/* Just return something sensible so that at least Blender won't crash. */
+	BLI_assert(!"Unknown mesh source");
+	return ob->runtime.mesh_eval;
 }
 
 /* create collision shape of mesh - convex hull */
@@ -1278,7 +1283,7 @@ static void rigidbody_update_sim_ob(Depsgraph *depsgraph, Scene *scene, RigidBod
 		ListBase *effectors;
 
 		/* get effectors present in the group specified by effector_weights */
-		effectors = pdInitEffectors(depsgraph, scene, ob, NULL, effector_weights, true);
+		effectors = BKE_effectors_create(depsgraph, ob, NULL, effector_weights);
 		if (effectors) {
 			float eff_force[3] = {0.0f, 0.0f, 0.0f};
 			float eff_loc[3], eff_vel[3];
@@ -1293,7 +1298,7 @@ static void rigidbody_update_sim_ob(Depsgraph *depsgraph, Scene *scene, RigidBod
 			/* calculate net force of effectors, and apply to sim object
 			 *	- we use 'central force' since apply force requires a "relative position" which we don't have...
 			 */
-			pdDoEffectors(effectors, NULL, effector_weights, &epoint, eff_force, NULL);
+			BKE_effectors_apply(effectors, NULL, effector_weights, &epoint, eff_force, NULL);
 			if (G.f & G_DEBUG)
 				printf("\tapplying force (%f,%f,%f) to '%s'\n", eff_force[0], eff_force[1], eff_force[2], ob->id.name + 2);
 			/* activate object in case it is deactivated */
@@ -1305,7 +1310,7 @@ static void rigidbody_update_sim_ob(Depsgraph *depsgraph, Scene *scene, RigidBod
 			printf("\tno forces to apply to '%s'\n", ob->id.name + 2);
 
 		/* cleanup */
-		pdEndEffectors(&effectors);
+		BKE_effectors_free(effectors);
 	}
 	/* NOTE: passive objects don't need to be updated since they don't move */
 

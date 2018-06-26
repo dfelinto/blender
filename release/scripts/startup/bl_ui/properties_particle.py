@@ -83,7 +83,7 @@ class PARTICLE_MT_specials(Menu):
         layout.operator("particle.duplicate_particle_system")
 
 
-class PARTICLE_MT_hair_dynamics_presets(PresetMenu):
+class PARTICLE_PT_hair_dynamics_presets(PresetMenu):
     bl_label = "Hair Dynamics Presets"
     preset_subdir = "hair_dynamics"
     preset_operator = "script.execute_preset"
@@ -349,7 +349,7 @@ class PARTICLE_PT_hair_dynamics(ParticleButtonsPanel, Panel):
 
         layout = self.layout
         layout.enabled = psys.use_hair_dynamics and psys.point_cache.is_baked is False
-        PARTICLE_MT_hair_dynamics_presets.draw_panel_header(layout)
+        PARTICLE_PT_hair_dynamics_presets.draw_panel_header(layout)
 
     def draw(self, context):
         layout = self.layout
@@ -500,6 +500,7 @@ class PARTICLE_PT_cache(ParticleButtonsPanel, Panel):
 
 class PARTICLE_PT_velocity(ParticleButtonsPanel, Panel):
     bl_label = "Velocity"
+    bl_options = {'DEFAULT_CLOSED'}
     COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE'}
 
     @classmethod
@@ -626,6 +627,7 @@ class PARTICLE_PT_rotation_angular_velocity(ParticleButtonsPanel, Panel):
 
 class PARTICLE_PT_physics(ParticleButtonsPanel, Panel):
     bl_label = "Physics"
+    bl_options = {'DEFAULT_CLOSED'}
     COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE'}
 
     @classmethod
@@ -1012,6 +1014,7 @@ class PARTICLE_PT_boidbrain(ParticleButtonsPanel, Panel):
 
 class PARTICLE_PT_render(ParticleButtonsPanel, Panel):
     bl_label = "Render"
+    bl_options = {'DEFAULT_CLOSED'}
     COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE'}
 
     @classmethod
@@ -1710,30 +1713,74 @@ class PARTICLE_PT_force_fields(ParticleButtonsPanel, Panel):
 
     def draw(self, context):
         layout = self.layout
+        layout.use_property_split = True
 
         part = particle_get_settings(context)
 
-        row = layout.row()
-        row.prop(part, "use_self_effect")
-        row.prop(part, "effector_amount", text="Amount")
+        col = layout.column()
+        col.prop(part, "use_self_effect")
+        col.prop(part, "effector_amount", text="Effector Amount")
 
-        split = layout.split(percentage=0.2)
-        split.label(text="Type 1:")
-        split.prop(part.force_field_1, "type", text="")
+
+class PARTICLE_PT_force_fields_type1(ParticleButtonsPanel, Panel):
+    bl_label = "Type 1"
+    bl_parent_id = "PARTICLE_PT_force_fields"
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE'}
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+
+        part = particle_get_settings(context)
+
+        col = layout.column()
+        col.prop(part.force_field_1, "type", text="Type 1")
         basic_force_field_settings_ui(self, context, part.force_field_1)
-        if part.force_field_1.type != 'NONE':
-            layout.label(text="Falloff:")
+
+
+class PARTICLE_PT_force_fields_type2(ParticleButtonsPanel, Panel):
+    bl_label = "Type 2"
+    bl_parent_id = "PARTICLE_PT_force_fields"
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE'}
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+
+        part = particle_get_settings(context)
+
+        col = layout.column()
+        col.prop(part.force_field_2, "type", text="Type 2")
+        basic_force_field_settings_ui(self, context, part.force_field_2)
+
+
+class PARTICLE_PT_force_fields_type1_falloff(ParticleButtonsPanel, Panel):
+    bl_label = "Falloff"
+    bl_options = {'DEFAULT_CLOSED'}
+    bl_parent_id = "PARTICLE_PT_force_fields_type1"
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE'}
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+
+        part = particle_get_settings(context)
+
         basic_force_field_falloff_ui(self, context, part.force_field_1)
 
-        if part.force_field_1.type != 'NONE':
-            layout.label(text="")
 
-        split = layout.split(percentage=0.2)
-        split.label(text="Type 2:")
-        split.prop(part.force_field_2, "type", text="")
-        basic_force_field_settings_ui(self, context, part.force_field_2)
-        if part.force_field_2.type != 'NONE':
-            layout.label(text="Falloff:")
+class PARTICLE_PT_force_fields_type2_falloff(ParticleButtonsPanel, Panel):
+    bl_label = "Falloff"
+    bl_options = {'DEFAULT_CLOSED'}
+    bl_parent_id = "PARTICLE_PT_force_fields_type2"
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE'}
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+
+        part = particle_get_settings(context)
+
         basic_force_field_falloff_ui(self, context, part.force_field_2)
 
 
@@ -1879,7 +1926,7 @@ class PARTICLE_PT_custom_props(ParticleButtonsPanel, PropertyPanel, Panel):
 
 classes = (
     PARTICLE_MT_specials,
-    PARTICLE_MT_hair_dynamics_presets,
+    PARTICLE_PT_hair_dynamics_presets,
     PARTICLE_UL_particle_systems,
     PARTICLE_PT_context_particles,
     PARTICLE_PT_emission,
@@ -1916,6 +1963,10 @@ classes = (
     PARTICLE_PT_hair_shape,
     PARTICLE_PT_field_weights,
     PARTICLE_PT_force_fields,
+    PARTICLE_PT_force_fields_type1,
+    PARTICLE_PT_force_fields_type1_falloff,
+    PARTICLE_PT_force_fields_type2,
+    PARTICLE_PT_force_fields_type2_falloff,
     PARTICLE_PT_vertexgroups,
     PARTICLE_PT_textures,
     PARTICLE_PT_custom_props,

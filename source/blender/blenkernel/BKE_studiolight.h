@@ -61,6 +61,22 @@
 
 #define STUDIOLIGHT_ICON_SIZE 96
 
+#define STUDIOLIGHT_SPHERICAL_HARMONICS_LEVEL 2
+#define STUDIOLIGHT_SPHERICAL_HARMONICS_MAX_COMPONENTS 9
+
+#if STUDIOLIGHT_SPHERICAL_HARMONICS_LEVEL == 0
+#  define STUDIOLIGHT_SPHERICAL_HARMONICS_COMPONENTS 1
+#endif
+
+#if STUDIOLIGHT_SPHERICAL_HARMONICS_LEVEL == 1
+#  define STUDIOLIGHT_SPHERICAL_HARMONICS_COMPONENTS 4
+#endif
+
+#if STUDIOLIGHT_SPHERICAL_HARMONICS_LEVEL == 2
+#  define STUDIOLIGHT_SPHERICAL_HARMONICS_COMPONENTS 9
+#  define STUDIOLIGHT_SPHERICAL_HARMONICS_WINDOWING_TARGET_LAMPLACIAN 10.0f
+#endif
+
 struct GPUTexture;
 struct StudioLight;
 
@@ -97,12 +113,12 @@ typedef struct StudioLight {
 	char name[FILE_MAXFILE];
 	char path[FILE_MAX];
 	char *path_irr_cache;
-	char *path_sh2_cache;
+	char *path_sh_cache;
 	int icon_id_irradiance;
 	int icon_id_radiance;
 	int icon_id_matcap;
 	int icon_id_matcap_flipped;
-	float spherical_harmonics_coefs[9][3];
+	float spherical_harmonics_coefs[STUDIOLIGHT_SPHERICAL_HARMONICS_COMPONENTS][3];
 	float light_direction[3];
 	ImBuf *equirectangular_radiance_buffer;
 	ImBuf *equirectangular_irradiance_buffer;
@@ -112,12 +128,12 @@ typedef struct StudioLight {
 	float *gpu_matcap_3components; /* 3 channel buffer for GPU_R11F_G11F_B10F */
 
 	/*
-	Free function to clean up the running icons previews (wmJob) the usage is in
-	interface_icons. Please be aware that this was build to handle only one free function
-	that cleans up all icons. just to keep the code simple.
-	*/
+	 * Free function to clean up the running icons previews (wmJob) the usage is in
+	 * interface_icons. Please be aware that this was build to handle only one free function
+	 * that cleans up all icons. just to keep the code simple.
+	 */
 	StudioLightFreeFunction *free_function;
-	void* free_function_data;
+	void *free_function_data;
 } StudioLight;
 
 void BKE_studiolight_init(void);
@@ -125,10 +141,12 @@ void BKE_studiolight_free(void);
 struct StudioLight *BKE_studiolight_find(const char *name, int flag);
 struct StudioLight *BKE_studiolight_findindex(int index, int flag);
 struct StudioLight *BKE_studiolight_find_first(int flag);
-void BKE_studiolight_preview(uint* icon_buffer, StudioLight *sl, int icon_id_type);
+void BKE_studiolight_preview(uint *icon_buffer, StudioLight *sl, int icon_id_type);
 struct ListBase *BKE_studiolight_listbase(void);
 void BKE_studiolight_ensure_flag(StudioLight *sl, int flag);
 void BKE_studiolight_refresh(void);
+StudioLight *BKE_studiolight_new(const char *path, int orientation);
+void BKE_studiolight_remove(StudioLight *sl);
 void BKE_studiolight_set_free_function(StudioLight *sl, StudioLightFreeFunction *free_function, void *data);
 void BKE_studiolight_unset_icon_id(StudioLight *sl, int icon_id);
 

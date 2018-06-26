@@ -187,39 +187,6 @@ bool DRW_object_is_flat_normal(const Object *ob)
 	return true;
 }
 
-/**
- * Return true if the object has its own draw mode.
- * Caller must check this is active */
-int DRW_object_is_mode_shade(const Object *ob)
-{
-	BLI_assert(ob == DST.draw_ctx.obact);
-	UNUSED_VARS_NDEBUG(ob);
-	if ((DST.draw_ctx.object_mode & OB_MODE_EDIT) == 0) {
-		if ((DST.draw_ctx.object_mode & (OB_MODE_VERTEX_PAINT | OB_MODE_WEIGHT_PAINT | OB_MODE_TEXTURE_PAINT)) > 0) {
-			if (ELEM(DST.draw_ctx.v3d->drawtype, OB_MATERIAL, OB_RENDER)) {
-				return false;
-			}
-			else if ((DST.draw_ctx.v3d->flag2 & V3D_SHOW_MODE_SHADE_OVERRIDE) == 0) {
-				return true;
-			}
-			else {
-				return false;
-			}
-		}
-	}
-	return -1;
-}
-
-int DRW_object_is_paint_mode(const Object *ob)
-{
-	if (ob == DST.draw_ctx.obact) {
-		if ((DST.draw_ctx.object_mode & (OB_MODE_VERTEX_PAINT | OB_MODE_WEIGHT_PAINT | OB_MODE_TEXTURE_PAINT)) > 0) {
-			return true;
-		}
-	}
-	return false;
-}
-
 bool DRW_check_psys_visible_within_active_context(
         Object *object,
         struct ParticleSystem *psys)
@@ -1024,7 +991,6 @@ static void drw_engines_enable_from_engine(RenderEngineType *engine_type, int dr
 			break;
 
 		case OB_SOLID:
-		case OB_TEXTURE:
 			if (shading_flags & V3D_SHADING_XRAY) {
 				use_drw_engine(&draw_engine_workbench_transparent);
 			}
@@ -1467,7 +1433,7 @@ void DRW_render_to_image(RenderEngine *engine, struct Depsgraph *depsgraph)
 	Render *render = engine->re;
 
 	if (G.background && DST.gl_context == NULL) {
-		WM_init_opengl();
+		WM_init_opengl(G_MAIN);
 	}
 
 	void *re_gl_context = RE_gl_context_get(render);
@@ -1729,7 +1695,7 @@ void DRW_draw_select_loop(
 			        DEG_ITER_OBJECT_FLAG_VISIBLE |
 			        DEG_ITER_OBJECT_FLAG_DUPLI)
 			{
-				if ((ob->base_flag & BASE_SELECTABLED) != 0) {
+				if ((ob->base_flag & BASE_SELECTABLE) != 0) {
 
 					if (object_filter_fn != NULL) {
 						if (ob->base_flag & BASE_FROMDUPLI) {

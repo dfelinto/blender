@@ -256,7 +256,8 @@ struct LatticeDeformData *psys_create_lattice_deform_data(ParticleSimulationData
 	if (psys_in_edit_mode(sim->depsgraph, sim->psys) == 0) {
 		Object *lattice = NULL;
 		ModifierData *md = (ModifierData *)psys_get_modifier(sim->ob, sim->psys);
-		int mode = G.is_rendering ? eModifierMode_Render : eModifierMode_Realtime;
+		bool for_render = DEG_get_mode(sim->depsgraph) == DAG_EVAL_RENDER;
+		int mode = for_render ? eModifierMode_Render : eModifierMode_Realtime;
 
 		for (; md; md = md->next) {
 			if (md->type == eModifierType_Lattice) {
@@ -640,7 +641,7 @@ void psys_free(Object *ob, ParticleSystem *psys)
 		if (psys->fluid_springs)
 			MEM_freeN(psys->fluid_springs);
 
-		pdEndEffectors(&psys->effectors);
+		BKE_effectors_free(psys->effectors);
 
 		if (psys->pdd) {
 			psys_free_pdd(psys);
@@ -1841,7 +1842,7 @@ static void do_path_effectors(ParticleSimulationData *sim, int i, ParticleCacheK
 	copy_qt_qt(eff_key.rot, (ca - 1)->rot);
 
 	pd_point_from_particle(sim, sim->psys->particles + i, &eff_key, &epoint);
-	pdDoEffectors(sim->psys->effectors, sim->colliders, sim->psys->part->effector_weights, &epoint, force, NULL);
+	BKE_effectors_apply(sim->psys->effectors, sim->colliders, sim->psys->part->effector_weights, &epoint, force, NULL);
 
 	mul_v3_fl(force, effector * powf((float)k / (float)steps, 100.0f * sim->psys->part->eff_hair) / (float)steps);
 

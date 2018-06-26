@@ -430,6 +430,36 @@ typedef struct bPathCompare {
 	char flag, pad[7];
 } bPathCompare;
 
+typedef struct bUserMenu {
+	struct bUserMenu *next, *prev;
+	char space_type;
+	char _pad0[7];
+	char context[64];
+	/* bUserMenuItem */
+	ListBase items;
+} bUserMenu;
+
+/* May be part of bUserMenu or other list. */
+typedef struct bUserMenuItem {
+	struct bUserMenuItem *next, *prev;
+	char ui_name[64];
+	char type;
+	char _pad0[7];
+} bUserMenuItem;
+
+typedef struct bUserMenuItem_Op {
+	bUserMenuItem item;
+	char opname[64];
+	struct IDProperty *prop;
+	char opcontext;
+	char _pad0[7];
+} bUserMenuItem_Op;
+
+enum {
+	USER_MENU_TYPE_SEP = 1,
+	USER_MENU_TYPE_OPERATOR = 2,
+};
+
 typedef struct SolidLight {
 	int flag, pad;
 	float col[4], spec[4], vec[4];
@@ -511,6 +541,8 @@ typedef struct UserDef {
 	struct ListBase user_keymaps;
 	struct ListBase addons;
 	struct ListBase autoexec_paths;
+	struct ListBase user_menus; /* bUserMenu */
+
 	char keyconfigstr[64];
 
 	short undosteps;
@@ -632,7 +664,7 @@ typedef enum eUserPref_Flag {
 	USER_FLAG_DEPRECATED_7	= (1 << 7),  /* cleared */
 	USER_MAT_ON_OB			= (1 << 8),
 	USER_FLAG_DEPRECATED_9	= (1 << 9),   /* cleared */
-	USER_FLAG_DEPRECATED_10	= (1 << 10),  /* cleared */
+	USER_DEVELOPER_UI		= (1 << 10),
 	USER_TOOLTIPS			= (1 << 11),
 	USER_TWOBUTTONMOUSE		= (1 << 12),
 	USER_NONUMPAD			= (1 << 13),

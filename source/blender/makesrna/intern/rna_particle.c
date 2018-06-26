@@ -139,8 +139,6 @@ static const EnumPropertyItem part_hair_ren_as_items[] = {
 #include "BKE_cloth.h"
 #include "BKE_colortools.h"
 #include "BKE_deform.h"
-#include "BKE_DerivedMesh.h"
-#include "BKE_cdderivedmesh.h"
 #include "BKE_effect.h"
 #include "BKE_material.h"
 #include "BKE_modifier.h"
@@ -3087,7 +3085,7 @@ static void rna_def_particle_settings(BlenderRNA *brna)
 	RNA_def_property_struct_type(prop, "Collection");
 	RNA_def_property_flag(prop, PROP_EDITABLE);
 	RNA_def_property_ui_text(prop, "Dupli Collection", "Show Objects in this collection in place of particles");
-	RNA_def_property_update(prop, 0, "rna_Particle_redo");
+	RNA_def_property_update(prop, 0, "rna_Particle_redo_dependency");
 
 	prop = RNA_def_property(srna, "dupli_weights", PROP_COLLECTION, PROP_NONE);
 	RNA_def_property_collection_sdna(prop, NULL, "dupliweights", NULL);

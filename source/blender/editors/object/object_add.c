@@ -946,7 +946,7 @@ static int empty_drop_named_image_invoke(bContext *C, wmOperator *op, const wmEv
 
 		/* add under the mouse */
 		ED_object_location_from_view(C, ob->loc);
-		ED_view3d_cursor3d_position(C, ob->loc, event->mval);
+		ED_view3d_cursor3d_position(C, event->mval, false, ob->loc);
 	}
 
 	BKE_object_empty_draw_type_set(ob, OB_EMPTY_IMAGE);
@@ -1013,7 +1013,21 @@ static int object_lamp_add_exec(bContext *C, wmOperator *op)
 		return OPERATOR_CANCELLED;
 
 	ob = ED_object_add_type(C, OB_LAMP, get_lamp_defname(type), loc, rot, false, layer);
-	BKE_object_obdata_size_init(ob, RNA_float_get(op->ptr, "radius"));
+
+	float size = RNA_float_get(op->ptr, "radius");
+	/* Better defaults for lamp size. */
+	switch (type) {
+		case LA_LOCAL:
+		case LA_SPOT:
+			break;
+		case LA_AREA:
+			size *= 4.0f;
+			break;
+		default:
+			size *= 0.5f;
+			break;
+	}
+	BKE_object_obdata_size_init(ob, size);
 
 	la = (Lamp *)ob->data;
 	la->type = type;
@@ -1070,7 +1084,7 @@ static int collection_instance_add_exec(bContext *C, wmOperator *op)
 			const int mval[2] = {event->x - ar->winrct.xmin,
 			                     event->y - ar->winrct.ymin};
 			ED_object_location_from_view(C, loc);
-			ED_view3d_cursor3d_position(C, loc, mval);
+			ED_view3d_cursor3d_position(C, mval, false, loc);
 			RNA_float_set_array(op->ptr, "location", loc);
 		}
 	}
@@ -1097,8 +1111,6 @@ static int collection_instance_add_exec(bContext *C, wmOperator *op)
 
 		/* works without this except if you try render right after, see: 22027 */
 		DEG_relations_tag_update(bmain);
-		DEG_id_tag_update(&collection->id, 0);
-
 		DEG_id_tag_update(&scene->id, DEG_TAG_SELECT_UPDATE);
 		WM_event_add_notifier(C, NC_SCENE | ND_OB_ACTIVE, scene);
 
@@ -2002,9 +2014,6 @@ static int convert_exec(bContext *C, wmOperator *op)
 			}
 			FOREACH_SCENE_OBJECT_END;
 		}
-
-		/* delete object should renew depsgraph */
-		DEG_relations_tag_update(bmain);
 	}
 
 // XXX	ED_object_editmode_enter(C, 0);
@@ -2079,7 +2088,7 @@ static Base *object_add_duplicate_internal(Main *bmain, Scene *scene, ViewLayer 
 		DEG_id_tag_update(&obn->id, OB_RECALC_OB | OB_RECALC_DATA);
 
 		base = BKE_view_layer_base_find(view_layer, ob);
-		if ((base != NULL) && (base->flag & BASE_VISIBLED)) {
+		if ((base != NULL) && (base->flag & BASE_VISIBLE)) {
 			BKE_collection_object_add_from(bmain, scene, ob, obn);
 		}
 		else {
@@ -2426,7 +2435,7 @@ static int add_named_exec(bContext *C, wmOperator *op)
 		const int mval[2] = {event->x - ar->winrct.xmin,
 		                     event->y - ar->winrct.ymin};
 		ED_object_location_from_view(C, basen->object->loc);
-		ED_view3d_cursor3d_position(C, basen->object->loc, mval);
+		ED_view3d_cursor3d_position(C, mval, false, basen->object->loc);
 	}
 
 	ED_object_base_select(basen, BA_SELECT);

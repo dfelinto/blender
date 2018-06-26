@@ -60,6 +60,8 @@ struct Main;
 struct wmMsgBus;
 struct wmMsgSubscribeKey;
 struct wmMsgSubscribeValue;
+struct wmOperatorType;
+struct IDProperty;
 
 /* regions */
 void    ED_region_do_listen(
@@ -311,6 +313,21 @@ int     ED_operator_posemode_local(struct bContext *C);
 int     ED_operator_mask(struct bContext *C);
 int     ED_operator_camera(struct bContext *C);
 
+/* screen_user_menu.c */
+
+struct bUserMenu *ED_screen_user_menu_find(struct bContext *C);
+struct bUserMenu *ED_screen_user_menu_ensure(struct bContext *C);
+
+
+struct bUserMenuItem_Op *ED_screen_user_menu_item_find_operator(
+        struct ListBase *lb,
+        struct wmOperatorType *ot, struct IDProperty *prop, short opcontext);
+void ED_screen_user_menu_item_add_operator(
+        struct ListBase *lb, const char *ui_name,
+        struct wmOperatorType *ot, struct IDProperty *prop, short opcontext);
+void ED_screen_user_menu_item_remove(
+        struct ListBase *lb, struct bUserMenuItem *umi);
+void ED_screen_user_menu_register(void);
 
 /* Cache display helpers */
 
@@ -333,4 +350,3 @@ void ED_area_type_hud_ensure(struct bContext *C, struct ScrArea *sa);
 #define ED_KEYMAP_HEADER    64
 
 #endif /* __ED_SCREEN_H__ */
-

@@ -1469,6 +1469,10 @@ static void outliner_add_layer_collection_objects(
 		Base *base = BKE_view_layer_base_find(layer, cob->ob);
 		TreeElement *te_object = outliner_add_element(soops, tree, base->object, ten, 0, 0);
 		te_object->directdata = base;
+
+		if (!(base->flag & BASE_VISIBLE)) {
+			te_object->flag |= TE_DISABLED;
+		}
 	}
 }
 
@@ -1487,7 +1491,10 @@ static void outliner_add_layer_collections_recursive(
 		ten->reinsert_poll = outliner_collections_reorder_poll;
 
 		const bool exclude = (lc->flag & LAYER_COLLECTION_EXCLUDE) != 0;
-		if (exclude) {
+		if (exclude ||
+		    ((layer->runtime_flag & VIEW_LAYER_HAS_HIDE) &&
+		     !(lc->runtime_flag & LAYER_COLLECTION_HAS_VISIBLE_OBJECTS)))
+		{
 			ten->flag |= TE_DISABLED;
 		}
 
@@ -1885,10 +1892,11 @@ static int outliner_exclude_filter_get(SpaceOops *soops)
 {
 	int exclude_filter = soops->filter & ~SO_FILTER_OB_STATE;
 
-	if (soops->filter & SO_FILTER_SEARCH) {
-		if (soops->search_string[0] == 0) {
-			exclude_filter &= ~SO_FILTER_SEARCH;
-		}
+	if (soops->search_string[0] != 0) {
+		exclude_filter |= SO_FILTER_SEARCH;
+	}
+	else {
+		exclude_filter &= ~SO_FILTER_SEARCH;
 	}
 
 	/* Let's have this for the collection options at first. */
@@ -1976,7 +1984,7 @@ static bool outliner_element_visible_get(ViewLayer *view_layer, TreeElement *te,
 			}
 
 			if (exclude_filter & SO_FILTER_OB_STATE_VISIBLE) {
-				if ((base->flag & BASE_VISIBLED) == 0) {
+				if ((base->flag & BASE_VISIBLE) == 0) {
 					return false;
 				}
 			}
@@ -2262,5 +2270,3 @@ void outliner_build_tree(Main *mainvar, Scene *scene, ViewLayer *view_layer, Spa
 
 	BKE_main_id_clear_newpoins(mainvar);
 }
-
-

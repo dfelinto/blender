@@ -77,6 +77,7 @@ set(SRC
 	intern/blender.c
 	intern/blender_copybuffer.c
 	intern/blender_undo.c
+	intern/blender_user_menu.c
 	intern/blendfile.c
 	intern/bmfont.c
 	intern/boids.c
@@ -140,6 +141,7 @@ set(SRC
 	intern/mesh.c
 	intern/mesh_convert.c
 	intern/mesh_evaluate.c
+	intern/mesh_iterators.c
 	intern/mesh_mapping.c
 	intern/mesh_merge.c
 	intern/mesh_remap.c
@@ -272,6 +274,7 @@ set(SRC
 	BKE_mball.h
 	BKE_mball_tessellate.h
 	BKE_mesh.h
+	BKE_mesh_iterators.h
 	BKE_mesh_mapping.h
 	BKE_mesh_remap.h
 	BKE_mesh_tangent.h
@@ -417,7 +420,7 @@ if(WITH_CODEC_FFMPEG)
 	)
 	add_definitions(-DWITH_FFMPEG)
 
-	remove_strict_flags_file(
+	remove_strict_c_flags_file(
 		intern/writeffmpeg.c
 	)
 endif()

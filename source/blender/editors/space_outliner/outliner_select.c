@@ -155,6 +155,20 @@ static void do_outliner_activate_pose(bContext *C, ViewLayer *view_layer, Base *
 	}
 }
 
+/* For draw callback to run mode switching */
+void outliner_object_mode_toggle(
+        bContext *C, Scene *scene, ViewLayer *view_layer,
+        Base *base)
+{
+	Object *obact = OBACT(view_layer);
+	if (obact->mode & OB_MODE_EDIT) {
+		do_outliner_activate_obdata(C, scene, view_layer, base);
+	}
+	else if (obact->mode & OB_MODE_POSE) {
+		do_outliner_activate_pose(C, view_layer, base);
+	}
+}
+
 /* ****************************************************** */
 /* Outliner Element Selection/Activation on Click */
 
@@ -192,7 +206,7 @@ static void do_outliner_object_select_recursive(ViewLayer *view_layer, Object *o
 
 	for (base = FIRSTBASE(view_layer); base; base = base->next) {
 		Object *ob = base->object;
-		if ((((base->flag & BASE_VISIBLED) == 0) && BKE_object_is_child_recursive(ob_parent, ob))) {
+		if ((((base->flag & BASE_VISIBLE) == 0) && BKE_object_is_child_recursive(ob_parent, ob))) {
 			ED_object_base_select(base, select ? BA_SELECT : BA_DESELECT);
 		}
 	}
@@ -986,7 +1000,7 @@ static void do_outliner_item_activate_tree_element(
 			Object *ob = (Object *)outliner_search_back(soops, te, ID_OB);
 			if ((ob != NULL) && (ob->data == tselem->id)) {
 				Base *base = BKE_view_layer_base_find(view_layer, ob);
-				if ((base != NULL) && (base->flag & BASE_VISIBLED)) {
+				if ((base != NULL) && (base->flag & BASE_VISIBLE)) {
 					do_outliner_activate_obdata(C, scene, view_layer, base);
 				}
 			}

@@ -65,6 +65,7 @@ extern "C" {
 #include "DNA_object_types.h"
 #include "DNA_rigidbody_types.h"
 #include "DNA_scene_types.h"
+#include "DNA_speaker_types.h"
 #include "DNA_texture_types.h"
 #include "DNA_world_types.h"
 #include "DNA_object_force_types.h"
@@ -297,87 +298,72 @@ DepsRelation *DepsgraphRelationBuilder::add_operation_relation(
 
 void DepsgraphRelationBuilder::add_collision_relations(
         const OperationKey &key,
-        Scene *scene,
         Object *object,
         Collection *collection,
-        bool dupli,
         const char *name)
 {
-	unsigned int numcollobj;
-	Object **collobjs = get_collisionobjects_ext(scene,
-	                                             object,
-	                                             collection,
-	                                             &numcollobj,
-	                                             eModifierType_Collision,
-	                                             dupli);
-	for (unsigned int i = 0; i < numcollobj; i++) {
-		Object *ob1 = collobjs[i];
+	ListBase *relations = deg_build_collision_relations(graph_, collection, eModifierType_Collision);
 
-		ComponentKey trf_key(&ob1->id, DEG_NODE_TYPE_TRANSFORM);
-		add_relation(trf_key, key, name);
+	LISTBASE_FOREACH (CollisionRelation *, relation, relations) {
+		if (relation->ob != object) {
+			ComponentKey trf_key(&relation->ob->id, DEG_NODE_TYPE_TRANSFORM);
+			add_relation(trf_key, key, name);
 
-		ComponentKey coll_key(&ob1->id, DEG_NODE_TYPE_GEOMETRY);
-		add_relation(coll_key, key, name);
-	}
-	if (collobjs != NULL) {
-		MEM_freeN(collobjs);
+			ComponentKey coll_key(&relation->ob->id, DEG_NODE_TYPE_GEOMETRY);
+			add_relation(coll_key, key, name);
+		}
 	}
 }
 
 void DepsgraphRelationBuilder::add_forcefield_relations(
         const OperationKey &key,
-        Scene *scene,
         Object *object,
         ParticleSystem *psys,
         EffectorWeights *eff,
         bool add_absorption,
         const char *name)
 {
-	ListBase *effectors = pdInitEffectors(NULL, scene, object, psys, eff, false);
-	if (effectors == NULL) {
-		return;
-	}
-	LISTBASE_FOREACH (EffectorCache *, eff, effectors) {
-		if (eff->ob != object) {
-			ComponentKey eff_key(&eff->ob->id, DEG_NODE_TYPE_TRANSFORM);
+	ListBase *relations = deg_build_effector_relations(graph_, eff->group);
+
+	LISTBASE_FOREACH (EffectorRelation *, relation, relations) {
+		if (relation->ob != object) {
+			ComponentKey eff_key(&relation->ob->id, DEG_NODE_TYPE_TRANSFORM);
 			add_relation(eff_key, key, name);
+
+			if (relation->pd->forcefield == PFIELD_SMOKEFLOW && relation->pd->f_source) {
+				ComponentKey trf_key(&relation->pd->f_source->id,
+				                     DEG_NODE_TYPE_TRANSFORM);
+				add_relation(trf_key, key, "Smoke Force Domain");
+				ComponentKey eff_key(&relation->pd->f_source->id,
+				                     DEG_NODE_TYPE_GEOMETRY);
+				add_relation(eff_key, key, "Smoke Force Domain");
+			}
+			if (add_absorption && (relation->pd->flag & PFIELD_VISIBILITY)) {
+				add_collision_relations(key,
+				                        object,
+				                        NULL,
+				                        "Force Absorption");
+			}
 		}
-		if (eff->psys != NULL) {
-			if (eff->ob != object) {
-				ComponentKey eff_key(&eff->ob->id, DEG_NODE_TYPE_EVAL_PARTICLES);
+		if (relation->psys) {
+			if (relation->ob != object) {
+				ComponentKey eff_key(&relation->ob->id, DEG_NODE_TYPE_EVAL_PARTICLES);
 				add_relation(eff_key, key, name);
 				/* TODO: remove this when/if EVAL_PARTICLES is sufficient
 				 * for up to date particles.
 				 */
-				ComponentKey mod_key(&eff->ob->id, DEG_NODE_TYPE_GEOMETRY);
+				ComponentKey mod_key(&relation->ob->id, DEG_NODE_TYPE_GEOMETRY);
 				add_relation(mod_key, key, name);
 			}
-			else if (eff->psys != psys) {
-				OperationKey eff_key(&eff->ob->id,
+			else if (relation->psys != psys) {
+				OperationKey eff_key(&relation->ob->id,
 				                     DEG_NODE_TYPE_EVAL_PARTICLES,
 				                     DEG_OPCODE_PARTICLE_SYSTEM_EVAL,
-				                     eff->psys->name);
+				                     relation->psys->name);
 				add_relation(eff_key, key, name);
 			}
 		}
-		if (eff->pd->forcefield == PFIELD_SMOKEFLOW && eff->pd->f_source) {
-			ComponentKey trf_key(&eff->pd->f_source->id,
-			                     DEG_NODE_TYPE_TRANSFORM);
-			add_relation(trf_key, key, "Smoke Force Domain");
-			ComponentKey eff_key(&eff->pd->f_source->id,
-			                     DEG_NODE_TYPE_GEOMETRY);
-			add_relation(eff_key, key, "Smoke Force Domain");
-		}
-		if (add_absorption && (eff->pd->flag & PFIELD_VISIBILITY)) {
-			add_collision_relations(key,
-			                        scene,
-			                        object,
-			                        NULL,
-			                        true,
-			                        "Force Absorption");
-		}
 	}
-	pdEndEffectors(&effectors);
 }
 
 Depsgraph *DepsgraphRelationBuilder::getGraph()
@@ -442,6 +428,9 @@ void DepsgraphRelationBuilder::build_id(ID *id)
 		case ID_LT:
 			build_object_data_geometry_datablock(id);
 			break;
+		case ID_SPK:
+			build_speaker((Speaker *)id);
+			break;
 		default:
 			fprintf(stderr, "Unhandled ID %s\n", id->name);
 			BLI_assert(!"Should never happen");
@@ -464,11 +453,19 @@ void DepsgraphRelationBuilder::build_collection(
 		}
 	}
 	const bool group_done = built_map_.checkIsBuiltAndTag(collection);
-	OperationKey object_local_transform_key(object != NULL ? &object->id : NULL,
+	OperationKey object_transform_final_key(object != NULL ? &object->id : NULL,
 	                                        DEG_NODE_TYPE_TRANSFORM,
-	                                        DEG_OPCODE_TRANSFORM_LOCAL);
+	                                        DEG_OPCODE_TRANSFORM_FINAL);
 	if (!group_done) {
 		LISTBASE_FOREACH (CollectionObject *, cob, &collection->gobject) {
+			if (allow_restrict_flags) {
+				const int restrict_flag = (graph_->mode == DAG_EVAL_VIEWPORT)
+				        ? OB_RESTRICT_VIEW
+				        : OB_RESTRICT_RENDER;
+				if (cob->ob->restrictflag & restrict_flag) {
+					continue;
+				}
+			}
 			build_object(NULL, cob->ob);
 		}
 		LISTBASE_FOREACH (CollectionChild *, child, &collection->children) {
@@ -479,7 +476,7 @@ void DepsgraphRelationBuilder::build_collection(
 		FOREACH_COLLECTION_VISIBLE_OBJECT_RECURSIVE_BEGIN(collection, ob, graph_->mode)
 		{
 			ComponentKey dupli_transform_key(&ob->id, DEG_NODE_TYPE_TRANSFORM);
-			add_relation(dupli_transform_key, object_local_transform_key, "Dupligroup");
+			add_relation(dupli_transform_key, object_transform_final_key, "Dupligroup");
 		}
 		FOREACH_COLLECTION_VISIBLE_OBJECT_RECURSIVE_END;
 	}
@@ -597,7 +594,13 @@ void DepsgraphRelationBuilder::build_object(Base *base, Object *object)
 		ComponentKey proxy_transform_key(&object->id, DEG_NODE_TYPE_TRANSFORM);
 		add_relation(ob_transform_key, proxy_transform_key, "Proxy Transform");
 	}
-
+	if (object->proxy_group != NULL) {
+		build_object(NULL, object->proxy_group);
+		OperationKey proxy_group_ubereval_key(&object->proxy_group->id,
+		                                      DEG_NODE_TYPE_TRANSFORM,
+		                                      DEG_OPCODE_TRANSFORM_OBJECT_UBEREVAL);
+		add_relation(proxy_group_ubereval_key, final_transform_key, "Proxy Group Transform");
+	}
 	/* Object dupligroup. */
 	if (object->dup_group != NULL) {
 		build_collection(DEG_COLLECTION_OWNER_OBJECT, object, object->dup_group);
@@ -657,6 +660,9 @@ void DepsgraphRelationBuilder::build_object_data(Object *object)
 		case OB_LIGHTPROBE:
 			build_object_data_lightprobe(object);
 			break;
+		case OB_SPEAKER:
+			build_object_data_speaker(object);
+			break;
 	}
 	Key *key = BKE_key_from_object(object);
 	if (key != NULL) {
@@ -696,6 +702,19 @@ void DepsgraphRelationBuilder::build_object_data_lightprobe(Object *object)
 	                        DEG_NODE_TYPE_PARAMETERS,
 	                        DEG_OPCODE_LIGHT_PROBE_EVAL);
 	add_relation(probe_key, object_key, "LightProbe Update");
+}
+
+void DepsgraphRelationBuilder::build_object_data_speaker(Object *object)
+{
+	Speaker *speaker = (Speaker *)object->data;
+	build_speaker(speaker);
+	OperationKey probe_key(&speaker->id,
+	                       DEG_NODE_TYPE_PARAMETERS,
+	                       DEG_OPCODE_SPEAKER_EVAL);
+	OperationKey object_key(&object->id,
+	                        DEG_NODE_TYPE_PARAMETERS,
+	                        DEG_OPCODE_SPEAKER_EVAL);
+	add_relation(probe_key, object_key, "Speaker Update");
 }
 
 void DepsgraphRelationBuilder::build_object_parent(Object *object)
@@ -1563,10 +1582,8 @@ void DepsgraphRelationBuilder::build_particles(Object *object)
 		/* Collisions */
 		if (part->type != PART_HAIR) {
 			add_collision_relations(psys_key,
-			                        scene_,
 			                        object,
 			                        part->collision_group,
-			                        true,
 			                        "Particle Collision");
 		}
 		else if ((psys->flag & PSYS_HAIR_DYNAMICS) &&
@@ -1574,15 +1591,12 @@ void DepsgraphRelationBuilder::build_particles(Object *object)
 		         psys->clmd->coll_parms != NULL)
 		{
 			add_collision_relations(psys_key,
-			                        scene_,
 			                        object,
 			                        psys->clmd->coll_parms->group,
-			                        true,
 			                        "Hair Collision");
 		}
 		/* Effectors. */
 		add_forcefield_relations(psys_key,
-		                         scene_,
 		                         object,
 		                         psys,
 		                         part->effector_weights,
@@ -2117,6 +2131,14 @@ void DepsgraphRelationBuilder::build_lightprobe(LightProbe *probe)
 		return;
 	}
 	build_animdata(&probe->id);
+}
+
+void DepsgraphRelationBuilder::build_speaker(Speaker *speaker)
+{
+	if (built_map_.checkIsBuiltAndTag(speaker)) {
+		return;
+	}
+	build_animdata(&speaker->id);
 }
 
 void DepsgraphRelationBuilder::build_copy_on_write_relations()

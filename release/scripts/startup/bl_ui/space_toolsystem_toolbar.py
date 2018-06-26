@@ -83,6 +83,12 @@ def generate_from_brushes_ex(
 class _defs_view3d_generic:
     @ToolDef.from_fn
     def cursor():
+        def draw_settings(context, layout, tool):
+            wm = context.window_manager
+            props = tool.operator_properties("view3d.cursor3d")
+            layout.prop(props, "use_depth")
+            layout.prop(props, "orientation")
+
         return dict(
             text="Cursor",
             icon="ops.generic.cursor",
@@ -93,6 +99,7 @@ class _defs_view3d_generic:
                  dict(type='EVT_TWEAK_A', value='ANY'),
                  ),
             ),
+            draw_settings=draw_settings,
         )
 
     @ToolDef.from_fn
@@ -166,11 +173,16 @@ class _defs_transform:
 
     @ToolDef.from_fn
     def transform():
+        def draw_settings(context, layout, tool):
+            tool_settings = context.tool_settings
+            layout.prop(tool_settings, "use_manipulator_mode")
+
         return dict(
             text="Transform",
             icon="ops.transform.transform",
             widget="TRANSFORM_WGT_manipulator",
             # No keymap default action, only for manipulators!
+            draw_settings=draw_settings,
         )
 
 

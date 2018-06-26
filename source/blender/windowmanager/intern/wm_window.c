@@ -70,6 +70,7 @@
 #include "wm_window.h"
 #include "wm_event_system.h"
 
+#include "ED_anim_api.h"
 #include "ED_scene.h"
 #include "ED_screen.h"
 #include "ED_fileselect.h"
@@ -227,6 +228,10 @@ void wm_window_free(bContext *C, wmWindowManager *wm, wmWindow *win)
 	}
 
 	if (win->eventstate) MEM_freeN(win->eventstate);
+
+	if (win->cursor_keymap_status) {
+		MEM_freeN(win->cursor_keymap_status);
+	}
 
 	wm_event_free_all(win);
 
@@ -953,30 +958,7 @@ wmWindow *WM_window_open_temp(bContext *C, int x, int y, int sizex, int sizey, i
 
 	/* do additional setup for specific editor type */
 	if (type == WM_WINDOW_DRIVERS) {
-		/* Configure editor - mode, tabs, framing */
-		SpaceIpo *sipo = (SpaceIpo *)sa->spacedata.first;
-		sipo->mode = SIPO_MODE_DRIVERS;
-
-		ARegion *ar_props = BKE_area_find_region_type(sa, RGN_TYPE_UI);
-		if (ar_props) {
-			UI_panel_category_active_set(ar_props, "Drivers");
-
-			ar_props->flag &= ~RGN_FLAG_HIDDEN;
-			/* XXX: Adjust width of this too? */
-
-			ED_region_visibility_change_update(C, ar_props);
-		}
-
-		ARegion *ar_main = BKE_area_find_region_type(sa, RGN_TYPE_WINDOW);
-		if (ar_main) {
-			/* XXX: Ideally we recenter based on the range instead... */
-			ar_main->v2d.tot.xmin = -2.0f;
-			ar_main->v2d.tot.ymin = -2.0f;
-			ar_main->v2d.tot.xmax = 2.0f;
-			ar_main->v2d.tot.ymax = 2.0f;
-
-			ar_main->v2d.cur = ar_main->v2d.tot;
-		}
+		ED_drivers_editor_init(C, sa);
 	}
 
 	if (sa->spacetype == SPACE_IMAGE)
@@ -2318,14 +2300,13 @@ void *WM_opengl_context_create(void)
 	 * So we should call this function only on the main thread.
 	 */
 	BLI_assert(BLI_thread_is_main());
-	// BLI_assert(GPU_framebuffer_current_get() == 0);
+	BLI_assert(GPU_framebuffer_current_get() == 0);
 	return GHOST_CreateOpenGLContext(g_system);
 }
 
 void WM_opengl_context_dispose(void *context)
 {
-	// BLI_assert(BLI_thread_is_main());
-	// BLI_assert(GPU_framebuffer_current_get() == 0);
+	BLI_assert(GPU_framebuffer_current_get() == 0);
 	GHOST_DisposeOpenGLContext(g_system, (GHOST_ContextHandle)context);
 }
 

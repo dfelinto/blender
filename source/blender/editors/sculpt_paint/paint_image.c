@@ -46,15 +46,16 @@
 #include "IMB_imbuf_types.h"
 
 #include "DNA_brush_types.h"
+#include "DNA_mesh_types.h"
 #include "DNA_node_types.h"
 #include "DNA_object_types.h"
 
 #include "BKE_colorband.h"
 #include "BKE_context.h"
-#include "BKE_DerivedMesh.h"
 #include "BKE_brush.h"
 #include "BKE_main.h"
 #include "BKE_material.h"
+#include "BKE_mesh.h"
 #include "BKE_node.h"
 #include "BKE_paint.h"
 #include "BKE_undo_system.h"
@@ -1055,6 +1056,7 @@ static int texture_paint_toggle_poll(bContext *C)
 static int texture_paint_toggle_exec(bContext *C, wmOperator *op)
 {
 	struct wmMsgBus *mbus = CTX_wm_message_bus(C);
+	Main *bmain = CTX_data_main(C);
 	Scene *scene = CTX_data_scene(C);
 	Object *ob = CTX_data_active_object(C);
 	const int mode_flag = OB_MODE_TEXTURE_PAINT;
@@ -1070,14 +1072,13 @@ static int texture_paint_toggle_exec(bContext *C, wmOperator *op)
 		ob->mode &= ~mode_flag;
 
 		if (U.glreslimit != 0)
-			GPU_free_images();
-		GPU_paint_set_mipmap(1);
+			GPU_free_images(bmain);
+		GPU_paint_set_mipmap(bmain, 1);
 
 		toggle_paint_cursor(C, 0);
 	}
 	else {
 		bScreen *sc;
-		Main *bmain = CTX_data_main(C);
 		Image *ima = NULL;
 		ImagePaintSettings *imapaint = &scene->toolsettings->imapaint;
 
@@ -1122,11 +1123,15 @@ static int texture_paint_toggle_exec(bContext *C, wmOperator *op)
 		BKE_paint_init(bmain, scene, ePaintTextureProjective, PAINT_CURSOR_TEXTURE_PAINT);
 
 		if (U.glreslimit != 0)
-			GPU_free_images();
-		GPU_paint_set_mipmap(0);
+			GPU_free_images(bmain);
+		GPU_paint_set_mipmap(bmain, 0);
 
 		toggle_paint_cursor(C, 1);
 	}
+
+	Mesh *me = BKE_mesh_from_object(ob);
+	BLI_assert(me != NULL);
+	DEG_id_tag_update(&me->id, DEG_TAG_COPY_ON_WRITE);
 
 	WM_event_add_notifier(C, NC_SCENE | ND_MODE, scene);
 

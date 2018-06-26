@@ -858,10 +858,10 @@ static void ui_studiolight_kill_icon_preview_job(wmWindowManager *wm, int icon_i
 	icon->obj = NULL;
 }
 
-static void ui_studiolight_free_function(StudioLight * sl, void* data)
+static void ui_studiolight_free_function(StudioLight *sl, void *data)
 {
 	wmWindowManager *wm = data;
-	
+
 	// get icons_id, get icons and kill wm jobs
 	if (sl->icon_id_radiance) {
 		ui_studiolight_kill_icon_preview_job(wm, sl->icon_id_radiance);
@@ -920,7 +920,7 @@ void ui_icon_ensure_deferred(const bContext *C, const int icon_id, const bool bi
 							di->data.buffer.image = img;
 
 							wmJob *wm_job = WM_jobs_get(wm, CTX_wm_window(C), icon, "StudioLight Icon", 0, WM_JOB_TYPE_STUDIOLIGHT);
-							Icon** tmp = MEM_callocN(sizeof(Icon*), __func__);
+							Icon **tmp = MEM_callocN(sizeof(Icon *), __func__);
 							*tmp = icon;
 							WM_jobs_customdata_set(wm_job, tmp, MEM_freeN);
 							WM_jobs_timer(wm_job, 0.01, 0, NC_WINDOW);
@@ -1647,4 +1647,3 @@ void UI_icon_draw_preview_aspect_size(float x, float y, int icon_id, float aspec
 {
 	icon_draw_size(x, y, icon_id, aspect, alpha, NULL, ICON_SIZE_PREVIEW, size, false);
 }
-

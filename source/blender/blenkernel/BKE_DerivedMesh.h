@@ -387,9 +387,6 @@ void          DM_to_bmesh_ex(struct DerivedMesh *dm, struct BMesh *bm, const boo
 struct BMesh *DM_to_bmesh(struct DerivedMesh *dm, const bool calc_face_normal);
 
 
-/** Utility function to convert a DerivedMesh to a shape key block */
-void DM_to_meshkey(DerivedMesh *dm, struct Mesh *me, struct KeyBlock *kb);
-
 void DM_set_only_copy(DerivedMesh *dm, CustomDataMask mask);
 
 /* adds a vertex/edge/face custom data layer to a DerivedMesh, optionally
@@ -517,9 +514,6 @@ void DM_interp_poly_data(
         struct DerivedMesh *source, struct DerivedMesh *dest,
         int *src_indices,
         float *weights, int count, int dest_index);
-
-/* Temporary? A function to give a colorband to derivedmesh for vertexcolor ranges */
-void vDM_ColorBand_store(const struct ColorBand *coba, const char alert_color[4]);
 
 /* UNUSED */
 #if 0

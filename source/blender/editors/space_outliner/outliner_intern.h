@@ -151,11 +151,12 @@ typedef enum {
 /* size constants */
 #define OL_Y_OFFSET 2
 
+#define OL_TOG_HIDEX            (UI_UNIT_X * 4.0f)
 #define OL_TOG_RESTRICT_SELECTX (UI_UNIT_X * 3.0f)
 #define OL_TOG_RESTRICT_VIEWX   (UI_UNIT_X * 2.0f)
 #define OL_TOG_RESTRICT_RENDERX UI_UNIT_X
 
-#define OL_TOGW OL_TOG_RESTRICT_SELECTX
+#define OL_TOGW OL_TOG_HIDEX
 
 #define OL_RNA_COLX         (UI_UNIT_X * 15)
 #define OL_RNA_COL_SIZEX    (UI_UNIT_X * 7.5f)
@@ -181,7 +182,7 @@ typedef enum {
  * - not searching into RNA items helps but isn't the complete solution
  */
 
-#define SEARCHING_OUTLINER(sov)   ((sov->search_flags & SO_SEARCH_RECURSIVE) && (sov->filter & SO_FILTER_SEARCH))
+#define SEARCHING_OUTLINER(sov)   (sov->search_flags & SO_SEARCH_RECURSIVE)
 
 /* is the currrent element open? if so we also show children */
 #define TSELEM_OPEN(telm, sv)    ( (telm->flag & TSE_CLOSED) == 0 || (SEARCHING_OUTLINER(sv) && (telm->flag & TSE_CHILDSEARCH)) )
@@ -225,6 +226,10 @@ int outliner_item_do_activate_from_cursor(
 void outliner_item_select(
         struct SpaceOops *soops, const struct TreeElement *te,
         const bool extend, const bool toggle);
+
+void outliner_object_mode_toggle(
+        struct bContext *C, Scene *scene, ViewLayer *view_layer,
+        Base *base);
 
 /* outliner_edit.c ---------------------------------------------- */
 typedef void (*outliner_operation_cb)(
@@ -270,6 +275,13 @@ void id_delete_cb(
 void id_remap_cb(
         struct bContext *C, struct ReportList *reports, struct Scene *scene, struct TreeElement *te,
         struct TreeStoreElem *tsep, struct TreeStoreElem *tselem, void *user_data);
+
+void item_object_mode_enter_cb(
+        struct bContext *C, struct ReportList *reports, struct Scene *scene,
+        TreeElement *te, struct TreeStoreElem *tsep, struct TreeStoreElem *tselem, void *user_data);
+void item_object_mode_exit_cb(
+        struct bContext *C, struct ReportList *reports, struct Scene *scene,
+        TreeElement *te, struct TreeStoreElem *tsep, struct TreeStoreElem *tselem, void *user_data);
 
 TreeElement *outliner_dropzone_find(const struct SpaceOops *soops, const float fmval[2], const bool children);
 

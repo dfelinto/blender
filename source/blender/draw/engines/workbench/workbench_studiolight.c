@@ -34,9 +34,14 @@
 
 void studiolight_update_world(StudioLight *sl, WORKBENCH_UBO_World *wd)
 {
+	int i;
 	BKE_studiolight_ensure_flag(sl, STUDIOLIGHT_SPHERICAL_HARMONICS_COEFFICIENTS_CALCULATED);
-	for (int i = 0; i < 9; i++) {
+
+	for (i = 0; i < STUDIOLIGHT_SPHERICAL_HARMONICS_COMPONENTS; i++) {
 		copy_v3_v3(wd->spherical_harmonics_coefs[i], sl->spherical_harmonics_coefs[i]);
+	}
+	for (; i < STUDIOLIGHT_SPHERICAL_HARMONICS_MAX_COMPONENTS; i++) {
+		copy_v3_fl(wd->spherical_harmonics_coefs[i], 0.0);
 	}
 }
 
@@ -121,6 +126,7 @@ static BoundBox *studiolight_object_shadow_bbox_get(WORKBENCH_PrivateData *wpd, 
 		for (int i = 0; i < 8; ++i) {
 			mul_m4_v3(wpd->shadow_mat, oed->shadow_bbox.vec[i]);
 		}
+		oed->shadow_bbox_dirty = false;
 	}
 
 	return &oed->shadow_bbox;

@@ -65,9 +65,11 @@ class VIEW3D_HT_header(Header):
                 row.prop(tool_settings.particle_edit, "select_mode", text="", expand=True)
 
             # Occlude geometry
-            if ((((shading.type not in {'SOLID', 'TEXTURED'}) or not shading.show_xray) and
-                (object_mode == 'PARTICLE_EDIT' or (object_mode == 'EDIT' and obj.type == 'MESH'))) or
-                (object_mode in {'WEIGHT_PAINT', 'VERTEX_PAINT'})):
+            if (
+                    (((shading.type not in {'SOLID', 'TEXTURED'}) or not shading.show_xray) and
+                     (object_mode == 'PARTICLE_EDIT' or (object_mode == 'EDIT' and obj.type == 'MESH'))) or
+                    (object_mode in {'WEIGHT_PAINT', 'VERTEX_PAINT'})
+            ):
                 row = layout.row()
                 row.prop(view, "use_occlude_geometry", text="")
 
@@ -195,7 +197,7 @@ class VIEW3D_HT_header(Header):
         sub.popover(space_type='VIEW_3D', region_type='HEADER', panel_type="VIEW3D_PT_shading")
 
         row = layout.row(align=True)
-        row.prop(overlay, "show_overlays", icon="WIRE", text="")
+        row.prop(overlay, "show_overlays", icon='WIRE', text="")
 
         sub = row.row(align=True)
         sub.active = overlay.show_overlays
@@ -1517,6 +1519,10 @@ class VIEW3D_MT_object(Menu):
 
         layout.separator()
 
+        layout.menu("VIEW3D_MT_object_showhide")
+
+        layout.separator()
+
         layout.operator("object.delete", text="Delete...").use_global = False
 
 
@@ -1871,6 +1877,20 @@ class VIEW3D_MT_object_quick_effects(Menu):
         layout.operator("object.quick_explode")
         layout.operator("object.quick_smoke")
         layout.operator("object.quick_fluid")
+
+
+class VIEW3D_MT_object_showhide(Menu):
+    bl_label = "Show/Hide"
+
+    def draw(self, context):
+        layout = self.layout
+
+        layout.operator("object.hide_view_clear", text="Show Hidden")
+
+        layout.separator()
+
+        layout.operator("object.hide_view_set", text="Hide Selected").unselected = False
+        layout.operator("object.hide_view_set", text="Hide Unselected").unselected = True
 
 
 class VIEW3D_MT_make_single_user(Menu):
@@ -2626,7 +2646,7 @@ class VIEW3D_MT_edit_mesh_specials(Menu):
             layout.operator("mesh.merge", text="Merge Vertices...")
             layout.operator("mesh.remove_doubles", text="Remove Double Vertices")
             layout.operator("mesh.dissolve_verts")
-            layout.operator("mesh.delete", text="Delete Vertices").type = "VERT"
+            layout.operator("mesh.delete", text="Delete Vertices").type = 'VERT'
 
         # Edge Select Commands
         if select_mode[1]:
@@ -2637,7 +2657,7 @@ class VIEW3D_MT_edit_mesh_specials(Menu):
             layout.separator()
 
             layout.operator("mesh.dissolve_edges")
-            layout.operator("mesh.delete", text="Delete Edges").type = "EDGE"
+            layout.operator("mesh.delete", text="Delete Edges").type = 'EDGE'
 
         # Face Select Commands
         if select_mode[2]:
@@ -2667,7 +2687,7 @@ class VIEW3D_MT_edit_mesh_specials(Menu):
             layout.separator()
 
             layout.operator("mesh.dissolve_faces")
-            layout.operator("mesh.delete", text="Delete Faces").type = "FACE"
+            layout.operator("mesh.delete", text="Delete Faces").type = 'FACE'
 
         # General Mesh Commands
 
@@ -2953,17 +2973,21 @@ class VIEW3D_MT_edit_mesh_shading(Menu):
     def draw(self, context):
         layout = self.layout
 
-        layout.label(text="Faces:")
-        layout.operator("mesh.faces_shade_smooth", text="Smooth")
-        layout.operator("mesh.faces_shade_flat", text="Flat")
-        layout.label(text="Edges:")
-        layout.operator("mesh.mark_sharp", text="Smooth").clear = True
-        layout.operator("mesh.mark_sharp", text="Sharp")
-        layout.label(text="Vertices:")
-        props = layout.operator("mesh.mark_sharp", text="Smooth")
+        layout.operator("mesh.faces_shade_smooth", text="Smooth Faces")
+        layout.operator("mesh.faces_shade_flat", text="Flat Faces")
+
+        layout.separator()
+
+        layout.operator("mesh.mark_sharp", text="Smooth Edges").clear = True
+        layout.operator("mesh.mark_sharp", text="Sharp Edges")
+
+        layout.separator()
+
+        props = layout.operator("mesh.mark_sharp", text="Smooth Vertices")
         props.use_verts = True
         props.clear = True
-        layout.operator("mesh.mark_sharp", text="Sharp").use_verts = True
+
+        layout.operator("mesh.mark_sharp", text="Sharp Vertices").use_verts = True
 
 
 class VIEW3D_MT_edit_mesh_weights(Menu):
@@ -3493,7 +3517,7 @@ class VIEW3D_MT_edit_gpencil_interpolate(Menu):
         layout.operator("gpencil.interpolate_sequence", text="Sequence")
 
 
-class VIEW3D_PIE_object_mode(Menu):
+class VIEW3D_MT_object_mode_pie(Menu):
     bl_label = "Mode"
 
     def draw(self, context):
@@ -3503,9 +3527,9 @@ class VIEW3D_PIE_object_mode(Menu):
         pie.operator_enum("OBJECT_OT_mode_set", "mode")
 
 
-class VIEW3D_PIE_view(Menu):
+class VIEW3D_MT_view_pie(Menu):
     bl_label = "View"
-    bl_idname = "VIEW3D_PIE_view"
+    bl_idname = "VIEW3D_MT_view_pie"
 
     def draw(self, context):
         layout = self.layout
@@ -3626,7 +3650,7 @@ class VIEW3D_PT_shading_lighting(Panel):
         view = context.space_data
         shading = view.shading
 
-        if shading.type in ('SOLID', 'TEXTURED'):
+        if shading.type == 'SOLID':
             layout.row().prop(shading, "light", expand=True)
             if shading.light == 'STUDIO':
                 row = layout.row()
@@ -3643,7 +3667,7 @@ class VIEW3D_PT_shading_lighting(Panel):
                 sub.operator('VIEW3D_OT_toggle_matcap_flip', emboss=False, text="", icon='ARROW_LEFTRIGHT')
                 sub.operator('wm.studiolight_userpref_show', emboss=False, text="", icon='PREFERENCES')
 
-        elif shading.type in ('MATERIAL'):
+        elif shading.type == 'MATERIAL':
             row = layout.row()
             row.template_icon_view(shading, "studio_light", show_labels=True)
             sub = row.column()
@@ -3688,7 +3712,7 @@ class VIEW3D_PT_shading_options(Panel):
     def poll(cls, context):
         view = context.space_data
         shading = view.shading
-        return shading.type in ['SOLID', 'TEXTURED']
+        return shading.type == 'SOLID'
 
     def draw(self, context):
         layout = self.layout
@@ -3700,35 +3724,34 @@ class VIEW3D_PT_shading_options(Panel):
             row = layout.row()
             row.prop(shading, "show_specular_highlight")
 
-        if shading.type in ('SOLID', 'TEXTURED'):
-            row = layout.split(0.4)
-            row.prop(shading, "show_xray")
-            sub = row.row()
-            sub.active = shading.show_xray
-            sub.prop(shading, "xray_alpha", text="")
+        row = layout.split(0.4)
+        row.prop(shading, "show_xray")
+        sub = row.row()
+        sub.active = shading.show_xray
+        sub.prop(shading, "xray_alpha", text="")
 
-            row = layout.split(0.4)
-            row.active = not shading.show_xray
-            row.prop(shading, "show_shadows")
-            sub = row.row()
-            sub.active = shading.show_shadows and not shading.show_xray
-            sub.prop(shading, "shadow_intensity", text="")
+        row = layout.split(0.4)
+        row.active = not shading.show_xray
+        row.prop(shading, "show_shadows")
+        sub = row.row()
+        sub.active = shading.show_shadows and not shading.show_xray
+        sub.prop(shading, "shadow_intensity", text="")
 
-            row = layout.split(0.4)
-            row.active = not shading.show_xray
-            row.prop(shading, "show_cavity")
-            sub = row.column(align=True)
-            sub.active = not shading.show_xray and shading.show_cavity
-            sub.prop(shading, "cavity_ridge_factor")
-            sub.prop(shading, "cavity_valley_factor")
+        row = layout.split(0.4)
+        row.active = not shading.show_xray
+        row.prop(shading, "show_cavity")
+        sub = row.column(align=True)
+        sub.active = not shading.show_xray and shading.show_cavity
+        sub.prop(shading, "cavity_ridge_factor")
+        sub.prop(shading, "cavity_valley_factor")
 
-            row = layout.split(0.4)
-            row.prop(shading, "show_object_outline")
-            sub = row.row()
-            sub.active = shading.show_object_outline
-            sub.prop(shading, "object_outline_color", text="")
+        row = layout.split(0.4)
+        row.prop(shading, "show_object_outline")
+        sub = row.row()
+        sub.active = shading.show_object_outline
+        sub.prop(shading, "object_outline_color", text="")
 
-            layout.prop(view, "show_world")
+        layout.prop(view, "show_world")
 
 
 class VIEW3D_PT_overlay(Panel):
@@ -3766,7 +3789,7 @@ class VIEW3D_PT_overlay(Panel):
         #sub.prop(overlay, "show_onion_skins")
         sub.prop(overlay, "show_face_orientation")
         sub.prop(overlay, "show_backface_culling")
-        if shading.type == "MATERIAL":
+        if shading.type == 'MATERIAL':
             sub.prop(overlay, "show_look_dev")
 
         row = col.row()
@@ -3826,6 +3849,7 @@ class VIEW3D_PT_overlay_edit_mesh(Panel):
         data = context.active_object.data
         statvis = tool_settings.statvis
         with_freestyle = bpy.app.build_options.freestyle
+        show_developer_ui = context.user_preferences.view.show_developer_ui
 
         col = layout.column()
         col.active = display_all
@@ -3848,7 +3872,7 @@ class VIEW3D_PT_overlay_edit_mesh(Panel):
         sub.prop(data, "show_extra_face_area", text="Face Area")
         sub.prop(data, "show_extra_face_angle", text="Face Angle")
 
-        if bpy.app.debug:
+        if show_developer_ui:
             sub.prop(data, "show_extra_indices", text="Indices")
 
         if with_freestyle:
@@ -4001,11 +4025,19 @@ class VIEW3D_PT_overlay_paint(Panel):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'HEADER'
     bl_parent_id = 'VIEW3D_PT_overlay'
-    bl_label = "Paint"
+    bl_label = ""
 
     @classmethod
     def poll(cls, context):
         return context.mode in {'PAINT_WEIGHT', 'PAINT_VERTEX', 'PAINT_TEXTURE'}
+
+    def draw_header(self, context):
+        layout = self.layout
+        layout.label(text={
+            'PAINT_TEXTURE': "Texture Paint",
+            'PAINT_VERTEX': "Vertex Paint",
+            'PAINT_WEIGHT': "Weight Paint",
+        }[context.mode])
 
     def draw(self, context):
         layout = self.layout
@@ -4016,10 +4048,14 @@ class VIEW3D_PT_overlay_paint(Panel):
         col = layout.column()
         col.active = display_all
 
+        col.prop(overlay, {
+            'PAINT_TEXTURE': "texture_paint_mode_opacity",
+            'PAINT_VERTEX': "vertex_paint_mode_opacity",
+            'PAINT_WEIGHT': "weight_paint_mode_opacity",
+        }[context.mode], text="Opacity")
+
         if context.mode in {'PAINT_WEIGHT', 'PAINT_VERTEX'}:
             col.prop(overlay, "show_paint_wire")
-
-        col.prop(view, "show_mode_shade_override")
 
 
 class VIEW3D_PT_quad_view(Panel):
@@ -4217,6 +4253,7 @@ classes = (
     VIEW3D_MT_object_collection,
     VIEW3D_MT_object_constraints,
     VIEW3D_MT_object_quick_effects,
+    VIEW3D_MT_object_showhide,
     VIEW3D_MT_make_single_user,
     VIEW3D_MT_make_links,
     VIEW3D_MT_brush,
@@ -4283,8 +4320,8 @@ classes = (
     VIEW3D_MT_edit_armature_delete,
     VIEW3D_MT_edit_gpencil_transform,
     VIEW3D_MT_edit_gpencil_interpolate,
-    VIEW3D_PIE_object_mode,
-    VIEW3D_PIE_view,
+    VIEW3D_MT_object_mode_pie,
+    VIEW3D_MT_view_pie,
     VIEW3D_PT_grease_pencil,
     VIEW3D_PT_grease_pencil_palettecolor,
     VIEW3D_PT_view3d_properties,

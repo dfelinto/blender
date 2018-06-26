@@ -93,6 +93,7 @@
 #include "BKE_bvhutils.h"
 
 #include "DEG_depsgraph.h"
+#include "DEG_depsgraph_physics.h"
 #include "DEG_depsgraph_query.h"
 
 #include "PIL_time.h"
@@ -1307,9 +1308,10 @@ void psys_update_particle_tree(ParticleSystem *psys, float cfra)
 
 static void psys_update_effectors(ParticleSimulationData *sim)
 {
-	pdEndEffectors(&sim->psys->effectors);
-	sim->psys->effectors = pdInitEffectors(sim->depsgraph, sim->scene, sim->ob, sim->psys,
-	                                       sim->psys->part->effector_weights, true);
+	BKE_effectors_free(sim->psys->effectors);
+	sim->psys->effectors = BKE_effectors_create(sim->depsgraph,
+	                                            sim->ob, sim->psys,
+	                                            sim->psys->part->effector_weights);
 	precalc_guides(sim, sim->psys->effectors);
 }
 
@@ -2066,7 +2068,7 @@ static void basic_force_cb(void *efdata_v, ParticleKey *state, float *force, flo
 	/* add effectors */
 	pd_point_from_particle(efdata->sim, efdata->pa, state, &epoint);
 	if (part->type != PART_HAIR || part->effector_weights->flag & EFF_WEIGHT_DO_HAIR)
-		pdDoEffectors(sim->psys->effectors, sim->colliders, part->effector_weights, &epoint, force, impulse);
+		BKE_effectors_apply(sim->psys->effectors, sim->colliders, part->effector_weights, &epoint, force, impulse);
 
 	mul_v3_fl(force, efdata->ptex.field);
 	mul_v3_fl(impulse, efdata->ptex.field);
@@ -2957,18 +2959,20 @@ static void psys_update_path_cache(ParticleSimulationData *sim, float cfra, cons
 
 
 	/* particle instance modifier with "path" option need cached paths even if particle system doesn't */
-	FOREACH_SCENE_OBJECT_BEGIN(sim->scene, ob)
-	{
-		ModifierData *md = modifiers_findByType(ob, eModifierType_ParticleInstance);
-		if (md) {
-			ParticleInstanceModifierData *pimd = (ParticleInstanceModifierData *)md;
-			if (pimd->flag & eParticleInstanceFlag_Path && pimd->ob == sim->ob && pimd->psys == (psys - (ParticleSystem*)sim->ob->particlesystem.first)) {
-				skip = 0;
-				break;
+	if (skip) {
+		FOREACH_SCENE_OBJECT_BEGIN(sim->scene, ob)
+		{
+			ModifierData *md = modifiers_findByType(ob, eModifierType_ParticleInstance);
+			if (md) {
+				ParticleInstanceModifierData *pimd = (ParticleInstanceModifierData *)md;
+				if (pimd->flag & eParticleInstanceFlag_Path && pimd->ob == sim->ob && pimd->psys == (psys - (ParticleSystem*)sim->ob->particlesystem.first)) {
+					skip = 0;
+					break;
+				}
 			}
 		}
+		FOREACH_SCENE_OBJECT_END;
 	}
-	FOREACH_SCENE_OBJECT_END;
 
 	if (!skip) {
 		psys_cache_paths(sim, cfra, use_render_params);
@@ -3536,7 +3540,7 @@ static void dynamics_step(ParticleSimulationData *sim, float cfra)
 	psys_update_effectors(sim);
 
 	if (part->type != PART_HAIR)
-		sim->colliders = get_collider_cache(sim->scene, sim->ob, part->collision_group);
+		sim->colliders = BKE_collider_cache_create(sim->depsgraph, sim->ob, part->collision_group);
 
 	/* initialize physics type specific stuff */
 	switch (part->phystype) {
@@ -3743,7 +3747,7 @@ static void dynamics_step(ParticleSimulationData *sim, float cfra)
 			pa->state.time=cfra;
 	}
 
-	free_collider_cache(&sim->colliders);
+	BKE_collider_cache_free(&sim->colliders);
 	BLI_rng_free(sim->rng);
 	sim->rng = NULL;
 }
@@ -4221,16 +4225,6 @@ void particle_system_update(struct Depsgraph *depsgraph, Scene *scene, Object *o
 	if (!psys_check_enabled(ob, psys, use_render_params))
 		return;
 
-	if (DEG_is_active(depsgraph)) {
-		if (psys->orig_psys != NULL &&
-		    psys->orig_psys->edit != NULL &&
-		    psys->orig_psys->edit->psys == psys_orig_get(psys))
-		{
-			psys->orig_psys->edit->psys_eval = psys;
-			psys->orig_psys->edit->psmd_eval = psmd;
-		}
-	}
-
 	cfra = DEG_get_ctime(depsgraph);
 
 	sim.depsgraph = depsgraph;
@@ -4383,6 +4377,18 @@ void particle_system_update(struct Depsgraph *depsgraph, Scene *scene, Object *o
 
 	if (psys_orig->edit) {
 		psys_orig->edit->flags |= PT_CACHE_EDIT_UPDATE_PARTICLE_FROM_EVAL;
+	}
+
+	if (DEG_is_active(depsgraph)) {
+		if (psys_orig != psys) {
+			if (psys_orig->edit != NULL &&
+			    psys_orig->edit->psys == psys_orig)
+			{
+				psys_orig->edit->psys_eval = psys;
+				psys_orig->edit->psmd_eval = psmd;
+			}
+			psys_orig->flag = psys->flag;
+		}
 	}
 
 	psys->cfra = cfra;
