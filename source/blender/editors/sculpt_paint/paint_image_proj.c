@@ -3378,7 +3378,7 @@ static void proj_paint_state_vert_flags_init(ProjPaintState *ps)
 }
 
 #ifndef PROJ_DEBUG_NOSEAMBLEED
-static void project_paint_bleed_add_face_user(
+static bool project_paint_bleed_add_face_user(
         const ProjPaintState *ps, MemArena *arena,
         const MLoopTri *lt, const int tri_index)
 {
@@ -3386,11 +3386,17 @@ static void project_paint_bleed_add_face_user(
 	/* annoying but we need to add all faces even ones we never use elsewhere */
 	if (ps->seam_bleed_px > 0.0f) {
 		const int lt_vtri[3] = { PS_LOOPTRI_AS_VERT_INDEX_3(ps, lt) };
+		if (lt_vtri[0] > ps->totlooptri_eval + 1) {
+			printf("%s: %d >= %d\n", __func__, lt_vtri[0], ps->totlooptri_eval);
+			return false;
+		}
+
 		void *tri_index_p = POINTER_FROM_INT(tri_index);
 		BLI_linklist_prepend_arena(&ps->vertFaces[lt_vtri[0]], tri_index_p, arena);
 		BLI_linklist_prepend_arena(&ps->vertFaces[lt_vtri[1]], tri_index_p, arena);
 		BLI_linklist_prepend_arena(&ps->vertFaces[lt_vtri[2]], tri_index_p, arena);
 	}
+	return true;
 }
 #endif
 
@@ -3650,7 +3656,7 @@ static void project_paint_build_proj_ima(
 	}
 }
 
-static void project_paint_prepare_all_faces(
+static bool project_paint_prepare_all_faces(
         ProjPaintState *ps, MemArena *arena,
         const ProjPaintFaceLookup *face_lookup,
         ProjPaintLayerClone *layer_clone,
@@ -3671,7 +3677,9 @@ static void project_paint_prepare_all_faces(
 		bool is_face_sel;
 
 #ifndef PROJ_DEBUG_NOSEAMBLEED
-		project_paint_bleed_add_face_user(ps, arena, lt, tri_index);
+		if (!project_paint_bleed_add_face_user(ps, arena, lt, tri_index)) {
+			return false;
+		}
 #endif
 
 		is_face_sel = project_paint_check_face_sel(ps, face_lookup, lt);
@@ -3792,10 +3800,12 @@ static void project_paint_prepare_all_faces(
 
 	/* we have built the array, discard the linked list */
 	BLI_linklist_free(image_LinkList.list, NULL);
+
+	return true;
 }
 
 /* run once per stroke before projection painting */
-static void project_paint_begin(
+static bool project_paint_begin(
         const bContext *C, ProjPaintState *ps,
         const bool is_multi_view, const char symmetry_flag)
 {
@@ -3820,7 +3830,7 @@ static void project_paint_begin(
 	/* paint onto the derived mesh */
 	if (ps->is_shared_user == false) {
 		if (!proj_paint_state_mesh_eval_init(C, ps)) {
-			return;
+			return false;
 		}
 	}
 
@@ -3886,7 +3896,7 @@ static void project_paint_begin(
 
 	proj_paint_state_vert_flags_init(ps);
 
-	project_paint_prepare_all_faces(ps, arena, &face_lookup, &layer_clone, mloopuv_base, is_multi_view);
+	return project_paint_prepare_all_faces(ps, arena, &face_lookup, &layer_clone, mloopuv_base, is_multi_view);
 }
 
 static void paint_proj_begin_clone(ProjPaintState *ps, const float mouse[2])
@@ -5217,7 +5227,10 @@ void *paint_proj_new_stroke(bContext *C, Object *ob, const float mouse[2], int m
 			PROJ_PAINT_STATE_SHARED_MEMCPY(ps, ps_handle->ps_views[0]);
 		}
 
-		project_paint_begin(C, ps, is_multi_view, symmetry_flag_views[i]);
+		if (!project_paint_begin(C, ps, is_multi_view, symmetry_flag_views[i])) {
+			goto fail;
+		}
+
 		if (ps->me_eval == NULL) {
 			goto fail;
 		}
@@ -5368,7 +5381,9 @@ static int texture_paint_camera_project_exec(bContext *C, wmOperator *op)
 	ED_image_undo_push_begin(op->type->name);
 
 	/* allocate and initialize spatial data structures */
-	project_paint_begin(C, &ps, false, 0);
+	if (!project_paint_begin(C, &ps, false, 0)) {
+		return OPERATOR_CANCELLED;
+	}
 
 	if (ps.me_eval == NULL) {
 		BKE_brush_size_set(scene, ps.brush, orig_brush_size);
