@@ -82,7 +82,10 @@ struct bToolRef *WM_toolsystem_ref_from_context(struct bContext *C)
 	bToolRef *tref = WM_toolsystem_ref_find(workspace, &tkey);
 	/* We could return 'sa->runtime.tool' in this case. */
 	if (sa->runtime.is_tool_set) {
-		BLI_assert(tref == sa->runtime.tool);
+		//BLI_assert(tref == sa->runtime.tool);
+		if (tref != sa->runtime.tool) {
+			printf("%s: %s %s\n", __func__, tref->idname, sa->runtime.tool->idname);
+		}
 	}
 	return tref;
 }
