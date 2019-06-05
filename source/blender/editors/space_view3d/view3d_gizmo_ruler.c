@@ -1058,6 +1058,16 @@ static int view3d_ruler_add_invoke(bContext *C, wmOperator *op, const wmEvent *e
   wmGizmoGroup *gzgroup = WM_gizmomap_group_find(gzmap, view3d_gzgt_ruler_id);
   const bool use_depth = (v3d->shading.type >= OB_SOLID);
 
+  printf("%s: ar=%p, ar->gizmo_map=%p, len(gzmap->groups)=%d, gzgroup=%p\n",
+         __func__,
+         ar,
+         ar->gizmo_map,
+         BLI_listbase_count(WM_gizmomap_group_list(gzmap)),
+         gzgroup);
+
+  WM_gizmomap_debug_print(gzmap);
+  return OPERATOR_FINISHED;
+
   /* Create new line */
   RulerItem *ruler_item;
   ruler_item = ruler_item_add(gzgroup);

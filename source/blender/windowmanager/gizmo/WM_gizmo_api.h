@@ -283,6 +283,7 @@ void WM_gizmomap_message_subscribe(struct bContext *C,
                                    struct ARegion *ar,
                                    struct wmMsgBus *mbus);
 bool WM_gizmomap_is_any_selected(const struct wmGizmoMap *gzmap);
+void WM_gizmomap_debug_print(const struct wmGizmoMap *gzmap);
 bool WM_gizmomap_minmax(const struct wmGizmoMap *gzmap,
                         bool use_hidden,
                         bool use_select,

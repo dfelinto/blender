@@ -180,6 +180,7 @@ static wmGizmoMap *wm_gizmomap_new_from_type_ex(struct wmGizmoMapType *gzmap_typ
 wmGizmoMap *WM_gizmomap_new_from_type(const struct wmGizmoMapType_Params *gzmap_params)
 {
   wmGizmoMapType *gzmap_type = WM_gizmomaptype_ensure(gzmap_params);
+  printf("%s: region_id=%d, space_id=%d\n", __func__, gzmap_type->regionid, gzmap_type->spaceid);
   wmGizmoMap *gzmap = MEM_callocN(sizeof(wmGizmoMap), "GizmoMap");
   wm_gizmomap_new_from_type_ex(gzmap_type, gzmap);
   return gzmap;
@@ -239,6 +240,20 @@ const ListBase *WM_gizmomap_group_list(wmGizmoMap *gzmap)
   return &gzmap->groups;
 }
 
+void WM_gizmomap_debug_print(const wmGizmoMap *gzmap)
+{
+  return;
+  printf("%s: gzmap=%p, len(gzmap->groups)=%d\n",
+         __func__,
+         gzmap,
+         BLI_listbase_count(&gzmap->groups));
+
+  int count = 0;
+  for (wmGizmoGroup *gzgroup = gzmap->groups.first; gzgroup; gzgroup = gzgroup->next) {
+    printf("wmGizmoGroup[%d]=%s\n", count++, gzgroup->type->idname);
+  }
+}
+
 bool WM_gizmomap_is_any_selected(const wmGizmoMap *gzmap)
 {
   return gzmap->gzmap_context.select.len != 0;
@@ -282,6 +297,7 @@ static GHash *WM_gizmomap_gizmo_hash_new(const bContext *C,
                                          void *data,
                                          const eWM_GizmoFlag flag_exclude)
 {
+  printf("%s: gzmap=%p\n", __func__, gzmap);
   GHash *hash = BLI_ghash_ptr_new(__func__);
 
   /* collect gizmos */

@@ -82,6 +82,7 @@ wmGizmoGroup *wm_gizmogroup_new_from_type(wmGizmoMap *gzmap, wmGizmoGroupType *g
 
 void wm_gizmogroup_free(bContext *C, wmGizmoGroup *gzgroup)
 {
+  printf("%s: gzgroup=%p, idname=%s\n", __func__, gzgroup, gzgroup->type->idname);
   wmGizmoMap *gzmap = gzgroup->parent_gzmap;
 
   /* Similar to WM_gizmo_unlink, but only to keep gzmap state correct,
@@ -830,6 +831,8 @@ void WM_gizmomaptype_group_init_runtime(const Main *bmain,
                                         wmGizmoMapType *gzmap_type,
                                         wmGizmoGroupType *gzgt)
 {
+  printf("%s\n", __func__);
+
   /* Tools add themselves. */
   if (gzgt->flag & WM_GIZMOGROUPTYPE_TOOL_INIT) {
     return;
@@ -843,6 +846,7 @@ void WM_gizmomaptype_group_init_runtime(const Main *bmain,
         for (ARegion *ar = lb->first; ar; ar = ar->next) {
           wmGizmoMap *gzmap = ar->gizmo_map;
           if (gzmap && gzmap->type == gzmap_type) {
+            printf("%s: sc=%p, ar=%p\n", __func__, sc, ar);
             WM_gizmomaptype_group_init_runtime_with_region(gzmap_type, gzgt, ar);
           }
         }
@@ -860,6 +864,14 @@ wmGizmoGroup *WM_gizmomaptype_group_init_runtime_with_region(wmGizmoMapType *gzm
   UNUSED_VARS_NDEBUG(gzmap_type);
 
   wmGizmoGroup *gzgroup = wm_gizmogroup_new_from_type(gzmap, gzgt);
+  printf("%s: ar=%p, ar->gizmo_map=%p, len(gzmap->groups)=%d, gzgroup=%p, idname=%s\n",
+         __func__,
+         ar,
+         ar->gizmo_map,
+         BLI_listbase_count(WM_gizmomap_group_list(gzmap)),
+         gzgroup,
+         gzgroup->type->idname);
+  WM_gizmomap_debug_print(gzmap);
 
   wm_gizmomap_highlight_set(gzmap, NULL, NULL, 0);
 

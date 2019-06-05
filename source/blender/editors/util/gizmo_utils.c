@@ -58,6 +58,15 @@ bool ED_gizmo_poll_or_unlink_delayed_from_tool_ex(const bContext *C,
                                                   const char *gzgt_idname)
 {
   bToolRef_Runtime *tref_rt = WM_toolsystem_runtime_from_context((bContext *)C);
+  printf(
+      "%s: workspace=%p, workspace->id.name=%s, gzgt_idname=%s, tref_rt=%p, "
+      "tref_rt->gizmp_group=%s\n",
+      __func__,
+      CTX_wm_workspace(C),
+      CTX_wm_workspace(C)->id.name + 2,
+      gzgt_idname,
+      tref_rt,
+      tref_rt ? tref_rt->gizmo_group : "(nil)");
   if ((tref_rt == NULL) || !STREQ(gzgt_idname, tref_rt->gizmo_group)) {
     WM_gizmo_group_type_unlink_delayed_ptr(gzgt);
     return false;
