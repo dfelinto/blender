@@ -122,11 +122,8 @@ def draw_kmi(display_keymaps, kc, km, kmi, layout, level):
 
     col = _indented_layout(layout, level)
 
-    if kmi.show_expanded:
-        col = col.column(align=True)
-        box = col.box()
-    else:
-        box = col.column()
+    col = col.column(align=True)
+    box = col.box()
 
     split = box.split()
 
@@ -165,9 +162,9 @@ def draw_kmi(display_keymaps, kc, km, kmi, layout, level):
 
     # Expanded, additional event settings
     if kmi.show_expanded:
-        box = col.box()
+        boxcol = box.column()
 
-        split = box.split(factor=0.4)
+        split = boxcol.split(factor=0.4)
         sub = split.row()
 
         if km.is_modal:
@@ -198,7 +195,7 @@ def draw_kmi(display_keymaps, kc, km, kmi, layout, level):
             subrow.prop(kmi, "key_modifier", text="", event=True)
 
         # Operator properties
-        box.template_keymap_item_properties(kmi)
+        boxcol.template_keymap_item_properties(kmi)
 
         # Modal key maps attached to this operator
         if not km.is_modal:
@@ -212,13 +209,12 @@ _EVENT_TYPES = set()
 _EVENT_TYPE_MAP = {}
 _EVENT_TYPE_MAP_EXTRA = {}
 
-
 def draw_filtered(display_keymaps, filter_type, filter_text, layout):
-
     if filter_type == 'NAME':
         def filter_func(kmi):
-            return (filter_text in kmi.idname.lower() or
-                    filter_text in kmi.name.lower())
+            compiled_filter = filter_text.split(' ')
+            return all(x in kmi.idname.lower() for x in compiled_filter ) \
+            or all(x in kmi.name.lower() for x in compiled_filter)
     else:
         if not _EVENT_TYPES:
             enum = bpy.types.Event.bl_rna.properties["type"].enum_items
@@ -228,13 +224,25 @@ def draw_filtered(display_keymaps, filter_type, filter_text, layout):
 
             del enum
             _EVENT_TYPE_MAP_EXTRA.update({
-                "`": 'ACCENT_GRAVE',
-                "*": 'NUMPAD_ASTERIX',
-                "/": 'NUMPAD_SLASH',
-                '+': 'NUMPAD_PLUS',
-                "RMB": 'RIGHTMOUSE',
-                "LMB": 'LEFTMOUSE',
-                "MMB": 'MIDDLEMOUSE',
+                "BS"  : 'BACK_SPACE'     ,
+                "SB"  : 'SPACE'          ,
+                "CC"  : 'CONTROL'        ,
+                "SS"  : 'SHIFT'          ,
+                "AA"  : 'ALT'            ,
+                '`'   : 'ACCENT_GRAVE'   ,
+                '*'   : 'NUMPAD_ASTERIX' ,
+                '/'   : 'NUMPAD_SLASH'   ,
+                '+'   : 'NUMPAD_PLUS'    ,
+                "RMB" : 'RIGHTMOUSE'     ,
+                "LMB" : 'LEFTMOUSE'      ,
+                "MMB" : 'MIDDLEMOUSE'    ,
+                "DA"  : 'LEFT_ARROW'     ,
+                "DD"  : 'RIGHT_ARROW'    ,
+                "DW"  : 'UP_ARROW'       ,
+                "DS"  : 'DOWN_ARROW'     ,
+                "PU"  : 'PAGE_UP'        ,
+                "PD"  : 'PAGE_DOWN'      ,
+
             })
             _EVENT_TYPE_MAP_EXTRA.update({
                 "%d" % i: "NUMPAD_%d" % i for i in range(10)
@@ -246,12 +254,16 @@ def draw_filtered(display_keymaps, filter_type, filter_text, layout):
 
         # Modifier {kmi.attribute: name} mapping
         key_mod = {
-            "ctrl": "ctrl",
-            "alt": "alt",
-            "shift": "shift",
-            "cmd": "oskey",
-            "oskey": "oskey",
-            "any": "any",
+            "ctrl"  : "ctrl"     ,
+            "cc"    : "ctrl"     ,
+            "shift" : "shift"    ,
+            "ss"    : "shift"    ,
+            "alt"   : "alt"      ,
+            "aa"    : "alt"      ,
+            "cmd"   : "oskey"    ,
+            "oskey" : "oskey"    ,
+            "any"   : "any"      ,
+            "sb"    : 'spacebar' ,
         }
         # KeyMapItem like dict, use for comparing against
         # attr: {states, ...}
@@ -270,7 +282,7 @@ def draw_filtered(display_keymaps, filter_type, filter_text, layout):
                 filter_text_split.remove(kk)
                 kmi_test_dict[kv] = {True}
 
-        # what's left should be the event type
+        # whats left should be the event type
         def kmi_type_set_from_string(kmi_type):
             kmi_type = kmi_type.upper()
             kmi_type_set = set()
@@ -354,7 +366,6 @@ def draw_hierarchy(display_keymaps, layout):
     for entry in keymap_hierarchy.generate():
         draw_entry(display_keymaps, entry, layout)
 
-
 def draw_keymaps(context, layout):
     from bl_keymap_utils.io import keyconfig_merge
 
@@ -387,7 +398,7 @@ def draw_keymaps(context, layout):
 
     # layout.context_pointer_set("keyconfig", wm.keyconfigs.active)
     # row.operator("preferences.keyconfig_remove", text="", icon='X')
-    rowsub = row.split(factor=0.3, align=True)
+    rowsub = row.split(factor=0.33, align=True)
     # postpone drawing into rowsub, so we can set alert!
 
     layout.separator()
@@ -412,8 +423,8 @@ def draw_keymaps(context, layout):
         # When the keyconfig defines it's own preferences.
         kc_prefs = kc_active.preferences
         if kc_prefs is not None:
-            box = col.box()
-            row = box.row(align=True)
+            boxcol = col.column()
+            row = boxcol.row(align=True)
 
             pref = context.preferences
             keymappref = pref.keymap
@@ -430,9 +441,9 @@ def draw_keymaps(context, layout):
             if show_ui_keyconfig:
                 # Defined by user preset, may contain mistakes out of our control.
                 try:
-                    kc_prefs.draw(box)
+                    kc_prefs.draw(boxcol)
                 except Exception:
                     import traceback
                     traceback.print_exc()
-            del box
+            del boxcol
         del kc_prefs
