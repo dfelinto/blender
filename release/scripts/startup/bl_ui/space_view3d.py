@@ -4910,7 +4910,7 @@ class VIEW3D_PT_collections(Panel):
     bl_label = "Collections"
     bl_options = {'DEFAULT_CLOSED'}
 
-    def _draw_collection(self, layout, view_layer, collection, index):
+    def _draw_collection(self, layout, view_layer, lock_collections, collection, index):
         need_separator = index
         for child in collection.children:
             index += 1
@@ -4946,11 +4946,18 @@ class VIEW3D_PT_collections(Panel):
             sub = row.split()
             subrow = sub.row(align=True)
             subrow.alignment = 'RIGHT'
-            subrow.active = collection.is_visible  # Parent collection runtime visibility
-            subrow.prop(child, "hide_viewport", text="", emboss=False)
+            if not lock_collections:
+                subrow.active = collection.is_visible  # Parent collection runtime visibility
+                subrow.prop(child, "hide_viewport", text="", emboss=False)
+            else:
+                subrow.active = collection.visible_get() # Parent collection runtime visibility
+                icon = 'HIDE_OFF' if child.visible_get() else 'HIDE_ON'
+                props = subrow.operator("object.hide_collection", text="", icon=icon, emboss=False)
+                props.collection_index = index
+                props.toggle = True
 
         for child in collection.children:
-            index = self._draw_collection(layout, view_layer, child, index)
+            index = self._draw_collection(layout, view_layer, lock_collections, child, index)
 
         return index
 
@@ -4958,11 +4965,17 @@ class VIEW3D_PT_collections(Panel):
         layout = self.layout
         layout.use_property_split = False
 
+        view = context.space_data
         view_layer = context.view_layer
+
+        layout.use_property_split = True
+        layout.prop(view, "lock_collections")
+        layout.separator()
+
         # We pass index 0 here because the index is increased
         # so the first real index is 1
         # And we start with index as 1 because we skip the master collection
-        self._draw_collection(layout, view_layer, view_layer.layer_collection, 0)
+        self._draw_collection(layout, view_layer, view.lock_collections, view_layer.layer_collection, 0)
 
 
 class VIEW3D_PT_object_type_visibility(Panel):

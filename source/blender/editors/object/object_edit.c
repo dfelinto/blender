@@ -271,6 +271,7 @@ void OBJECT_OT_hide_view_set(wmOperatorType *ot)
 static int object_hide_collection_exec(bContext *C, wmOperator *op)
 {
   wmWindow *win = CTX_wm_window(C);
+  View3D *v3d = CTX_wm_view3d(C);
 
   int index = RNA_int_get(op->ptr, "collection_index");
   const bool extend = (win->eventstate->shift != 0) || RNA_boolean_get(op->ptr, "toggle");
@@ -289,7 +290,12 @@ static int object_hide_collection_exec(bContext *C, wmOperator *op)
 
   DEG_id_tag_update(&scene->id, ID_RECALC_BASE_FLAGS);
 
-  BKE_layer_collection_isolate(scene, view_layer, lc, extend);
+  if (v3d->flag & V3D_LOCK_COLLECTIONS) {
+    BKE_layer_collection_local_isolate(scene, view_layer, v3d, lc, extend);
+  }
+  else {
+    BKE_layer_collection_isolate(scene, view_layer, lc, extend);
+  }
 
   WM_event_add_notifier(C, NC_SCENE | ND_OB_SELECT, scene);
 

@@ -1191,6 +1191,21 @@ static const EnumPropertyItem *rna_View3DShading_studio_light_itemf(bContext *UN
   return item;
 }
 
+static void rna_SpaceView3D_lock_collections_set(PointerRNA *ptr, int value)
+{
+  View3D *v3d = (View3D *)ptr->data;
+  if (!ED_view3d_lock_collections_set(v3d, value ? 1 : 0)) {
+    return;
+  }
+
+  if (value) {
+    v3d->flag |= V3D_LOCK_COLLECTIONS;
+  }
+  else {
+    v3d->flag &= ~V3D_LOCK_COLLECTIONS;
+  }
+}
+
 static const EnumPropertyItem *rna_SpaceView3D_stereo3d_camera_itemf(bContext *C,
                                                                      PointerRNA *UNUSED(ptr),
                                                                      PropertyRNA *UNUSED(prop),
@@ -3910,6 +3925,13 @@ static void rna_def_space_view3d(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "fx_settings", PROP_POINTER, PROP_NONE);
   RNA_def_property_ui_text(prop, "FX Options", "Options used for real time compositing");
+  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
+
+  prop = RNA_def_property(srna, "lock_collections", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "flag", V3D_LOCK_COLLECTIONS);
+  RNA_def_property_boolean_funcs(prop, NULL, "rna_SpaceView3D_lock_collections_set");
+  RNA_def_property_ui_text(
+      prop, "Lock Collections", "Lock the collections visibility in this viewport");
   RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
 
   /* Stereo Settings */

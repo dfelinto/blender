@@ -122,6 +122,11 @@ void BKE_layer_collection_isolate(struct Scene *scene,
                                   struct ViewLayer *view_layer,
                                   struct LayerCollection *lc,
                                   bool extend);
+void BKE_layer_collection_local_isolate(struct Scene *scene,
+                                        struct ViewLayer *view_layer,
+                                        struct View3D *v3d,
+                                        struct LayerCollection *lc,
+                                        bool extend);
 void BKE_layer_collection_set_visible(struct ViewLayer *view_layer,
                                       struct LayerCollection *lc,
                                       const bool visible,

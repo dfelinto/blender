@@ -68,6 +68,7 @@ static LayerCollection *layer_collection_add(ListBase *lb_parent, Collection *co
 {
   LayerCollection *lc = MEM_callocN(sizeof(LayerCollection), "Collection Base");
   lc->collection = collection;
+  lc->local_collections_bits = ~(0);
   BLI_addtail(lb_parent, lc);
 
   return lc;
@@ -1081,6 +1082,80 @@ void BKE_layer_collection_isolate(Scene *scene,
   }
 
   BKE_layer_collection_sync(scene, view_layer);
+}
+
+static void layer_collection_local_visibility_set_recursive(LayerCollection *layer_collection,
+                                                            const int local_collections_uuid)
+{
+  layer_collection->local_collections_bits |= local_collections_uuid;
+  for (LayerCollection *child = layer_collection->layer_collections.first; child;
+       child = child->next) {
+    layer_collection_local_visibility_set_recursive(child, local_collections_uuid);
+  }
+}
+
+static void layer_collection_local_visibility_unset_recursive(LayerCollection *layer_collection,
+                                                              const int local_collections_uuid)
+{
+  layer_collection->local_collections_bits &= ~local_collections_uuid;
+  for (LayerCollection *child = layer_collection->layer_collections.first; child;
+       child = child->next) {
+    layer_collection_local_visibility_set_recursive(child, local_collections_uuid);
+  }
+}
+
+/**
+ * Isolate the collection locally
+ *
+ * Same as BKE_layer_collection_local_isolate but for a viewport
+ */
+void BKE_layer_collection_local_isolate(
+    Scene *scene, ViewLayer *view_layer, View3D *v3d, LayerCollection *lc, bool extend)
+{
+  LayerCollection *lc_master = view_layer->layer_collections.first;
+  bool hide_it = extend && ((v3d->local_collections_uuid & lc->local_collections_bits) != 0);
+
+  if (!extend) {
+    /* Hide all collections . */
+    for (LayerCollection *lc_iter = lc_master->layer_collections.first; lc_iter;
+         lc_iter = lc_iter->next) {
+      layer_collection_local_visibility_unset_recursive(lc_iter, v3d->local_collections_uuid);
+    }
+  }
+
+  /* Make all the direct parents visible. */
+  if (hide_it) {
+    lc->local_collections_bits &= ~(v3d->local_collections_uuid);
+  }
+  else {
+    LayerCollection *lc_parent = lc;
+    for (LayerCollection *lc_iter = lc_master->layer_collections.first; lc_iter;
+         lc_iter = lc_iter->next) {
+      if (BKE_layer_collection_has_layer_collection(lc_iter, lc)) {
+        lc_parent = lc_iter;
+        break;
+      }
+    }
+
+    while (lc_parent != lc) {
+      lc_parent->local_collections_bits &= ~(v3d->local_collections_uuid);
+      for (LayerCollection *lc_iter = lc_parent->layer_collections.first; lc_iter;
+           lc_iter = lc_iter->next) {
+        if (BKE_layer_collection_has_layer_collection(lc_iter, lc)) {
+          lc_parent = lc_iter;
+          break;
+        }
+      }
+    }
+
+    /* Make all the children visible. */
+    layer_collection_local_visibility_set_recursive(lc, v3d->local_collections_uuid);
+  }
+
+#if 0
+  BKE_layer_collection_sync(scene, view_layer);
+    // TODO(dalai) set objects or be sure DEG is called to sync that.
+#endif
 }
 
 static void layer_collection_bases_show_recursive(ViewLayer *view_layer, LayerCollection *lc)

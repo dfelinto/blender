@@ -177,7 +177,9 @@ typedef struct Object_Runtime {
   /** Runtime grease pencil drawing data */
   struct GpencilBatchCache *gpencil_cache;
 
-  void *_pad2; /* Padding is here for win32s unconventional struct alignment rules. */
+  // void *_pad2; /* Padding is here for win32s unconventional struct alignment rules. */
+  unsigned short local_collections_bits;
+  short _pad2[3];
 } Object_Runtime;
 
 typedef struct Object {

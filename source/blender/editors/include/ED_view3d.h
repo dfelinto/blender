@@ -744,4 +744,7 @@ void ED_view3d_buttons_region_layout_ex(const struct bContext *C,
                                         struct ARegion *ar,
                                         const char *category_override);
 
+/* view3d_view.c */
+bool ED_view3d_lock_collections_set(struct View3D *v3d, bool value);
+
 #endif /* __ED_VIEW3D_H__ */

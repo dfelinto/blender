@@ -1534,3 +1534,22 @@ void VIEW3D_OT_localview_remove_from(wmOperatorType *ot)
 }
 
 /** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Local Collections
+ * \{ */
+
+bool ED_view3d_lock_collections_set(struct View3D *v3d, bool value)
+{
+  // TODO(dfelintoview lock collections)
+  /*
+   * see if current uuid is valid, otherwise
+   * set a valid uuid to v3d, else return false;
+   * // DO NOT set this uuid for all layer collections (dont usually need but playing safe)
+   */
+  UNUSED_VARS(v3d, value);
+  v3d->local_collections_uuid = (1 << 1);
+  return true;
+}
+
+/** \} */
