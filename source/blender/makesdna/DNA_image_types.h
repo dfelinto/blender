@@ -119,6 +119,8 @@ typedef struct Image {
   ListBase renderslots;
   short render_slot, last_render_slot;
 
+  ImageUser *user;
+
   int flag;
   short source, type;
   int lastframe;

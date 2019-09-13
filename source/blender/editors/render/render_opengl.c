@@ -504,6 +504,9 @@ static void screen_opengl_render_apply(const bContext *C, OGLRender *oglrender)
   if (ibuf) {
     ibuf->userflags |= IB_DISPLAY_BUFFER_INVALID;
   }
+
+  oglrender->ima->user = &oglrender->iuser;
+
   BKE_image_release_ibuf(oglrender->ima, ibuf, lock);
 
   if (oglrender->write_still) {
