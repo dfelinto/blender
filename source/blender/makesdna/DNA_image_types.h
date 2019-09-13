@@ -116,10 +116,10 @@ typedef struct Image {
   ListBase anims;
   struct RenderResult *rr;
 
+  ImageUser *user;
+
   ListBase renderslots;
   short render_slot, last_render_slot;
-
-  ImageUser *user;
 
   int flag;
   short source, type;
