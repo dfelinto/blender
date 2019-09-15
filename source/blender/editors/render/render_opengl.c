@@ -505,8 +505,6 @@ static void screen_opengl_render_apply(const bContext *C, OGLRender *oglrender)
     ibuf->userflags |= IB_DISPLAY_BUFFER_INVALID;
   }
 
-  oglrender->ima->user = oglrender->iuser;
-
   BKE_image_release_ibuf(oglrender->ima, ibuf, lock);
 
   if (oglrender->write_still) {
@@ -645,6 +643,8 @@ static bool screen_opengl_render_init(bContext *C, wmOperator *op)
 
   oglrender->iuser.scene = scene;
   oglrender->iuser.ok = 1;
+
+  oglrender->ima->iuser = oglrender->iuser;
 
   /* create render result */
   RE_InitState(oglrender->re, NULL, &scene->r, &scene->view_layers, NULL, sizex, sizey, NULL);
