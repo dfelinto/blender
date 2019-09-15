@@ -4167,6 +4167,10 @@ static ImBuf *image_get_render_result(Image *ima, ImageUser *iuser, void **r_loc
   int from_render = (ima->render_slot == ima->last_render_slot);
   int actview;
 
+  if (!iuser) {
+    iuser = &ima->user;
+  }
+  
   if (!(iuser && iuser->scene)) {
     return NULL;
   }
@@ -4186,7 +4190,7 @@ static ImBuf *image_get_render_result(Image *ima, ImageUser *iuser, void **r_loc
   if (BKE_image_is_stereo(ima) && (iuser->flag & IMA_SHOW_STEREO)) {
     actview = iuser->multiview_eye;
   }
-
+  
   RenderSlot *slot;
   if (from_render) {
     RE_AcquireResultImage(re, &rres, actview);
