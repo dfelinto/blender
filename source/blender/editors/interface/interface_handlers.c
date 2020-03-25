@@ -421,6 +421,9 @@ typedef struct uiAfterFunc {
   PointerRNA rnapoin;
   PropertyRNA *rnaprop;
 
+  void *search_arg;
+  uiButSearchArgFreeFunc search_arg_free_func;
+
   bContextStore *context;
 
   char undostr[BKE_UNDO_STR_MAX];
@@ -755,6 +758,11 @@ static void ui_apply_but_func(bContext *C, uiBut *but)
     after->rnapoin = but->rnapoin;
     after->rnaprop = but->rnaprop;
 
+    after->search_arg_free_func = but->search_arg_free_func;
+    after->search_arg = but->search_arg;
+    but->search_arg_free_func = NULL;
+    but->search_arg = NULL;
+
     if (but->context) {
       after->context = CTX_store_copy(but->context);
     }
@@ -919,6 +927,10 @@ static void ui_apply_but_funcs_after(bContext *C)
     }
     if (after.rename_orig) {
       MEM_freeN(after.rename_orig);
+    }
+
+    if (after.search_arg_free_func) {
+      after.search_arg_free_func(after.search_arg);
     }
 
     ui_afterfunc_update_preferences_dirty(&after);
@@ -9682,21 +9694,29 @@ static int ui_handle_menu_event(bContext *C,
                 /* Apply scroll operation. */
                 if (scrolltype == MENU_SCROLL_DOWN) {
                   but = ui_but_next(but);
-                  if (but == NULL) {
-                    but = ui_but_first(block);
-                  }
                 }
                 else if (scrolltype == MENU_SCROLL_UP) {
                   but = ui_but_prev(but);
-                  if (but == NULL) {
-                    but = ui_but_last(block);
-                  }
                 }
                 else if (scrolltype == MENU_SCROLL_TOP) {
                   but = ui_but_first(block);
                 }
                 else if (scrolltype == MENU_SCROLL_BOTTOM) {
                   but = ui_but_last(block);
+                }
+              }
+
+              if (!but) {
+                /* wrap button or no active button*/
+                uiBut *but_wrap = NULL;
+                if (ELEM(scrolltype, MENU_SCROLL_UP, MENU_SCROLL_BOTTOM)) {
+                  but_wrap = ui_but_last(block);
+                }
+                else if (ELEM(scrolltype, MENU_SCROLL_DOWN, MENU_SCROLL_TOP)) {
+                  but_wrap = ui_but_first(block);
+                }
+                if (but_wrap) {
+                  but = but_wrap;
                 }
               }
 

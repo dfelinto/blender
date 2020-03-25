@@ -1,6 +1,4 @@
 /*
- * ***** BEGIN GPL LICENSE BLOCK *****
- *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
  * as published by the Free Software Foundation; either version 2
@@ -14,12 +12,10 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * ***** END GPL LICENSE BLOCK *****
  */
 
-/** \file blender/blenkernel/intern/volume.cc
- *  \ingroup bke
+/** \file
+ * \ingroup bke
  */
 
 #include "MEM_guardedalloc.h"
@@ -56,7 +52,9 @@
 
 #include "CLG_log.h"
 
+#ifdef WITH_OPENVDB
 static CLG_LogRef LOG = {"bke.volume"};
+#endif
 
 #define VOLUME_FRAME_NONE INT_MAX
 
@@ -90,7 +88,7 @@ static CLG_LogRef LOG = {"bke.volume"};
  * out of file descriptors or prevent other applications from writing to it.
  */
 
-struct VolumeFileCache {
+static struct VolumeFileCache {
   /* Cache Entry */
   struct Entry {
     Entry(const std::string &filepath, const openvdb::GridBase::Ptr &grid)
@@ -594,6 +592,7 @@ static int volume_sequence_frame(const Depsgraph *depsgraph, const Volume *volum
   return frame;
 }
 
+#ifdef WITH_OPENVDB
 static void volume_filepath_get(const Main *bmain, const Volume *volume, char r_filepath[FILE_MAX])
 {
   BLI_strncpy(r_filepath, volume->filepath, FILE_MAX);
@@ -607,6 +606,7 @@ static void volume_filepath_get(const Main *bmain, const Volume *volume, char r_
     BLI_path_extension_ensure(r_filepath, FILE_MAX, ext);
   }
 }
+#endif
 
 /* File Load */
 
@@ -681,7 +681,7 @@ bool BKE_volume_load(Volume *volume, Main *bmain)
   }
 
   /* Add grids read from file to own vector, filtering out any NULL pointers. */
-  for (const openvdb::GridBase::Ptr vdb_grid : vdb_grids) {
+  for (const openvdb::GridBase::Ptr &vdb_grid : vdb_grids) {
     if (vdb_grid) {
       VolumeFileCache::Entry template_entry(grids.filepath, vdb_grid);
       grids.emplace_back(template_entry);

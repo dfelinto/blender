@@ -747,6 +747,10 @@ bool OpenCLInfo::device_supported(const string &platform_name, const cl_device_i
   }
   VLOG(3) << "OpenCL driver version " << driver_major << "." << driver_minor;
 
+  if (getenv("CYCLES_OPENCL_TEST")) {
+    return true;
+  }
+
   /* It is possible to have Iris GPU on AMD/Apple OpenCL framework
    * (aka, it will not be on Intel framework). This isn't supported
    * and needs an explicit blacklist.
@@ -806,18 +810,30 @@ bool OpenCLInfo::platform_version_check(cl_platform_id platform, string *error)
   return true;
 }
 
-bool OpenCLInfo::device_version_check(cl_device_id device, string *error)
+bool OpenCLInfo::get_device_version(cl_device_id device, int *r_major, int *r_minor, string *error)
 {
-  const int req_major = 1, req_minor = 1;
-  int major, minor;
   char version[256];
   clGetDeviceInfo(device, CL_DEVICE_OPENCL_C_VERSION, sizeof(version), &version, NULL);
-  if (sscanf(version, "OpenCL C %d.%d", &major, &minor) < 2) {
+  if (sscanf(version, "OpenCL C %d.%d", r_major, r_minor) < 2) {
     if (error != NULL) {
       *error = string_printf("OpenCL: failed to parse OpenCL C version string (%s).", version);
     }
     return false;
   }
+  if (error != NULL) {
+    *error = "";
+  }
+  return true;
+}
+
+bool OpenCLInfo::device_version_check(cl_device_id device, string *error)
+{
+  const int req_major = 1, req_minor = 1;
+  int major, minor;
+  if (!get_device_version(device, &major, &minor, error)) {
+    return false;
+  }
+
   if (!((major == req_major && minor >= req_minor) || (major > req_major))) {
     if (error != NULL) {
       *error = string_printf("OpenCL: C version 1.1 or later required, found %d.%d", major, minor);
@@ -858,7 +874,7 @@ string OpenCLInfo::get_hardware_id(const string &platform_name, cl_device_id dev
   return "";
 }
 
-void OpenCLInfo::get_usable_devices(vector<OpenCLPlatformDevice> *usable_devices, bool force_all)
+void OpenCLInfo::get_usable_devices(vector<OpenCLPlatformDevice> *usable_devices)
 {
   const cl_device_type device_type = OpenCLInfo::device_type();
   static bool first_time = true;
@@ -924,7 +940,7 @@ void OpenCLInfo::get_usable_devices(vector<OpenCLPlatformDevice> *usable_devices
         FIRST_VLOG(2) << "Ignoring device " << device_name << " due to old compiler version.";
         continue;
       }
-      if (force_all || device_supported(platform_name, device_id)) {
+      if (device_supported(platform_name, device_id)) {
         cl_device_type device_type;
         if (!get_device_type(device_id, &device_type, &error)) {
           FIRST_VLOG(2) << "Ignoring device " << device_name

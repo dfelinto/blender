@@ -1321,7 +1321,7 @@ static void rna_def_userdef_theme_ui_panel(BlenderRNA *brna)
   RNA_def_property_update(prop, 0, "rna_userdef_theme_update");
 }
 
-const EnumPropertyItem rna_enum_userdef_theme_background_types_items[] = {
+static const EnumPropertyItem rna_enum_userdef_theme_background_types_items[] = {
     {TH_BACKGROUND_SINGLE_COLOR,
      "SINGLE_COLOR",
      0,
@@ -1531,6 +1531,28 @@ static void rna_def_userdef_theme_ui(BlenderRNA *brna)
   RNA_def_property_array(prop, 3);
   RNA_def_property_ui_text(
       prop, "Text Cursor", "Color of the interface widgets text insertion cursor (caret)");
+  RNA_def_property_update(prop, 0, "rna_userdef_theme_update");
+
+  /* Transparent Grid */
+  prop = RNA_def_property(srna, "transparent_checker_primary", PROP_FLOAT, PROP_COLOR_GAMMA);
+  RNA_def_property_float_sdna(prop, NULL, "transparent_checker_primary");
+  RNA_def_property_array(prop, 3);
+  RNA_def_property_ui_text(
+      prop, "Primary Color", "Primary color of checkerboard pattern indicating transparent areas");
+  RNA_def_property_update(prop, 0, "rna_userdef_theme_update");
+
+  prop = RNA_def_property(srna, "transparent_checker_secondary", PROP_FLOAT, PROP_COLOR_GAMMA);
+  RNA_def_property_float_sdna(prop, NULL, "transparent_checker_secondary");
+  RNA_def_property_array(prop, 3);
+  RNA_def_property_ui_text(prop,
+                           "Secondary Color",
+                           "Secondary color of checkerboard pattern indicating transparent areas");
+  RNA_def_property_update(prop, 0, "rna_userdef_theme_update");
+
+  prop = RNA_def_property(srna, "transparent_checker_size", PROP_INT, PROP_PIXEL);
+  RNA_def_property_ui_text(
+      prop, "Checkerboard Size", "Size of checkerboard pattern indicating transparent areas");
+  RNA_def_property_range(prop, 2, 48);
   RNA_def_property_update(prop, 0, "rna_userdef_theme_update");
 
   /* axis */
@@ -3586,6 +3608,11 @@ static void rna_def_userdef_theme_space_clip(BlenderRNA *brna)
   rna_def_userdef_theme_spaces_main(srna);
   rna_def_userdef_theme_spaces_list_main(srna);
 
+  prop = RNA_def_property(srna, "grid", PROP_FLOAT, PROP_COLOR_GAMMA);
+  RNA_def_property_array(prop, 3);
+  RNA_def_property_ui_text(prop, "Grid", "");
+  RNA_def_property_update(prop, 0, "rna_userdef_theme_update");
+
   prop = RNA_def_property(srna, "marker_outline", PROP_FLOAT, PROP_COLOR_GAMMA);
   RNA_def_property_float_sdna(prop, NULL, "marker_outline");
   RNA_def_property_array(prop, 3);
@@ -3729,12 +3756,12 @@ static void rna_def_userdef_themes(BlenderRNA *brna)
       {0, "USER_INTERFACE", ICON_WORKSPACE, "User Interface", ""},
       {19, "STYLE", ICON_FONTPREVIEW, "Text Style", ""},
       {18, "BONE_COLOR_SETS", ICON_COLOR, "Bone Color Sets", ""},
-      {1, "VIEW_3D", ICON_VIEW3D, "3D View", ""},
+      {1, "VIEW_3D", ICON_VIEW3D, "3D Viewport", ""},
       {3, "GRAPH_EDITOR", ICON_GRAPH, "Graph Editor", ""},
       {4, "DOPESHEET_EDITOR", ICON_ACTION, "Dope Sheet", ""},
       {5, "NLA_EDITOR", ICON_NLA, "Nonlinear Animation", ""},
       {6, "IMAGE_EDITOR", ICON_IMAGE, "UV/Image Editor", ""},
-      {7, "SEQUENCE_EDITOR", ICON_SEQUENCE, "Video Sequence Editor", ""},
+      {7, "SEQUENCE_EDITOR", ICON_SEQUENCE, "Video Sequencer", ""},
       {8, "TEXT_EDITOR", ICON_TEXT, "Text Editor", ""},
       {9, "NODE_EDITOR", ICON_NODETREE, "Node Editor", ""},
       {11, "PROPERTIES", ICON_PROPERTIES, "Properties", ""},
@@ -6029,6 +6056,10 @@ static void rna_def_userdef_experimental(BlenderRNA *brna)
       prop,
       "Undo Speedup",
       "Use new undo speedup (WARNING: can lead to crashes and serious .blend file corruption)");
+
+  prop = RNA_def_property(srna, "use_menu_search", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "use_menu_search", 1);
+  RNA_def_property_ui_text(prop, "Menu Search", "Search actions by menus instead of operators");
 }
 
 static void rna_def_userdef_addon_collection(BlenderRNA *brna, PropertyRNA *cprop)
