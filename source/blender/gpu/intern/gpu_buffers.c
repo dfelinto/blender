@@ -206,6 +206,15 @@ static void face_set_overlay_color_get(const int face_set, const int seed, uchar
   rgba_float_to_uchar(r_color, rgba);
 }
 
+static bool gpu_pbvh_is_looptri_visible(const MLoopTri *lt,
+                                        const MVert *mvert,
+                                        const MLoop *mloop,
+                                        const int *sculpt_face_sets)
+{
+  return (!paint_is_face_hidden(lt, mvert, mloop) && sculpt_face_sets &&
+          sculpt_face_sets[lt->poly] > SCULPT_FACE_SET_NONE);
+}
+
 /* Threaded - do not call any functions that use OpenGL calls! */
 void GPU_pbvh_mesh_buffers_update(GPU_PBVH_Buffers *buffers,
                                   const MVert *mvert,
@@ -313,11 +322,7 @@ void GPU_pbvh_mesh_buffers_update(GPU_PBVH_Buffers *buffers,
               buffers->mloop[lt->tri[2]].v,
           };
 
-          if (paint_is_face_hidden(lt, mvert, buffers->mloop)) {
-            continue;
-          }
-
-          if (sculpt_face_sets[lt->poly] <= 0) {
+          if (!gpu_pbvh_is_looptri_visible(lt, mvert, buffers->mloop, sculpt_face_sets)) {
             continue;
           }
 
@@ -379,15 +384,6 @@ void GPU_pbvh_mesh_buffers_update(GPU_PBVH_Buffers *buffers,
 
   buffers->show_mask = !empty_mask;
   buffers->mvert = mvert;
-}
-
-static bool gpu_pbvh_is_looptri_visible(const MLoopTri *lt,
-                                        const MVert *mvert,
-                                        const MLoop *mloop,
-                                        const int *sculpt_face_sets)
-{
-  return (!paint_is_face_hidden(lt, mvert, mloop) && sculpt_face_sets &&
-          sculpt_face_sets[lt->poly] > 0);
 }
 
 /* Threaded - do not call any functions that use OpenGL calls! */
