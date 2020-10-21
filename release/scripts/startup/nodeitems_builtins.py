@@ -485,8 +485,8 @@ def not_implemented_node(idname):
 
 geometry_node_categories = [
     # Geometry Nodes
-    GeometryNodeCategory("GEO_CONVERTER", "Converter", items=[
-        NodeItem("ShaderNodeMath"),
+    GeometryNodeCategory("GEO_MESH", "Mesh", items=[
+        NodeItem("GeometryNodeTriangulate"),
     ]),
     GeometryNodeCategory("GEO_GROUP", "Group", items=node_group_items),
     GeometryNodeCategory("GEO_LAYOUT", "Layout", items=[

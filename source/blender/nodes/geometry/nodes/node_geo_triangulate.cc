@@ -14,20 +14,23 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
-#pragma once
+#include "node_geometry_util.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+static bNodeSocketTemplate geo_node_triangulate_in[] = {
+    {SOCK_GEOMETRY, N_("Geometry")},
+    {-1, ""},
+};
 
-extern struct bNodeTreeType *ntreeType_Geometry;
+static bNodeSocketTemplate geo_node_triangulate_out[] = {
+    {SOCK_GEOMETRY, N_("Geometry")},
+    {-1, ""},
+};
 
-void register_node_tree_type_geo(void);
+void register_node_type_geo_triangulate()
+{
+  static bNodeType ntype;
 
-void register_node_type_geo_group(void);
-
-void register_node_type_geo_triangulate(void);
-
-#ifdef __cplusplus
+  geo_node_type_base(&ntype, GEO_NODE_TRIANGULATE, "Triangulate", 0, 0);
+  node_type_socket_templates(&ntype, geo_node_triangulate_in, geo_node_triangulate_out);
+  nodeRegisterType(&ntype);
 }
-#endif

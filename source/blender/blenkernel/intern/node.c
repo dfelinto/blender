@@ -4658,6 +4658,8 @@ static void registerTextureNodes(void)
 static void registerGeometryNodes(void)
 {
   register_node_type_geo_group();
+
+  register_node_type_geo_triangulate();
 }
 
 static void registerFunctionNodes(void)

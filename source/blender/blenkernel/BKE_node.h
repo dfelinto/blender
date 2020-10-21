@@ -1324,6 +1324,14 @@ int ntreeTexExecTree(struct bNodeTree *ntree,
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name Geometry Nodes
+ * \{ */
+
+#define GEO_NODE_TRIANGULATE 1000
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name Function Nodes
  * \{ */
 
