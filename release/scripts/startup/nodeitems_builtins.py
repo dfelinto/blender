@@ -487,6 +487,7 @@ geometry_node_categories = [
     # Geometry Nodes
     GeometryNodeCategory("GEO_MESH", "Mesh", items=[
         NodeItem("GeometryNodeTriangulate"),
+        NodeItem("GeometryNodeEdgeSplit"),
     ]),
     GeometryNodeCategory("GEO_GROUP", "Group", items=node_group_items),
     GeometryNodeCategory("GEO_LAYOUT", "Layout", items=[

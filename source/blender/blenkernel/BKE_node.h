@@ -1328,6 +1328,7 @@ int ntreeTexExecTree(struct bNodeTree *ntree,
  * \{ */
 
 #define GEO_NODE_TRIANGULATE 1000
+#define GEO_NODE_EDGE_SPLIT 1001
 
 /** \} */
 

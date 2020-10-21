@@ -139,6 +139,7 @@ set(SRC
 
   geometry/nodes/node_geo_common.cc
   geometry/nodes/node_geo_triangulate.cc
+  geometry/nodes/node_geo_edge_split.cc
   geometry/node_geometry_tree.cc
   geometry/node_geometry_util.cc
 

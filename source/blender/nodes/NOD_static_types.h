@@ -267,6 +267,7 @@ DefNode(FunctionNode, FN_NODE_OBJECT_TRANSFORMS, 0,             "OBJECT_TRANSFOR
 DefNode(FunctionNode, FN_NODE_RANDOM_FLOAT, 0,                  "RANDOM_FLOAT", RandomFloat, "Random Float", "")
 
 DefNode(GeometryNode, GEO_NODE_TRIANGULATE, 0, "TRIANGULATE", Triangulate, "Triangulate", "")
+DefNode(GeometryNode, GEO_NODE_EDGE_SPLIT, 0, "EDGE_SPLIT", EdgeSplit, "Edge Split", "")
 
 
 /* undefine macros */
