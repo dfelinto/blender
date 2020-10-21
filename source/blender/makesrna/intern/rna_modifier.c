@@ -1597,6 +1597,14 @@ static int rna_MeshSequenceCacheModifier_read_velocity_get(PointerRNA *ptr)
 #  endif
 }
 
+static bool rna_NodesModifier_node_tree_poll(PointerRNA *ptr, PointerRNA value)
+{
+  NodesModifierData *nmd = ptr->data;
+  bNodeTree *ntree = value.data;
+  UNUSED_VARS(nmd, ntree);
+  return true;
+}
+
 #else
 
 /* NOTE: *MUST* return subdivision_type property. */
@@ -6918,6 +6926,7 @@ static void rna_def_modifier_weightednormal(BlenderRNA *brna)
 static void rna_def_modifier_nodes(BlenderRNA *brna)
 {
   StructRNA *srna;
+  PropertyRNA *prop;
 
   srna = RNA_def_struct(brna, "NodesModifier", "Modifier");
   RNA_def_struct_ui_text(srna, "Nodes Modifier", "");
@@ -6925,6 +6934,12 @@ static void rna_def_modifier_nodes(BlenderRNA *brna)
   RNA_def_struct_ui_icon(srna, ICON_MESH_DATA); /* TODO: Use correct icon. */
 
   RNA_define_lib_overridable(true);
+
+  prop = RNA_def_property(srna, "node_tree", PROP_POINTER, PROP_NONE);
+  RNA_def_property_ui_text(prop, "Node Tree", "Node tree that controls what this modifier does");
+  RNA_def_property_pointer_funcs(prop, NULL, NULL, NULL, "rna_NodesModifier_node_tree_poll");
+  RNA_def_property_flag(prop, PROP_EDITABLE);
+  RNA_def_property_update(prop, 0, "rna_Modifier_dependency_update");
 
   RNA_define_lib_overridable(false);
 }

@@ -117,7 +117,7 @@ static void panel_draw(const bContext *UNUSED(C), Panel *panel)
   uiLayoutSetPropSep(layout, true);
   uiLayoutSetPropDecorate(layout, false);
 
-  uiItemL(layout, "This modifier does nothing currently", ICON_INFO);
+  uiItemR(layout, ptr, "node_tree", 0, NULL, ICON_MESH_DATA);
 
   modifier_panel_end(layout, ptr);
 }
