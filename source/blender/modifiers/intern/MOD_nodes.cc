@@ -166,7 +166,7 @@ ModifierTypeInfo modifierType_Nodes = {
     /* name */ "Nodes",
     /* structName */ "NodesModifierData",
     /* structSize */ sizeof(NodesModifierData),
-#ifdef WITH_PARTICLE_NODES
+#ifdef WITH_GEOMETRY_NODES
     /* srna */ &RNA_NodesModifier,
 #else
     /* srna */ &RNA_Modifier,
