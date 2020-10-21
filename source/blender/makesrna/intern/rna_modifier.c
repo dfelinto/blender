@@ -29,7 +29,6 @@
 #include "DNA_object_force_types.h"
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
-#include "DNA_simulation_types.h"
 
 #include "MEM_guardedalloc.h"
 
@@ -161,6 +160,7 @@ const EnumPropertyItem rna_enum_object_modifier_type_items[] = {
      ICON_MOD_MULTIRES,
      "Multiresolution",
      "Subdivide the mesh in a way that allows editing the higher subdivision levels"},
+    {eModifierType_Nodes, "NODES", ICON_MESH_DATA, "Nodes", ""}, /* TODO: Use correct icon. */
     {eModifierType_Remesh,
      "REMESH",
      ICON_MOD_REMESH,
@@ -305,11 +305,6 @@ const EnumPropertyItem rna_enum_object_modifier_type_items[] = {
      "Spawn particles from the shape"},
     {eModifierType_Softbody, "SOFT_BODY", ICON_MOD_SOFT, "Soft Body", ""},
     {eModifierType_Surface, "SURFACE", ICON_MODIFIER, "Surface", ""},
-    {eModifierType_Simulation,
-     "SIMULATION",
-     ICON_PHYSICS,
-     "Simulation",
-     ""}, /* TODO: Use correct icon. */
     {0, NULL, 0, NULL, NULL},
 };
 
@@ -6920,14 +6915,14 @@ static void rna_def_modifier_weightednormal(BlenderRNA *brna)
 }
 
 #  ifdef WITH_PARTICLE_NODES
-static void rna_def_modifier_simulation(BlenderRNA *brna)
+static void rna_def_modifier_nodes(BlenderRNA *brna)
 {
   StructRNA *srna;
 
-  srna = RNA_def_struct(brna, "SimulationModifier", "Modifier");
-  RNA_def_struct_ui_text(srna, "Simulation Modifier", "");
-  RNA_def_struct_sdna(srna, "SimulationModifierData");
-  RNA_def_struct_ui_icon(srna, ICON_PHYSICS); /* TODO: Use correct icon. */
+  srna = RNA_def_struct(brna, "NodesModifier", "Modifier");
+  RNA_def_struct_ui_text(srna, "Nodes Modifier", "");
+  RNA_def_struct_sdna(srna, "NodesModifierData");
+  RNA_def_struct_ui_icon(srna, ICON_MESH_DATA); /* TODO: Use correct icon. */
 
   RNA_define_lib_overridable(true);
 
@@ -7290,7 +7285,7 @@ void RNA_def_modifier(BlenderRNA *brna)
   rna_def_modifier_surfacedeform(brna);
   rna_def_modifier_weightednormal(brna);
 #  ifdef WITH_PARTICLE_NODES
-  rna_def_modifier_simulation(brna);
+  rna_def_modifier_nodes(brna);
 #  endif
   rna_def_modifier_mesh_to_volume(brna);
   rna_def_modifier_volume_displace(brna);

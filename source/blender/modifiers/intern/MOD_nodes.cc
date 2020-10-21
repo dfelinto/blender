@@ -67,17 +67,17 @@ using blender::float3;
 
 static void initData(ModifierData *md)
 {
-  SimulationModifierData *smd = (SimulationModifierData *)md;
+  NodesModifierData *nmd = (NodesModifierData *)md;
 
-  BLI_assert(MEMCMP_STRUCT_AFTER_IS_ZERO(smd, modifier));
+  BLI_assert(MEMCMP_STRUCT_AFTER_IS_ZERO(nmd, modifier));
 
-  MEMCPY_STRUCT_AFTER(smd, DNA_struct_default_get(SimulationModifierData), modifier);
+  MEMCPY_STRUCT_AFTER(nmd, DNA_struct_default_get(NodesModifierData), modifier);
 }
 
 static void updateDepsgraph(ModifierData *md, const ModifierUpdateDepsgraphContext *UNUSED(ctx))
 {
-  SimulationModifierData *smd = reinterpret_cast<SimulationModifierData *>(md);
-  UNUSED_VARS(smd);
+  NodesModifierData *nmd = reinterpret_cast<NodesModifierData *>(md);
+  UNUSED_VARS(nmd);
 }
 
 static void foreachIDLink(ModifierData *md,
@@ -85,16 +85,16 @@ static void foreachIDLink(ModifierData *md,
                           IDWalkFunc UNUSED(walk),
                           void *UNUSED(userData))
 {
-  SimulationModifierData *smd = reinterpret_cast<SimulationModifierData *>(md);
-  UNUSED_VARS(smd);
+  NodesModifierData *nmd = reinterpret_cast<NodesModifierData *>(md);
+  UNUSED_VARS(nmd);
 }
 
 static bool isDisabled(const struct Scene *UNUSED(scene),
                        ModifierData *md,
                        bool UNUSED(useRenderParams))
 {
-  SimulationModifierData *smd = reinterpret_cast<SimulationModifierData *>(md);
-  UNUSED_VARS(smd);
+  NodesModifierData *nmd = reinterpret_cast<NodesModifierData *>(md);
+  UNUSED_VARS(nmd);
   return false;
 }
 
@@ -102,8 +102,8 @@ static PointCloud *modifyPointCloud(ModifierData *md,
                                     const ModifierEvalContext *UNUSED(ctx),
                                     PointCloud *pointcloud)
 {
-  SimulationModifierData *smd = reinterpret_cast<SimulationModifierData *>(md);
-  UNUSED_VARS(smd);
+  NodesModifierData *nmd = reinterpret_cast<NodesModifierData *>(md);
+  UNUSED_VARS(nmd);
   return pointcloud;
 }
 
@@ -124,48 +124,48 @@ static void panel_draw(const bContext *UNUSED(C), Panel *panel)
 
 static void panelRegister(ARegionType *region_type)
 {
-  modifier_panel_register(region_type, eModifierType_Simulation, panel_draw);
+  modifier_panel_register(region_type, eModifierType_Nodes, panel_draw);
 }
 
 static void blendWrite(BlendWriter *writer, const ModifierData *md)
 {
-  const SimulationModifierData *smd = reinterpret_cast<const SimulationModifierData *>(md);
-  UNUSED_VARS(smd, writer);
+  const NodesModifierData *nmd = reinterpret_cast<const NodesModifierData *>(md);
+  UNUSED_VARS(nmd, writer);
 }
 
 static void blendRead(BlendDataReader *reader, ModifierData *md)
 {
-  SimulationModifierData *smd = reinterpret_cast<SimulationModifierData *>(md);
-  UNUSED_VARS(smd, reader);
+  NodesModifierData *nmd = reinterpret_cast<NodesModifierData *>(md);
+  UNUSED_VARS(nmd, reader);
 }
 
 static void copyData(const ModifierData *md, ModifierData *target, const int flag)
 {
-  const SimulationModifierData *smd = reinterpret_cast<const SimulationModifierData *>(md);
-  SimulationModifierData *tsmd = reinterpret_cast<SimulationModifierData *>(target);
-  UNUSED_VARS(smd, tsmd);
+  const NodesModifierData *nmd = reinterpret_cast<const NodesModifierData *>(md);
+  NodesModifierData *tnmd = reinterpret_cast<NodesModifierData *>(target);
+  UNUSED_VARS(nmd, tnmd);
 
   BKE_modifier_copydata_generic(md, target, flag);
 }
 
 static void freeData(ModifierData *md)
 {
-  SimulationModifierData *smd = reinterpret_cast<SimulationModifierData *>(md);
-  UNUSED_VARS(smd);
+  NodesModifierData *nmd = reinterpret_cast<NodesModifierData *>(md);
+  UNUSED_VARS(nmd);
 }
 
-ModifierTypeInfo modifierType_Simulation = {
-    /* name */ "Simulation",
-    /* structName */ "SimulationModifierData",
-    /* structSize */ sizeof(SimulationModifierData),
+ModifierTypeInfo modifierType_Nodes = {
+    /* name */ "Nodes",
+    /* structName */ "NodesModifierData",
+    /* structSize */ sizeof(NodesModifierData),
 #ifdef WITH_PARTICLE_NODES
-    /* srna */ &RNA_SimulationModifier,
+    /* srna */ &RNA_NodesModifier,
 #else
     /* srna */ &RNA_Modifier,
 #endif
     /* type */ eModifierTypeType_None,
     /* flags */ (ModifierTypeFlag)0,
-    /* icon */ ICON_PHYSICS, /* TODO: Use correct icon. */
+    /* icon */ ICON_MESH_DATA, /* TODO: Use correct icon. */
 
     /* copyData */ copyData,
 

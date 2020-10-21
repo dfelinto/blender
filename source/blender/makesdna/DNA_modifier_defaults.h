@@ -574,7 +574,7 @@
     .flag = 0, \
   }
 
-#define _DNA_DEFAULT_SimulationModifierData \
+#define _DNA_DEFAULT_NodesModifierData \
   { 0 }
 
 #define _DNA_DEFAULT_SkinModifierData \

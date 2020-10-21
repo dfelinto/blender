@@ -566,7 +566,7 @@ extern StructRNA RNA_SimpleDeformModifier;
 extern StructRNA RNA_SimplifyGpencilModifier;
 extern StructRNA RNA_Simulation;
 #ifdef WITH_PARTICLE_NODES
-extern StructRNA RNA_SimulationModifier;
+extern StructRNA RNA_NodesModifier;
 #endif
 extern StructRNA RNA_GeometryNode;
 extern StructRNA RNA_GeometryNodeTree;

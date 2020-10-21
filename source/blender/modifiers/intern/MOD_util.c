@@ -342,7 +342,7 @@ void modifier_type_init(ModifierTypeInfo *types[])
   INIT_TYPE(MeshSequenceCache);
   INIT_TYPE(SurfaceDeform);
   INIT_TYPE(WeightedNormal);
-  INIT_TYPE(Simulation);
+  INIT_TYPE(Nodes);
   INIT_TYPE(MeshToVolume);
   INIT_TYPE(VolumeDisplace);
   INIT_TYPE(VolumeToMesh);
