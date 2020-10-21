@@ -31,6 +31,7 @@ _modules = [
     "console",
     "constraint",
     "file",
+    "geometry_nodes",
     "image",
     "mesh",
     "node",

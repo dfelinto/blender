@@ -154,7 +154,7 @@ class NODE_HT_header(Header):
         elif snode.tree_type == 'GeometryNodeTree':
             NODE_MT_editor_menus.draw_collapsible(context, layout)
             layout.separator_spacer()
-            layout.template_ID(snode, "node_tree", new="node.new_node_tree")
+            layout.template_ID(snode, "node_tree", new="node.new_geometry_node_tree")
 
         else:
             # Custom node tree is edited as independent ID block
