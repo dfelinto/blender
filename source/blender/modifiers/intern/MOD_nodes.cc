@@ -36,11 +36,11 @@
 #include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
 #include "DNA_modifier_types.h"
+#include "DNA_node_types.h"
 #include "DNA_object_types.h"
 #include "DNA_pointcloud_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_screen_types.h"
-#include "DNA_simulation_types.h"
 
 #include "BKE_customdata.h"
 #include "BKE_lib_query.h"
@@ -74,19 +74,18 @@ static void initData(ModifierData *md)
   MEMCPY_STRUCT_AFTER(nmd, DNA_struct_default_get(NodesModifierData), modifier);
 }
 
-static void updateDepsgraph(ModifierData *md, const ModifierUpdateDepsgraphContext *UNUSED(ctx))
+static void updateDepsgraph(ModifierData *md, const ModifierUpdateDepsgraphContext *ctx)
 {
   NodesModifierData *nmd = reinterpret_cast<NodesModifierData *>(md);
-  UNUSED_VARS(nmd);
+  if (nmd->node_tree != nullptr) {
+    DEG_add_node_tree_relation(ctx->node, nmd->node_tree, "Nodes Modifier");
+  }
 }
 
-static void foreachIDLink(ModifierData *md,
-                          Object *UNUSED(ob),
-                          IDWalkFunc UNUSED(walk),
-                          void *UNUSED(userData))
+static void foreachIDLink(ModifierData *md, Object *ob, IDWalkFunc walk, void *userData)
 {
   NodesModifierData *nmd = reinterpret_cast<NodesModifierData *>(md);
-  UNUSED_VARS(nmd);
+  walk(userData, ob, (ID **)&nmd->node_tree, IDWALK_CB_USER);
 }
 
 static bool isDisabled(const struct Scene *UNUSED(scene),
@@ -104,7 +103,16 @@ static PointCloud *modifyPointCloud(ModifierData *md,
 {
   NodesModifierData *nmd = reinterpret_cast<NodesModifierData *>(md);
   UNUSED_VARS(nmd);
+  std::cout << __func__ << "\n";
   return pointcloud;
+}
+
+static Mesh *modifyMesh(ModifierData *md, const ModifierEvalContext *UNUSED(ctx), Mesh *mesh)
+{
+  NodesModifierData *nmd = reinterpret_cast<NodesModifierData *>(md);
+  UNUSED_VARS(nmd);
+  std::cout << __func__ << "\n";
+  return mesh;
 }
 
 static void panel_draw(const bContext *UNUSED(C), Panel *panel)
@@ -163,8 +171,8 @@ ModifierTypeInfo modifierType_Nodes = {
 #else
     /* srna */ &RNA_Modifier,
 #endif
-    /* type */ eModifierTypeType_None,
-    /* flags */ (ModifierTypeFlag)0,
+    /* type */ eModifierTypeType_Constructive,
+    /* flags */ eModifierTypeFlag_AcceptsMesh,
     /* icon */ ICON_MESH_DATA, /* TODO: Use correct icon. */
 
     /* copyData */ copyData,
@@ -173,7 +181,7 @@ ModifierTypeInfo modifierType_Nodes = {
     /* deformMatrices */ NULL,
     /* deformVertsEM */ NULL,
     /* deformMatricesEM */ NULL,
-    /* modifyMesh */ NULL,
+    /* modifyMesh */ modifyMesh,
     /* modifyHair */ NULL,
     /* modifyPointCloud */ modifyPointCloud,
     /* modifyVolume */ NULL,

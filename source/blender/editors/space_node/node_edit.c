@@ -391,6 +391,7 @@ void snode_dag_update(bContext *C, SpaceNode *snode)
   }
 
   DEG_id_tag_update(snode->id, 0);
+  DEG_id_tag_update(&snode->nodetree->id, 0);
 }
 
 void snode_notify(bContext *C, SpaceNode *snode)
