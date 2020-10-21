@@ -24,7 +24,7 @@ set(INC
   function
   intern
   shader
-  simulation
+  geometry
   texture
   ../blenkernel
   ../blenlib
@@ -137,6 +137,10 @@ set(SRC
   function/nodes/node_fn_switch.cc
   function/node_function_util.cc
 
+  geometry/nodes/node_geo_common.cc
+  geometry/node_geometry_tree.cc
+  geometry/node_geometry_util.cc
+
   shader/nodes/node_shader_add_shader.c
   shader/nodes/node_shader_ambient_occlusion.c
   shader/nodes/node_shader_attribute.c
@@ -230,10 +234,6 @@ set(SRC
   shader/node_shader_tree.c
   shader/node_shader_util.c
 
-  simulation/nodes/node_sim_common.cc
-  simulation/node_simulation_tree.cc
-  simulation/node_simulation_util.cc
-
   texture/nodes/node_texture_at.c
   texture/nodes/node_texture_bricks.c
   texture/nodes/node_texture_checker.c
@@ -272,7 +272,7 @@ set(SRC
   composite/node_composite_util.h
   function/node_function_util.hh
   shader/node_shader_util.h
-  simulation/node_simulation_util.h
+  geometry/node_geometry_util.h
   texture/node_texture_util.h
 
   NOD_common.h
@@ -283,7 +283,7 @@ set(SRC
   NOD_node_tree_multi_function.hh
   NOD_node_tree_ref.hh
   NOD_shader.h
-  NOD_simulation.h
+  NOD_geometry.h
   NOD_socket.h
   NOD_static_types.h
   NOD_texture.h

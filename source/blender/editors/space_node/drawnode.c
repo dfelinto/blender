@@ -68,8 +68,8 @@
 #include "IMB_imbuf_types.h"
 
 #include "NOD_composite.h"
+#include "NOD_geometry.h"
 #include "NOD_shader.h"
-#include "NOD_simulation.h"
 #include "NOD_texture.h"
 #include "node_intern.h" /* own include */
 
@@ -3138,9 +3138,9 @@ static void node_texture_set_butfunc(bNodeType *ntype)
   }
 }
 
-/* ****************** BUTTON CALLBACKS FOR SIMULATION NODES ***************** */
+/* ****************** BUTTON CALLBACKS FOR GEOMETRY NODES ***************** */
 
-static void node_simulation_set_butfunc(bNodeType *UNUSED(ntype))
+static void node_geometry_set_butfunc(bNodeType *UNUSED(ntype))
 {
 }
 
@@ -3286,7 +3286,7 @@ void ED_node_init_butfuncs(void)
     node_composit_set_butfunc(ntype);
     node_shader_set_butfunc(ntype);
     node_texture_set_butfunc(ntype);
-    node_simulation_set_butfunc(ntype);
+    node_geometry_set_butfunc(ntype);
     node_function_set_butfunc(ntype);
 
     /* define update callbacks for socket properties */
@@ -3298,7 +3298,7 @@ void ED_node_init_butfuncs(void)
   ntreeType_Composite->ui_icon = ICON_NODE_COMPOSITING;
   ntreeType_Shader->ui_icon = ICON_NODE_MATERIAL;
   ntreeType_Texture->ui_icon = ICON_NODE_TEXTURE;
-  ntreeType_Simulation->ui_icon = ICON_PHYSICS; /* TODO: Use correct icon. */
+  ntreeType_Geometry->ui_icon = ICON_PHYSICS; /* TODO: Use correct icon. */
 }
 
 void ED_init_custom_node_type(bNodeType *ntype)

@@ -18,7 +18,7 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "NOD_simulation.h"
+#include "NOD_geometry.h"
 
 #include "BKE_node.h"
 
@@ -28,18 +28,18 @@
 
 #include "RNA_access.h"
 
-bNodeTreeType *ntreeType_Simulation;
+bNodeTreeType *ntreeType_Geometry;
 
-void register_node_tree_type_sim(void)
+void register_node_tree_type_geo(void)
 {
-  bNodeTreeType *tt = ntreeType_Simulation = static_cast<bNodeTreeType *>(
-      MEM_callocN(sizeof(bNodeTreeType), "simulation node tree type"));
-  tt->type = NTREE_SIMULATION;
-  strcpy(tt->idname, "SimulationNodeTree");
-  strcpy(tt->ui_name, N_("Simulation Editor"));
+  bNodeTreeType *tt = ntreeType_Geometry = static_cast<bNodeTreeType *>(
+      MEM_callocN(sizeof(bNodeTreeType), "geometry node tree type"));
+  tt->type = NTREE_GEOMETRY;
+  strcpy(tt->idname, "GeometryNodeTree");
+  strcpy(tt->ui_name, N_("Geometry Node Editor"));
   tt->ui_icon = 0; /* defined in drawnode.c */
-  strcpy(tt->ui_description, N_("Simulation nodes"));
-  tt->rna_ext.srna = &RNA_SimulationNodeTree;
+  strcpy(tt->ui_description, N_("Geometry nodes"));
+  tt->rna_ext.srna = &RNA_GeometryNodeTree;
 
   ntreeTypeAdd(tt);
 }

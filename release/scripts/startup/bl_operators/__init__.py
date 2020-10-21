@@ -42,7 +42,6 @@ _modules = [
     "rigidbody",
     "screen_play_rendered_anim",
     "sequencer",
-    "simulation",
     "userpref",
     "uvcalc_follow_active",
     "uvcalc_lightmap",

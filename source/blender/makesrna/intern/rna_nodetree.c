@@ -38,7 +38,6 @@
 #include "BKE_animsys.h"
 #include "BKE_image.h"
 #include "BKE_node.h"
-#include "BKE_simulation.h"
 #include "BKE_texture.h"
 
 #include "RNA_access.h"
@@ -727,9 +726,9 @@ static const EnumPropertyItem *rna_node_static_type_itemf(bContext *UNUSED(C),
 #  undef DefNode
   }
 
-  if (RNA_struct_is_a(ptr->type, &RNA_SimulationNode)) {
+  if (RNA_struct_is_a(ptr->type, &RNA_GeometryNode)) {
 #  define DefNode(Category, ID, DefFunc, EnumName, StructName, UIName, UIDesc) \
-    if (STREQ(#Category, "SimulationNode")) { \
+    if (STREQ(#Category, "GeometryNode")) { \
       tmp.value = ID; \
       tmp.identifier = EnumName; \
       tmp.name = UIName; \
@@ -1870,16 +1869,16 @@ static StructRNA *rna_TextureNode_register(Main *bmain,
   return nt->rna_ext.srna;
 }
 
-static StructRNA *rna_SimulationNode_register(Main *bmain,
-                                              ReportList *reports,
-                                              void *data,
-                                              const char *identifier,
-                                              StructValidateFunc validate,
-                                              StructCallbackFunc call,
-                                              StructFreeFunc free)
+static StructRNA *rna_GeometryNode_register(Main *bmain,
+                                            ReportList *reports,
+                                            void *data,
+                                            const char *identifier,
+                                            StructValidateFunc validate,
+                                            StructCallbackFunc call,
+                                            StructFreeFunc free)
 {
   bNodeType *nt = rna_Node_register_base(
-      bmain, reports, &RNA_SimulationNode, data, identifier, validate, call, free);
+      bmain, reports, &RNA_GeometryNode, data, identifier, validate, call, free);
   if (!nt) {
     return NULL;
   }
@@ -8179,14 +8178,14 @@ static void rna_def_texture_node(BlenderRNA *brna)
   RNA_def_struct_register_funcs(srna, "rna_TextureNode_register", "rna_Node_unregister", NULL);
 }
 
-static void rna_def_simulation_node(BlenderRNA *brna)
+static void rna_def_geometry_node(BlenderRNA *brna)
 {
   StructRNA *srna;
 
-  srna = RNA_def_struct(brna, "SimulationNode", "NodeInternal");
-  RNA_def_struct_ui_text(srna, "Simulation Node", "");
+  srna = RNA_def_struct(brna, "GeometryNode", "NodeInternal");
+  RNA_def_struct_ui_text(srna, "Geometry Node", "");
   RNA_def_struct_sdna(srna, "bNode");
-  RNA_def_struct_register_funcs(srna, "rna_SimulationNode_register", "rna_Node_unregister", NULL);
+  RNA_def_struct_register_funcs(srna, "rna_GeometryNode_register", "rna_Node_unregister", NULL);
 }
 
 static void rna_def_function_node(BlenderRNA *brna)
@@ -9625,7 +9624,7 @@ static void rna_def_nodetree(BlenderRNA *brna)
       {NTREE_SHADER, "SHADER", ICON_MATERIAL, "Shader", "Shader nodes"},
       {NTREE_TEXTURE, "TEXTURE", ICON_TEXTURE, "Texture", "Texture nodes"},
       {NTREE_COMPOSIT, "COMPOSITING", ICON_RENDERLAYERS, "Compositing", "Compositing nodes"},
-      {NTREE_SIMULATION, "SIMULATION", ICON_PHYSICS, "Simulation", "Simulation nodes"},
+      {NTREE_GEOMETRY, "GEOMETRY", ICON_MESH_DATA, "Geometry", "Geometry nodes"},
       {0, NULL, 0, NULL, NULL},
   };
 
@@ -9849,15 +9848,15 @@ static void rna_def_texture_nodetree(BlenderRNA *brna)
   RNA_def_struct_ui_icon(srna, ICON_TEXTURE);
 }
 
-static void rna_def_simulation_nodetree(BlenderRNA *brna)
+static void rna_def_geometry_nodetree(BlenderRNA *brna)
 {
   StructRNA *srna;
 
-  srna = RNA_def_struct(brna, "SimulationNodeTree", "NodeTree");
+  srna = RNA_def_struct(brna, "GeometryNodeTree", "NodeTree");
   RNA_def_struct_ui_text(
-      srna, "Simulation Node Tree", "Node tree consisting of linked nodes used for simulations");
+      srna, "Geometry Node Tree", "Node tree consisting of linked nodes used for geometries");
   RNA_def_struct_sdna(srna, "bNodeTree");
-  RNA_def_struct_ui_icon(srna, ICON_PHYSICS); /* TODO: Use correct icon. */
+  RNA_def_struct_ui_icon(srna, ICON_MESH_DATA); /* TODO: Use correct icon. */
 }
 
 static StructRNA *define_specific_node(BlenderRNA *brna,
@@ -9946,7 +9945,7 @@ void RNA_def_nodetree(BlenderRNA *brna)
   rna_def_shader_node(brna);
   rna_def_compositor_node(brna);
   rna_def_texture_node(brna);
-  rna_def_simulation_node(brna);
+  rna_def_geometry_node(brna);
   rna_def_function_node(brna);
 
   rna_def_nodetree(brna);
@@ -9956,7 +9955,7 @@ void RNA_def_nodetree(BlenderRNA *brna)
   rna_def_composite_nodetree(brna);
   rna_def_shader_nodetree(brna);
   rna_def_texture_nodetree(brna);
-  rna_def_simulation_nodetree(brna);
+  rna_def_geometry_nodetree(brna);
 
 #  define DefNode(Category, ID, DefFunc, EnumName, StructName, UIName, UIDesc) \
     { \
@@ -9973,13 +9972,13 @@ void RNA_def_nodetree(BlenderRNA *brna)
    */
 #  include "../../nodes/NOD_static_types.h"
 
-  /* Node group types need to be defined for shader, compositor, texture, simulation nodes
+  /* Node group types need to be defined for shader, compositor, texture, geometry nodes
    * individually. Cannot use the static types header for this, since they share the same int id.
    */
   define_specific_node(brna, "ShaderNodeGroup", "ShaderNode", "Group", "", def_group);
   define_specific_node(brna, "CompositorNodeGroup", "CompositorNode", "Group", "", def_group);
   define_specific_node(brna, "TextureNodeGroup", "TextureNode", "Group", "", def_group);
-  define_specific_node(brna, "SimulationNodeGroup", "SimulationNode", "Group", "", def_group);
+  define_specific_node(brna, "GeometryNodeGroup", "GeometryNode", "Group", "", def_group);
   def_custom_group(brna,
                    "ShaderNodeCustomGroup",
                    "ShaderNode",

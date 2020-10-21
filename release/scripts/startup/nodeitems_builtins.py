@@ -58,11 +58,11 @@ class TextureNodeCategory(SortedNodeCategory):
                 context.space_data.tree_type == 'TextureNodeTree')
 
 
-class SimulationNodeCategory(SortedNodeCategory):
+class GeometryNodeCategory(SortedNodeCategory):
     @classmethod
     def poll(cls, context):
         return (context.space_data.type == 'NODE_EDITOR' and
-                context.space_data.tree_type == 'SimulationNodeTree')
+                context.space_data.tree_type == 'GeometryNodeTree')
 
 
 # menu entry for node group tools
@@ -77,11 +77,11 @@ node_tree_group_type = {
     'CompositorNodeTree': 'CompositorNodeGroup',
     'ShaderNodeTree': 'ShaderNodeGroup',
     'TextureNodeTree': 'TextureNodeGroup',
-    'SimulationNodeTree': 'SimulationNodeGroup',
+    'GeometryNodeTree': 'GeometryNodeGroup',
 }
 
 
-# generic node group items generator for shader, compositor, simulation and texture node groups
+# generic node group items generator for shader, compositor, geometry and texture node groups
 def node_group_items(context):
     if context is None:
         return
@@ -483,10 +483,10 @@ def not_implemented_node(idname):
     return NodeItem(idname, label=label)
 
 
-simulation_node_categories = [
-    # Simulation Nodes
-    SimulationNodeCategory("SIM_GROUP", "Group", items=node_group_items),
-    SimulationNodeCategory("SIM_LAYOUT", "Layout", items=[
+geometry_node_categories = [
+    # Geometry Nodes
+    GeometryNodeCategory("SIM_GROUP", "Group", items=node_group_items),
+    GeometryNodeCategory("SIM_LAYOUT", "Layout", items=[
         NodeItem("NodeFrame"),
         NodeItem("NodeReroute"),
     ]),
@@ -497,14 +497,14 @@ def register():
     nodeitems_utils.register_node_categories('SHADER', shader_node_categories)
     nodeitems_utils.register_node_categories('COMPOSITING', compositor_node_categories)
     nodeitems_utils.register_node_categories('TEXTURE', texture_node_categories)
-    nodeitems_utils.register_node_categories('SIMULATION', simulation_node_categories)
+    nodeitems_utils.register_node_categories('GEOMETRY', geometry_node_categories)
 
 
 def unregister():
     nodeitems_utils.unregister_node_categories('SHADER')
     nodeitems_utils.unregister_node_categories('COMPOSITING')
     nodeitems_utils.unregister_node_categories('TEXTURE')
-    nodeitems_utils.unregister_node_categories('SIMULATION')
+    nodeitems_utils.unregister_node_categories('GEOMETRY')
 
 
 if __name__ == "__main__":

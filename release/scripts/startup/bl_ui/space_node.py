@@ -151,13 +151,9 @@ class NODE_HT_header(Header):
             if snode_id:
                 layout.prop(snode_id, "use_nodes")
 
-        elif snode.tree_type == 'SimulationNodeTree':
+        elif snode.tree_type == 'GeometryNodeTree':
             row = layout.row(align=True)
-            row.prop(snode, "simulation", text="")
-            row.operator("simulation.new", text="", icon='ADD')
-            simulation = snode.simulation
-            if simulation:
-                row.prop(snode.simulation, "use_fake_user", text="")
+            # TODO: Add header for geometry node trees.
 
         else:
             # Custom node tree is edited as independent ID block

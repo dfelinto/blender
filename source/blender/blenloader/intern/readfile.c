@@ -158,7 +158,6 @@
 #include "BKE_screen.h"
 #include "BKE_sequencer.h"
 #include "BKE_shader_fx.h"
-#include "BKE_simulation.h"
 #include "BKE_sound.h"
 #include "BKE_volume.h"
 #include "BKE_workspace.h"

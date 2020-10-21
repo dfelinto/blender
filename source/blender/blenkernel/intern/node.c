@@ -65,7 +65,6 @@
 #include "BKE_lib_query.h"
 #include "BKE_main.h"
 #include "BKE_node.h"
-#include "BKE_simulation.h"
 
 #include "BLI_ghash.h"
 #include "BLI_threads.h"
@@ -75,8 +74,8 @@
 #include "NOD_common.h"
 #include "NOD_composite.h"
 #include "NOD_function.h"
+#include "NOD_geometry.h"
 #include "NOD_shader.h"
-#include "NOD_simulation.h"
 #include "NOD_socket.h"
 #include "NOD_texture.h"
 
@@ -4656,9 +4655,9 @@ static void registerTextureNodes(void)
   register_node_type_tex_proc_distnoise();
 }
 
-static void registerSimulationNodes(void)
+static void registerGeometryNodes(void)
 {
-  register_node_type_sim_group();
+  register_node_type_geo_group();
 }
 
 static void registerFunctionNodes(void)
@@ -4685,7 +4684,7 @@ void init_nodesystem(void)
   register_node_tree_type_cmp();
   register_node_tree_type_sh();
   register_node_tree_type_tex();
-  register_node_tree_type_sim();
+  register_node_tree_type_geo();
 
   register_node_type_frame();
   register_node_type_reroute();
@@ -4695,7 +4694,7 @@ void init_nodesystem(void)
   registerCompositNodes();
   registerShaderNodes();
   registerTextureNodes();
-  registerSimulationNodes();
+  registerGeometryNodes();
   registerFunctionNodes();
 }
 

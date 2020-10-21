@@ -20,11 +20,11 @@
 extern "C" {
 #endif
 
-extern struct bNodeTreeType *ntreeType_Simulation;
+extern struct bNodeTreeType *ntreeType_Geometry;
 
-void register_node_tree_type_sim(void);
+void register_node_tree_type_geo(void);
 
-void register_node_type_sim_group(void);
+void register_node_type_geo_group(void);
 
 #ifdef __cplusplus
 }
