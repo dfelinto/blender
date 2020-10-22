@@ -17,7 +17,13 @@
 #include "BLI_math_base.h"
 #include "BLI_math_rotation.h"
 
+#include "DNA_modifier_types.h"
+
 #include "node_geometry_util.hh"
+
+extern "C" {
+Mesh *doEdgeSplit(Mesh *mesh, EdgeSplitModifierData *emd);
+}
 
 static bNodeSocketTemplate geo_node_edge_split_in[] = {
     {SOCK_GEOMETRY, N_("Geometry")},
@@ -39,11 +45,39 @@ static bNodeSocketTemplate geo_node_edge_split_out[] = {
     {-1, ""},
 };
 
+namespace blender::nodes {
+static void geo_edge_split_exec(bNode *UNUSED(node), GValueByName &inputs, GValueByName &outputs)
+{
+  GeometryPtr geometry_in = inputs.extract<GeometryPtr>("Geometry");
+
+  GeometryPtr geometry_out;
+  if (geometry_in.has_value()) {
+    Mesh *mesh_in = geometry_in->mesh_get_for_read();
+    if (mesh_in != nullptr) {
+      const float split_angle = inputs.extract<float>("Angle");
+      const bool use_sharp_flag = inputs.extract<bool>("Sharp Edges");
+
+      /* Use modifier struct to pass arguments to the modifier code. */
+      EdgeSplitModifierData emd = {.split_angle = split_angle, .flags = MOD_EDGESPLIT_FROMANGLE};
+      if (use_sharp_flag) {
+        emd.flags |= MOD_EDGESPLIT_FROMFLAG;
+      }
+
+      Mesh *mesh_out = doEdgeSplit(mesh_in, &emd);
+      geometry_out = GeometryPtr{new Geometry()};
+      geometry_out->mesh_set_and_transfer_ownership(mesh_out);
+    }
+  }
+  outputs.move_in("Geometry", std::move(geometry_out));
+}
+}  // namespace blender::nodes
+
 void register_node_type_geo_edge_split()
 {
   static bNodeType ntype;
 
   geo_node_type_base(&ntype, GEO_NODE_EDGE_SPLIT, "Edge Split", 0, 0);
   node_type_socket_templates(&ntype, geo_node_edge_split_in, geo_node_edge_split_out);
+  ntype.geometry_node_execute = blender::nodes::geo_edge_split_exec;
   nodeRegisterType(&ntype);
 }
