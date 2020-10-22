@@ -2219,7 +2219,7 @@ enum {
 
 typedef struct NodesModifierData {
   ModifierData modifier;
-  struct bNodeTree *node_tree;
+  struct bNodeTree *node_group;
 } NodesModifierData;
 
 typedef struct MeshToVolumeModifierData {

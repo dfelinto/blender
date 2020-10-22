@@ -80,15 +80,15 @@ static void initData(ModifierData *md)
 static void updateDepsgraph(ModifierData *md, const ModifierUpdateDepsgraphContext *ctx)
 {
   NodesModifierData *nmd = reinterpret_cast<NodesModifierData *>(md);
-  if (nmd->node_tree != nullptr) {
-    DEG_add_node_tree_relation(ctx->node, nmd->node_tree, "Nodes Modifier");
+  if (nmd->node_group != nullptr) {
+    DEG_add_node_tree_relation(ctx->node, nmd->node_group, "Nodes Modifier");
   }
 }
 
 static void foreachIDLink(ModifierData *md, Object *ob, IDWalkFunc walk, void *userData)
 {
   NodesModifierData *nmd = reinterpret_cast<NodesModifierData *>(md);
-  walk(userData, ob, (ID **)&nmd->node_tree, IDWALK_CB_USER);
+  walk(userData, ob, (ID **)&nmd->node_group, IDWALK_CB_USER);
 }
 
 static bool isDisabled(const struct Scene *UNUSED(scene),
@@ -241,12 +241,12 @@ static GeometryPtr compute_geometry(const DOutputSocket *group_input,
 static Mesh *modifyMesh(ModifierData *md, const ModifierEvalContext *UNUSED(ctx), Mesh *mesh)
 {
   NodesModifierData *nmd = reinterpret_cast<NodesModifierData *>(md);
-  if (nmd->node_tree == nullptr) {
+  if (nmd->node_group == nullptr) {
     return mesh;
   }
 
   NodeTreeRefMap tree_refs;
-  DerivedNodeTree tree{nmd->node_tree, tree_refs};
+  DerivedNodeTree tree{nmd->node_group, tree_refs};
 
   Span<const DNode *> input_nodes = tree.nodes_by_type("NodeGroupInput");
   Span<const DNode *> output_nodes = tree.nodes_by_type("NodeGroupOutput");
@@ -294,7 +294,7 @@ static void panel_draw(const bContext *UNUSED(C), Panel *panel)
   uiLayoutSetPropSep(layout, true);
   uiLayoutSetPropDecorate(layout, false);
 
-  uiItemR(layout, ptr, "node_tree", 0, NULL, ICON_MESH_DATA);
+  uiItemR(layout, ptr, "node_group", 0, NULL, ICON_MESH_DATA);
 
   modifier_panel_end(layout, ptr);
 }
