@@ -115,22 +115,25 @@ class NodeMFNetworkBuilder;
 class GValueByName;
 }  // namespace nodes
 namespace fn {
+class CPPType;
 class MFDataType;
-}
+}  // namespace fn
 }  // namespace blender
 
 using NodeExpandInMFNetworkFunction = void (*)(blender::nodes::NodeMFNetworkBuilder &builder);
-using SocketGetMFDataTypeFunction = blender::fn::MFDataType (*)();
-using SocketExpandInMFNetworkFunction = void (*)(blender::nodes::SocketMFNetworkBuilder &builder);
 using NodeGeometryExecFunction = void (*)(struct bNode *node,
                                           blender::nodes::GValueByName &inputs,
                                           blender::nodes::GValueByName &outputs);
+using SocketGetCPPTypeFunction = const blender::fn::CPPType *(*)();
+using SocketGetCPPValueFunction = void (*)(const struct bNodeSocket &socket, void *r_value);
+using SocketExpandInMFNetworkFunction = void (*)(blender::nodes::SocketMFNetworkBuilder &builder);
 
 #else
 typedef void *NodeExpandInMFNetworkFunction;
-typedef void *SocketGetMFDataTypeFunction;
 typedef void *SocketExpandInMFNetworkFunction;
 typedef void *NodeGeometryExecFunction;
+typedef void *SocketGetCPPTypeFunction;
+typedef void *SocketGetCPPValueFunction;
 #endif
 
 /**
@@ -186,10 +189,12 @@ typedef struct bNodeSocketType {
   /* Callback to free the socket type. */
   void (*free_self)(struct bNodeSocketType *stype);
 
-  /* Returns the multi-function data type of this socket type. */
-  SocketGetMFDataTypeFunction get_mf_data_type;
   /* Expands the socket into a multi-function node that outputs the socket value. */
   SocketExpandInMFNetworkFunction expand_in_mf_network;
+  /* Return the CPPType of this socket. */
+  SocketGetCPPTypeFunction get_cpp_type;
+  /* Get the value of this socket in a generic way. */
+  SocketGetCPPValueFunction get_cpp_value;
 } bNodeSocketType;
 
 typedef void *(*NodeInitExecFunction)(struct bNodeExecContext *context,

@@ -26,20 +26,11 @@
 #include "FN_multi_function_network.hh"
 
 #include "NOD_derived_node_tree.hh"
+#include "NOD_type_callbacks.hh"
 
 #include "BLI_resource_collector.hh"
 
 namespace blender::nodes {
-
-/* Maybe this should be moved to BKE_node.h. */
-inline bool is_multi_function_data_socket(const bNodeSocket *bsocket)
-{
-  if (bsocket->typeinfo->get_mf_data_type != nullptr) {
-    BLI_assert(bsocket->typeinfo->expand_in_mf_network != nullptr);
-    return true;
-  }
-  return false;
-}
 
 /**
  * A MFNetworkTreeMap maps various components of a DerivedNodeTree to components of a
@@ -149,7 +140,7 @@ class MFNetworkTreeMap {
       if (!dsocket->is_available()) {
         continue;
       }
-      if (!is_multi_function_data_socket(dsocket->bsocket())) {
+      if (!socket_is_mf_data_socket(*dsocket->bsocket()->typeinfo)) {
         continue;
       }
       fn::MFSocket *socket = sockets[used_sockets];
@@ -298,6 +289,11 @@ class SocketMFNetworkBuilder : public MFNetworkBuilderBase {
   template<typename T> void set_constant_value(T value)
   {
     this->construct_generator_fn<fn::CustomMF_Constant<T>>(std::move(value));
+  }
+  void set_constant_value(const CPPType &type, const void *value)
+  {
+    /* The value has live as long as the generated mf network. */
+    this->construct_generator_fn<fn::CustomMF_GenericConstant>(type, value);
   }
 
   template<typename T, typename... Args> void construct_generator_fn(Args &&... args)

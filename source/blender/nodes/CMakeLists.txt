@@ -271,6 +271,7 @@ set(SRC
   intern/node_tree_multi_function.cc
   intern/node_tree_ref.cc
   intern/node_util.c
+  intern/type_callbacks.cc
 
   composite/node_composite_util.h
   function/node_function_util.hh
@@ -290,6 +291,7 @@ set(SRC
   NOD_socket.h
   NOD_static_types.h
   NOD_texture.h
+  NOD_type_callbacks.hh
   intern/node_common.h
   intern/node_exec.h
   intern/node_util.h

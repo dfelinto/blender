@@ -65,6 +65,7 @@
 
 #include "NOD_derived_node_tree.hh"
 #include "NOD_geometry_exec.hh"
+#include "NOD_type_callbacks.hh"
 
 using blender::float3;
 
@@ -116,40 +117,6 @@ using namespace blender::nodes;
 using namespace blender::fn;
 using namespace blender::bke;
 
-static void get_socket_value(const bNodeSocket *bsocket, void *r_value)
-{
-  /* TODO: Move this into socket callbacks. */
-  switch (bsocket->type) {
-    case SOCK_GEOMETRY:
-      new (r_value) GeometryPtr();
-      break;
-    case SOCK_FLOAT:
-      *(float *)r_value = ((bNodeSocketValueFloat *)bsocket->default_value)->value;
-      break;
-    case SOCK_INT:
-      *(int *)r_value = ((bNodeSocketValueInt *)bsocket->default_value)->value;
-      break;
-    default:
-      BLI_assert(false);
-  }
-}
-
-static const CPPType &get_socket_type(const bNodeSocket *bsocket)
-{
-  /* TODO: Move this into socket callbacks. */
-  switch (bsocket->type) {
-    case SOCK_GEOMETRY:
-      return CPPType::get<GeometryPtr>();
-    case SOCK_FLOAT:
-      return CPPType::get<float>();
-    case SOCK_INT:
-      return CPPType::get<int>();
-    default:
-      BLI_assert(false);
-      return CPPType::get<float>();
-  }
-}
-
 static bool compute_input_socket(const DOutputSocket *group_input,
                                  GeometryPtr &group_input_geometry,
                                  const DInputSocket &socket_to_compute,
@@ -173,7 +140,7 @@ static bool compute_output_socket(const DOutputSocket *group_input,
 
   /* Compute all inputs for the node. */
   for (const DInputSocket *input_socket : node.inputs()) {
-    const CPPType &type = get_socket_type(input_socket->bsocket());
+    const CPPType &type = *socket_cpp_type_get(*input_socket->bsocket()->typeinfo);
     void *buffer = allocator.allocate(type.size(), type.alignment());
     compute_input_socket(group_input, group_input_geometry, *input_socket, buffer);
     node_inputs.move_in(input_socket->bsocket()->identifier, GMutablePointer{type, buffer});
@@ -186,7 +153,7 @@ static bool compute_output_socket(const DOutputSocket *group_input,
 
   /* Pass relevant value to the caller. */
   bNodeSocket *bsocket_to_compute = socket_to_compute.bsocket();
-  const CPPType &type_to_compute = get_socket_type(bsocket_to_compute);
+  const CPPType &type_to_compute = *socket_cpp_type_get(*bsocket_to_compute->typeinfo);
   GMutablePointer computed_value = node_outputs.extract(bsocket_to_compute->identifier);
   type_to_compute.relocate_to_uninitialized(computed_value.get(), r_value);
   return true;
@@ -206,13 +173,13 @@ static bool compute_input_socket(const DOutputSocket *group_input,
   }
   if (total_inputs == 0) {
     bNodeSocket *bsocket = socket_to_compute.bsocket();
-    get_socket_value(bsocket, r_value);
+    socket_cpp_value_get(*bsocket, r_value);
     return true;
   }
   if (from_group_inputs.size() == 1) {
     bNodeSocket *bsocket = from_group_inputs[0]->bsocket();
     BLI_assert(bsocket->type == socket_to_compute.bsocket()->type);
-    get_socket_value(bsocket, r_value);
+    socket_cpp_value_get(*bsocket, r_value);
     return true;
   }
 
