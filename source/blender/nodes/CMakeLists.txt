@@ -138,8 +138,9 @@ set(SRC
   function/node_function_util.cc
 
   geometry/nodes/node_geo_common.cc
-  geometry/nodes/node_geo_triangulate.cc
   geometry/nodes/node_geo_edge_split.cc
+  geometry/nodes/node_geo_triangulate.cc
+  geometry/node_geometry_exec.cc
   geometry/node_geometry_tree.cc
   geometry/node_geometry_util.cc
 
@@ -274,7 +275,7 @@ set(SRC
   composite/node_composite_util.h
   function/node_function_util.hh
   shader/node_shader_util.h
-  geometry/node_geometry_util.h
+  geometry/node_geometry_util.hh
   texture/node_texture_util.h
 
   NOD_common.h

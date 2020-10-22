@@ -20,7 +20,7 @@
 
 #include "NOD_common.h"
 #include "node_common.h"
-#include "node_geometry_util.h"
+#include "node_geometry_util.hh"
 
 void register_node_type_geo_group(void)
 {

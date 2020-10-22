@@ -29,8 +29,10 @@ set(INC
   ../bmesh
   ../depsgraph
   ../editors/include
+  ../functions
   ../makesdna
   ../makesrna
+  ../nodes
   ../render/extern/include
   ../windowmanager
   ../../../intern/eigen

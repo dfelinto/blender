@@ -14,7 +14,15 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
-#include "node_geometry_util.h"
+#include "node_geometry_util.hh"
+
+extern "C" {
+Mesh *triangulate_mesh(Mesh *mesh,
+                       const int quad_method,
+                       const int ngon_method,
+                       const int min_vertices,
+                       const int flag);
+}
 
 static bNodeSocketTemplate geo_node_triangulate_in[] = {
     {SOCK_GEOMETRY, N_("Geometry")},
@@ -26,11 +34,29 @@ static bNodeSocketTemplate geo_node_triangulate_out[] = {
     {-1, ""},
 };
 
+namespace blender::nodes {
+static void geo_triangulate_exec(bNode *UNUSED(node), GValueByName &inputs, GValueByName &outputs)
+{
+  GeometryPtr geometry_in = inputs.extract<GeometryPtr>("Geometry");
+  GeometryPtr geometry_out;
+  if (geometry_in.has_value()) {
+    Mesh *mesh_in = geometry_in->mesh_get_for_read();
+    if (mesh_in != nullptr) {
+      Mesh *mesh_out = triangulate_mesh(mesh_in, 3, 0, 4, 0);
+      geometry_out = GeometryPtr{new Geometry()};
+      geometry_out->mesh_set_and_transfer_ownership(mesh_out);
+    }
+  }
+  outputs.move_in("Geometry", std::move(geometry_out));
+}
+}  // namespace blender::nodes
+
 void register_node_type_geo_triangulate()
 {
   static bNodeType ntype;
 
   geo_node_type_base(&ntype, GEO_NODE_TRIANGULATE, "Triangulate", 0, 0);
   node_type_socket_templates(&ntype, geo_node_triangulate_in, geo_node_triangulate_out);
+  ntype.geometry_node_execute = blender::nodes::geo_triangulate_exec;
   nodeRegisterType(&ntype);
 }

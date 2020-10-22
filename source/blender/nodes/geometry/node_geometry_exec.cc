@@ -14,24 +14,10 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
-#pragma once
+#include "NOD_geometry_exec.hh"
 
-#include <string.h>
+MAKE_CPP_TYPE(GeometryPtr, blender::bke::GeometryPtr);
 
-#include "BLI_utildefines.h"
+namespace blender::nodes {
 
-#include "MEM_guardedalloc.h"
-
-#include "DNA_node_types.h"
-
-#include "BKE_node.h"
-
-#include "BLT_translation.h"
-
-#include "NOD_geometry.h"
-
-#include "node_util.h"
-
-void geo_node_type_base(
-    struct bNodeType *ntype, int type, const char *name, short nclass, short flag);
-bool geo_node_poll_default(struct bNodeType *ntype, struct bNodeTree *ntree);
+}

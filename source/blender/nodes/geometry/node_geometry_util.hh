@@ -14,16 +14,25 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
-#include "node_geometry_util.hh"
+#pragma once
+
+#include <string.h>
+
+#include "BLI_utildefines.h"
+
+#include "MEM_guardedalloc.h"
+
+#include "DNA_node_types.h"
+
+#include "BKE_node.h"
+
+#include "BLT_translation.h"
+
+#include "NOD_geometry.h"
+#include "NOD_geometry_exec.hh"
+
 #include "node_util.h"
 
-bool geo_node_poll_default(bNodeType *UNUSED(ntype), bNodeTree *ntree)
-{
-  return STREQ(ntree->idname, "GeometryNodeTree");
-}
-
-void geo_node_type_base(bNodeType *ntype, int type, const char *name, short nclass, short flag)
-{
-  node_type_base(ntype, type, name, nclass, flag);
-  ntype->poll = geo_node_poll_default;
-}
+void geo_node_type_base(
+    struct bNodeType *ntype, int type, const char *name, short nclass, short flag);
+bool geo_node_poll_default(struct bNodeType *ntype, struct bNodeTree *ntree);

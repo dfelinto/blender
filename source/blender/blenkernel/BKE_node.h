@@ -112,6 +112,7 @@ namespace blender {
 namespace nodes {
 class SocketMFNetworkBuilder;
 class NodeMFNetworkBuilder;
+class GValueByName;
 }  // namespace nodes
 namespace fn {
 class MFDataType;
@@ -121,11 +122,15 @@ class MFDataType;
 using NodeExpandInMFNetworkFunction = void (*)(blender::nodes::NodeMFNetworkBuilder &builder);
 using SocketGetMFDataTypeFunction = blender::fn::MFDataType (*)();
 using SocketExpandInMFNetworkFunction = void (*)(blender::nodes::SocketMFNetworkBuilder &builder);
+using NodeGeometryExecFunction = void (*)(struct bNode *node,
+                                          blender::nodes::GValueByName &inputs,
+                                          blender::nodes::GValueByName &outputs);
 
 #else
 typedef void *NodeExpandInMFNetworkFunction;
 typedef void *SocketGetMFDataTypeFunction;
 typedef void *SocketExpandInMFNetworkFunction;
+typedef void *NodeGeometryExecFunction;
 #endif
 
 /**
@@ -301,6 +306,9 @@ typedef struct bNodeType {
 
   /* Expands the bNode into nodes in a multi-function network, which will be evaluated later on. */
   NodeExpandInMFNetworkFunction expand_in_mf_network;
+
+  /* Execute a geometry node. */
+  NodeGeometryExecFunction geometry_node_execute;
 
   /* RNA integration */
   ExtensionRNA rna_ext;

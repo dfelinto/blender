@@ -17,7 +17,7 @@
 #include "BLI_math_base.h"
 #include "BLI_math_rotation.h"
 
-#include "node_geometry_util.h"
+#include "node_geometry_util.hh"
 
 static bNodeSocketTemplate geo_node_edge_split_in[] = {
     {SOCK_GEOMETRY, N_("Geometry")},
