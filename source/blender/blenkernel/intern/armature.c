@@ -2540,6 +2540,13 @@ void BKE_pose_rebuild(Main *bmain, Object *ob, bArmature *arm, const bool do_id_
   for (pchan = pose->chanbase.first; pchan; pchan = pchan->next) {
     /* Find the custom B-Bone handles. */
     BKE_pchan_rebuild_bbone_handles(pose, pchan);
+    /* Re-validate that we are still using a valid pchan form custom transform. */
+    /* Note that we could store pointers of freed pchan in a GSet to speed this up, however this is
+     * supposed to be a rarely used feature, so for now assuming that always building that GSet
+     * would be less optimal. */
+    if (pchan->custom_tx != NULL && BLI_findindex(&pose->chanbase, pchan->custom_tx) == -1) {
+      pchan->custom_tx = NULL;
+    }
   }
 
   /* printf("rebuild pose %s, %d bones\n", ob->id.name, counter); */
@@ -2563,6 +2570,19 @@ void BKE_pose_rebuild(Main *bmain, Object *ob, bArmature *arm, const bool do_id_
    * since there is one node per pose/bone. */
   if (bmain != NULL) {
     DEG_relations_tag_update(bmain);
+  }
+}
+
+/**
+ * Ensures object's pose is rebuilt if needed.
+ *
+ * \param bmain: May be NULL, only used to tag depsgraph as being dirty...
+ */
+void BKE_pose_ensure(Main *bmain, Object *ob, bArmature *arm, const bool do_id_user)
+{
+  BLI_assert(!ELEM(NULL, arm, ob));
+  if ((ob->pose == NULL) || (ob->pose->flag & POSE_RECALC)) {
+    BKE_pose_rebuild(bmain, ob, arm, do_id_user);
   }
 }
 
@@ -2704,11 +2724,9 @@ void BKE_pose_where_is(struct Depsgraph *depsgraph, Scene *scene, Object *ob)
   if (ELEM(NULL, arm, scene)) {
     return;
   }
-  if ((ob->pose == NULL) || (ob->pose->flag & POSE_RECALC)) {
-    /* WARNING! passing NULL bmain here means we won't tag depsgraph's as dirty -
-     * hopefully this is OK. */
-    BKE_pose_rebuild(NULL, ob, arm, true);
-  }
+  /* WARNING! passing NULL bmain here means we won't tag depsgraph's as dirty -
+   * hopefully this is OK. */
+  BKE_pose_ensure(NULL, ob, arm, true);
 
   ctime = BKE_scene_frame_get(scene); /* not accurate... */
 
