@@ -417,6 +417,9 @@ void snode_notify(bContext *C, SpaceNode *snode)
   else if (ED_node_is_texture(snode)) {
     WM_event_add_notifier(C, NC_TEXTURE | ND_NODES, id);
   }
+  else if (ED_node_is_geometry(snode)) {
+    WM_main_add_notifier(NC_OBJECT | ND_MODIFIER, id);
+  }
 }
 
 void ED_node_set_tree_type(SpaceNode *snode, bNodeTreeType *typeinfo)
