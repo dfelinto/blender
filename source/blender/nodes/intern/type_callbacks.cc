@@ -33,7 +33,6 @@ std::optional<MFDataType> socket_mf_type_get(const bNodeSocketType &stype)
   if (cpp_type != nullptr) {
     return MFDataType::ForSingle(*cpp_type);
   }
-  BLI_assert(false);
   return {};
 }
 
@@ -42,7 +41,7 @@ bool socket_is_mf_data_socket(const bNodeSocketType &stype)
   if (!socket_mf_type_get(stype).has_value()) {
     return false;
   }
-  if (stype.expand_in_mf_network == nullptr) {
+  if (stype.expand_in_mf_network == nullptr && stype.get_cpp_value == nullptr) {
     return false;
   }
   return true;
