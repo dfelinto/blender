@@ -65,6 +65,12 @@ class GMutablePointer {
   {
     return type_ != nullptr && type_->is<T>();
   }
+
+  void destruct()
+  {
+    BLI_assert(data_ != nullptr);
+    type_->destruct(data_);
+  }
 };
 
 }  // namespace blender::fn
