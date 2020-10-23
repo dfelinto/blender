@@ -101,6 +101,7 @@ class SocketRef : NonCopyable, NonMovable {
 
   StringRefNull idname() const;
   StringRefNull name() const;
+  StringRefNull identifier() const;
 
   bNodeSocket *bsocket() const;
   bNode *bnode() const;
@@ -270,6 +271,11 @@ inline StringRefNull SocketRef::idname() const
 inline StringRefNull SocketRef::name() const
 {
   return bsocket_->name;
+}
+
+inline StringRefNull SocketRef::identifier() const
+{
+  return bsocket_->identifier;
 }
 
 inline bNodeSocket *SocketRef::bsocket() const

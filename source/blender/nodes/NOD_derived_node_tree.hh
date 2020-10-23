@@ -65,6 +65,8 @@ class DSocket : NonCopyable, NonMovable {
   PointerRNA *rna() const;
   StringRefNull idname() const;
   StringRefNull name() const;
+  StringRefNull identifier() const;
+  bNodeSocketType *typeinfo() const;
 
   const SocketRef &socket_ref() const;
   bNodeSocket *bsocket() const;
@@ -147,6 +149,8 @@ class DNode : NonCopyable, NonMovable {
   PointerRNA *rna() const;
   StringRefNull idname() const;
   StringRefNull name() const;
+  bNode *bnode() const;
+  bNodeType *typeinfo() const;
 
  private:
   void destruct_with_sockets();
@@ -286,6 +290,16 @@ inline StringRefNull DSocket::idname() const
 inline StringRefNull DSocket::name() const
 {
   return socket_ref_->name();
+}
+
+inline StringRefNull DSocket::identifier() const
+{
+  return socket_ref_->identifier();
+}
+
+inline bNodeSocketType *DSocket::typeinfo() const
+{
+  return socket_ref_->bsocket()->typeinfo;
 }
 
 inline const SocketRef &DSocket::socket_ref() const
@@ -443,6 +457,16 @@ inline StringRefNull DNode::idname() const
 inline StringRefNull DNode::name() const
 {
   return node_ref_->name();
+}
+
+inline bNode *DNode::bnode() const
+{
+  return node_ref_->bnode();
+}
+
+inline bNodeType *DNode::typeinfo() const
+{
+  return node_ref_->bnode()->typeinfo;
 }
 
 /* --------------------------------------------------------------------
