@@ -43,6 +43,7 @@
 #include "DNA_screen_types.h"
 
 #include "BKE_customdata.h"
+#include "BKE_idprop.h"
 #include "BKE_lib_query.h"
 #include "BKE_mesh.h"
 #include "BKE_modifier.h"
@@ -85,12 +86,30 @@ static void updateDepsgraph(ModifierData *md, const ModifierUpdateDepsgraphConte
   if (nmd->node_group != nullptr) {
     DEG_add_node_tree_relation(ctx->node, nmd->node_group, "Nodes Modifier");
   }
+
+  /* TODO: Add relations for IDs in settings. */
 }
 
 static void foreachIDLink(ModifierData *md, Object *ob, IDWalkFunc walk, void *userData)
 {
   NodesModifierData *nmd = reinterpret_cast<NodesModifierData *>(md);
   walk(userData, ob, (ID **)&nmd->node_group, IDWALK_CB_USER);
+
+  struct ForeachSettingData {
+    IDWalkFunc walk;
+    void *userData;
+    Object *ob;
+  } settings = {walk, userData, ob};
+
+  IDP_foreach_property(
+      nmd->settings.properties,
+      IDP_TYPE_FILTER_ID,
+      [](IDProperty *id_prop, void *user_data) {
+        ForeachSettingData *settings = (ForeachSettingData *)user_data;
+        settings->walk(
+            settings->userData, settings->ob, (ID **)&id_prop->data.pointer, IDWALK_CB_USER);
+      },
+      &settings);
 }
 
 static bool isDisabled(const struct Scene *UNUSED(scene),
@@ -432,28 +451,37 @@ static void panelRegister(ARegionType *region_type)
 static void blendWrite(BlendWriter *writer, const ModifierData *md)
 {
   const NodesModifierData *nmd = reinterpret_cast<const NodesModifierData *>(md);
-  UNUSED_VARS(nmd, writer);
+  if (nmd->settings.properties != nullptr) {
+    IDP_BlendWrite(writer, nmd->settings.properties);
+  }
 }
 
 static void blendRead(BlendDataReader *reader, ModifierData *md)
 {
   NodesModifierData *nmd = reinterpret_cast<NodesModifierData *>(md);
-  UNUSED_VARS(nmd, reader);
+  BLO_read_data_address(reader, &nmd->settings.properties);
+  IDP_BlendDataRead(reader, &nmd->settings.properties);
 }
 
 static void copyData(const ModifierData *md, ModifierData *target, const int flag)
 {
   const NodesModifierData *nmd = reinterpret_cast<const NodesModifierData *>(md);
   NodesModifierData *tnmd = reinterpret_cast<NodesModifierData *>(target);
-  UNUSED_VARS(nmd, tnmd);
 
   BKE_modifier_copydata_generic(md, target, flag);
+
+  if (nmd->settings.properties != nullptr) {
+    tnmd->settings.properties = IDP_CopyProperty_ex(nmd->settings.properties, flag);
+  }
 }
 
 static void freeData(ModifierData *md)
 {
   NodesModifierData *nmd = reinterpret_cast<NodesModifierData *>(md);
-  UNUSED_VARS(nmd);
+  if (nmd->settings.properties != nullptr) {
+    IDP_FreeProperty_ex(nmd->settings.properties, false);
+    nmd->settings.properties = nullptr;
+  }
 }
 
 ModifierTypeInfo modifierType_Nodes = {

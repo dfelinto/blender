@@ -2219,9 +2219,16 @@ enum {
 #define MOD_MESHSEQ_READ_ALL \
   (MOD_MESHSEQ_READ_VERT | MOD_MESHSEQ_READ_POLY | MOD_MESHSEQ_READ_UV | MOD_MESHSEQ_READ_COLOR)
 
+typedef struct NodesModifierSettings {
+  /* This stores data that is passed into the node group. */
+  struct IDProperty *properties;
+} NodesModifierSettings;
+
 typedef struct NodesModifierData {
   ModifierData modifier;
   struct bNodeTree *node_group;
+
+  struct NodesModifierSettings settings;
 
   /* This property exists only temporary for testing purposes. */
   float test_float_input;

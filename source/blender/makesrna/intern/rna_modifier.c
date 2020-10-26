@@ -42,6 +42,7 @@
 #include "BKE_dynamicpaint.h"
 #include "BKE_effect.h"
 #include "BKE_fluid.h" /* For BKE_fluid_modifier_free & BKE_fluid_modifier_create_type_data */
+#include "BKE_idprop.h"
 #include "BKE_mesh_mapping.h"
 #include "BKE_mesh_remap.h"
 #include "BKE_multires.h"
@@ -1603,6 +1604,21 @@ static bool rna_NodesModifier_node_group_poll(PointerRNA *ptr, PointerRNA value)
   bNodeTree *ntree = value.data;
   UNUSED_VARS(nmd, ntree);
   return true;
+}
+
+static IDProperty *rna_NodesModifierSettings_properties(PointerRNA *ptr, bool create)
+{
+  NodesModifierSettings *settings = ptr->data;
+  if (create && settings->properties == NULL) {
+    IDPropertyTemplate val = {0};
+    settings->properties = IDP_New(IDP_GROUP, &val, "Nodes Modifier Settings");
+  }
+  return settings->properties;
+}
+
+static char *rna_NodesModifierSettings_path(PointerRNA *UNUSED(ptr))
+{
+  return BLI_strdup("settings");
 }
 
 #else
@@ -6923,6 +6939,18 @@ static void rna_def_modifier_weightednormal(BlenderRNA *brna)
 }
 
 #  ifdef WITH_GEOMETRY_NODES
+static void rna_def_modifier_nodes_settings(BlenderRNA *brna)
+{
+  StructRNA *srna;
+
+  srna = RNA_def_struct(brna, "NodesModifierSettings", NULL);
+  RNA_def_struct_nested(brna, srna, "NodesModifier");
+  RNA_def_struct_path_func(srna, "rna_NodesModifierSettings_path");
+  RNA_def_struct_ui_text(
+      srna, "Nodes Modifier Settings", "Settings that are passed into the node group");
+  RNA_def_struct_idprops_func(srna, "rna_NodesModifierSettings_properties");
+}
+
 static void rna_def_modifier_nodes(BlenderRNA *brna)
 {
   StructRNA *srna;
@@ -6941,11 +6969,17 @@ static void rna_def_modifier_nodes(BlenderRNA *brna)
   RNA_def_property_flag(prop, PROP_EDITABLE);
   RNA_def_property_update(prop, 0, "rna_Modifier_dependency_update");
 
+  prop = RNA_def_property(srna, "settings", PROP_POINTER, PROP_NONE);
+  RNA_def_property_flag(prop, PROP_NEVER_NULL);
+  RNA_def_property_ui_text(prop, "Settings", "Settings that are passed into the node group");
+
   prop = RNA_def_property(srna, "test_float_input", PROP_FLOAT, PROP_NONE);
   RNA_def_property_ui_text(prop, "Float Input", "Temporary float input for testing purposes");
   RNA_def_property_update(prop, 0, "rna_Modifier_dependency_update");
 
   RNA_define_lib_overridable(false);
+
+  rna_def_modifier_nodes_settings(brna);
 }
 #  endif
 
