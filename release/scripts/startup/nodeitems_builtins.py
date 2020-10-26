@@ -488,6 +488,7 @@ geometry_node_categories = [
     GeometryNodeCategory("GEO_MESH", "Mesh", items=[
         NodeItem("GeometryNodeTriangulate"),
         NodeItem("GeometryNodeEdgeSplit"),
+        NodeItem("GeometryNodeTransform"),
     ]),
     GeometryNodeCategory("GEO_MATH", "Misc", items=[
         NodeItem("ShaderNodeMapRange"),

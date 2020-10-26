@@ -28,6 +28,7 @@ void register_node_type_geo_group(void);
 
 void register_node_type_geo_triangulate(void);
 void register_node_type_geo_edge_split(void);
+void register_node_type_geo_transform(void);
 
 #ifdef __cplusplus
 }
