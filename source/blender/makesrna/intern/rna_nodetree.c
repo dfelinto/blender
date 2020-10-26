@@ -368,6 +368,22 @@ static const EnumPropertyItem prop_shader_output_target_items[] = {
     {SHD_OUTPUT_CYCLES, "CYCLES", 0, "Cycles", "Use shaders for Cycles renderer"},
     {0, NULL, 0, NULL, NULL},
 };
+
+static const EnumPropertyItem rna_node_geometry_boolean_method_items[] = {
+    {GEO_NODE_BOOLEAN_INTERSECT,
+     "INTERSECT",
+     0,
+     "Intersect",
+     "Keep the part of the mesh that is common between all operands"},
+    {GEO_NODE_BOOLEAN_UNION, "UNION", 0, "Union", "Combine meshes in an additive way"},
+    {GEO_NODE_BOOLEAN_DIFFERENCE,
+     "DIFFERENCE",
+     0,
+     "Difference",
+     "Combine meshes in a subtractive way"},
+    {0, NULL, 0, NULL, NULL},
+};
+
 #endif
 
 #ifdef RNA_RUNTIME
@@ -8138,6 +8154,20 @@ static void def_tex_bricks(StructRNA *srna)
   RNA_def_property_int_sdna(prop, NULL, "custom2");
   RNA_def_property_range(prop, 2, 99);
   RNA_def_property_ui_text(prop, "Squash Frequency", "Squash every N rows");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+}
+
+/* -- Geometry Nodes --------------------------------------------------------- */
+
+static void def_geo_boolean(StructRNA *srna)
+{
+  PropertyRNA *prop;
+
+  prop = RNA_def_property(srna, "operation", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, NULL, "custom1");
+  RNA_def_property_enum_items(prop, rna_node_geometry_boolean_method_items);
+  RNA_def_property_enum_default(prop, GEO_NODE_BOOLEAN_INTERSECT);
+  RNA_def_property_ui_text(prop, "Operation", "");
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
 }
 

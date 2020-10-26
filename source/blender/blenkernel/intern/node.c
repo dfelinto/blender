@@ -4662,6 +4662,7 @@ static void registerGeometryNodes(void)
   register_node_type_geo_triangulate();
   register_node_type_geo_edge_split();
   register_node_type_geo_transform();
+  register_node_type_geo_boolean();
 }
 
 static void registerFunctionNodes(void)

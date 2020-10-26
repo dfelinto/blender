@@ -29,6 +29,7 @@ set(INC
   ../blenkernel
   ../blenlib
   ../blentranslation
+  ../bmesh
   ../depsgraph
   ../functions
   ../gpu
@@ -138,6 +139,7 @@ set(SRC
   function/node_function_util.cc
 
   geometry/nodes/node_geo_common.cc
+  geometry/nodes/node_geo_boolean.cc
   geometry/nodes/node_geo_edge_split.cc
   geometry/nodes/node_geo_transform.cc
   geometry/nodes/node_geo_triangulate.cc
@@ -301,6 +303,7 @@ set(SRC
 set(LIB
   bf_functions
   bf_intern_sky
+  bf_bmesh
 )
 
 if(WITH_PYTHON)

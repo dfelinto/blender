@@ -1423,3 +1423,12 @@ typedef enum NodeShaderOutputTarget {
   SHD_OUTPUT_EEVEE = 1,
   SHD_OUTPUT_CYCLES = 2,
 } NodeShaderOutputTarget;
+
+/* Geometry Nodes */
+
+/* Boolean Node */
+typedef enum GeometryNodeBooleanOperation {
+  GEO_NODE_BOOLEAN_INTERSECT = 0,
+  GEO_NODE_BOOLEAN_UNION = 1,
+  GEO_NODE_BOOLEAN_DIFFERENCE = 2,
+} GeometryNodeBooleanOperation;

@@ -3140,8 +3140,18 @@ static void node_texture_set_butfunc(bNodeType *ntype)
 
 /* ****************** BUTTON CALLBACKS FOR GEOMETRY NODES ***************** */
 
-static void node_geometry_set_butfunc(bNodeType *UNUSED(ntype))
+static void node_geometry_buts_boolean_math(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
 {
+  uiItemR(layout, ptr, "operation", DEFAULT_FLAGS, "", ICON_NONE);
+}
+
+static void node_geometry_set_butfunc(bNodeType *ntype)
+{
+  switch (ntype->type) {
+    case GEO_NODE_BOOLEAN:
+      ntype->draw_buttons = node_geometry_buts_boolean_math;
+      break;
+  }
 }
 
 /* ****************** BUTTON CALLBACKS FOR FUNCTION NODES ***************** */
