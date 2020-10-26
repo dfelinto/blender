@@ -2222,6 +2222,10 @@ enum {
 typedef struct NodesModifierData {
   ModifierData modifier;
   struct bNodeTree *node_group;
+
+  /* This property exists only temporary for testing purposes. */
+  float test_float_input;
+  char _pad[4];
 } NodesModifierData;
 
 typedef struct MeshToVolumeModifierData {

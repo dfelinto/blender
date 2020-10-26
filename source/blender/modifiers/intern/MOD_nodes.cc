@@ -257,42 +257,41 @@ class GeometryNodesEvaluator {
 
   void forward_to_inputs(const DOutputSocket &from_socket, GMutablePointer value_to_forward)
   {
-    Span<const DInputSocket *> linked_sockets = from_socket.linked_sockets();
-
-    Vector<const DInputSocket *> to_sockets_with_same_type;
-    Vector<const DInputSocket *> to_sockets_with_different_type;
-    for (const DInputSocket *linked_socket : linked_sockets) {
-      if (from_socket.typeinfo() == linked_socket->typeinfo()) {
-        to_sockets_with_same_type.append(linked_socket);
-      }
-      else {
-        to_sockets_with_different_type.append(linked_socket);
-      }
-    }
+    Span<const DInputSocket *> to_sockets_all = from_socket.linked_sockets();
 
     const CPPType &from_type = *value_to_forward.type();
 
-    for (const DInputSocket *to_socket : to_sockets_with_different_type) {
+    Vector<const DInputSocket *> to_sockets_same_type;
+    for (const DInputSocket *to_socket : to_sockets_all) {
       const CPPType &to_type = *socket_cpp_type_get(*to_socket->typeinfo());
-      void *buffer = allocator_.allocate(to_type.size(), to_type.alignment());
-      conversions_.convert(from_type, to_type, value_to_forward.get(), buffer);
-      value_by_input_.add_new(to_socket, GMutablePointer{to_type, buffer});
+      if (from_type == to_type) {
+        to_sockets_same_type.append(to_socket);
+      }
+      else {
+        void *buffer = allocator_.allocate(to_type.size(), to_type.alignment());
+        if (conversions_.is_convertible(from_type, to_type)) {
+          conversions_.convert(from_type, to_type, value_to_forward.get(), buffer);
+        }
+        else {
+          to_type.copy_to_uninitialized(to_type.default_value(), buffer);
+        }
+        value_by_input_.add_new(to_socket, GMutablePointer{to_type, buffer});
+      }
     }
 
-    if (to_sockets_with_same_type.size() == 0) {
+    if (to_sockets_same_type.size() == 0) {
       /* This value is not further used, so destruct it. */
       value_to_forward.destruct();
     }
-    else if (to_sockets_with_same_type.size() == 1) {
+    else if (to_sockets_same_type.size() == 1) {
       /* This value is only used on one input socket, no need to copy it. */
-      const DInputSocket *to_socket = to_sockets_with_same_type[0];
+      const DInputSocket *to_socket = to_sockets_same_type[0];
       value_by_input_.add_new(to_socket, value_to_forward);
     }
     else {
       /* Multiple inputs use the value, make a copy for every input except for one. */
-      const DInputSocket *first_to_socket = to_sockets_with_same_type[0];
-      Span<const DInputSocket *> other_to_sockets = to_sockets_with_same_type.as_span().drop_front(
-          1);
+      const DInputSocket *first_to_socket = to_sockets_same_type[0];
+      Span<const DInputSocket *> other_to_sockets = to_sockets_same_type.as_span().drop_front(1);
       const CPPType &type = *value_to_forward.type();
 
       value_by_input_.add_new(first_to_socket, value_to_forward);
@@ -311,20 +310,43 @@ class GeometryNodesEvaluator {
  * often than necessary. It's going to be replaced soon.
  */
 static GeometryPtr compute_geometry(const DerivedNodeTree &tree,
-                                    const DOutputSocket *group_input,
-                                    GeometryPtr group_input_geometry,
-                                    const DInputSocket &socket_to_compute)
+                                    Span<const DOutputSocket *> group_input_sockets,
+                                    const DInputSocket &socket_to_compute,
+                                    GeometryPtr input_geometry,
+                                    NodesModifierData *nmd)
 {
   ResourceCollector resources;
+  LinearAllocator<> &allocator = resources.linear_allocator();
   MultiFunctionByNode mf_by_node = get_multi_function_per_node(tree, resources);
 
-  /* Use this buffer so that it is not destructed when the scope ends. The evaluator is responsible
-   * for destructing it. */
-  TypedBuffer<GeometryPtr> buffer;
-  new (buffer.ptr()) GeometryPtr(std::move(group_input_geometry));
-
   Map<const DOutputSocket *, GMutablePointer> group_inputs;
-  group_inputs.add_new(group_input, GMutablePointer{buffer.ptr()});
+
+  if (group_input_sockets.size() > 0) {
+    Span<const DOutputSocket *> remaining_input_sockets = group_input_sockets;
+
+    /* If the group expects a geometry as first input, use the geometry that has been passed to
+     * modifier. */
+    const DOutputSocket *first_input_socket = group_input_sockets[0];
+    if (first_input_socket->bsocket()->type == SOCK_GEOMETRY) {
+      GeometryPtr *geometry_in = allocator.construct<GeometryPtr>(std::move(input_geometry));
+      group_inputs.add_new(first_input_socket, geometry_in);
+      remaining_input_sockets = remaining_input_sockets.drop_front(1);
+    }
+
+    /* Initialize remaining group inputs. */
+    for (const DOutputSocket *socket : remaining_input_sockets) {
+      const CPPType &type = *socket_cpp_type_get(*socket->typeinfo());
+      if (type.is<float>()) {
+        float *value_in = allocator.construct<float>(nmd->test_float_input);
+        group_inputs.add_new(socket, value_in);
+      }
+      else {
+        void *value_in = allocator.allocate(type.size(), type.alignment());
+        type.copy_to_uninitialized(type.default_value(), value_in);
+        group_inputs.add_new(socket, {type, value_in});
+      }
+    }
+  }
 
   Vector<const DInputSocket *> group_outputs;
   group_outputs.append(&socket_to_compute);
@@ -377,7 +399,7 @@ static Mesh *modifyMesh(ModifierData *md, const ModifierEvalContext *UNUSED(ctx)
   input_geometry->mesh_set_and_keep_ownership(mesh);
 
   GeometryPtr new_geometry = compute_geometry(
-      tree, group_inputs[0], std::move(input_geometry), *group_outputs[0]);
+      tree, group_inputs, *group_outputs[0], std::move(input_geometry), nmd);
   make_geometry_mutable(new_geometry);
   Mesh *new_mesh = new_geometry->mesh_release();
   if (new_mesh == nullptr) {
@@ -397,6 +419,7 @@ static void panel_draw(const bContext *UNUSED(C), Panel *panel)
   uiLayoutSetPropDecorate(layout, false);
 
   uiItemR(layout, ptr, "node_group", 0, NULL, ICON_MESH_DATA);
+  uiItemR(layout, ptr, "test_float_input", 0, NULL, ICON_NONE);
 
   modifier_panel_end(layout, ptr);
 }
