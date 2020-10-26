@@ -39,6 +39,9 @@ class NewGeometryNodeTree(bpy.types.Operator):
 
         input_node.location.x = -200 - input_node.width
         output_node.location.x = 200
+
+        group.links.new(output_node.inputs[0], input_node.outputs[0])
+
         context.space_data.node_tree = group
         return {'FINISHED'}
 
