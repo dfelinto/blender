@@ -58,6 +58,14 @@ bool Geometry::is_mutable() const
 }
 
 /**
+ * Returns true when this geometry has a mesh component.
+ */
+bool Geometry::mesh_available() const
+{
+  return mesh_ != nullptr;
+}
+
+/**
  * Replace the mesh in the geometry. The caller remains the owner of the given mesh and is
  * responsible for freeing it eventually.
  */

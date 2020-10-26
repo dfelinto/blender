@@ -62,6 +62,7 @@ class Geometry {
   void user_remove();
   bool is_mutable() const;
 
+  bool mesh_available() const;
   void mesh_set_and_keep_ownership(Mesh *mesh);
   void mesh_set_and_transfer_ownership(Mesh *mesh);
   void mesh_reset();
