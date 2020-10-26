@@ -355,15 +355,55 @@ static GeometryPtr compute_geometry(const DerivedNodeTree &tree,
     /* Initialize remaining group inputs. */
     for (const DOutputSocket *socket : remaining_input_sockets) {
       const CPPType &type = *socket_cpp_type_get(*socket->typeinfo());
-      if (type.is<float>()) {
-        float *value_in = allocator.construct<float>(nmd->test_float_input);
-        group_inputs.add_new(socket, value_in);
+      void *value_in = allocator.allocate(type.size(), type.alignment());
+      if (nmd->settings.properties != nullptr) {
+        StringRefNull socket_identifier = socket->identifier();
+        const IDProperty *property = IDP_GetPropertyFromGroup(nmd->settings.properties,
+                                                              socket_identifier.c_str());
+        if (property != nullptr) {
+          const int property_type = property->type;
+          switch (property_type) {
+            case IDP_FLOAT: {
+              if (type.is<float>()) {
+                *(float *)value_in = IDP_Float(property);
+              }
+              else if (type.is<int>()) {
+                *(int *)value_in = IDP_Float(property);
+              }
+              break;
+            }
+            case IDP_DOUBLE: {
+              if (type.is<float>()) {
+                *(float *)value_in = IDP_Double(property);
+              }
+              else if (type.is<int>()) {
+                *(int *)value_in = IDP_Double(property);
+              }
+              break;
+            }
+            case IDP_INT: {
+              if (type.is<float>()) {
+                *(float *)value_in = IDP_Int(property);
+              }
+              else if (type.is<int>()) {
+                *(int *)value_in = IDP_Int(property);
+              }
+              break;
+            }
+            default: {
+              type.copy_to_uninitialized(type.default_value(), value_in);
+              break;
+            }
+          }
+        }
+        else {
+          type.copy_to_uninitialized(type.default_value(), value_in);
+        }
       }
       else {
-        void *value_in = allocator.allocate(type.size(), type.alignment());
         type.copy_to_uninitialized(type.default_value(), value_in);
-        group_inputs.add_new(socket, {type, value_in});
       }
+      group_inputs.add_new(socket, {type, value_in});
     }
   }
 
