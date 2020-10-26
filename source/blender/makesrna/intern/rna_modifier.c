@@ -6973,10 +6973,6 @@ static void rna_def_modifier_nodes(BlenderRNA *brna)
   RNA_def_property_flag(prop, PROP_NEVER_NULL);
   RNA_def_property_ui_text(prop, "Settings", "Settings that are passed into the node group");
 
-  prop = RNA_def_property(srna, "test_float_input", PROP_FLOAT, PROP_NONE);
-  RNA_def_property_ui_text(prop, "Float Input", "Temporary float input for testing purposes");
-  RNA_def_property_update(prop, 0, "rna_Modifier_dependency_update");
-
   RNA_define_lib_overridable(false);
 
   rna_def_modifier_nodes_settings(brna);

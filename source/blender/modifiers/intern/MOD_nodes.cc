@@ -478,7 +478,6 @@ static void panel_draw(const bContext *UNUSED(C), Panel *panel)
   uiLayoutSetPropDecorate(layout, false);
 
   uiItemR(layout, ptr, "node_group", 0, NULL, ICON_MESH_DATA);
-  uiItemR(layout, ptr, "test_float_input", 0, NULL, ICON_NONE);
 
   modifier_panel_end(layout, ptr);
 }
