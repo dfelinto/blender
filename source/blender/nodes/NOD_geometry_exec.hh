@@ -55,7 +55,14 @@ class GValueByName {
     }
   }
 
-  /* Add a value to the container. */
+  /* Add a value to the container. The container is responsible for destructing the value that is
+   * passed in. */
+  void transfer_ownership_in(StringRef name, GMutablePointer value)
+  {
+    values_.add_new(name, value);
+  }
+
+  /* Add a value to the container. The caller remains responsible for destructing the value. */
   void move_in(StringRef name, GMutablePointer value)
   {
     const CPPType &type = *value.type();

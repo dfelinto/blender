@@ -121,110 +121,98 @@ using namespace blender::bke;
 class GeometryNodesEvaluator {
  private:
   LinearAllocator<> allocator_;
-  const DerivedNodeTree &tree_;
-  Map<const DOutputSocket *, GMutablePointer> group_input_data_;
+  Map<const DInputSocket *, GMutablePointer> value_by_input_;
   Vector<const DInputSocket *> group_outputs_;
   MultiFunctionByNode &mf_by_node_;
   const DataTypeConversions &conversions_;
 
  public:
-  GeometryNodesEvaluator(const DerivedNodeTree &tree,
-                         Map<const DOutputSocket *, GMutablePointer> group_input_data,
+  GeometryNodesEvaluator(const Map<const DOutputSocket *, GMutablePointer> &group_input_data,
                          Vector<const DInputSocket *> group_outputs,
                          MultiFunctionByNode &mf_by_node)
-      : tree_(tree),
-        group_input_data_(std::move(group_input_data)),
-        group_outputs_(std::move(group_outputs)),
+      : group_outputs_(std::move(group_outputs)),
         mf_by_node_(mf_by_node),
         conversions_(get_implicit_type_conversions())
   {
+    for (auto item : group_input_data.items()) {
+      this->forward_to_inputs(*item.key, item.value);
+    }
   }
 
   Vector<GMutablePointer> execute()
   {
     Vector<GMutablePointer> results;
     for (const DInputSocket *group_output : group_outputs_) {
-      const CPPType &type = *socket_cpp_type_get(*group_output->typeinfo());
-      void *result_buffer = allocator_.allocate(type.size(), type.alignment());
-      this->compute_input_socket(*group_output, result_buffer);
-      results.append(GMutablePointer{type, result_buffer});
+      GMutablePointer result = this->get_input_value(*group_output);
+      results.append(result);
     }
-    for (GMutablePointer value : group_input_data_.values()) {
-      value.type()->destruct(value.get());
+    for (GMutablePointer value : value_by_input_.values()) {
+      value.destruct();
     }
     return results;
   }
 
  private:
-  void compute_input_socket(const DInputSocket &socket_to_compute, void *r_value)
+  GMutablePointer get_input_value(const DInputSocket &socket_to_compute)
   {
+    std::optional<GMutablePointer> value = value_by_input_.pop_try(&socket_to_compute);
+    if (value.has_value()) {
+      /* This input has been computed before, return it directly. */
+      return *value;
+    }
+
     Span<const DOutputSocket *> from_sockets = socket_to_compute.linked_sockets();
     Span<const DGroupInput *> from_group_inputs = socket_to_compute.linked_group_inputs();
     const int total_inputs = from_sockets.size() + from_group_inputs.size();
     BLI_assert(total_inputs <= 1);
 
+    const CPPType &type = *socket_cpp_type_get(*socket_to_compute.typeinfo());
+
     if (total_inputs == 0) {
+      /* The input is not connected, use the value from the socket itself. */
       bNodeSocket &bsocket = *socket_to_compute.bsocket();
-      socket_cpp_value_get(bsocket, r_value);
-      return;
+      void *buffer = allocator_.allocate(type.size(), type.alignment());
+      socket_cpp_value_get(bsocket, buffer);
+      return GMutablePointer{type, buffer};
     }
     if (from_group_inputs.size() == 1) {
+      /* The input gets its value from the input of a group that is not further connected. */
       bNodeSocket &bsocket = *from_group_inputs[0]->bsocket();
-      socket_cpp_value_get(bsocket, r_value);
-      return;
+      void *buffer = allocator_.allocate(type.size(), type.alignment());
+      socket_cpp_value_get(bsocket, buffer);
+      return GMutablePointer{type, buffer};
     }
 
+    /* Compute the socket now. */
     const DOutputSocket &from_socket = *from_sockets[0];
-    const CPPType &from_type = *socket_cpp_type_get(*from_socket.typeinfo());
-    const CPPType &to_type = *socket_cpp_type_get(*socket_to_compute.typeinfo());
-    if (from_type == to_type) {
-      this->compute_output_socket(from_socket, r_value);
-    }
-    else {
-      /* The type of both sockets don't match, so a conversion is necessary. */
-      if (conversions_.is_convertible(from_type, to_type)) {
-        void *from_value = allocator_.allocate(from_type.size(), from_type.alignment());
-        this->compute_output_socket(from_socket, from_value);
-        conversions_.convert(from_type, to_type, from_value, r_value);
-        from_type.destruct(from_value);
-      }
-      else {
-        /* Use a default value when the types cannot be converted. */
-        to_type.copy_to_uninitialized(to_type.default_value(), r_value);
-      }
-    }
+    this->compute_output_and_forward(from_socket);
+    return value_by_input_.pop(&socket_to_compute);
   }
 
-  void compute_output_socket(const DOutputSocket &socket_to_compute, void *r_value)
+  void compute_output_and_forward(const DOutputSocket &socket_to_compute)
   {
-    const GMutablePointer *group_input = group_input_data_.lookup_ptr(&socket_to_compute);
-    if (group_input != nullptr) {
-      const CPPType &type = *group_input->type();
-      type.copy_to_uninitialized(group_input->get(), r_value);
-      return;
-    }
-
     const DNode &node = socket_to_compute.node();
-    GValueByName node_inputs{allocator_};
 
-    /* Compute all inputs for the node. */
+    /* Prepare inputs required to execute the node. */
+    GValueByName node_inputs{allocator_};
     for (const DInputSocket *input_socket : node.inputs()) {
-      const CPPType &type = *socket_cpp_type_get(*input_socket->typeinfo());
-      void *buffer = allocator_.allocate(type.size(), type.alignment());
-      compute_input_socket(*input_socket, buffer);
-      node_inputs.move_in(input_socket->identifier(), GMutablePointer{type, buffer});
-      type.destruct(buffer);
+      if (input_socket->is_available()) {
+        GMutablePointer value = this->get_input_value(*input_socket);
+        node_inputs.transfer_ownership_in(input_socket->identifier(), value);
+      }
     }
 
-    /* Execute the node itself. */
+    /* Execute the node. */
     GValueByName node_outputs{allocator_};
     this->execute_node(node, node_inputs, node_outputs);
 
-    /* Pass relevant value to the caller. */
-    bNodeSocket *bsocket_to_compute = socket_to_compute.bsocket();
-    const CPPType &type_to_compute = *socket_cpp_type_get(*bsocket_to_compute->typeinfo);
-    GMutablePointer computed_value = node_outputs.extract(bsocket_to_compute->identifier);
-    type_to_compute.relocate_to_uninitialized(computed_value.get(), r_value);
+    /* Forward computed outputs to linked input sockets. */
+    for (const DOutputSocket *output_socket : node.outputs()) {
+      if (output_socket->is_available()) {
+        GMutablePointer value = node_outputs.extract(output_socket->identifier());
+        this->forward_to_inputs(*output_socket, value);
+      }
+    }
   }
 
   void execute_node(const DNode &node, GValueByName &node_inputs, GValueByName &node_outputs)
@@ -266,6 +254,55 @@ class GeometryNodesEvaluator {
       value.destruct();
     }
   }
+
+  void forward_to_inputs(const DOutputSocket &from_socket, GMutablePointer value_to_forward)
+  {
+    Span<const DInputSocket *> linked_sockets = from_socket.linked_sockets();
+
+    Vector<const DInputSocket *> to_sockets_with_same_type;
+    Vector<const DInputSocket *> to_sockets_with_different_type;
+    for (const DInputSocket *linked_socket : linked_sockets) {
+      if (from_socket.typeinfo() == linked_socket->typeinfo()) {
+        to_sockets_with_same_type.append(linked_socket);
+      }
+      else {
+        to_sockets_with_different_type.append(linked_socket);
+      }
+    }
+
+    const CPPType &from_type = *value_to_forward.type();
+
+    for (const DInputSocket *to_socket : to_sockets_with_different_type) {
+      const CPPType &to_type = *socket_cpp_type_get(*to_socket->typeinfo());
+      void *buffer = allocator_.allocate(to_type.size(), to_type.alignment());
+      conversions_.convert(from_type, to_type, value_to_forward.get(), buffer);
+      value_by_input_.add_new(to_socket, GMutablePointer{to_type, buffer});
+    }
+
+    if (to_sockets_with_same_type.size() == 0) {
+      /* This value is not further used, so destruct it. */
+      value_to_forward.destruct();
+    }
+    else if (to_sockets_with_same_type.size() == 1) {
+      /* This value is only used on one input socket, no need to copy it. */
+      const DInputSocket *to_socket = to_sockets_with_same_type[0];
+      value_by_input_.add_new(to_socket, value_to_forward);
+    }
+    else {
+      /* Multiple inputs use the value, make a copy for every input except for one. */
+      const DInputSocket *first_to_socket = to_sockets_with_same_type[0];
+      Span<const DInputSocket *> other_to_sockets = to_sockets_with_same_type.as_span().drop_front(
+          1);
+      const CPPType &type = *value_to_forward.type();
+
+      value_by_input_.add_new(first_to_socket, value_to_forward);
+      for (const DInputSocket *to_socket : other_to_sockets) {
+        void *buffer = allocator_.allocate(type.size(), type.alignment());
+        type.copy_to_uninitialized(value_to_forward.get(), buffer);
+        value_by_input_.add_new(to_socket, GMutablePointer{type, buffer});
+      }
+    }
+  }
 };
 
 /**
@@ -292,7 +329,7 @@ static GeometryPtr compute_geometry(const DerivedNodeTree &tree,
   Vector<const DInputSocket *> group_outputs;
   group_outputs.append(&socket_to_compute);
 
-  GeometryNodesEvaluator evaluator{tree, group_inputs, group_outputs, mf_by_node};
+  GeometryNodesEvaluator evaluator{group_inputs, group_outputs, mf_by_node};
   Vector<GMutablePointer> results = evaluator.execute();
   BLI_assert(results.size() == 1);
   GMutablePointer result = results[0];
