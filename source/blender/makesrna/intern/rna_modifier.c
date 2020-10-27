@@ -57,6 +57,8 @@
 #include "WM_api.h"
 #include "WM_types.h"
 
+#include "intern/MOD_nodes.h"
+
 const EnumPropertyItem rna_enum_object_modifier_type_items[] = {
     {0, "", 0, N_("Modify"), ""},
     {eModifierType_DataTransfer,
@@ -1604,6 +1606,13 @@ static bool rna_NodesModifier_node_group_poll(PointerRNA *ptr, PointerRNA value)
   bNodeTree *ntree = value.data;
   UNUSED_VARS(nmd, ntree);
   return true;
+}
+
+static void rna_NodesModifier_node_group_update(Main *bmain, Scene *scene, PointerRNA *ptr)
+{
+  NodesModifierData *nmd = ptr->data;
+  rna_Modifier_dependency_update(bmain, scene, ptr);
+  MOD_nodes_update_interface(nmd);
 }
 
 static IDProperty *rna_NodesModifierSettings_properties(PointerRNA *ptr, bool create)
@@ -6967,7 +6976,7 @@ static void rna_def_modifier_nodes(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Node Group", "Node group that controls what this modifier does");
   RNA_def_property_pointer_funcs(prop, NULL, NULL, NULL, "rna_NodesModifier_node_group_poll");
   RNA_def_property_flag(prop, PROP_EDITABLE);
-  RNA_def_property_update(prop, 0, "rna_Modifier_dependency_update");
+  RNA_def_property_update(prop, 0, "rna_NodesModifier_node_group_update");
 
   prop = RNA_def_property(srna, "settings", PROP_POINTER, PROP_NONE);
   RNA_def_property_flag(prop, PROP_NEVER_NULL);

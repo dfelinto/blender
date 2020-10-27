@@ -117,6 +117,7 @@ set(SRC
 
   MOD_modifiertypes.h
   intern/MOD_meshcache_util.h
+  intern/MOD_nodes.h
   intern/MOD_solidify_util.h
   intern/MOD_ui_common.h
   intern/MOD_util.h

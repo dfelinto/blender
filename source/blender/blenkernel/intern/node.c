@@ -39,6 +39,7 @@
 #include "DNA_light_types.h"
 #include "DNA_linestyle_types.h"
 #include "DNA_material_types.h"
+#include "DNA_modifier_types.h"
 #include "DNA_node_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_simulation_types.h"
@@ -83,6 +84,8 @@
 #include "DEG_depsgraph_build.h"
 
 #include "BLO_read_write.h"
+
+#include "intern/MOD_nodes.h"
 
 #define NODE_DEFAULT_MAX_WIDTH 700
 
@@ -3954,14 +3957,14 @@ void ntreeUpdateAllNew(Main *main)
   FOREACH_NODETREE_END;
 }
 
-void ntreeUpdateAllUsers(Main *main, ID *ngroup)
+void ntreeUpdateAllUsers(Main *main, bNodeTree *ngroup)
 {
   /* Update all users of ngroup, to add/remove sockets as needed. */
   FOREACH_NODETREE_BEGIN (main, ntree, owner_id) {
     bool need_update = false;
 
     LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
-      if (node->id == ngroup) {
+      if (node->id == &ngroup->id) {
         if (node->typeinfo->group_update_func) {
           node->typeinfo->group_update_func(ntree, node);
         }
@@ -3975,6 +3978,19 @@ void ntreeUpdateAllUsers(Main *main, ID *ngroup)
     }
   }
   FOREACH_NODETREE_END;
+
+  if (ngroup->type == NTREE_GEOMETRY) {
+    LISTBASE_FOREACH (Object *, object, &main->objects) {
+      LISTBASE_FOREACH (ModifierData *, md, &object->modifiers) {
+        if (md->type == eModifierType_Nodes) {
+          NodesModifierData *nmd = (NodesModifierData *)md;
+          if (nmd->node_group == ngroup) {
+            MOD_nodes_update_interface(nmd);
+          }
+        }
+      }
+    }
+  }
 }
 
 void ntreeUpdateTree(Main *bmain, bNodeTree *ntree)
@@ -4018,7 +4034,7 @@ void ntreeUpdateTree(Main *bmain, bNodeTree *ntree)
   }
 
   if (bmain) {
-    ntreeUpdateAllUsers(bmain, &ntree->id);
+    ntreeUpdateAllUsers(bmain, ntree);
   }
 
   if (ntree->update & (NTREE_UPDATE_LINKS | NTREE_UPDATE_NODES)) {

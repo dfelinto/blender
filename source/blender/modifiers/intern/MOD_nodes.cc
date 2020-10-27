@@ -62,6 +62,7 @@
 #include "DEG_depsgraph_query.h"
 
 #include "MOD_modifiertypes.h"
+#include "MOD_nodes.h"
 #include "MOD_ui_common.h"
 
 #include "NOD_derived_node_tree.hh"
@@ -323,6 +324,59 @@ class GeometryNodesEvaluator {
   }
 };
 
+static bool get_socket_property_info(bNodeSocket &socket,
+                                     int *r_property_type,
+                                     IDPropertyTemplate *r_default_value)
+{
+  switch (socket.type) {
+    case SOCK_FLOAT: {
+      *r_property_type = IDP_FLOAT;
+      r_default_value->f = ((bNodeSocketValueFloat *)socket.default_value)->value;
+      return true;
+    }
+    case SOCK_INT: {
+      *r_property_type = IDP_INT;
+      r_default_value->i = ((bNodeSocketValueInt *)socket.default_value)->value;
+      return true;
+    }
+    default: {
+      return false;
+    }
+  }
+}
+
+void MOD_nodes_update_interface(NodesModifierData *nmd)
+{
+  if (nmd->node_group == nullptr) {
+    return;
+  }
+  if (nmd->settings.properties == nullptr) {
+    IDPropertyTemplate val = {0};
+    nmd->settings.properties = IDP_New(IDP_GROUP, &val, "Nodes Modifier Settings");
+  }
+
+  LISTBASE_FOREACH (bNodeSocket *, socket, &nmd->node_group->inputs) {
+    const char *identifier = socket->identifier;
+
+    IDPropertyTemplate default_value = {0};
+    int property_type;
+    const bool is_supported = get_socket_property_info(*socket, &property_type, &default_value);
+    if (!is_supported) {
+      continue;
+    }
+
+    IDProperty *property = IDP_GetPropertyFromGroup(nmd->settings.properties, identifier);
+    if (property != nullptr && property->type != property_type) {
+      IDP_FreeFromGroup(nmd->settings.properties, property);
+      property = nullptr;
+    }
+    if (property == nullptr) {
+      property = IDP_New(property_type, &default_value, identifier);
+      IDP_AddToGroup(nmd->settings.properties, property);
+    }
+  }
+}
+
 /**
  * Evaluate a node group to compute the output geometry.
  * Currently, this uses a fairly basic and inefficient algorithm that might compute things more
@@ -469,17 +523,34 @@ static Mesh *modifyMesh(ModifierData *md, const ModifierEvalContext *UNUSED(ctx)
 
 static void panel_draw(const bContext *UNUSED(C), Panel *panel)
 {
+#ifdef WITH_GEOMETRY_NODES
   uiLayout *layout = panel->layout;
 
   PointerRNA ob_ptr;
   PointerRNA *ptr = modifier_panel_get_property_pointers(panel, &ob_ptr);
+  NodesModifierData *nmd = static_cast<NodesModifierData *>(ptr->data);
 
   uiLayoutSetPropSep(layout, true);
   uiLayoutSetPropDecorate(layout, false);
 
   uiItemR(layout, ptr, "node_group", 0, NULL, ICON_MESH_DATA);
 
+  if (nmd->node_group != nullptr && nmd->settings.properties != nullptr) {
+    PointerRNA settings_ptr;
+    RNA_pointer_create(ptr->owner_id, &RNA_NodesModifierSettings, &nmd->settings, &settings_ptr);
+    LISTBASE_FOREACH (bNodeSocket *, socket, &nmd->node_group->inputs) {
+      IDProperty *property = IDP_GetPropertyFromGroup(nmd->settings.properties,
+                                                      socket->identifier);
+      if (property != nullptr) {
+        char rna_path[128];
+        BLI_snprintf(rna_path, ARRAY_SIZE(rna_path), "[\"%s\"]", socket->identifier);
+        uiItemR(layout, &settings_ptr, rna_path, 0, socket->name, ICON_NONE);
+      }
+    }
+  }
+
   modifier_panel_end(layout, ptr);
+#endif
 }
 
 static void panelRegister(ARegionType *region_type)
