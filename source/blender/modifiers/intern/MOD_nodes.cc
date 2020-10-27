@@ -533,7 +533,10 @@ ModifierTypeInfo modifierType_Nodes = {
     /* srna */ &RNA_Modifier,
 #endif
     /* type */ eModifierTypeType_Constructive,
-    /* flags */ eModifierTypeFlag_AcceptsMesh,
+    /* flags */
+    static_cast<ModifierTypeFlag>(eModifierTypeFlag_AcceptsMesh |
+                                  eModifierTypeFlag_SupportsEditmode |
+                                  eModifierTypeFlag_EnableInEditmode),
     /* icon */ ICON_MESH_DATA, /* TODO: Use correct icon. */
 
     /* copyData */ copyData,
