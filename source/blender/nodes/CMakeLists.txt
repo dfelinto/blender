@@ -141,6 +141,8 @@ set(SRC
   geometry/nodes/node_geo_common.cc
   geometry/nodes/node_geo_boolean.cc
   geometry/nodes/node_geo_edge_split.cc
+  geometry/nodes/node_geo_point_distribute.cc
+  geometry/nodes/node_geo_point_instance.cc
   geometry/nodes/node_geo_transform.cc
   geometry/nodes/node_geo_triangulate.cc
   geometry/node_geometry_exec.cc

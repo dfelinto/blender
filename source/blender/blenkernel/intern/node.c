@@ -4663,6 +4663,8 @@ static void registerGeometryNodes(void)
   register_node_type_geo_edge_split();
   register_node_type_geo_transform();
   register_node_type_geo_boolean();
+  register_node_type_geo_point_distribute();
+  register_node_type_geo_point_instance();
 }
 
 static void registerFunctionNodes(void)

@@ -490,6 +490,11 @@ geometry_node_categories = [
         NodeItem("GeometryNodeEdgeSplit"),
         NodeItem("GeometryNodeTransform"),
         NodeItem("GeometryNodeBoolean"),
+        NodeItem("GeometryNodePointDistribute"),
+    ]),    
+    GeometryNodeCategory("GEO_POINTCLOUD", "Pointcloud", items=[
+        NodeItem("GeometryNodePointDistribute"),
+        NodeItem("GeometryNodePointInstance"),
     ]),
     GeometryNodeCategory("GEO_MATH", "Misc", items=[
         NodeItem("ShaderNodeMapRange"),
