@@ -228,6 +228,29 @@ void *BKE_pointcloud_add_default(Main *bmain, const char *name)
   return pointcloud;
 }
 
+PointCloud *BKE_pointcloud_new_nomain(const int totpoint)
+{
+  PointCloud *pointcloud = BKE_libblock_alloc(
+      NULL, ID_PT, BKE_idtype_idcode_to_name(ID_PT), LIB_ID_CREATE_LOCALIZE);
+
+  pointcloud_init_data(&pointcloud->id);
+
+  pointcloud->totpoint = totpoint;
+
+  CustomData_add_layer_named(&pointcloud->pdata,
+                             CD_PROP_FLOAT,
+                             CD_CALLOC,
+                             NULL,
+                             pointcloud->totpoint,
+                             POINTCLOUD_ATTR_RADIUS);
+
+  pointcloud->totpoint = totpoint;
+  CustomData_realloc(&pointcloud->pdata, pointcloud->totpoint);
+  BKE_pointcloud_update_customdata_pointers(pointcloud);
+
+  return pointcloud;
+}
+
 BoundBox *BKE_pointcloud_boundbox_get(Object *ob)
 {
   BLI_assert(ob->type == OB_POINTCLOUD);
