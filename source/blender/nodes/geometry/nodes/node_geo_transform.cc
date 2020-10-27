@@ -14,8 +14,11 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
-#include "BKE_mesh.h"
 #include "BLI_math_matrix.h"
+
+#include "DNA_pointcloud_types.h"
+
+#include "BKE_mesh.h"
 
 #include "node_geometry_util.hh"
 
@@ -32,32 +35,80 @@ static bNodeSocketTemplate geo_node_transform_out[] = {
     {-1, ""},
 };
 
-namespace blender::nodes {
-static void geo_transform_exec(bNode *UNUSED(node), GValueByName &inputs, GValueByName &outputs)
+using blender::float3;
+
+static bool use_translate(const float3 rotation, const float3 scale)
 {
-  GeometryPtr geometry = inputs.extract<GeometryPtr>("Geometry");
-
-  if (!geometry.has_value() || !geometry->mesh_available()) {
-    outputs.move_in("Geometry", std::move(geometry));
-    return;
+  if (compare_ff(rotation.length_squared(), 0.0f, 1e-9f) != 1) {
+    return false;
   }
+  if (compare_ff(scale.x, 1.0f, 1e-9f) != 1 || compare_ff(scale.y, 1.0f, 1e-9f) != 1 ||
+      compare_ff(scale.z, 1.0f, 1e-9f) != 1) {
+    return false;
+  }
+  return true;
+}
 
-  bke::make_geometry_mutable(geometry);
-
-  Mesh *mesh = geometry->mesh_get_for_write();
-
-  const float3 translation = inputs.extract<float3>("Translation");
-  const float3 rotation = inputs.extract<float3>("Rotation");
-  const float3 scale = inputs.extract<float3>("Scale");
-
+static void transform_mesh(Mesh *mesh,
+                           const float3 translation,
+                           const float3 rotation,
+                           const float3 scale)
+{
   /* Use only translation if rotation and scale are zero. */
-  if (translation.length() > 0.0f && rotation.length() == 0.0f && scale.length() == 0.0f) {
+  if (use_translate(rotation, scale)) {
     BKE_mesh_translate(mesh, translation, true);
   }
   else {
     float mat[4][4];
     loc_eul_size_to_mat4(mat, translation, rotation, scale);
     BKE_mesh_transform(mesh, mat, true);
+  }
+}
+
+static void transform_pointcloud(PointCloud *pointcloud,
+                                 const float3 translation,
+                                 const float3 rotation,
+                                 const float3 scale)
+{
+  /* Use only translation if rotation and scale don't apply. */
+  if (use_translate(rotation, scale)) {
+    for (int i = 0; i < pointcloud->totpoint; i++) {
+      add_v3_v3(pointcloud->co[i], translation);
+    }
+  }
+  else {
+    float mat[4][4];
+    loc_eul_size_to_mat4(mat, translation, rotation, scale);
+    for (int i = 0; i < pointcloud->totpoint; i++) {
+      mul_m4_v3(mat, pointcloud->co[i]);
+    }
+  }
+}
+
+namespace blender::nodes {
+static void geo_transform_exec(bNode *UNUSED(node), GValueByName &inputs, GValueByName &outputs)
+{
+  GeometryPtr geometry = inputs.extract<GeometryPtr>("Geometry");
+
+  if (!geometry.has_value()) {
+    outputs.move_in("Geometry", std::move(geometry));
+    return;
+  }
+
+  const float3 translation = inputs.extract<float3>("Translation");
+  const float3 rotation = inputs.extract<float3>("Rotation");
+  const float3 scale = inputs.extract<float3>("Scale");
+
+  bke::make_geometry_mutable(geometry);
+
+  if (geometry->mesh_available()) {
+    Mesh *mesh = geometry->mesh_get_for_write();
+    transform_mesh(mesh, translation, rotation, scale);
+  }
+
+  if (geometry->pointcloud_available()) {
+    PointCloud *pointcloud = geometry->pointcloud_get_for_write();
+    transform_pointcloud(pointcloud, translation, rotation, scale);
   }
 
   outputs.move_in("Geometry", std::move(geometry));
