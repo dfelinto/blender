@@ -17,6 +17,7 @@
 #include "BKE_geometry.hh"
 #include "BKE_lib_id.h"
 #include "BKE_mesh.h"
+#include "BKE_pointcloud.h"
 
 #include "MEM_guardedalloc.h"
 
@@ -30,11 +31,17 @@ Geometry::Geometry(const Geometry &other)
     /* Own the new mesh, regardless of whether the original mesh was owned. */
     mesh_owned_ = true;
   }
+  if (other.pointcloud_ != nullptr) {
+    pointcloud_ = BKE_pointcloud_copy_for_eval(other.pointcloud_, false);
+    /* Own the new pointcloud, regardless of whether the original mesh was owned. */
+    pointcloud_owned_ = true;
+  }
 }
 
 Geometry::~Geometry()
 {
   this->mesh_reset();
+  this->pointcloud_reset();
 }
 
 void Geometry::user_add()
@@ -64,6 +71,10 @@ bool Geometry::mesh_available() const
 {
   return mesh_ != nullptr;
 }
+bool Geometry::pointcloud_available() const
+{
+  return pointcloud_ != nullptr;
+}
 
 /**
  * Replace the mesh in the geometry. The caller remains the owner of the given mesh and is
@@ -76,6 +87,13 @@ void Geometry::mesh_set_and_keep_ownership(Mesh *mesh)
   mesh_ = mesh;
   mesh_owned_ = false;
 }
+void Geometry::pointcloud_set_and_keep_ownership(PointCloud *pointcloud)
+{
+  BLI_assert(this->is_mutable());
+  this->pointcloud_reset();
+  pointcloud_ = pointcloud;
+  pointcloud_owned_ = false;
+}
 
 /**
  * Replace the mesh in the geometry. The geometry becomes responsible for freeing the mesh.
@@ -86,6 +104,13 @@ void Geometry::mesh_set_and_transfer_ownership(Mesh *mesh)
   this->mesh_reset();
   mesh_ = mesh;
   mesh_owned_ = true;
+}
+void Geometry::pointcloud_set_and_transfer_ownership(PointCloud *pointcloud)
+{
+  BLI_assert(this->is_mutable());
+  this->pointcloud_reset();
+  pointcloud_ = pointcloud;
+  pointcloud_owned_ = true;
 }
 
 /**
@@ -101,6 +126,16 @@ void Geometry::mesh_reset()
     mesh_ = nullptr;
   }
 }
+void Geometry::pointcloud_reset()
+{
+  BLI_assert(this->is_mutable());
+  if (pointcloud_ != nullptr) {
+    if (pointcloud_owned_) {
+      BKE_id_free(nullptr, pointcloud_);
+    }
+    pointcloud_ = nullptr;
+  }
+}
 
 /**
  * Get the mesh from the geometry. This mesh should only be read and not modified. This can be used
@@ -110,6 +145,10 @@ void Geometry::mesh_reset()
 Mesh *Geometry::mesh_get_for_read()
 {
   return mesh_;
+}
+PointCloud *Geometry::pointcloud_get_for_read()
+{
+  return pointcloud_;
 }
 
 /**
@@ -122,6 +161,11 @@ Mesh *Geometry::mesh_get_for_write()
   BLI_assert(this->is_mutable());
   return mesh_;
 }
+PointCloud *Geometry::pointcloud_get_for_write()
+{
+  BLI_assert(this->is_mutable());
+  return pointcloud_;
+}
 
 /**
  * Return the mesh in the geometry and remove it. This only works on mutable geometries.
@@ -133,6 +177,13 @@ Mesh *Geometry::mesh_release()
   Mesh *mesh = mesh_;
   mesh_ = nullptr;
   return mesh;
+}
+PointCloud *Geometry::pointcloud_release()
+{
+  BLI_assert(this->is_mutable());
+  PointCloud *pointcloud = pointcloud_;
+  pointcloud_ = nullptr;
+  return pointcloud;
 }
 
 /**

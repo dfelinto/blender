@@ -26,6 +26,7 @@
 #include "BLI_hash.hh"
 
 struct Mesh;
+struct PointCloud;
 
 namespace blender::bke {
 
@@ -43,10 +44,13 @@ class Geometry {
    * above 1, the geometry is immutable. */
   std::atomic<int> users_ = 1;
 
-  /* Only contains a mesh for now. */
   Mesh *mesh_ = nullptr;
   /* Determines if the mesh is freed when the geometry does not want to reference it anymore. */
   bool mesh_owned_ = false;
+
+  PointCloud *pointcloud_ = nullptr;
+  /* True if the pointcloud is freed with the geometry. */
+  bool pointcloud_owned_ = false;
 
  public:
   Geometry() = default;
@@ -69,6 +73,14 @@ class Geometry {
   Mesh *mesh_get_for_read();
   Mesh *mesh_get_for_write();
   Mesh *mesh_release();
+
+  bool pointcloud_available() const;
+  void pointcloud_set_and_keep_ownership(PointCloud *pointcloud);
+  void pointcloud_set_and_transfer_ownership(PointCloud *pointcloud);
+  void pointcloud_reset();
+  PointCloud *pointcloud_get_for_read();
+  PointCloud *pointcloud_get_for_write();
+  PointCloud *pointcloud_release();
 };
 
 /**
