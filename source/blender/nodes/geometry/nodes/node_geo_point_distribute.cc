@@ -117,6 +117,8 @@ static PointCloud *scatter_pointcloud_from_mesh(Mesh *mesh,
     pointcloud->radius[i] = 0.05f; /* TODO: Use radius attribute / vertex vgroup. */
   }
 
+  BLI_rng_free(rng);
+
   return pointcloud;
 }
 
