@@ -14,9 +14,9 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
-// #include "BLI_float3.hh" /* Can't get this to work. I'm probably doing it completely wrong. */
+#include "BLI_float3.hh"
 #include "BLI_math_vector.h"
-#include "BLI_rand.h"
+#include "BLI_rand.hh"
 #include "BLI_span.hh"
 
 #include "DNA_mesh_types.h"
@@ -56,11 +56,12 @@ static void mesh_loop_tri_corner_coords(
   *r_v2 = mverts[mloop_2->v].co;
 }
 
+using blender::float3;
+
 static PointCloud *scatter_pointcloud_from_mesh(Mesh *mesh,
                                                 const float density,
                                                 const float UNUSED(minimum_radius))
 {
-
   BKE_mesh_runtime_looptri_ensure(mesh);
   const int looptris_len = mesh->runtime.looptris.len;
   blender::Array<float> weights(looptris_len);
@@ -92,9 +93,9 @@ static PointCloud *scatter_pointcloud_from_mesh(Mesh *mesh,
   PointCloud *pointcloud = BKE_pointcloud_new_nomain(points_len);
 
   /* Distribute the points. */
-  RNG *rng = BLI_rng_new(0);
+  blender::RandomNumberGenerator rng(0);
   for (int i = 0; i < points_len; i++) {
-    const int random_weight_total = BLI_rng_get_float(rng) * weight_total;
+    const int random_weight_total = rng.get_float() * weight_total;
 
     /* Find the triangle index based on the weights. TODO: Use binary search. */
     int i_tri = 0;
@@ -109,15 +110,12 @@ static PointCloud *scatter_pointcloud_from_mesh(Mesh *mesh,
     float *v0, *v1, *v2;
     mesh_loop_tri_corner_coords(mesh, i_tri, &v0, &v1, &v2);
 
-    float co[3];
-    BLI_rng_get_tri_sample_float_v3(rng, v0, v1, v2, co);
-    pointcloud->co[i][0] = co[0];
-    pointcloud->co[i][1] = co[1];
-    pointcloud->co[i][2] = co[2];
+    float3 co = rng.get_triangle_sample_3d(v0, v1, v2);
+    pointcloud->co[i][0] = co.x;
+    pointcloud->co[i][1] = co.y;
+    pointcloud->co[i][2] = co.z;
     pointcloud->radius[i] = 0.05f; /* TODO: Use radius attribute / vertex vgroup. */
   }
-
-  BLI_rng_free(rng);
 
   return pointcloud;
 }
