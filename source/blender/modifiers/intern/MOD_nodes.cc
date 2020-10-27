@@ -422,7 +422,7 @@ void MOD_nodes_update_interface(NodesModifierData *nmd)
       IDProperty *new_property = property_type->create(*socket, socket->identifier);
       IDP_AddToGroup(nmd->settings.properties, new_property);
     }
-    else if (property_type->is_correct_type(*property)) {
+    else if (!property_type->is_correct_type(*property)) {
       IDP_FreeFromGroup(nmd->settings.properties, property);
       property = property_type->create(*socket, socket->identifier);
       IDP_AddToGroup(nmd->settings.properties, property);
