@@ -380,6 +380,20 @@ static const SocketPropertyType *get_socket_property_type(const bNodeSocket &bso
       };
       return &vector_type;
     }
+    case SOCK_BOOLEAN: {
+      static const SocketPropertyType boolean_type = {
+          [](const bNodeSocket &socket, const char *name) {
+            IDPropertyTemplate value = {0};
+            value.i = ((bNodeSocketValueBoolean *)socket.default_value)->value != 0;
+            return IDP_New(IDP_INT, &value, name);
+          },
+          [](const IDProperty &property) { return property.type == IDP_INT; },
+          [](const IDProperty &property, void *r_value) {
+            *(bool *)r_value = IDP_Int(&property) != 0;
+          },
+      };
+      return &boolean_type;
+    }
     default: {
       return nullptr;
     }
