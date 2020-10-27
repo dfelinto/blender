@@ -3959,6 +3959,10 @@ void ntreeUpdateAllNew(Main *main)
 
 void ntreeUpdateAllUsers(Main *main, bNodeTree *ngroup)
 {
+  if (ngroup == NULL) {
+    return;
+  }
+
   /* Update all users of ngroup, to add/remove sockets as needed. */
   FOREACH_NODETREE_BEGIN (main, ntree, owner_id) {
     bool need_update = false;
