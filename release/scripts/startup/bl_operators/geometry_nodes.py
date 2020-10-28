@@ -36,6 +36,7 @@ class NewGeometryNodeTree(bpy.types.Operator):
         group.outputs.new('NodeSocketGeometry', "Geometry")
         input_node = group.nodes.new('NodeGroupInput')
         output_node = group.nodes.new('NodeGroupOutput')
+        output_node.is_active_output = True
 
         input_node.location.x = -200 - input_node.width
         output_node.location.x = 200
