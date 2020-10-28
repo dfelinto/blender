@@ -532,6 +532,7 @@ class CLIP_PT_tools_solve(CLIP_PT_tracking_panel, Panel):
         tracking = clip.tracking
         settings = tracking.settings
         tracking_object = tracking.objects.active
+        camera = clip.tracking.camera
 
         col = layout.column()
         col.prop(settings, "use_tripod_solver", text="Tripod")
@@ -545,9 +546,16 @@ class CLIP_PT_tools_solve(CLIP_PT_tracking_panel, Panel):
         col.prop(tracking_object, "keyframe_a")
         col.prop(tracking_object, "keyframe_b")
 
-        col = layout.column()
+        col = layout.column(heading="Refine", align=True)
         col.active = tracking_object.is_camera
-        col.prop(settings, "refine_intrinsics", text="Refine")
+        col.prop(settings, "refine_intrinsics_focal_length", text="Focal Length")
+        col.prop(settings, "refine_intrinsics_principal_point", text="Optical Center")
+
+        col.prop(settings, "refine_intrinsics_radial_distortion", text="Radial Distortion")
+
+        row = col.row()
+        row.active = (camera.distortion_model == 'BROWN')
+        row.prop(settings, "refine_intrinsics_tangential_distortion", text="Tangential Distortion")
 
         col = layout.column(align=True)
         col.scale_y = 2.0
