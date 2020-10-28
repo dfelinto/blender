@@ -122,13 +122,13 @@ static PointCloud *scatter_pointcloud_from_mesh(Mesh *mesh,
 
 namespace blender::nodes {
 static void geo_point_distribute_exec(bNode *UNUSED(node),
-                                      GValueByName &inputs,
-                                      GValueByName &outputs)
+                                      GeoNodeInputs inputs,
+                                      GeoNodeOutputs outputs)
 {
   GeometryPtr geometry = inputs.extract<GeometryPtr>("Geometry");
 
   if (!geometry.has_value() || !geometry->mesh_available()) {
-    outputs.move_in("Geometry", std::move(geometry));
+    outputs.set("Geometry", std::move(geometry));
     return;
   }
 
@@ -136,7 +136,7 @@ static void geo_point_distribute_exec(bNode *UNUSED(node),
   const float minimum_radius = inputs.extract<float>("Minimum Radius");
 
   if (density <= 0.0f) {
-    outputs.move_in("Geometry", std::move(geometry));
+    outputs.set("Geometry", std::move(geometry));
     return;
   }
 
@@ -152,7 +152,7 @@ static void geo_point_distribute_exec(bNode *UNUSED(node),
   /* For now don't output the original mesh. In the future we could output this too. */
   geometry->pointcloud_set_and_transfer_ownership(pointcloud_out);
 
-  outputs.move_in("Geometry", std::move(geometry));
+  outputs.set("Geometry", std::move(geometry));
 }
 }  // namespace blender::nodes
 

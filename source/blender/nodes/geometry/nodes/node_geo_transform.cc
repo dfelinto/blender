@@ -86,12 +86,12 @@ static void transform_pointcloud(PointCloud *pointcloud,
 }
 
 namespace blender::nodes {
-static void geo_transform_exec(bNode *UNUSED(node), GValueByName &inputs, GValueByName &outputs)
+static void geo_transform_exec(bNode *UNUSED(node), GeoNodeInputs inputs, GeoNodeOutputs outputs)
 {
   GeometryPtr geometry = inputs.extract<GeometryPtr>("Geometry");
 
   if (!geometry.has_value()) {
-    outputs.move_in("Geometry", std::move(geometry));
+    outputs.set("Geometry", std::move(geometry));
     return;
   }
 
@@ -111,7 +111,7 @@ static void geo_transform_exec(bNode *UNUSED(node), GValueByName &inputs, GValue
     transform_pointcloud(pointcloud, translation, rotation, scale);
   }
 
-  outputs.move_in("Geometry", std::move(geometry));
+  outputs.set("Geometry", std::move(geometry));
 }
 }  // namespace blender::nodes
 

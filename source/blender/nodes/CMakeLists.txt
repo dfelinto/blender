@@ -271,6 +271,7 @@ set(SRC
   intern/derived_node_tree.cc
   intern/node_common.c
   intern/node_exec.c
+  intern/node_geometry_exec.cc
   intern/node_socket.cc
   intern/node_tree_dependencies.cc
   intern/node_tree_multi_function.cc

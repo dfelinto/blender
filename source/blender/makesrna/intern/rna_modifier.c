@@ -1601,9 +1601,10 @@ static bool rna_NodesModifier_node_group_poll(PointerRNA *ptr, PointerRNA value)
 
 static void rna_NodesModifier_node_group_update(Main *bmain, Scene *scene, PointerRNA *ptr)
 {
+  Object *object = (Object *)ptr->owner_id;
   NodesModifierData *nmd = ptr->data;
   rna_Modifier_dependency_update(bmain, scene, ptr);
-  MOD_nodes_update_interface(nmd);
+  MOD_nodes_update_interface(object, nmd);
 }
 
 static IDProperty *rna_NodesModifierSettings_properties(PointerRNA *ptr, bool create)

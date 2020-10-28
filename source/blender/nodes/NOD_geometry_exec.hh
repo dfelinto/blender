@@ -16,12 +16,11 @@
 
 #pragma once
 
-#include "FN_generic_pointer.hh"
-
-#include "BLI_linear_allocator.hh"
-#include "BLI_map.hh"
+#include "FN_generic_value_map.hh"
 
 #include "BKE_geometry.hh"
+
+#include "DNA_node_types.h"
 
 namespace blender::nodes {
 
@@ -29,71 +28,86 @@ using bke::Geometry;
 using bke::GeometryPtr;
 using fn::CPPType;
 using fn::GMutablePointer;
+using fn::GValueMap;
 
-/**
- * This container maps names to values of arbitrary type. It is used to represent the input and
- * output values of geometry nodes.
- *
- * The string keys are only referenced, but the values are owned.
- */
-class GValueByName {
+class GeoNodeInputs {
  private:
-  /* Used to allocate values owned by this container. */
-  LinearAllocator<> &allocator_;
-  Map<StringRef, GMutablePointer> values_;
+  const bNode *node_;
+  GValueMap<StringRef> &values_;
 
  public:
-  GValueByName(LinearAllocator<> &allocator) : allocator_(allocator)
+  GeoNodeInputs(const bNode &node, GValueMap<StringRef> &values) : node_(&node), values_(values)
   {
   }
 
-  ~GValueByName()
+  /**
+   * Get the input value for the input socket with the given identifier.
+   *
+   * The node calling becomes responsible for destructing the value before it is done
+   * executing. This method can only be called once for each identifier.
+   */
+  GMutablePointer extract(StringRef identifier)
   {
-    /* Destruct all values that have not been destructed. */
-    for (GMutablePointer value : values_.values()) {
-      value.type()->destruct(value.get());
-    }
+#ifdef DEBUG
+    this->check_extract(identifier);
+#endif
+    return values_.extract(identifier);
   }
 
-  /* Add a value to the container. The container is responsible for destructing the value that is
-   * passed in. */
-  void transfer_ownership_in(StringRef name, GMutablePointer value)
+  /**
+   * Get the input value for the input socket with the given identifier.
+   *
+   * This method can only be called once for each identifier.
+   */
+  template<typename T> T extract(StringRef identifier)
   {
-    values_.add_new(name, value);
+#ifdef DEBUG
+    this->check_extract(identifier, &CPPType::get<T>());
+#endif
+    return values_.extract<T>(identifier);
   }
 
-  /* Add a value to the container. The caller remains responsible for destructing the value. */
-  void move_in(StringRef name, GMutablePointer value)
+ private:
+  void check_extract(StringRef identifier, const CPPType *requested_type = nullptr);
+};
+
+class GeoNodeOutputs {
+ private:
+  const bNode *node_;
+  GValueMap<StringRef> &values_;
+
+ public:
+  GeoNodeOutputs(const bNode &node, GValueMap<StringRef> &values) : node_(&node), values_(values)
   {
-    const CPPType &type = *value.type();
-    void *buffer = allocator_.allocate(type.size(), type.alignment());
-    type.move_to_uninitialized(value.get(), buffer);
-    values_.add_new(name, GMutablePointer{type, buffer});
   }
 
-  /* Add a value to the container. */
-  template<typename T> void move_in(StringRef name, T &&value)
+  /**
+   * Move-construct a new value based on the given value and store it for the given socket
+   * identifier.
+   */
+  void set_by_move(StringRef identifier, GMutablePointer value)
   {
-    this->move_in(name, GMutablePointer{&value});
+#ifdef DEBUG
+    BLI_assert(value.type() != nullptr);
+    BLI_assert(value.get() != nullptr);
+    this->check_set(identifier, *value.type());
+#endif
+    values_.add_new_by_move(identifier, value);
   }
 
-  /* Remove the value for the given name from the container and remove it. The caller is
-   * responsible for freeing it. */
-  GMutablePointer extract(StringRef name)
+  /**
+   * Store the output value for the given socket identifier.
+   */
+  template<typename T> void set(StringRef identifier, T &&value)
   {
-    return values_.pop(name);
+#ifdef DEBUG
+    this->check_set(identifier, CPPType::get<std::decay_t<T>>());
+#endif
+    values_.add_new(identifier, std::forward<T>(value));
   }
 
-  /* Remove the value for the given name from the container and remove it. */
-  template<typename T> T extract(StringRef name)
-  {
-    GMutablePointer value = values_.pop(name);
-    const CPPType &type = *value.type();
-    BLI_assert(type.is<T>());
-    T return_value;
-    type.relocate_to_initialized(value.get(), &return_value);
-    return return_value;
-  }
+ private:
+  void check_set(StringRef identifier, const CPPType &value_type);
 };
 
 }  // namespace blender::nodes

@@ -16,13 +16,14 @@
 
 #pragma once
 
+struct Object;
 struct NodesModifierData;
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-void MOD_nodes_update_interface(struct NodesModifierData *nmd);
+void MOD_nodes_update_interface(struct Object *object, struct NodesModifierData *nmd);
 
 #ifdef __cplusplus
 }

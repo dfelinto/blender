@@ -212,30 +212,33 @@ class GeometryNodesEvaluator {
   void compute_output_and_forward(const DOutputSocket &socket_to_compute)
   {
     const DNode &node = socket_to_compute.node();
+    const bNode &bnode = *node.bnode();
 
     /* Prepare inputs required to execute the node. */
-    GValueByName node_inputs{allocator_};
+    GValueMap<StringRef> node_inputs_map{allocator_};
     for (const DInputSocket *input_socket : node.inputs()) {
       if (input_socket->is_available()) {
         GMutablePointer value = this->get_input_value(*input_socket);
-        node_inputs.transfer_ownership_in(input_socket->identifier(), value);
+        node_inputs_map.add_new_direct(input_socket->identifier(), value);
       }
     }
 
     /* Execute the node. */
-    GValueByName node_outputs{allocator_};
+    GValueMap<StringRef> node_outputs_map{allocator_};
+    GeoNodeInputs node_inputs{bnode, node_inputs_map};
+    GeoNodeOutputs node_outputs{bnode, node_outputs_map};
     this->execute_node(node, node_inputs, node_outputs);
 
     /* Forward computed outputs to linked input sockets. */
     for (const DOutputSocket *output_socket : node.outputs()) {
       if (output_socket->is_available()) {
-        GMutablePointer value = node_outputs.extract(output_socket->identifier());
+        GMutablePointer value = node_outputs_map.extract(output_socket->identifier());
         this->forward_to_inputs(*output_socket, value);
       }
     }
   }
 
-  void execute_node(const DNode &node, GValueByName &node_inputs, GValueByName &node_outputs)
+  void execute_node(const DNode &node, GeoNodeInputs node_inputs, GeoNodeOutputs node_outputs)
   {
     bNode *bnode = node.bnode();
     if (bnode->typeinfo->geometry_node_execute != nullptr) {
@@ -270,7 +273,7 @@ class GeometryNodesEvaluator {
     }
     for (const int i : node.outputs().index_range()) {
       GMutablePointer value = output_data[i];
-      node_outputs.move_in(node.output(i).identifier(), value);
+      node_outputs.set_by_move(node.output(i).identifier(), value);
       value.destruct();
     }
   }
@@ -400,7 +403,7 @@ static const SocketPropertyType *get_socket_property_type(const bNodeSocket &bso
   }
 }
 
-void MOD_nodes_update_interface(NodesModifierData *nmd)
+void MOD_nodes_update_interface(Object *object, NodesModifierData *nmd)
 {
   if (nmd->node_group == nullptr) {
     return;
@@ -428,6 +431,8 @@ void MOD_nodes_update_interface(NodesModifierData *nmd)
       IDP_AddToGroup(nmd->settings.properties, property);
     }
   }
+
+  DEG_id_tag_update(&object->id, ID_RECALC_GEOMETRY);
 }
 
 static void initialize_group_input(NodesModifierData &nmd,

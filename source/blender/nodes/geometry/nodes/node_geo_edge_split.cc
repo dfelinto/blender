@@ -46,7 +46,7 @@ static bNodeSocketTemplate geo_node_edge_split_out[] = {
 };
 
 namespace blender::nodes {
-static void geo_edge_split_exec(bNode *UNUSED(node), GValueByName &inputs, GValueByName &outputs)
+static void geo_edge_split_exec(bNode *UNUSED(node), GeoNodeInputs inputs, GeoNodeOutputs outputs)
 {
   GeometryPtr geometry_in = inputs.extract<GeometryPtr>("Geometry");
 
@@ -68,7 +68,7 @@ static void geo_edge_split_exec(bNode *UNUSED(node), GValueByName &inputs, GValu
       geometry_out->mesh_set_and_transfer_ownership(mesh_out);
     }
   }
-  outputs.move_in("Geometry", std::move(geometry_out));
+  outputs.set("Geometry", std::move(geometry_out));
 }
 }  // namespace blender::nodes
 

@@ -112,7 +112,8 @@ namespace blender {
 namespace nodes {
 class SocketMFNetworkBuilder;
 class NodeMFNetworkBuilder;
-class GValueByName;
+class GeoNodeInputs;
+class GeoNodeOutputs;
 }  // namespace nodes
 namespace fn {
 class CPPType;
@@ -122,8 +123,8 @@ class MFDataType;
 
 using NodeExpandInMFNetworkFunction = void (*)(blender::nodes::NodeMFNetworkBuilder &builder);
 using NodeGeometryExecFunction = void (*)(struct bNode *node,
-                                          blender::nodes::GValueByName &inputs,
-                                          blender::nodes::GValueByName &outputs);
+                                          blender::nodes::GeoNodeInputs inputs,
+                                          blender::nodes::GeoNodeOutputs outputs);
 using SocketGetCPPTypeFunction = const blender::fn::CPPType *(*)();
 using SocketGetCPPValueFunction = void (*)(const struct bNodeSocket &socket, void *r_value);
 using SocketExpandInMFNetworkFunction = void (*)(blender::nodes::SocketMFNetworkBuilder &builder);

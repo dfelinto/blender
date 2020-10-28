@@ -3989,7 +3989,7 @@ void ntreeUpdateAllUsers(Main *main, bNodeTree *ngroup)
         if (md->type == eModifierType_Nodes) {
           NodesModifierData *nmd = (NodesModifierData *)md;
           if (nmd->node_group == ngroup) {
-            MOD_nodes_update_interface(nmd);
+            MOD_nodes_update_interface(object, nmd);
           }
         }
       }

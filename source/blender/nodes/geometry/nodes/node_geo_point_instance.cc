@@ -31,13 +31,13 @@ static bNodeSocketTemplate geo_node_point_instance_out[] = {
 
 namespace blender::nodes {
 static void geo_point_instance_exec(bNode *UNUSED(node),
-                                    GValueByName &inputs,
-                                    GValueByName &outputs)
+                                    GeoNodeInputs inputs,
+                                    GeoNodeOutputs outputs)
 {
   GeometryPtr geometry = inputs.extract<GeometryPtr>("Geometry");
 
   if (!geometry.has_value() || !geometry->pointcloud_available()) {
-    outputs.move_in("Geometry", std::move(geometry));
+    outputs.set("Geometry", std::move(geometry));
     return;
   }
 
@@ -45,7 +45,7 @@ static void geo_point_instance_exec(bNode *UNUSED(node),
   const PointCloud *pointcloud = geometry->pointcloud_get_for_read();
 
   if (pointcloud == NULL) {
-    outputs.move_in("Geometry", std::move(geometry));
+    outputs.set("Geometry", std::move(geometry));
     return;
   }
 
@@ -60,7 +60,7 @@ static void geo_point_instance_exec(bNode *UNUSED(node),
 
   geometry->mesh_set_and_transfer_ownership(mesh_out);
 
-  outputs.move_in("Geometry", std::move(geometry));
+  outputs.set("Geometry", std::move(geometry));
 }
 }  // namespace blender::nodes
 
