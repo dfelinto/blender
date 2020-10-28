@@ -1932,6 +1932,7 @@ void ED_node_link_insert(Main *bmain, ScrArea *area)
 
       ntreeUpdateTree(bmain, snode->edittree); /* needed for pointers */
       snode_update(snode, select);
+      ED_node_tag_update_id((ID *)snode->edittree);
       ED_node_tag_update_id(snode->id);
     }
   }
