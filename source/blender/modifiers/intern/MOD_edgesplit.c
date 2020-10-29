@@ -54,9 +54,9 @@
 #include "MOD_ui_common.h"
 
 /* For edge split modifier node. */
-Mesh *doEdgeSplit(Mesh *mesh, EdgeSplitModifierData *emd);
+Mesh *doEdgeSplit(const Mesh *mesh, EdgeSplitModifierData *emd);
 
-Mesh *doEdgeSplit(Mesh *mesh, EdgeSplitModifierData *emd)
+Mesh *doEdgeSplit(const Mesh *mesh, EdgeSplitModifierData *emd)
 {
   Mesh *result;
   BMesh *bm;

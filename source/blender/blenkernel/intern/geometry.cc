@@ -23,25 +23,57 @@
 
 namespace blender::bke {
 
-/* Make a copy of the geometry. */
-Geometry::Geometry(const Geometry &other)
+/* -------------------------------------------------------------------- */
+/** \name Geometry Component
+ * \{ */
+
+GeometryComponent ::~GeometryComponent()
 {
-  if (other.mesh_ != nullptr) {
-    mesh_ = BKE_mesh_copy_for_eval(other.mesh_, false);
-    /* Own the new mesh, regardless of whether the original mesh was owned. */
-    mesh_owned_ = true;
+}
+
+GeometryComponent *GeometryComponent::create(GeometryComponentType component_type)
+{
+  switch (component_type) {
+    case GeometryComponentType::Mesh:
+      return new MeshComponent();
+    case GeometryComponentType::PointCloud:
+      return new PointCloudComponent();
   }
-  if (other.pointcloud_ != nullptr) {
-    pointcloud_ = BKE_pointcloud_copy_for_eval(other.pointcloud_, false);
-    /* Own the new pointcloud, regardless of whether the original mesh was owned. */
-    pointcloud_owned_ = true;
+  BLI_assert(false);
+  return nullptr;
+}
+
+void GeometryComponent::user_add()
+{
+  users_.fetch_add(1);
+}
+
+void GeometryComponent::user_remove()
+{
+  const int new_users = users_.fetch_sub(1) - 1;
+  if (new_users == 0) {
+    delete this;
   }
 }
 
-Geometry::~Geometry()
+bool GeometryComponent::is_mutable() const
 {
-  this->mesh_reset();
-  this->pointcloud_reset();
+  /* If the item is shared, it is read-only. */
+  /* The user count can be 0, when this is called from the destructor. */
+  return users_ <= 1;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Geometry
+ * \{ */
+
+/* Makes a copy of the geometry. The individual components are shared with the original geometry.
+ * Therefore, this is a relatively cheap operation.
+ */
+Geometry::Geometry(const Geometry &other) : components_(other.components_)
+{
 }
 
 void Geometry::user_add()
@@ -64,126 +96,108 @@ bool Geometry::is_mutable() const
   return users_ <= 1;
 }
 
-/**
- * Returns true when this geometry has a mesh component.
+/* This method can only be used when the geometry is mutable. It returns a mutable geometry
+ * component of the given type.
  */
-bool Geometry::mesh_available() const
+GeometryComponent &Geometry::get_component_for_write(GeometryComponentType component_type)
 {
-  return mesh_ != nullptr;
-}
-bool Geometry::pointcloud_available() const
-{
-  return pointcloud_ != nullptr;
+  BLI_assert(this->is_mutable());
+  return components_.add_or_modify(
+      component_type,
+      [&](GeometryComponentPtr *value_ptr) -> GeometryComponent & {
+        /* If the component did not exist before, create a new one. */
+        new (value_ptr) GeometryComponentPtr(GeometryComponent::create(component_type));
+        return **value_ptr;
+      },
+      [&](GeometryComponentPtr *value_ptr) -> GeometryComponent & {
+        GeometryComponentPtr &value = *value_ptr;
+        if (value->is_mutable()) {
+          /* If the referenced component is already mutable, return it directly. */
+          return *value;
+        }
+        /* If the referenced component is shared, make a copy. The copy is not shared and is
+         * therefore mutable. */
+        GeometryComponent *copied_component = value->copy();
+        value = GeometryComponentPtr{copied_component};
+        return *copied_component;
+      });
 }
 
-/**
- * Replace the mesh in the geometry. The caller remains the owner of the given mesh and is
- * responsible for freeing it eventually.
- */
-void Geometry::mesh_set_and_keep_ownership(Mesh *mesh)
+/* Get the component of the given type. Might return null if the component does not exist yet. */
+const GeometryComponent *Geometry::get_component_for_read(
+    GeometryComponentType component_type) const
 {
-  BLI_assert(this->is_mutable());
-  this->mesh_reset();
-  mesh_ = mesh;
-  mesh_owned_ = false;
-}
-void Geometry::pointcloud_set_and_keep_ownership(PointCloud *pointcloud)
-{
-  BLI_assert(this->is_mutable());
-  this->pointcloud_reset();
-  pointcloud_ = pointcloud;
-  pointcloud_owned_ = false;
-}
-
-/**
- * Replace the mesh in the geometry. The geometry becomes responsible for freeing the mesh.
- */
-void Geometry::mesh_set_and_transfer_ownership(Mesh *mesh)
-{
-  BLI_assert(this->is_mutable());
-  this->mesh_reset();
-  mesh_ = mesh;
-  mesh_owned_ = true;
-}
-void Geometry::pointcloud_set_and_transfer_ownership(PointCloud *pointcloud)
-{
-  BLI_assert(this->is_mutable());
-  this->pointcloud_reset();
-  pointcloud_ = pointcloud;
-  pointcloud_owned_ = true;
-}
-
-/**
- * Clear any mesh data the geometry might have.
- */
-void Geometry::mesh_reset()
-{
-  BLI_assert(this->is_mutable());
-  if (mesh_ != nullptr) {
-    if (mesh_owned_) {
-      BKE_id_free(nullptr, mesh_);
-    }
-    mesh_ = nullptr;
+  const GeometryComponentPtr *component = components_.lookup_ptr(component_type);
+  if (component != nullptr) {
+    return component->get();
   }
-}
-void Geometry::pointcloud_reset()
-{
-  BLI_assert(this->is_mutable());
-  if (pointcloud_ != nullptr) {
-    if (pointcloud_owned_) {
-      BKE_id_free(nullptr, pointcloud_);
-    }
-    pointcloud_ = nullptr;
-  }
+  return nullptr;
 }
 
-/**
- * Get the mesh from the geometry. This mesh should only be read and not modified. This can be used
- * on shared geometries.
- * Might return null.
- */
-Mesh *Geometry::mesh_get_for_read()
+/* Returns a read-only mesh or null. */
+const Mesh *Geometry::get_mesh_for_read() const
 {
-  return mesh_;
-}
-PointCloud *Geometry::pointcloud_get_for_read()
-{
-  return pointcloud_;
+  const MeshComponent *component = this->get_component_for_read<MeshComponent>();
+  return (component == nullptr) ? nullptr : component->get_for_read();
 }
 
-/**
- * Get the mesh from the geometry. The caller is allowed to modify the mesh. This method can only
- * be used on mutable geometries.
- * Might return null.
- */
-Mesh *Geometry::mesh_get_for_write()
+/* Returns true when the geometry has a mesh component that has a mesh. */
+bool Geometry::has_mesh() const
 {
-  BLI_assert(this->is_mutable());
-  return mesh_;
-}
-PointCloud *Geometry::pointcloud_get_for_write()
-{
-  BLI_assert(this->is_mutable());
-  return pointcloud_;
+  const MeshComponent *component = this->get_component_for_read<MeshComponent>();
+  return component != nullptr && component->has_mesh();
 }
 
-/**
- * Return the mesh in the geometry and remove it. This only works on mutable geometries.
- * Might return null;
- */
-Mesh *Geometry::mesh_release()
+/* Returns a read-only point cloud of null. */
+const PointCloud *Geometry::get_pointcloud_for_read() const
 {
-  BLI_assert(this->is_mutable());
-  Mesh *mesh = mesh_;
-  mesh_ = nullptr;
-  return mesh;
+  const PointCloudComponent *component = this->get_component_for_read<PointCloudComponent>();
+  return (component == nullptr) ? nullptr : component->get_for_read();
 }
-PointCloud *Geometry::pointcloud_release()
+
+/* Returns true when the geometry has a point cloud component that has a point cloud. */
+bool Geometry::has_pointcloud() const
 {
-  BLI_assert(this->is_mutable());
-  PointCloud *pointcloud = pointcloud_;
-  pointcloud_ = nullptr;
-  return pointcloud;
+  const PointCloudComponent *component = this->get_component_for_read<PointCloudComponent>();
+  return component != nullptr && component->has_pointcloud();
+}
+
+/* Create a new geometry that only contains the given mesh. Ownership of the mesh is transferred to
+ * the new geometry. */
+GeometryPtr Geometry::create_with_mesh(Mesh *mesh, bool transfer_ownership)
+{
+  Geometry *geometry = new Geometry();
+  MeshComponent &component = geometry->get_component_for_write<MeshComponent>();
+  component.replace(mesh, transfer_ownership);
+  return geometry;
+}
+
+/* Clear the existing mesh and replace it with the given one. */
+void Geometry::replace_mesh(Mesh *mesh, bool transfer_ownership)
+{
+  MeshComponent &component = this->get_component_for_write<MeshComponent>();
+  component.replace(mesh, transfer_ownership);
+}
+
+/* Clear the existing point cloud and replace with the given one. */
+void Geometry::replace_pointcloud(PointCloud *pointcloud, bool transfer_ownership)
+{
+  PointCloudComponent &pointcloud_component = this->get_component_for_write<PointCloudComponent>();
+  pointcloud_component.replace(pointcloud, transfer_ownership);
+}
+
+/* Returns a mutable mesh or null. No ownership is transferred. */
+Mesh *Geometry::get_mesh_for_write()
+{
+  MeshComponent &component = this->get_component_for_write<MeshComponent>();
+  return component.get_for_write();
+}
+
+/* Returns a mutable point cloud or null. No ownership is transferred. */
+PointCloud *Geometry::get_pointcloud_for_write()
+{
+  PointCloudComponent &component = this->get_component_for_write<PointCloudComponent>();
+  return component.get_for_write();
 }
 
 /**
@@ -207,5 +221,151 @@ void make_geometry_mutable(GeometryPtr &geometry)
     geometry = GeometryPtr{new_geometry};
   }
 }
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Mesh Component
+ * \{ */
+
+MeshComponent::~MeshComponent()
+{
+  this->clear();
+}
+
+GeometryComponent *MeshComponent::copy() const
+{
+  MeshComponent *new_component = new MeshComponent();
+  if (mesh_ != nullptr) {
+    new_component->mesh_ = BKE_mesh_copy_for_eval(mesh_, true);
+    new_component->owned_ = true;
+  }
+  return new_component;
+}
+
+void MeshComponent::clear()
+{
+  BLI_assert(this->is_mutable());
+  if (mesh_ != nullptr) {
+    if (owned_) {
+      BKE_id_free(nullptr, mesh_);
+    }
+    mesh_ = nullptr;
+  }
+}
+
+bool MeshComponent::has_mesh() const
+{
+  return mesh_ != nullptr;
+}
+
+/* Clear the component and replace it with the new mesh. */
+void MeshComponent::replace(Mesh *mesh, bool transfer_ownership)
+{
+  BLI_assert(this->is_mutable());
+  this->clear();
+  mesh_ = mesh;
+  owned_ = transfer_ownership;
+}
+
+/* Return the mesh and clear the component. The caller takes over responsibility for freeing the
+ * mesh (if the component was responsible before). */
+Mesh *MeshComponent::release()
+{
+  BLI_assert(this->is_mutable());
+  Mesh *mesh = mesh_;
+  mesh_ = nullptr;
+  return mesh;
+}
+
+/* Get the mesh from this component. This method can be used by multiple threads at the same
+ * time. Therefore, the returned mesh should not be modified. No ownership is transferred. */
+const Mesh *MeshComponent::get_for_read() const
+{
+  return mesh_;
+}
+
+/* Get the mesh from this component. This method can only be used when the component is mutable,
+ * i.e. it is not shared. The returned mesh can be modified. No ownership is transferred. */
+Mesh *MeshComponent::get_for_write()
+{
+  BLI_assert(this->is_mutable());
+  return mesh_;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Pointcloud Component
+ * \{ */
+
+PointCloudComponent::~PointCloudComponent()
+{
+  this->clear();
+}
+
+GeometryComponent *PointCloudComponent::copy() const
+{
+  PointCloudComponent *new_component = new PointCloudComponent();
+  if (pointcloud_ != nullptr) {
+    new_component->pointcloud_ = BKE_pointcloud_copy_for_eval(pointcloud_, true);
+    new_component->owned_ = true;
+  }
+  return new_component;
+}
+
+void PointCloudComponent::clear()
+{
+  BLI_assert(this->is_mutable());
+  if (pointcloud_ != nullptr) {
+    if (owned_) {
+      BKE_id_free(nullptr, pointcloud_);
+    }
+    pointcloud_ = nullptr;
+  }
+}
+
+bool PointCloudComponent::has_pointcloud() const
+{
+  return pointcloud_ != nullptr;
+}
+
+/* Clear the component and replace it with the new point cloud. */
+void PointCloudComponent::replace(PointCloud *pointcloud, bool transfer_ownership)
+{
+  BLI_assert(this->is_mutable());
+  this->clear();
+  pointcloud_ = pointcloud;
+  owned_ = transfer_ownership;
+}
+
+/* Return the point cloud and clear the component. The caller takes over responsibility for freeing
+ * the point cloud (if the component was responsible before). */
+PointCloud *PointCloudComponent::release()
+{
+  BLI_assert(this->is_mutable());
+  PointCloud *pointcloud = pointcloud_;
+  pointcloud_ = nullptr;
+  return pointcloud;
+}
+
+/* Get the point cloud from this component. This method can be used by multiple threads at the same
+ * time. Therefore, the returned point cloud should not be modified. No ownership is transferred.
+ */
+const PointCloud *PointCloudComponent::get_for_read() const
+{
+  return pointcloud_;
+}
+
+/* Get the point cloud from this component. This method can only be used when the component is
+ * mutable, i.e. it is not shared. The returned point cloud can be modified. No ownership is
+ * transferred. */
+PointCloud *PointCloudComponent::get_for_write()
+{
+  BLI_assert(this->is_mutable());
+  return pointcloud_;
+}
+
+/** \} */
 
 }  // namespace blender::bke

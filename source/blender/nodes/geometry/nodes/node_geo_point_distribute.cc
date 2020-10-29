@@ -58,11 +58,12 @@ static void mesh_loop_tri_corner_coords(
 
 using blender::float3;
 
-static PointCloud *scatter_pointcloud_from_mesh(Mesh *mesh,
+static PointCloud *scatter_pointcloud_from_mesh(const Mesh *mesh,
                                                 const float density,
                                                 const float UNUSED(minimum_radius))
 {
-  BKE_mesh_runtime_looptri_ensure(mesh);
+  /* This only updates a cache and can be considered to be logically const. */
+  BKE_mesh_runtime_looptri_ensure(const_cast<Mesh *>(mesh));
   const int looptris_len = mesh->runtime.looptris.len;
   blender::Array<float> weights(looptris_len);
 
@@ -127,7 +128,7 @@ static void geo_point_distribute_exec(bNode *UNUSED(node),
 {
   GeometryPtr geometry = inputs.extract<GeometryPtr>("Geometry");
 
-  if (!geometry.has_value() || !geometry->mesh_available()) {
+  if (!geometry.has_value() || !geometry->has_mesh()) {
     outputs.set("Geometry", std::move(geometry));
     return;
   }
@@ -140,17 +141,12 @@ static void geo_point_distribute_exec(bNode *UNUSED(node),
     return;
   }
 
-  /* For now, replace any existing pointcloud in the geometry. */
-  bke::make_geometry_mutable(geometry);
-  geometry->pointcloud_reset();
-
-  /* Only need "write" to calculate the runtime "looptris" data. */
-  Mesh *mesh_in = geometry->mesh_get_for_write();
-
+  const Mesh *mesh_in = geometry->get_mesh_for_read();
   PointCloud *pointcloud_out = scatter_pointcloud_from_mesh(mesh_in, density, minimum_radius);
 
-  /* For now don't output the original mesh. In the future we could output this too. */
-  geometry->pointcloud_set_and_transfer_ownership(pointcloud_out);
+  /* For now, replace any existing pointcloud in the geometry. */
+  make_geometry_mutable(geometry);
+  geometry->replace_pointcloud(pointcloud_out);
 
   outputs.set("Geometry", std::move(geometry));
 }

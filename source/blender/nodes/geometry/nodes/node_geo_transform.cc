@@ -99,15 +99,15 @@ static void geo_transform_exec(bNode *UNUSED(node), GeoNodeInputs inputs, GeoNod
   const float3 rotation = inputs.extract<float3>("Rotation");
   const float3 scale = inputs.extract<float3>("Scale");
 
-  bke::make_geometry_mutable(geometry);
+  make_geometry_mutable(geometry);
 
-  if (geometry->mesh_available()) {
-    Mesh *mesh = geometry->mesh_get_for_write();
+  if (geometry->has_mesh()) {
+    Mesh *mesh = geometry->get_mesh_for_write();
     transform_mesh(mesh, translation, rotation, scale);
   }
 
-  if (geometry->pointcloud_available()) {
-    PointCloud *pointcloud = geometry->pointcloud_get_for_write();
+  if (geometry->has_pointcloud()) {
+    PointCloud *pointcloud = geometry->get_pointcloud_for_write();
     transform_pointcloud(pointcloud, translation, rotation, scale);
   }
 

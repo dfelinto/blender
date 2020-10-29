@@ -26,6 +26,9 @@ namespace blender::nodes {
 
 using bke::Geometry;
 using bke::GeometryPtr;
+using bke::make_geometry_mutable;
+using bke::MeshComponent;
+using bke::PointCloudComponent;
 using fn::CPPType;
 using fn::GMutablePointer;
 using fn::GValueMap;

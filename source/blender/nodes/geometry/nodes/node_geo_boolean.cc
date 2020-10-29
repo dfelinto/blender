@@ -47,7 +47,7 @@ static int bm_face_isect_pair(BMFace *f, void *UNUSED(user_data))
   return BM_elem_flag_test(f, BM_ELEM_DRAW) ? 1 : 0;
 }
 
-static Mesh *mesh_boolean_calc(Mesh *mesh_a, Mesh *mesh_b, int boolean_mode)
+static Mesh *mesh_boolean_calc(const Mesh *mesh_a, const Mesh *mesh_b, int boolean_mode)
 {
   const BMAllocTemplate allocsize = BMALLOC_TEMPLATE_FROM_ME(mesh_a, mesh_b);
 
@@ -111,8 +111,8 @@ static void geo_boolean_exec(bNode *node, GeoNodeInputs inputs, GeoNodeOutputs o
     return;
   }
 
-  Mesh *mesh_in_a = geometry_in_a->mesh_get_for_read();
-  Mesh *mesh_in_b = geometry_in_b->mesh_get_for_read();
+  const Mesh *mesh_in_a = geometry_in_a->get_mesh_for_read();
+  const Mesh *mesh_in_b = geometry_in_b->get_mesh_for_read();
   if (mesh_in_a == nullptr || mesh_in_b == nullptr) {
     outputs.set("Geometry", std::move(geometry_out));
     return;
@@ -125,11 +125,8 @@ static void geo_boolean_exec(bNode *node, GeoNodeInputs inputs, GeoNodeOutputs o
     return;
   }
 
-  geometry_out = GeometryPtr{new Geometry()};
-
   Mesh *mesh_out = mesh_boolean_calc(mesh_in_a, mesh_in_b, operation);
-
-  geometry_out->mesh_set_and_transfer_ownership(mesh_out);
+  geometry_out = Geometry::create_with_mesh(mesh_out);
 
   outputs.set("Geometry", std::move(geometry_out));
 }

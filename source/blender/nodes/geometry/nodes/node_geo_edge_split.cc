@@ -22,7 +22,7 @@
 #include "node_geometry_util.hh"
 
 extern "C" {
-Mesh *doEdgeSplit(Mesh *mesh, EdgeSplitModifierData *emd);
+Mesh *doEdgeSplit(const Mesh *mesh, EdgeSplitModifierData *emd);
 }
 
 static bNodeSocketTemplate geo_node_edge_split_in[] = {
@@ -48,27 +48,25 @@ static bNodeSocketTemplate geo_node_edge_split_out[] = {
 namespace blender::nodes {
 static void geo_edge_split_exec(bNode *UNUSED(node), GeoNodeInputs inputs, GeoNodeOutputs outputs)
 {
-  GeometryPtr geometry_in = inputs.extract<GeometryPtr>("Geometry");
+  GeometryPtr geometry = inputs.extract<GeometryPtr>("Geometry");
 
-  GeometryPtr geometry_out;
-  if (geometry_in.has_value()) {
-    Mesh *mesh_in = geometry_in->mesh_get_for_read();
-    if (mesh_in != nullptr) {
-      const float split_angle = inputs.extract<float>("Angle");
-      const bool use_sharp_flag = inputs.extract<bool>("Sharp Edges");
+  const Mesh *mesh_in = geometry->get_mesh_for_read();
+  if (mesh_in != nullptr) {
+    const float split_angle = inputs.extract<float>("Angle");
+    const bool use_sharp_flag = inputs.extract<bool>("Sharp Edges");
 
-      /* Use modifier struct to pass arguments to the modifier code. */
-      EdgeSplitModifierData emd = {.split_angle = split_angle, .flags = MOD_EDGESPLIT_FROMANGLE};
-      if (use_sharp_flag) {
-        emd.flags |= MOD_EDGESPLIT_FROMFLAG;
-      }
-
-      Mesh *mesh_out = doEdgeSplit(mesh_in, &emd);
-      geometry_out = GeometryPtr{new Geometry()};
-      geometry_out->mesh_set_and_transfer_ownership(mesh_out);
+    /* Use modifier struct to pass arguments to the modifier code. */
+    EdgeSplitModifierData emd = {.split_angle = split_angle, .flags = MOD_EDGESPLIT_FROMANGLE};
+    if (use_sharp_flag) {
+      emd.flags |= MOD_EDGESPLIT_FROMFLAG;
     }
+
+    Mesh *mesh_out = doEdgeSplit(mesh_in, &emd);
+    make_geometry_mutable(geometry);
+    geometry->replace_mesh(mesh_out);
   }
-  outputs.set("Geometry", std::move(geometry_out));
+
+  outputs.set("Geometry", std::move(geometry));
 }
 }  // namespace blender::nodes
 

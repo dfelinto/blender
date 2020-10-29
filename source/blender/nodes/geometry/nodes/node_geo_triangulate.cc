@@ -38,18 +38,24 @@ static bNodeSocketTemplate geo_node_triangulate_out[] = {
 namespace blender::nodes {
 static void geo_triangulate_exec(bNode *UNUSED(node), GeoNodeInputs inputs, GeoNodeOutputs outputs)
 {
-  GeometryPtr geometry_in = inputs.extract<GeometryPtr>("Geometry");
+  GeometryPtr geometry = inputs.extract<GeometryPtr>("Geometry");
   const int min_vertices = std::max(inputs.extract<int>("Minimum Vertices"), 4);
-  GeometryPtr geometry_out;
-  if (geometry_in.has_value()) {
-    Mesh *mesh_in = geometry_in->mesh_get_for_read();
-    if (mesh_in != nullptr) {
-      Mesh *mesh_out = triangulate_mesh(mesh_in, 3, 0, min_vertices, 0);
-      geometry_out = GeometryPtr{new Geometry()};
-      geometry_out->mesh_set_and_transfer_ownership(mesh_out);
-    }
+
+  if (!geometry.has_value()) {
+    outputs.set("Geometry", geometry);
+    return;
   }
-  outputs.set("Geometry", std::move(geometry_out));
+
+  make_geometry_mutable(geometry);
+
+  /* #triangulate_mesh might modify the input mesh currently. */
+  Mesh *mesh_in = geometry->get_mesh_for_write();
+  if (mesh_in != nullptr) {
+    Mesh *mesh_out = triangulate_mesh(mesh_in, 3, 0, min_vertices, 0);
+    geometry->replace_mesh(mesh_out);
+  }
+
+  outputs.set("Geometry", std::move(geometry));
 }
 }  // namespace blender::nodes
 

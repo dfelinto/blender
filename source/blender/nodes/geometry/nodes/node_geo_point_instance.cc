@@ -36,29 +36,26 @@ static void geo_point_instance_exec(bNode *UNUSED(node),
 {
   GeometryPtr geometry = inputs.extract<GeometryPtr>("Geometry");
 
-  if (!geometry.has_value() || !geometry->pointcloud_available()) {
+  if (!geometry.has_value() || !geometry->has_pointcloud()) {
     outputs.set("Geometry", std::move(geometry));
     return;
   }
 
   /* For now make a mesh from the pointcloud instead of instancing another object / geometry. */
-  const PointCloud *pointcloud = geometry->pointcloud_get_for_read();
+  const PointCloud *pointcloud = geometry->get_pointcloud_for_read();
 
   if (pointcloud == NULL) {
     outputs.set("Geometry", std::move(geometry));
     return;
   }
 
-  /* For now, replace any existing mesh in the geometry. */
-  bke::make_geometry_mutable(geometry);
-  geometry->mesh_reset();
+  /* TODO: Carry over attributes from poincloud verts to the instances. */
   Mesh *mesh_out = BKE_mesh_new_nomain(pointcloud->totpoint, 0, 0, 0, 0);
-
   BKE_mesh_from_pointcloud(pointcloud, mesh_out);
 
-  /* TODO: Carry over attributes from poincloud verts to the instances. */
-
-  geometry->mesh_set_and_transfer_ownership(mesh_out);
+  /* For now, replace any existing mesh in the geometry. */
+  make_geometry_mutable(geometry);
+  geometry->replace_mesh(mesh_out);
 
   outputs.set("Geometry", std::move(geometry));
 }

@@ -546,13 +546,12 @@ static Mesh *modifyMesh(ModifierData *md, const ModifierEvalContext *UNUSED(ctx)
     return mesh;
   }
 
-  GeometryPtr input_geometry{new Geometry()};
-  input_geometry->mesh_set_and_keep_ownership(mesh);
+  GeometryPtr input_geometry{Geometry::create_with_mesh(mesh, false)};
 
   GeometryPtr new_geometry = compute_geometry(
       tree, group_inputs, *group_outputs[0], std::move(input_geometry), nmd);
   make_geometry_mutable(new_geometry);
-  Mesh *new_mesh = new_geometry->mesh_release();
+  Mesh *new_mesh = new_geometry->get_component_for_write<MeshComponent>().release();
   if (new_mesh == nullptr) {
     return BKE_mesh_new_nomain(0, 0, 0, 0, 0);
   }
