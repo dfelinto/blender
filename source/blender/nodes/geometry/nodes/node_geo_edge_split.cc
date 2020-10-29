@@ -50,23 +50,27 @@ static void geo_edge_split_exec(bNode *UNUSED(node), GeoNodeInputs inputs, GeoNo
 {
   GeometryPtr geometry = inputs.extract<GeometryPtr>("Geometry");
 
-  const Mesh *mesh_in = geometry->get_mesh_for_read();
-  if (mesh_in != nullptr) {
-    const float split_angle = inputs.extract<float>("Angle");
-    const bool use_sharp_flag = inputs.extract<bool>("Sharp Edges");
-
-    /* Use modifier struct to pass arguments to the modifier code. */
-    EdgeSplitModifierData emd = {0};
-    emd.split_angle = split_angle;
-    emd.flags = MOD_EDGESPLIT_FROMANGLE;
-    if (use_sharp_flag) {
-      emd.flags |= MOD_EDGESPLIT_FROMFLAG;
-    }
-
-    Mesh *mesh_out = doEdgeSplit(mesh_in, &emd);
-    make_geometry_mutable(geometry);
-    geometry->replace_mesh(mesh_out);
+  if (!geometry.has_value() || !geometry->has_mesh()) {
+    outputs.set("Geometry", std::move(geometry));
+    return;
   }
+
+  const float split_angle = inputs.extract<float>("Angle");
+  const bool use_sharp_flag = inputs.extract<bool>("Sharp Edges");
+
+  const Mesh *mesh_in = geometry->get_mesh_for_read();
+
+  /* Use modifier struct to pass arguments to the modifier code. */
+  EdgeSplitModifierData emd = {0};
+  emd.split_angle = split_angle;
+  emd.flags = MOD_EDGESPLIT_FROMANGLE;
+  if (use_sharp_flag) {
+    emd.flags |= MOD_EDGESPLIT_FROMFLAG;
+  }
+
+  Mesh *mesh_out = doEdgeSplit(mesh_in, &emd);
+  make_geometry_mutable(geometry);
+  geometry->replace_mesh(mesh_out);
 
   outputs.set("Geometry", std::move(geometry));
 }
