@@ -66,6 +66,7 @@
 #include "MOD_ui_common.h"
 
 #include "NOD_derived_node_tree.hh"
+#include "NOD_geometry.h"
 #include "NOD_geometry_exec.hh"
 #include "NOD_node_tree_multi_function.hh"
 #include "NOD_type_callbacks.hh"
@@ -433,6 +434,30 @@ void MOD_nodes_update_interface(Object *object, NodesModifierData *nmd)
   }
 
   DEG_id_tag_update(&object->id, ID_RECALC_GEOMETRY);
+}
+
+void MOD_nodes_init(Main *bmain, NodesModifierData *nmd)
+{
+  bNodeTree *ntree = ntreeAddTree(bmain, "Geometry Node Group", ntreeType_Geometry->idname);
+  nmd->node_group = ntree;
+
+  ntreeAddSocketInterface(ntree, SOCK_IN, "NodeSocketGeometry", "Geometry");
+  ntreeAddSocketInterface(ntree, SOCK_OUT, "NodeSocketGeometry", "Geometry");
+
+  bNode *group_input_node = nodeAddStaticNode(NULL, ntree, NODE_GROUP_INPUT);
+  bNode *group_output_node = nodeAddStaticNode(NULL, ntree, NODE_GROUP_OUTPUT);
+
+  group_input_node->locx = -200 - group_input_node->width;
+  group_output_node->locx = 200;
+  group_output_node->flag |= NODE_DO_OUTPUT;
+
+  nodeAddLink(ntree,
+              group_output_node,
+              (bNodeSocket *)group_output_node->inputs.first,
+              group_input_node,
+              (bNodeSocket *)group_input_node->outputs.first);
+
+  ntreeUpdateTree(bmain, ntree);
 }
 
 static void initialize_group_input(NodesModifierData &nmd,
