@@ -237,8 +237,7 @@ GeometryComponent *MeshComponent::copy() const
 {
   MeshComponent *new_component = new MeshComponent();
   if (mesh_ != nullptr) {
-    /* Individual custom data layers might still be shared. */
-    new_component->mesh_ = BKE_mesh_copy_for_eval(mesh_, true);
+    new_component->mesh_ = BKE_mesh_copy_for_eval(mesh_, false);
     new_component->owned_ = true;
   }
   return new_component;
@@ -309,8 +308,7 @@ GeometryComponent *PointCloudComponent::copy() const
 {
   PointCloudComponent *new_component = new PointCloudComponent();
   if (pointcloud_ != nullptr) {
-    /* Individual custom data layers might still be shared. */
-    new_component->pointcloud_ = BKE_pointcloud_copy_for_eval(pointcloud_, true);
+    new_component->pointcloud_ = BKE_pointcloud_copy_for_eval(pointcloud_, false);
     new_component->owned_ = true;
   }
   return new_component;
