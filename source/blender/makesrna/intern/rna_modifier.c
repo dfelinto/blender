@@ -57,7 +57,7 @@
 #include "WM_api.h"
 #include "WM_types.h"
 
-#include "intern/MOD_nodes.h"
+#include "MOD_nodes.h"
 
 const EnumPropertyItem rna_enum_object_modifier_type_items[] = {
     {0, "", 0, N_("Modify"), ""},
