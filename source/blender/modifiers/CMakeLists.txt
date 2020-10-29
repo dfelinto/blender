@@ -116,8 +116,8 @@ set(SRC
   intern/MOD_wireframe.c
 
   MOD_modifiertypes.h
+  MOD_nodes.h
   intern/MOD_meshcache_util.h
-  intern/MOD_nodes.h
   intern/MOD_solidify_util.h
   intern/MOD_ui_common.h
   intern/MOD_util.h
