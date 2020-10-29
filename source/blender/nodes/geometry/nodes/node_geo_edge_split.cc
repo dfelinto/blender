@@ -56,7 +56,9 @@ static void geo_edge_split_exec(bNode *UNUSED(node), GeoNodeInputs inputs, GeoNo
     const bool use_sharp_flag = inputs.extract<bool>("Sharp Edges");
 
     /* Use modifier struct to pass arguments to the modifier code. */
-    EdgeSplitModifierData emd = {.split_angle = split_angle, .flags = MOD_EDGESPLIT_FROMANGLE};
+    EdgeSplitModifierData emd = {0};
+    emd.split_angle = split_angle;
+    emd.flags = MOD_EDGESPLIT_FROMANGLE;
     if (use_sharp_flag) {
       emd.flags |= MOD_EDGESPLIT_FROMFLAG;
     }
