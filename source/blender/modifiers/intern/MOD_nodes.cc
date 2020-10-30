@@ -356,19 +356,16 @@ static IDProperty *socket_add_property(IDProperty *settings_prop_group,
                                        const SocketPropertyType &property_type,
                                        const bNodeSocket &socket)
 {
-  /* Add the property actually storing the data to the modifier's group.
-   * TODO: We will need to add a separate "ui_name" field for ID properties, right now multiple
-   * sockets with the same label aren't handled properly. Either that or we could continue
-   * to use a custom layout function besides uiDefAutoButsRNA to which we can pass the correct
-   * label information. */
-  IDProperty *prop = property_type.create_prop(socket, socket.name);
+  const char *new_prop_name = socket.identifier;
+  /* Add the property actually storing the data to the modifier's group. */
+  IDProperty *prop = property_type.create_prop(socket, new_prop_name);
   IDP_AddToGroup(settings_prop_group, prop);
 
   /* Make the group in the ui container group to hold the property's UI settings. */
   IDProperty *prop_ui_group;
   {
     IDPropertyTemplate idprop = {0};
-    prop_ui_group = IDP_New(IDP_GROUP, &idprop, socket.name);
+    prop_ui_group = IDP_New(IDP_GROUP, &idprop, new_prop_name);
     IDP_AddToGroup(ui_container, prop_ui_group);
   }
 
@@ -624,7 +621,8 @@ static void initialize_group_input(NodesModifierData &nmd,
     socket_cpp_value_get(socket, r_value);
     return;
   }
-  const IDProperty *property = IDP_GetPropertyFromGroup(nmd.settings.properties, socket.name);
+  const IDProperty *property = IDP_GetPropertyFromGroup(nmd.settings.properties,
+                                                        socket.identifier);
   if (property == nullptr) {
     socket_cpp_value_get(socket, r_value);
     return;
@@ -732,6 +730,31 @@ static Mesh *modifyMesh(ModifierData *md, const ModifierEvalContext *UNUSED(ctx)
   return new_mesh;
 }
 
+/* Drawing the properties manually with #uiItemR instead of #uiDefAutoButsRNA allows using
+ * the node socket identifier for the property names, since they are unique, but also having
+ * the correct label displayed in the UI.  */
+static void draw_property_for_socket(uiLayout *layout,
+                                     PointerRNA *settings_ptr,
+                                     const IDProperty *modifier_props,
+                                     const bNodeSocket &socket)
+{
+  const SocketPropertyType *property_type = get_socket_property_type(socket);
+  if (property_type == nullptr) {
+    return;
+  }
+
+  /* The property should be created in #MOD_nodes_update_interface with the correct type. */
+  IDProperty *property = IDP_GetPropertyFromGroup(modifier_props, socket.identifier);
+  BLI_assert(property != nullptr);
+  BLI_assert(property_type->is_correct_type(*property));
+
+  if (property != nullptr && property_type->is_correct_type(*property)) {
+    char rna_path[128];
+    BLI_snprintf(rna_path, ARRAY_SIZE(rna_path), "[\"%s\"]", socket.identifier);
+    uiItemR(layout, settings_ptr, rna_path, 0, socket.name, ICON_NONE);
+  }
+}
+
 static void panel_draw(const bContext *UNUSED(C), Panel *panel)
 {
 #ifdef WITH_GEOMETRY_NODES
@@ -750,8 +773,9 @@ static void panel_draw(const bContext *UNUSED(C), Panel *panel)
     PointerRNA settings_ptr;
     RNA_pointer_create(ptr->owner_id, &RNA_NodesModifierSettings, &nmd->settings, &settings_ptr);
 
-    uiDefAutoButsRNA(
-        layout, &settings_ptr, NULL, NULL, NULL, UI_BUT_LABEL_ALIGN_SPLIT_COLUMN, false);
+    LISTBASE_FOREACH (bNodeSocket *, socket, &nmd->node_group->inputs) {
+      draw_property_for_socket(layout, &settings_ptr, nmd->settings.properties, *socket);
+    }
   }
 
   modifier_panel_end(layout, ptr);
