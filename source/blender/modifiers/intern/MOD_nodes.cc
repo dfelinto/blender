@@ -683,12 +683,51 @@ static GeometryPtr compute_geometry(const DerivedNodeTree &tree,
   return output_geometry;
 }
 
-static Mesh *modifyMesh(ModifierData *md, const ModifierEvalContext *UNUSED(ctx), Mesh *mesh)
+/**
+ * \note This could be done in #initialize_group_input, though that would require adding the
+ * the object as a paramete, so it's likely better to this check as a separate step.
+ */
+static void check_property_socket_sync(const Object *ob, ModifierData *md)
+{
+  NodesModifierData *nmd = reinterpret_cast<NodesModifierData *>(md);
+
+  int i = 0;
+  LISTBASE_FOREACH_INDEX (const bNodeSocket *, socket, &nmd->node_group->inputs, i) {
+    /* The first socket is the special geometry socket for the modifier object. */
+    if (i == 0 && socket->type == SOCK_GEOMETRY) {
+      continue;
+    }
+
+    IDProperty *property = IDP_GetPropertyFromGroup(nmd->settings.properties, socket->identifier);
+    if (property == nullptr) {
+      BKE_modifier_set_error(ob,
+                             md,
+                             "Missing property for input socket \"%s\" (\"%s\") ",
+                             socket->name,
+                             socket->identifier);
+      continue;
+    }
+
+    const SocketPropertyType *property_type = get_socket_property_type(*socket);
+    if (!property_type->is_correct_type(*property)) {
+      BKE_modifier_set_error(ob,
+                             md,
+                             "Property type does not match for input socket \"%s\" (\"%s\") ",
+                             socket->name,
+                             socket->identifier);
+      continue;
+    }
+  }
+}
+
+static Mesh *modifyMesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh *mesh)
 {
   NodesModifierData *nmd = reinterpret_cast<NodesModifierData *>(md);
   if (nmd->node_group == nullptr) {
     return mesh;
   }
+
+  check_property_socket_sync(ctx->object, md);
 
   NodeTreeRefMap tree_refs;
   DerivedNodeTree tree{nmd->node_group, tree_refs};
@@ -745,9 +784,9 @@ static void draw_property_for_socket(uiLayout *layout,
 
   /* The property should be created in #MOD_nodes_update_interface with the correct type. */
   IDProperty *property = IDP_GetPropertyFromGroup(modifier_props, socket.identifier);
-  BLI_assert(property != nullptr);
-  BLI_assert(property_type->is_correct_type(*property));
 
+  /* IDProperties can be removed with python, so there could be a situation where
+   * there isn't a property for a socket or it doesn't have the correct type. */
   if (property != nullptr && property_type->is_correct_type(*property)) {
     char rna_path[128];
     BLI_snprintf(rna_path, ARRAY_SIZE(rna_path), "[\"%s\"]", socket.identifier);
