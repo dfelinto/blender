@@ -269,6 +269,7 @@ DefNode(FunctionNode, FN_NODE_RANDOM_FLOAT, 0,                  "RANDOM_FLOAT", 
 DefNode(GeometryNode, GEO_NODE_TRIANGULATE, 0, "TRIANGULATE", Triangulate, "Triangulate", "")
 DefNode(GeometryNode, GEO_NODE_EDGE_SPLIT, 0, "EDGE_SPLIT", EdgeSplit, "Edge Split", "")
 DefNode(GeometryNode, GEO_NODE_TRANSFORM, 0, "TRANSFORM", Transform, "Transform", "")
+DefNode(GeometryNode, GEO_NODE_SUBDIVISION_SURFACE, 0, "SUBDIVISION_SURFACE", SubdivisionSurface, "Subdivision Surface", "")
 DefNode(GeometryNode, GEO_NODE_BOOLEAN, def_geo_boolean, "BOOLEAN", Boolean, "Boolean", "")
 DefNode(GeometryNode, GEO_NODE_POINT_DISTRIBUTE, 0, "POINT_DISTRIBUTE", PointDistribute, "Point Distribute", "")
 DefNode(GeometryNode, GEO_NODE_POINT_INSTANCE, 0, "POINT_INSTANCE", PointInstance, "Point Instance", "")
