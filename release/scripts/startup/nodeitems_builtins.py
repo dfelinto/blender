@@ -490,9 +490,8 @@ geometry_node_categories = [
         NodeItem("GeometryNodeEdgeSplit"),
         NodeItem("GeometryNodeTransform"),
         NodeItem("GeometryNodeBoolean"),
-        NodeItem("GeometryNodePointDistribute"),
     ]),    
-    GeometryNodeCategory("GEO_POINTCLOUD", "Pointcloud", items=[
+    GeometryNodeCategory("GEO_SCATTERING", "Scattering", items=[
         NodeItem("GeometryNodePointDistribute"),
         NodeItem("GeometryNodePointInstance"),
     ]),
