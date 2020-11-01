@@ -569,7 +569,7 @@ void MOD_nodes_update_interface(Object *object, NodesModifierData *nmd)
         nmd->settings.properties, ui_container_group, *property_type, *socket);
 
     if (old_properties != NULL) {
-      IDProperty *old_prop = IDP_GetPropertyFromGroup(old_properties, socket->name);
+      IDProperty *old_prop = IDP_GetPropertyFromGroup(old_properties, socket->identifier);
       if (old_prop != nullptr && property_type->is_correct_type(*old_prop)) {
         IDP_CopyPropertyContent(new_prop, old_prop);
       }
