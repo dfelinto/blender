@@ -399,22 +399,26 @@ static const SocketPropertyType *get_socket_property_type(const bNodeSocket &bso
       static const SocketPropertyType float_type = {
           [](const bNodeSocket &socket, const char *name) {
             bNodeSocketValueFloat *value = (bNodeSocketValueFloat *)socket.default_value;
-            IDPropertyTemplate idprop = {.f = value->value};
+            IDPropertyTemplate idprop = {0};
+            idprop.f = value->value;
             return IDP_New(IDP_FLOAT, &idprop, name);
           },
           [](const bNodeSocket &socket, const char *name) {
             bNodeSocketValueFloat *value = (bNodeSocketValueFloat *)socket.default_value;
-            IDPropertyTemplate idprop = {.d = value->min};
+            IDPropertyTemplate idprop = {0};
+            idprop.d = value->min;
             return IDP_New(IDP_DOUBLE, &idprop, name);
           },
           [](const bNodeSocket &socket, const char *name) {
             bNodeSocketValueFloat *value = (bNodeSocketValueFloat *)socket.default_value;
-            IDPropertyTemplate idprop = {.d = value->max};
+            IDPropertyTemplate idprop = {0};
+            idprop.d = value->max;
             return IDP_New(IDP_DOUBLE, &idprop, name);
           },
           [](const bNodeSocket &socket, const char *name) {
             bNodeSocketValueFloat *value = (bNodeSocketValueFloat *)socket.default_value;
-            IDPropertyTemplate idprop = {.d = value->value};
+            IDPropertyTemplate idprop = {0};
+            idprop.d = value->value;
             return IDP_New(IDP_DOUBLE, &idprop, name);
           },
           [](const bNodeSocket &socket) {
@@ -431,22 +435,26 @@ static const SocketPropertyType *get_socket_property_type(const bNodeSocket &bso
       static const SocketPropertyType int_type = {
           [](const bNodeSocket &socket, const char *name) {
             bNodeSocketValueInt *value = (bNodeSocketValueInt *)socket.default_value;
-            IDPropertyTemplate idprop = {.i = value->value};
+            IDPropertyTemplate idprop = {0};
+            idprop.i = value->value;
             return IDP_New(IDP_INT, &idprop, name);
           },
           [](const bNodeSocket &socket, const char *name) {
             bNodeSocketValueInt *value = (bNodeSocketValueInt *)socket.default_value;
-            IDPropertyTemplate idprop = {.i = value->min};
+            IDPropertyTemplate idprop = {0};
+            idprop.i = value->min;
             return IDP_New(IDP_INT, &idprop, name);
           },
           [](const bNodeSocket &socket, const char *name) {
             bNodeSocketValueInt *value = (bNodeSocketValueInt *)socket.default_value;
-            IDPropertyTemplate idprop = {.i = value->max};
+            IDPropertyTemplate idprop = {0};
+            idprop.i = value->max;
             return IDP_New(IDP_INT, &idprop, name);
           },
           [](const bNodeSocket &socket, const char *name) {
             bNodeSocketValueInt *value = (bNodeSocketValueInt *)socket.default_value;
-            IDPropertyTemplate idprop = {.i = value->value};
+            IDPropertyTemplate idprop = {0};
+            idprop.i = value->value;
             return IDP_New(IDP_INT, &idprop, name);
           },
           [](const bNodeSocket &socket) {
@@ -470,12 +478,14 @@ static const SocketPropertyType *get_socket_property_type(const bNodeSocket &bso
           },
           [](const bNodeSocket &socket, const char *name) {
             bNodeSocketValueVector *value = (bNodeSocketValueVector *)socket.default_value;
-            IDPropertyTemplate idprop = {.d = value->min};
+            IDPropertyTemplate idprop = {0};
+            idprop.d = value->min;
             return IDP_New(IDP_DOUBLE, &idprop, name);
           },
           [](const bNodeSocket &socket, const char *name) {
             bNodeSocketValueVector *value = (bNodeSocketValueVector *)socket.default_value;
-            IDPropertyTemplate idprop = {.d = value->max};
+            IDPropertyTemplate idprop = {0};
+            idprop.d = value->max;
             return IDP_New(IDP_DOUBLE, &idprop, name);
           },
           [](const bNodeSocket &socket, const char *name) {
@@ -504,20 +514,24 @@ static const SocketPropertyType *get_socket_property_type(const bNodeSocket &bso
       static const SocketPropertyType boolean_type = {
           [](const bNodeSocket &socket, const char *name) {
             bNodeSocketValueBoolean *value = (bNodeSocketValueBoolean *)socket.default_value;
-            IDPropertyTemplate idprop = {.i = value->value != 0};
+            IDPropertyTemplate idprop = {0};
+            idprop.i = value->value != 0;
             return IDP_New(IDP_INT, &idprop, name);
           },
           [](const bNodeSocket &UNUSED(socket), const char *name) {
-            IDPropertyTemplate idprop = {.i = 0};
+            IDPropertyTemplate idprop = {0};
+            idprop.i = 0;
             return IDP_New(IDP_INT, &idprop, name);
           },
           [](const bNodeSocket &UNUSED(socket), const char *name) {
-            IDPropertyTemplate value = {.i = 1};
-            return IDP_New(IDP_INT, &value, name);
+            IDPropertyTemplate idprop = {0};
+            idprop.i = 1;
+            return IDP_New(IDP_INT, &idprop, name);
           },
           [](const bNodeSocket &socket, const char *name) {
             bNodeSocketValueBoolean *value = (bNodeSocketValueBoolean *)socket.default_value;
-            IDPropertyTemplate idprop = {.i = value->value != 0};
+            IDPropertyTemplate idprop = {0};
+            idprop.i = value->value != 0;
             return IDP_New(IDP_INT, &idprop, name);
           },
           nullptr,

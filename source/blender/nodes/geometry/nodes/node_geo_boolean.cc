@@ -53,12 +53,14 @@ static Mesh *mesh_boolean_calc(const Mesh *mesh_a, const Mesh *mesh_b, int boole
 
   BMesh *bm;
   {
-    struct BMeshCreateParams bmesh_create_params = {.use_toolflags = false};
+    struct BMeshCreateParams bmesh_create_params = {0};
+    bmesh_create_params.use_toolflags = false;
     bm = BM_mesh_create(&allocsize, &bmesh_create_params);
   }
 
   {
-    struct BMeshFromMeshParams bmesh_from_mesh_params = {.calc_face_normal = true};
+    struct BMeshFromMeshParams bmesh_from_mesh_params = {0};
+    bmesh_from_mesh_params.calc_face_normal = true;
     BM_mesh_bm_from_me(bm, mesh_a, &bmesh_from_mesh_params);
     BM_mesh_bm_from_me(bm, mesh_b, &bmesh_from_mesh_params);
   }
