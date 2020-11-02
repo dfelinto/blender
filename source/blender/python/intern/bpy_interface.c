@@ -80,6 +80,7 @@
 
 /* Logging types to use anywhere in the Python modules. */
 CLG_LOGREF_DECLARE_GLOBAL(BPY_LOG_CONTEXT, "bpy.context");
+CLG_LOGREF_DECLARE_GLOBAL(BPY_LOG_INTERFACE, "bpy.interface");
 CLG_LOGREF_DECLARE_GLOBAL(BPY_LOG_RNA, "bpy.rna");
 
 /* for internal use, when starting and ending python scripts */
@@ -304,7 +305,6 @@ void BPY_python_start(bContext *C, int argc, const char **argv)
 {
 #ifndef WITH_PYTHON_MODULE
   PyThreadState *py_tstate = NULL;
-  const char *py_path_bundle = BKE_appdir_folder_id(BLENDER_SYSTEM_PYTHON, NULL);
 
   /* Needed for Python's initialization for portable Python installations.
    * We could use #Py_SetPath, but this overrides Python's internal logic
@@ -321,8 +321,21 @@ void BPY_python_start(bContext *C, int argc, const char **argv)
   /* must run before python initializes */
   PyImport_ExtendInittab(bpy_internal_modules);
 
-  /* allow to use our own included python */
-  PyC_SetHomePath(py_path_bundle);
+  /* Allow to use our own included Python. `py_path_bundle` may be NULL. */
+  {
+    const char *py_path_bundle = BKE_appdir_folder_id(BLENDER_SYSTEM_PYTHON, NULL);
+    if (py_path_bundle != NULL) {
+      PyC_SetHomePath(py_path_bundle);
+    }
+    else {
+      /* Common enough to use the system Python on Linux/Unix, warn on other systems. */
+#  if defined(__APPLE__) || defined(_WIN32)
+      fprintf(stderr,
+              "Bundled Python not found and is expected on this platform "
+              "(the 'install' target may have not been built)\n");
+#  endif
+    }
+  }
 
   /* Without this the `sys.stdout` may be set to 'ascii'
    * (it is on my system at least), where printing unicode values will raise
@@ -360,17 +373,19 @@ void BPY_python_start(bContext *C, int argc, const char **argv)
   /* Setting the program name is important so the 'multiprocessing' module
    * can launch new Python instances. */
   {
+    const char *sys_variable = "executable";
     char program_path[FILE_MAX];
     if (BKE_appdir_program_python_search(
             program_path, sizeof(program_path), PY_MAJOR_VERSION, PY_MINOR_VERSION)) {
       PyObject *py_program_path = PyC_UnicodeFromByte(program_path);
-      PySys_SetObject("executable", py_program_path);
+      PySys_SetObject(sys_variable, py_program_path);
       Py_DECREF(py_program_path);
     }
     else {
       fprintf(stderr,
               "Unable to find the python binary, "
               "the multiprocessing module may not be functional!\n");
+      PySys_SetObject(sys_variable, Py_None);
     }
   }
 
