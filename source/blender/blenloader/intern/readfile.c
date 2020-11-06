@@ -2521,7 +2521,9 @@ static void direct_link_ipo(BlendDataReader *reader, Ipo *ipo)
       /* Undo generic endian switching. */
       if (BLO_read_requires_endian_switch(reader)) {
         BLI_endian_switch_int16(&ipo->blocktype);
-        BLI_endian_switch_int16(&icu->driver->blocktype);
+        if (icu->driver != NULL) {
+          BLI_endian_switch_int16(&icu->driver->blocktype);
+        }
       }
     }
   }
@@ -2658,8 +2660,8 @@ static void direct_link_constraints(BlendDataReader *reader, ListBase *lb)
       case CONSTRAINT_TYPE_KINEMATIC: {
         bKinematicConstraint *data = con->data;
 
-        con->lin_error = 0.f;
-        con->rot_error = 0.f;
+        con->lin_error = 0.0f;
+        con->rot_error = 0.0f;
 
         /* version patch for runtime flag, was not cleared in some case */
         data->flag &= ~CONSTRAINT_IK_AUTO;
@@ -4390,7 +4392,7 @@ static void direct_link_scene(BlendDataReader *reader, Scene *sce)
           seq->strip->proxy->anim = NULL;
         }
         else if (seq->flag & SEQ_USE_PROXY) {
-          BKE_sequencer_proxy_set(seq, true);
+          SEQ_proxy_set(seq, true);
         }
 
         /* need to load color balance to it could be converted to modifier */
@@ -5669,15 +5671,6 @@ static void read_libblock_undo_restore_at_old_address(FileData *fd, Main *main, 
 
   const short idcode = GS(id->name);
 
-  /* XXX 3DCursor (witch is UI data and as such should not be affected by undo) is stored in
-   * Scene... So this requires some special handling, previously done in `blo_lib_link_restore()`,
-   * but this cannot work anymore when we overwrite existing memory... */
-  if (idcode == ID_SCE) {
-    Scene *scene_old = (Scene *)id_old;
-    Scene *scene = (Scene *)id;
-    SWAP(View3DCursor, scene_old->cursor, scene->cursor);
-  }
-
   Main *old_bmain = fd->old_mainlist->first;
   ListBase *old_lb = which_libbase(old_bmain, idcode);
   ListBase *new_lb = which_libbase(main, idcode);
@@ -5688,6 +5681,11 @@ static void read_libblock_undo_restore_at_old_address(FileData *fd, Main *main, 
    * currently (they are all pointing to old addresses, and need to go through `lib_link`
    * process). So we can pass NULL for the Main pointer parameter. */
   BKE_lib_id_swap_full(NULL, id, id_old);
+
+  /* Special temporary usage of this pointer, necessary for the `undo_preserve` call after
+   * lib-linking to restore some data that should never be affected by undo, e.g. the 3D cursor of
+   * #Scene. */
+  id_old->orig_id = id;
 
   BLI_addtail(new_lb, id_old);
   BLI_addtail(old_lb, id);
@@ -6120,6 +6118,18 @@ static void lib_link_all(FileData *fd, Main *bmain)
     }
 
     id->tag &= ~LIB_TAG_NEED_LINK;
+
+    /* Some data that should be persistent, like the 3DCursor or the tool settings, are
+     * stored in IDs affected by undo, like Scene. So this requires some specific handling. */
+    if (id_type->blend_read_undo_preserve != NULL && id->orig_id != NULL) {
+      id_type->blend_read_undo_preserve(&reader, id, id->orig_id);
+    }
+  }
+  FOREACH_MAIN_ID_END;
+
+  /* Cleanup `ID.orig_id`, this is now reserved for depsgraph/COW usage only. */
+  FOREACH_MAIN_ID_BEGIN (bmain, id) {
+    id->orig_id = NULL;
   }
   FOREACH_MAIN_ID_END;
 
@@ -7058,6 +7068,31 @@ static bool object_in_any_collection(Main *bmain, Object *ob)
   return false;
 }
 
+/**
+ * Shared operations to perform on the object's base after adding it to the scene.
+ */
+static void object_base_instance_init(
+    Object *ob, bool set_selected, bool set_active, ViewLayer *view_layer, const View3D *v3d)
+{
+  Base *base = BKE_view_layer_base_find(view_layer, ob);
+
+  if (v3d != NULL) {
+    base->local_view_bits |= v3d->local_view_uuid;
+  }
+
+  if (set_selected) {
+    if (base->flag & BASE_SELECTABLE) {
+      base->flag |= BASE_SELECTED;
+    }
+  }
+
+  if (set_active) {
+    view_layer->basact = base;
+  }
+
+  BKE_scene_object_base_flag_sync_from_base(base);
+}
+
 static void add_loose_objects_to_scene(Main *mainvar,
                                        Main *bmain,
                                        Scene *scene,
@@ -7103,19 +7138,12 @@ static void add_loose_objects_to_scene(Main *mainvar,
         ob->mode = OB_MODE_OBJECT;
 
         BKE_collection_object_add(bmain, active_collection, ob);
-        Base *base = BKE_view_layer_base_find(view_layer, ob);
 
-        if (v3d != NULL) {
-          base->local_view_bits |= v3d->local_view_uuid;
-        }
-
-        if ((flag & FILE_AUTOSELECT) && (base->flag & BASE_SELECTABLE)) {
-          /* Do NOT make base active here! screws up GUI stuff,
-           * if you want it do it at the editor level. */
-          base->flag |= BASE_SELECTED;
-        }
-
-        BKE_scene_object_base_flag_sync_from_base(base);
+        const bool set_selected = (flag & FILE_AUTOSELECT) != 0;
+        /* Do NOT make base active here! screws up GUI stuff,
+         * if you want it do it at the editor level. */
+        const bool set_active = false;
+        object_base_instance_init(ob, set_selected, set_active, view_layer, v3d);
 
         ob->id.tag &= ~LIB_TAG_INDIRECT;
         ob->id.flag &= ~LIB_INDIRECT_WEAK_LINK;
@@ -7161,19 +7189,12 @@ static void add_loose_object_data_to_scene(Main *mainvar,
         BKE_object_materials_test(bmain, ob, ob->data);
 
         BKE_collection_object_add(bmain, active_collection, ob);
-        Base *base = BKE_view_layer_base_find(view_layer, ob);
 
-        if (v3d != NULL) {
-          base->local_view_bits |= v3d->local_view_uuid;
-        }
-
-        if ((flag & FILE_AUTOSELECT) && (base->flag & BASE_SELECTABLE)) {
-          /* Do NOT make base active here! screws up GUI stuff,
-           * if you want it do it at the editor level. */
-          base->flag |= BASE_SELECTED;
-        }
-
-        BKE_scene_object_base_flag_sync_from_base(base);
+        const bool set_selected = (flag & FILE_AUTOSELECT) != 0;
+        /* Do NOT make base active here! screws up GUI stuff,
+         * if you want it do it at the editor level. */
+        bool set_active = false;
+        object_base_instance_init(ob, set_selected, set_active, view_layer, v3d);
 
         copy_v3_v3(ob->loc, scene->cursor.location);
       }
@@ -7207,22 +7228,14 @@ static void add_collections_to_scene(Main *mainvar,
       ob->empty_drawsize = U.collection_instance_empty_size;
 
       BKE_collection_object_add(bmain, active_collection, ob);
-      Base *base = BKE_view_layer_base_find(view_layer, ob);
 
-      if (v3d != NULL) {
-        base->local_view_bits |= v3d->local_view_uuid;
-      }
+      const bool set_selected = (flag & FILE_AUTOSELECT) != 0;
+      /* TODO: why is it OK to make this active here but not in other situations?
+       * See other callers of #object_base_instance_init */
+      const bool set_active = set_selected;
+      object_base_instance_init(ob, set_selected, set_active, view_layer, v3d);
 
-      if ((flag & FILE_AUTOSELECT) && (base->flag & BASE_SELECTABLE)) {
-        base->flag |= BASE_SELECTED;
-      }
-
-      BKE_scene_object_base_flag_sync_from_base(base);
       DEG_id_tag_update(&ob->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY | ID_RECALC_ANIMATION);
-
-      if (flag & FILE_AUTOSELECT) {
-        view_layer->basact = base;
-      }
 
       /* Assign the collection. */
       ob->instance_collection = collection;

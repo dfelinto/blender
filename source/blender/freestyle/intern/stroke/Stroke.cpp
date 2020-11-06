@@ -342,7 +342,7 @@ void StrokeAttribute::setAttributeVec3f(const char *iName, const Vec3f &att)
 /*                                */
 /**********************************/
 
-StrokeVertex::StrokeVertex() : CurvePoint()
+StrokeVertex::StrokeVertex()
 {
   _CurvilignAbscissa = 0.0f;
   _StrokeLength = 0.0f;
@@ -691,7 +691,7 @@ int Stroke::Resample(float iSampling)
     ++next;
   }
   // add last:
-  if ((it != itend) && (next == itend) /* && (t == 0.f)*/) {
+  if ((it != itend) && (next == itend) /* && (t == 0.0f)*/) {
     newVertices.push_back(&(*it));
   }
 

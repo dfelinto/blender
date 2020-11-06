@@ -1210,7 +1210,7 @@ void IMB_exr_read_channels(void *handle)
       "BlenderMultiChannel");
 
   /* 'previous multilayer attribute, flipped. */
-  short flip = (ta && STREQLEN(ta->value().c_str(), "Blender V2.43", 13));
+  short flip = (ta && STRPREFIX(ta->value().c_str(), "Blender V2.43"));
 
   exr_printf(
       "\nIMB_exr_read_channels\n%s %-6s %-22s "
@@ -1610,7 +1610,7 @@ static ExrHandle *imb_exr_begin_read_mem(IStream &file_stream,
           memset(lookup, 0, sizeof(lookup));
 
           /* we can have RGB(A), XYZ(W), UVA */
-          if (pass->totchan == 3 || pass->totchan == 4) {
+          if (ELEM(pass->totchan, 3, 4)) {
             if (pass->chan[0]->chan_id == 'B' || pass->chan[1]->chan_id == 'B' ||
                 pass->chan[2]->chan_id == 'B') {
               lookup[(unsigned int)'R'] = 0;

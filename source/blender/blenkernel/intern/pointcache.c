@@ -462,7 +462,7 @@ static void ptcache_particle_interpolate(int index,
   psys_interpolate_particle(-1, keys, (cfra - cfra1) / dfra, &pa->state, 1);
   interp_qt_qtqt(pa->state.rot, keys[1].rot, keys[2].rot, (cfra - cfra1) / dfra);
 
-  mul_v3_fl(pa->state.vel, 1.f / (dfra * timestep));
+  mul_v3_fl(pa->state.vel, 1.0f / (dfra * timestep));
 
   pa->state.time = cfra;
 }
@@ -738,8 +738,7 @@ static int ptcache_dynamicpaint_read(PTCacheFile *pf, void *dp_v)
     if (surface->type == MOD_DPAINT_SURFACE_T_PAINT) {
       data_len = sizeof(PaintPoint);
     }
-    else if (surface->type == MOD_DPAINT_SURFACE_T_DISPLACE ||
-             surface->type == MOD_DPAINT_SURFACE_T_WEIGHT) {
+    else if (ELEM(surface->type, MOD_DPAINT_SURFACE_T_DISPLACE, MOD_DPAINT_SURFACE_T_WEIGHT)) {
       data_len = sizeof(float);
     }
     else if (surface->type == MOD_DPAINT_SURFACE_T_WAVE) {

@@ -1407,7 +1407,7 @@ PropertyRNA *RNA_def_property(StructOrFunctionRNA *cont_,
   /* a priori not raw editable */
   prop->rawtype = -1;
 
-  if (type != PROP_COLLECTION && type != PROP_POINTER) {
+  if (!ELEM(type, PROP_COLLECTION, PROP_POINTER)) {
     prop->flag = PROP_EDITABLE;
 
     if (type != PROP_STRING) {
@@ -1842,6 +1842,10 @@ void RNA_def_property_struct_runtime(PropertyRNA *prop, StructRNA *type)
           &LOG, "\"%s.%s\", invalid type for struct type.", srna->identifier, prop->identifier);
       DefRNA.error = true;
       break;
+  }
+
+  if ((type->flag & STRUCT_ID) != 0) {
+    prop->flag |= PROP_PTR_NO_OWNERSHIP;
   }
 }
 

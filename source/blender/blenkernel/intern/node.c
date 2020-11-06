@@ -408,6 +408,8 @@ static void write_node_socket_interface(BlendWriter *writer, bNodeSocket *sock)
 /* this is only direct data, tree itself should have been written */
 void ntreeBlendWrite(BlendWriter *writer, bNodeTree *ntree)
 {
+  BKE_id_blend_write(writer, &ntree->id);
+
   /* for link_list() speed, we write per list */
 
   if (ntree->adt) {
@@ -529,9 +531,6 @@ static void ntree_blend_write(BlendWriter *writer, ID *id, const void *id_addres
     ntree->execdata = NULL;
 
     BLO_write_id_struct(writer, bNodeTree, id_address, &ntree->id);
-    /* Note that trees directly used by other IDs (materials etc.) are not 'real' ID, they cannot
-     * be linked, etc., so we write actual id data here only, for 'real' ID trees. */
-    BKE_id_blend_write(writer, &ntree->id);
 
     ntreeBlendWrite(writer, ntree);
   }
@@ -859,6 +858,8 @@ IDTypeInfo IDType_ID_NT = {
     .blend_read_data = ntree_blend_read_data,
     .blend_read_lib = ntree_blend_read_lib,
     .blend_read_expand = ntree_blend_read_expand,
+
+    .blend_read_undo_preserve = NULL,
 };
 
 static void node_add_sockets_from_type(bNodeTree *ntree, bNode *node, bNodeType *ntype)
@@ -4699,7 +4700,7 @@ static void registerFunctionNodes(void)
   register_node_type_fn_random_float();
 }
 
-void init_nodesystem(void)
+void BKE_node_system_init(void)
 {
   nodetreetypes_hash = BLI_ghash_str_new("nodetreetypes_hash gh");
   nodetypes_hash = BLI_ghash_str_new("nodetypes_hash gh");
@@ -4726,7 +4727,7 @@ void init_nodesystem(void)
   registerFunctionNodes();
 }
 
-void free_nodesystem(void)
+void BKE_node_system_exit(void)
 {
   if (nodetypes_hash) {
     NODE_TYPES_BEGIN (nt) {

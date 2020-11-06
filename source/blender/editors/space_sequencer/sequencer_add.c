@@ -315,7 +315,7 @@ static bool seq_effect_add_properties_poll(const bContext *UNUSED(C),
 
   /* Hide start/end frames for effect strips that are locked to their parents' location. */
   if (BKE_sequence_effect_get_num_inputs(type) != 0) {
-    if ((STREQ(prop_id, "frame_start")) || (STREQ(prop_id, "frame_end"))) {
+    if (STR_ELEM(prop_id, "frame_start", "frame_end")) {
       return false;
     }
   }
@@ -639,8 +639,7 @@ static bool sequencer_add_draw_check_fn(PointerRNA *UNUSED(ptr),
 {
   const char *prop_id = RNA_property_identifier(prop);
 
-  return !(STREQ(prop_id, "filepath") || STREQ(prop_id, "directory") ||
-           STREQ(prop_id, "filename"));
+  return !(STR_ELEM(prop_id, "filepath", "directory", "filename"));
 }
 
 static int sequencer_add_movie_strip_exec(bContext *C, wmOperator *op)
@@ -725,7 +724,7 @@ void SEQUENCER_OT_movie_strip_add(struct wmOperatorType *ot)
                                  WM_FILESEL_FILEPATH | WM_FILESEL_RELPATH | WM_FILESEL_FILES |
                                      WM_FILESEL_SHOW_PROPS | WM_FILESEL_DIRECTORY,
                                  FILE_DEFAULTDISPLAY,
-                                 FILE_SORT_ALPHA);
+                                 FILE_SORT_DEFAULT);
   sequencer_generic_props__internal(ot, SEQPROP_STARTFRAME);
   RNA_def_boolean(ot->srna, "sound", true, "Sound", "Load sound with the movie");
   RNA_def_boolean(ot->srna,
@@ -780,7 +779,7 @@ void SEQUENCER_OT_sound_strip_add(struct wmOperatorType *ot)
                                  WM_FILESEL_FILEPATH | WM_FILESEL_RELPATH | WM_FILESEL_FILES |
                                      WM_FILESEL_SHOW_PROPS | WM_FILESEL_DIRECTORY,
                                  FILE_DEFAULTDISPLAY,
-                                 FILE_SORT_ALPHA);
+                                 FILE_SORT_DEFAULT);
   sequencer_generic_props__internal(ot, SEQPROP_STARTFRAME);
   RNA_def_boolean(ot->srna, "cache", false, "Cache", "Cache the sound in memory");
   RNA_def_boolean(ot->srna, "mono", false, "Mono", "Merge all the sound's channels into one");
@@ -903,7 +902,7 @@ static int sequencer_add_image_strip_exec(bContext *C, wmOperator *op)
     }
   }
 
-  BKE_sequence_init_colorspace(seq);
+  SEQ_render_init_colorspace(seq);
   BKE_sequence_calc_disp(scene, seq);
   BKE_sequencer_sort(scene);
 
@@ -972,7 +971,7 @@ void SEQUENCER_OT_image_strip_add(struct wmOperatorType *ot)
                                  WM_FILESEL_DIRECTORY | WM_FILESEL_RELPATH | WM_FILESEL_FILES |
                                      WM_FILESEL_SHOW_PROPS | WM_FILESEL_DIRECTORY,
                                  FILE_DEFAULTDISPLAY,
-                                 FILE_SORT_ALPHA);
+                                 FILE_SORT_DEFAULT);
   sequencer_generic_props__internal(ot, SEQPROP_STARTFRAME | SEQPROP_ENDFRAME);
 
   RNA_def_boolean(ot->srna,

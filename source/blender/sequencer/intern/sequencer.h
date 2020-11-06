@@ -44,61 +44,10 @@ struct StripElem;
 /* **********************************************************************
  * sequencer.c
  *
- * sequencer render functions
- * ********************************************************************** */
-
-struct ImBuf *BKE_sequencer_give_ibuf_seqbase(const SeqRenderData *context,
-                                              float cfra,
-                                              int chan_shown,
-                                              struct ListBase *seqbasep);
-struct ImBuf *BKE_sequencer_effect_execute_threaded(struct SeqEffectHandle *sh,
-                                                    const SeqRenderData *context,
-                                                    struct Sequence *seq,
-                                                    float cfra,
-                                                    float facf0,
-                                                    float facf1,
-                                                    struct ImBuf *ibuf1,
-                                                    struct ImBuf *ibuf2,
-                                                    struct ImBuf *ibuf3);
-struct ImBuf *BKE_sequencer_render_mask_input(const SeqRenderData *context,
-                                              int mask_input_type,
-                                              struct Sequence *mask_sequence,
-                                              struct Mask *mask_id,
-                                              int cfra,
-                                              int fra_offset,
-                                              bool make_float);
-void BKE_sequencer_color_balance_apply(struct StripColorBalance *cb,
-                                       struct ImBuf *ibuf,
-                                       float mul,
-                                       bool make_float,
-                                       struct ImBuf *mask_input);
-
-/* **********************************************************************
- * sequencer.c
- *
- * sequencer color space functions
- * ********************************************************************** */
-
-void BKE_sequencer_imbuf_to_sequencer_space(struct Scene *scene,
-                                            struct ImBuf *ibuf,
-                                            bool make_float);
-
-/* **********************************************************************
- * sequencer.c
- *
  * sequencer scene functions
  * ********************************************************************** */
 
 void BKE_sequencer_base_clipboard_pointers_free(struct ListBase *seqbase);
-int BKE_sequencer_get_shown_sequences(struct ListBase *seqbasep,
-                                      int cfra,
-                                      int chanshown,
-                                      struct Sequence **seq_arr_out);
-bool BKE_sequencer_input_have_to_preprocess(const SeqRenderData *context,
-                                            struct Sequence *seq,
-                                            float cfra);
-float BKE_sequencer_give_stripelem_index(struct Sequence *seq, float cfra);
-
 /* **********************************************************************
  * image_cache.c
  *
@@ -107,12 +56,12 @@ float BKE_sequencer_give_stripelem_index(struct Sequence *seq, float cfra);
 
 struct ImBuf *BKE_sequencer_cache_get(const SeqRenderData *context,
                                       struct Sequence *seq,
-                                      float cfra,
+                                      float timeline_frame,
                                       int type,
                                       bool skip_disk_cache);
 void BKE_sequencer_cache_put(const SeqRenderData *context,
                              struct Sequence *seq,
-                             float cfra,
+                             float timeline_frame,
                              int type,
                              struct ImBuf *i,
                              float cost,
@@ -125,7 +74,7 @@ bool BKE_sequencer_cache_put_if_possible(const SeqRenderData *context,
                                          float cost,
                                          bool skip_disk_cache);
 bool BKE_sequencer_cache_recycle_item(struct Scene *scene);
-void BKE_sequencer_cache_free_temp_cache(struct Scene *scene, short id, int cfra);
+void BKE_sequencer_cache_free_temp_cache(struct Scene *scene, short id, int timeline_frame);
 void BKE_sequencer_cache_destruct(struct Scene *scene);
 void BKE_sequencer_cache_cleanup_all(struct Main *bmain);
 void BKE_sequencer_cache_cleanup_sequence(struct Scene *scene,
@@ -174,6 +123,16 @@ void BKE_sequence_sound_init(struct Scene *scene, struct Sequence *seq);
 struct Sequence *BKE_sequence_metastrip(ListBase *seqbase /* = ed->seqbase */,
                                         struct Sequence *meta /* = NULL */,
                                         struct Sequence *seq);
+void seq_free_sequence_recurse(struct Scene *scene, struct Sequence *seq, const bool do_id_user);
+void seq_multiview_name(struct Scene *scene,
+                        const int view_id,
+                        const char *prefix,
+                        const char *ext,
+                        char *r_path,
+                        size_t r_size);
+int seq_num_files(struct Scene *scene, char views_format, const bool is_multiview);
+void seq_open_anim_file(struct Scene *scene, struct Sequence *seq, bool openfile);
+void seq_proxy_index_dir_set(struct anim *anim, const char *base_dir);
 
 /* **********************************************************************
  * sequencer.c

@@ -404,20 +404,21 @@ class GPENCIL_MT_cleanup(Menu):
 
         layout = self.layout
 
+        layout.operator("gpencil.frame_clean_fill", text="Boundary Strokes").mode = 'ACTIVE'
+        layout.operator("gpencil.frame_clean_fill", text="Boundary Strokes all Frames").mode = 'ALL'
+
+        layout.separator()
+
         layout.operator("gpencil.frame_clean_loose", text="Delete Loose Points")
-        layout.operator("gpencil.frame_clean_duplicate", text="Delete Duplicated Frames")
 
         if ob.mode != 'PAINT_GPENCIL':
             layout.operator("gpencil.stroke_merge_by_distance", text="Merge by Distance")
 
         layout.separator()
 
-        layout.operator("gpencil.frame_clean_fill", text="Boundary Strokes").mode = 'ACTIVE'
-        layout.operator("gpencil.frame_clean_fill", text="Boundary Strokes all Frames").mode = 'ALL'
-
+        layout.operator("gpencil.frame_clean_duplicate", text="Delete Duplicated Frames")
+        layout.operator("gpencil.recalc_geometry", text="Recalculate Geometry")
         if ob.mode != 'PAINT_GPENCIL':
-            layout.separator()
-
             layout.operator("gpencil.reproject")
 
 
@@ -880,11 +881,11 @@ class GreasePencilLayerDisplayPanel:
         gpd = ob.data
         gpl = gpd.layers.active
 
-        col = layout.row(align=True)
-        col.prop(gpl, "channel_color")
+        row = layout.row(align=True)
+        row.prop(gpl, "channel_color")
 
-        col = layout.row(align=True)
-        col.prop(gpl, "use_solo_mode", text="Show Only on Keyframed")
+        row = layout.row(align=True)
+        row.prop(gpl, "use_solo_mode", text="Show Only on Keyframed")
 
 
 class GreasePencilFlipTintColors(Operator):

@@ -506,13 +506,15 @@ IDTypeInfo IDType_ID_PA = {
     .blend_read_data = particle_settings_blend_read_data,
     .blend_read_lib = particle_settings_blend_read_lib,
     .blend_read_expand = particle_settings_blend_read_expand,
+
+    .blend_read_undo_preserve = NULL,
 };
 
 unsigned int PSYS_FRAND_SEED_OFFSET[PSYS_FRAND_COUNT];
 unsigned int PSYS_FRAND_SEED_MULTIPLIER[PSYS_FRAND_COUNT];
 float PSYS_FRAND_BASE[PSYS_FRAND_COUNT];
 
-void psys_init_rng(void)
+void BKE_particle_init_rng(void)
 {
   RNG *rng = BLI_rng_new_srandom(5831); /* arbitrary */
   for (int i = 0; i < PSYS_FRAND_COUNT; i++) {
@@ -1196,7 +1198,7 @@ static float interpolate_particle_value(
     value += w[3] * v4;
   }
 
-  CLAMP(value, 0.f, 1.f);
+  CLAMP(value, 0.0f, 1.0f);
 
   return value;
 }
@@ -1425,7 +1427,7 @@ static void do_particle_interpolation(ParticleSystem *psys,
   PTCacheEditPoint *point = pind->epoint;
   ParticleKey keys[4];
   int point_vel = (point && point->keys->vel);
-  float real_t, dfra, keytime, invdt = 1.f;
+  float real_t, dfra, keytime, invdt = 1.0f;
 
   /* billboards wont fill in all of these, so start cleared */
   memset(keys, 0, sizeof(keys));
@@ -1595,7 +1597,7 @@ static void do_particle_interpolation(ParticleSystem *psys,
 
   /* Convert velocity to time-step size. */
   if (pind->keyed || pind->cache || point_vel) {
-    invdt = dfra * 0.04f * (psys ? psys->part->timetweak : 1.f);
+    invdt = dfra * 0.04f * (psys ? psys->part->timetweak : 1.0f);
     mul_v3_fl(keys[1].vel, invdt);
     mul_v3_fl(keys[2].vel, invdt);
     interp_qt_qtqt(result->rot, keys[1].rot, keys[2].rot, keytime);
@@ -1614,7 +1616,7 @@ static void do_particle_interpolation(ParticleSystem *psys,
 
   /* the velocity needs to be converted back from cubic interpolation */
   if (pind->keyed || pind->cache || point_vel) {
-    mul_v3_fl(result->vel, 1.f / invdt);
+    mul_v3_fl(result->vel, 1.0f / invdt);
   }
 }
 
@@ -2479,7 +2481,7 @@ int do_guides(Depsgraph *depsgraph,
                 pd->kink_freq,
                 pd->kink_shape,
                 pd->kink_amp,
-                0.f,
+                0.0f,
                 pd->kink,
                 pd->kink_axis,
                 0,
@@ -2829,12 +2831,12 @@ static void psys_thread_create_path(ParticleTask *task,
   if (ctx->between) {
     ParticleData *pa = psys->particles + cpa->pa[0];
     int w, needupdate;
-    float foffset, wsum = 0.f;
+    float foffset, wsum = 0.0f;
     float co[3];
     float p_min = part->parting_min;
     float p_max = part->parting_max;
     /* Virtual parents don't work nicely with parting. */
-    float p_fac = part->parents > 0.f ? 0.f : part->parting_fac;
+    float p_fac = part->parents > 0.0f ? 0.0f : part->parting_fac;
 
     if (ctx->editupdate) {
       needupdate = 0;
@@ -2862,15 +2864,15 @@ static void psys_thread_create_path(ParticleTask *task,
       }
       else {
         key[w] = pcache[0];
-        weight[w] = 0.f;
+        weight[w] = 0.0f;
       }
     }
 
     /* modify weights to create parting */
-    if (p_fac > 0.f) {
+    if (p_fac > 0.0f) {
       const ParticleCacheKey *key_0_last = pcache_key_segment_endpoint_safe(key[0]);
       for (w = 0; w < 4; w++) {
-        if (w && (weight[w] > 0.f)) {
+        if (w && (weight[w] > 0.0f)) {
           const ParticleCacheKey *key_w_last = pcache_key_segment_endpoint_safe(key[w]);
           float d;
           if (part->flag & PART_CHILD_LONG_HAIR) {
@@ -2879,7 +2881,7 @@ static void psys_thread_create_path(ParticleTask *task,
             float d1 = len_v3v3(key[0]->co, key[w]->co);
             float d2 = len_v3v3(key_0_last->co, key_w_last->co);
 
-            d = d1 > 0.f ? d2 / d1 - 1.f : 10000.f;
+            d = d1 > 0.0f ? d2 / d1 - 1.0f : 10000.0f;
           }
           else {
             float v1[3], v2[3];
@@ -2895,13 +2897,13 @@ static void psys_thread_create_path(ParticleTask *task,
             d = (d - p_min) / (p_max - p_min);
           }
           else {
-            d = (d - p_min) <= 0.f ? 0.f : 1.f;
+            d = (d - p_min) <= 0.0f ? 0.0f : 1.0f;
           }
 
-          CLAMP(d, 0.f, 1.f);
+          CLAMP(d, 0.0f, 1.0f);
 
-          if (d > 0.f) {
-            weight[w] *= (1.f - d);
+          if (d > 0.0f) {
+            weight[w] *= (1.0f - d);
           }
         }
         wsum += weight[w];
@@ -3338,7 +3340,7 @@ void psys_cache_paths(ParticleSimulationData *sim, float cfra, const bool use_re
   LOOP_PARTICLES
   {
     if (!psys->totchild) {
-      psys_get_texture(sim, pa, &ptex, PAMAP_LENGTH, 0.f);
+      psys_get_texture(sim, pa, &ptex, PAMAP_LENGTH, 0.0f);
       pa_length = ptex.length * (1.0f - part->randlength * psys_frand(psys, psys->seed + p));
       if (vg_length) {
         pa_length *= psys_particle_value_from_verts(psmd->mesh_final, part->from, pa, vg_length);
@@ -3995,19 +3997,25 @@ void object_remove_particle_system(Main *bmain, Scene *UNUSED(scene), Object *ob
       if (psys->part->type == PART_FLUID_FLIP) {
         fmd->domain->particle_type &= ~FLUID_DOMAIN_PARTICLE_FLIP;
       }
-      if (psys->part->type == PART_FLUID_SPRAY || psys->part->type == PART_FLUID_SPRAYFOAM ||
-          psys->part->type == PART_FLUID_SPRAYBUBBLE ||
-          psys->part->type == PART_FLUID_SPRAYFOAMBUBBLE) {
+      if (ELEM(psys->part->type,
+               PART_FLUID_SPRAY,
+               PART_FLUID_SPRAYFOAM,
+               PART_FLUID_SPRAYBUBBLE,
+               PART_FLUID_SPRAYFOAMBUBBLE)) {
         fmd->domain->particle_type &= ~FLUID_DOMAIN_PARTICLE_SPRAY;
       }
-      if (psys->part->type == PART_FLUID_FOAM || psys->part->type == PART_FLUID_SPRAYFOAM ||
-          psys->part->type == PART_FLUID_FOAMBUBBLE ||
-          psys->part->type == PART_FLUID_SPRAYFOAMBUBBLE) {
+      if (ELEM(psys->part->type,
+               PART_FLUID_FOAM,
+               PART_FLUID_SPRAYFOAM,
+               PART_FLUID_FOAMBUBBLE,
+               PART_FLUID_SPRAYFOAMBUBBLE)) {
         fmd->domain->particle_type &= ~FLUID_DOMAIN_PARTICLE_FOAM;
       }
-      if (psys->part->type == PART_FLUID_BUBBLE || psys->part->type == PART_FLUID_FOAMBUBBLE ||
-          psys->part->type == PART_FLUID_SPRAYBUBBLE ||
-          psys->part->type == PART_FLUID_SPRAYFOAMBUBBLE) {
+      if (ELEM(psys->part->type,
+               PART_FLUID_BUBBLE,
+               PART_FLUID_FOAMBUBBLE,
+               PART_FLUID_SPRAYBUBBLE,
+               PART_FLUID_SPRAYFOAMBUBBLE)) {
         fmd->domain->particle_type &= ~FLUID_DOMAIN_PARTICLE_BUBBLE;
       }
       if (psys->part->type == PART_FLUID_TRACER) {
@@ -4015,9 +4023,11 @@ void object_remove_particle_system(Main *bmain, Scene *UNUSED(scene), Object *ob
       }
 
       /* Disable combined export if combined particle system was deleted. */
-      if (psys->part->type == PART_FLUID_SPRAYFOAM || psys->part->type == PART_FLUID_SPRAYBUBBLE ||
-          psys->part->type == PART_FLUID_FOAMBUBBLE ||
-          psys->part->type == PART_FLUID_SPRAYFOAMBUBBLE) {
+      if (ELEM(psys->part->type,
+               PART_FLUID_SPRAYFOAM,
+               PART_FLUID_SPRAYBUBBLE,
+               PART_FLUID_FOAMBUBBLE,
+               PART_FLUID_SPRAYFOAMBUBBLE)) {
         fmd->domain->sndparticle_combined_export = SNDPARTICLE_COMBINED_EXPORT_OFF;
       }
     }
@@ -4271,9 +4281,9 @@ static void get_cpa_texture(Mesh *mesh,
           break;
         case TEXCO_PARTICLE:
           /* texture coordinates in range [-1, 1] */
-          texvec[0] = 2.f * (cfra - par->time) / (par->dietime - par->time) - 1.f;
-          texvec[1] = 0.f;
-          texvec[2] = 0.f;
+          texvec[0] = 2.0f * (cfra - par->time) / (par->dietime - par->time) - 1.0f;
+          texvec[1] = 0.0f;
+          texvec[2] = 0.0f;
           break;
       }
 
@@ -4381,14 +4391,15 @@ void psys_get_texture(
           break;
         case TEXCO_PARTICLE:
           /* texture coordinates in range [-1, 1] */
-          texvec[0] = 2.f * (cfra - pa->time) / (pa->dietime - pa->time) - 1.f;
+          texvec[0] = 2.0f * (cfra - pa->time) / (pa->dietime - pa->time) - 1.0f;
           if (sim->psys->totpart > 0) {
-            texvec[1] = 2.f * (float)(pa - sim->psys->particles) / (float)sim->psys->totpart - 1.f;
+            texvec[1] = 2.0f * (float)(pa - sim->psys->particles) / (float)sim->psys->totpart -
+                        1.0f;
           }
           else {
             texvec[1] = 0.0f;
           }
-          texvec[2] = 0.f;
+          texvec[2] = 0.0f;
           break;
       }
 
@@ -4933,8 +4944,8 @@ int psys_get_particle_state(ParticleSimulationData *sim, int p, ParticleKey *sta
     else {
       float dfra, frs_sec = sim->scene->r.frs_sec;
       /* let's interpolate to try to be as accurate as possible */
-      if (pa->state.time + 2.f >= state->time && pa->prev_state.time - 2.f <= state->time) {
-        if (pa->prev_state.time >= pa->state.time || pa->prev_state.time < 0.f) {
+      if (pa->state.time + 2.0f >= state->time && pa->prev_state.time - 2.0f <= state->time) {
+        if (pa->prev_state.time >= pa->state.time || pa->prev_state.time < 0.0f) {
           /* prev_state is wrong so let's not use it,
            * this can happen at frames 1, 0 or particle birth. */
           dfra = state->time - pa->state.time;
@@ -4961,13 +4972,13 @@ int psys_get_particle_state(ParticleSimulationData *sim, int p, ParticleKey *sta
           psys_interpolate_particle(-1, keys, keytime, state, 1);
 
           /* convert back to real velocity */
-          mul_v3_fl(state->vel, 1.f / (dfra * timestep));
+          mul_v3_fl(state->vel, 1.0f / (dfra * timestep));
 
           interp_v3_v3v3(state->ave, keys[1].ave, keys[2].ave, keytime);
           interp_qt_qtqt(state->rot, keys[1].rot, keys[2].rot, keytime);
         }
       }
-      else if (pa->state.time + 1.f >= state->time && pa->state.time - 1.f <= state->time) {
+      else if (pa->state.time + 1.0f >= state->time && pa->state.time - 1.0f <= state->time) {
         /* linear interpolation using only pa->state */
 
         dfra = state->time - pa->state.time;
