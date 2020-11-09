@@ -61,7 +61,8 @@ static void geo_edge_split_exec(bNode *UNUSED(node), GeoNodeInputs inputs, GeoNo
   const Mesh *mesh_in = geometry->get_mesh_for_read();
 
   /* Use modifier struct to pass arguments to the modifier code. */
-  EdgeSplitModifierData emd = {0};
+  EdgeSplitModifierData emd;
+  memset(&emd, 0, sizeof(EdgeSplitModifierData));
   emd.split_angle = split_angle;
   emd.flags = MOD_EDGESPLIT_FROMANGLE;
   if (use_sharp_flag) {

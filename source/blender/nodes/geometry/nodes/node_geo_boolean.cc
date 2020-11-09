@@ -91,9 +91,10 @@ static Mesh *mesh_boolean_calc(const Mesh *mesh_a, const Mesh *mesh_b, int boole
     }
   }
 
-  BM_mesh_boolean(bm, looptris, tottri, bm_face_isect_pair, NULL, 2, false, boolean_mode);
+  BM_mesh_boolean(
+      bm, looptris, tottri, bm_face_isect_pair, nullptr, 2, false, false, boolean_mode);
 
-  Mesh *result = BKE_mesh_from_bmesh_for_eval_nomain(bm, NULL, mesh_a);
+  Mesh *result = BKE_mesh_from_bmesh_for_eval_nomain(bm, nullptr, mesh_a);
   BM_mesh_free(bm);
   result->runtime.cd_dirty_vert |= CD_MASK_NORMAL;
   MEM_freeN(looptris);

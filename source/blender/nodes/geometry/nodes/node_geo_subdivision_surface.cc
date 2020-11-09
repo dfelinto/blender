@@ -90,7 +90,7 @@ static void geo_subdivision_surface_exec(bNode *UNUSED(node),
   Subdiv *subdiv = BKE_subdiv_update_from_mesh(nullptr, &subdiv_settings, mesh_in);
 
   /* In case of bad topology, skip to input mesh. */
-  if (subdiv == NULL) {
+  if (subdiv == nullptr) {
     outputs.set("Geometry", std::move(geometry));
     return;
   }

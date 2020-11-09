@@ -375,13 +375,13 @@ static IDProperty *socket_add_property(IDProperty *settings_prop_group,
   IDP_AddToGroup(prop_ui_group, property_type.create_max_ui_prop(socket, "max"));
   IDP_AddToGroup(prop_ui_group, property_type.create_max_ui_prop(socket, "soft_max"));
   IDP_AddToGroup(prop_ui_group, property_type.create_default_ui_prop(socket, "default"));
-  if (property_type.rna_subtype_get != NULL) {
-    const char *subtype_identifier = NULL;
+  if (property_type.rna_subtype_get != nullptr) {
+    const char *subtype_identifier = nullptr;
     RNA_enum_identifier(rna_enum_property_subtype_items,
                         property_type.rna_subtype_get(socket),
                         &subtype_identifier);
 
-    if (subtype_identifier != NULL) {
+    if (subtype_identifier != nullptr) {
       IDPropertyTemplate idprop = {0};
       idprop.string.str = subtype_identifier;
       idprop.string.len = BLI_strnlen(subtype_identifier, MAX_NAME) + 1;
@@ -582,7 +582,7 @@ void MOD_nodes_update_interface(Object *object, NodesModifierData *nmd)
     IDProperty *new_prop = socket_add_property(
         nmd->settings.properties, ui_container_group, *property_type, *socket);
 
-    if (old_properties != NULL) {
+    if (old_properties != nullptr) {
       IDProperty *old_prop = IDP_GetPropertyFromGroup(old_properties, socket->identifier);
       if (old_prop != nullptr && property_type->is_correct_type(*old_prop)) {
         IDP_CopyPropertyContent(new_prop, old_prop);
@@ -590,7 +590,7 @@ void MOD_nodes_update_interface(Object *object, NodesModifierData *nmd)
     }
   }
 
-  if (old_properties != NULL) {
+  if (old_properties != nullptr) {
     IDP_FreeProperty(old_properties);
   }
 
@@ -605,8 +605,8 @@ void MOD_nodes_init(Main *bmain, NodesModifierData *nmd)
   ntreeAddSocketInterface(ntree, SOCK_IN, "NodeSocketGeometry", "Geometry");
   ntreeAddSocketInterface(ntree, SOCK_OUT, "NodeSocketGeometry", "Geometry");
 
-  bNode *group_input_node = nodeAddStaticNode(NULL, ntree, NODE_GROUP_INPUT);
-  bNode *group_output_node = nodeAddStaticNode(NULL, ntree, NODE_GROUP_OUTPUT);
+  bNode *group_input_node = nodeAddStaticNode(nullptr, ntree, NODE_GROUP_INPUT);
+  bNode *group_output_node = nodeAddStaticNode(nullptr, ntree, NODE_GROUP_OUTPUT);
 
   group_input_node->locx = -200 - group_input_node->width;
   group_output_node->locx = 200;
@@ -820,7 +820,7 @@ static void panel_draw(const bContext *UNUSED(C), Panel *panel)
   uiLayoutSetPropSep(layout, true);
   uiLayoutSetPropDecorate(layout, false);
 
-  uiItemR(layout, ptr, "node_group", 0, NULL, ICON_MESH_DATA);
+  uiItemR(layout, ptr, "node_group", 0, nullptr, ICON_MESH_DATA);
 
   if (nmd->node_group != nullptr && nmd->settings.properties != nullptr) {
     PointerRNA settings_ptr;
@@ -896,25 +896,25 @@ ModifierTypeInfo modifierType_Nodes = {
 
     /* copyData */ copyData,
 
-    /* deformVerts */ NULL,
-    /* deformMatrices */ NULL,
-    /* deformVertsEM */ NULL,
-    /* deformMatricesEM */ NULL,
+    /* deformVerts */ nullptr,
+    /* deformMatrices */ nullptr,
+    /* deformVertsEM */ nullptr,
+    /* deformMatricesEM */ nullptr,
     /* modifyMesh */ modifyMesh,
-    /* modifyHair */ NULL,
+    /* modifyHair */ nullptr,
     /* modifyPointCloud */ modifyPointCloud,
-    /* modifyVolume */ NULL,
+    /* modifyVolume */ nullptr,
 
     /* initData */ initData,
-    /* requiredDataMask */ NULL,
+    /* requiredDataMask */ nullptr,
     /* freeData */ freeData,
     /* isDisabled */ isDisabled,
     /* updateDepsgraph */ updateDepsgraph,
-    /* dependsOnTime */ NULL,
-    /* dependsOnNormals */ NULL,
+    /* dependsOnTime */ nullptr,
+    /* dependsOnNormals */ nullptr,
     /* foreachIDLink */ foreachIDLink,
-    /* foreachTexLink */ NULL,
-    /* freeRuntimeData */ NULL,
+    /* foreachTexLink */ nullptr,
+    /* freeRuntimeData */ nullptr,
     /* panelRegister */ panelRegister,
     /* blendWrite */ blendWrite,
     /* blendRead */ blendRead,

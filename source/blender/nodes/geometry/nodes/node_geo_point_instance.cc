@@ -44,7 +44,7 @@ static void geo_point_instance_exec(bNode *UNUSED(node),
   /* For now make a mesh from the pointcloud instead of instancing another object / geometry. */
   const PointCloud *pointcloud = geometry->get_pointcloud_for_read();
 
-  if (pointcloud == NULL) {
+  if (pointcloud == nullptr) {
     outputs.set("Geometry", std::move(geometry));
     return;
   }
