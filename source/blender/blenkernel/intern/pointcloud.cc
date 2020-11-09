@@ -232,8 +232,8 @@ void *BKE_pointcloud_add_default(Main *bmain, const char *name)
 
 PointCloud *BKE_pointcloud_new_nomain(const int totpoint)
 {
-  PointCloud *pointcloud = BKE_libblock_alloc(
-      NULL, ID_PT, BKE_idtype_idcode_to_name(ID_PT), LIB_ID_CREATE_LOCALIZE);
+  PointCloud *pointcloud = static_cast<PointCloud *>(
+      BKE_libblock_alloc(NULL, ID_PT, BKE_idtype_idcode_to_name(ID_PT), LIB_ID_CREATE_LOCALIZE));
 
   pointcloud_init_data(&pointcloud->id);
 
