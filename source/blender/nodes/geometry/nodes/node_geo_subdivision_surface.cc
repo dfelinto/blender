@@ -24,8 +24,6 @@
 static bNodeSocketTemplate geo_node_subdivision_surface_in[] = {
     {SOCK_GEOMETRY, N_("Geometry")},
     {SOCK_INT, N_("Level"), 1, 0, 0, 0, 0, 6},
-    {SOCK_BOOLEAN, N_("Simple")},
-    {SOCK_BOOLEAN, N_("Optimal Display")},
     {SOCK_BOOLEAN, N_("Use Creases")},
     {SOCK_BOOLEAN, N_("Boundary Smooth")},
     {SOCK_BOOLEAN, N_("Smooth UVs")},
@@ -55,8 +53,6 @@ static void geo_subdivision_surface_exec(bNode *UNUSED(node),
   return;
 #else
   const int subdiv_level = clamp_i(inputs.extract<int>("Level"), 0, 30);
-  const bool is_simple = inputs.extract<bool>("Simple");
-  const bool use_optimal_display = inputs.extract<bool>("Optimal Display");
   const bool use_crease = inputs.extract<bool>("Use Creases");
   const bool boundary_smooth = inputs.extract<bool>("Boundary Smooth");
   const bool smooth_uvs = inputs.extract<bool>("Smooth UVs");
@@ -72,11 +68,11 @@ static void geo_subdivision_surface_exec(bNode *UNUSED(node),
   /* Mesh settings init. */
   SubdivToMeshSettings mesh_settings;
   mesh_settings.resolution = (1 << subdiv_level) + 1;
-  mesh_settings.use_optimal_display = use_optimal_display;
+  mesh_settings.use_optimal_display = false;
 
   /* Subdivision settings init. */
   SubdivSettings subdiv_settings;
-  subdiv_settings.is_simple = is_simple;
+  subdiv_settings.is_simple = false;
   subdiv_settings.is_adaptive = false;
   subdiv_settings.use_creases = use_crease;
   subdiv_settings.level = subdiv_level;
