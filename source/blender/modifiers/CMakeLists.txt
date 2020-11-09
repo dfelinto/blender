@@ -33,7 +33,7 @@ set(INC
   ../makesdna
   ../makesrna
   ../nodes
-  ../render/extern/include
+  ../render
   ../windowmanager
   ../../../intern/eigen
   ../../../intern/guardedalloc

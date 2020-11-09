@@ -30,8 +30,7 @@
 #include "bmesh_boolean.h"
 #include "bmesh_edgesplit.h"
 
-namespace blender {
-namespace meshintersect {
+namespace blender::meshintersect {
 
 #ifdef WITH_GMP
 
@@ -117,11 +116,24 @@ static bool bmvert_attached_to_wire(const BMVert *bmv)
   return BM_vert_is_wire(bmv);
 }
 
+static bool bmvert_attached_to_hidden_face(BMVert *bmv)
+{
+  BMIter iter;
+  for (BMFace *bmf = static_cast<BMFace *>(BM_iter_new(&iter, nullptr, BM_FACES_OF_VERT, bmv));
+       bmf;
+       bmf = static_cast<BMFace *>(BM_iter_step(&iter))) {
+    if (BM_elem_flag_test(bmf, BM_ELEM_HIDDEN)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 static bool face_has_verts_in_order(BMesh *bm, BMFace *bmf, const BMVert *v1, const BMVert *v2)
 {
   BMIter liter;
   BMLoop *l = static_cast<BMLoop *>(BM_iter_new(&liter, bm, BM_LOOPS_OF_FACE, bmf));
-  while (l != NULL) {
+  while (l != nullptr) {
     if (l->v == v1 && l->next->v == v2) {
       return true;
     }
@@ -140,17 +152,19 @@ constexpr uint KEEP_FLAG = (1 << 6);
  * Also, the #BM_ELEM_TAG header flag is set for those #BMEdge's that come from intersections
  * resulting from the intersection needed by the Boolean operation.
  */
-static bool apply_mesh_output_to_bmesh(BMesh *bm, IMesh &m_out)
+static bool apply_mesh_output_to_bmesh(BMesh *bm, IMesh &m_out, bool keep_hidden)
 {
   bool any_change = false;
 
   m_out.populate_vert();
 
   /* Initially mark all existing verts as "don't keep", except hidden verts
-   * and verts attached to wire edges. */
+   * (if keep_hidden is true), and verts attached to wire edges. */
   for (int v = 0; v < bm->totvert; ++v) {
     BMVert *bmv = BM_vert_at_index(bm, v);
-    if (BM_elem_flag_test(bmv, BM_ELEM_HIDDEN) || bmvert_attached_to_wire(bmv)) {
+    if ((keep_hidden &&
+         (BM_elem_flag_test(bmv, BM_ELEM_HIDDEN) || bmvert_attached_to_hidden_face(bmv))) ||
+        bmvert_attached_to_wire(bmv)) {
       BM_elem_flag_enable(bmv, KEEP_FLAG);
     }
     else {
@@ -184,21 +198,21 @@ static bool apply_mesh_output_to_bmesh(BMesh *bm, IMesh &m_out)
       for (int i = 0; i < 3; ++i) {
         co[i] = static_cast<float>(d_co[i]);
       }
-      BMVert *bmv = BM_vert_create(bm, co, NULL, BM_CREATE_NOP);
+      BMVert *bmv = BM_vert_create(bm, co, nullptr, BM_CREATE_NOP);
       new_bmvs[v] = bmv;
       BM_elem_flag_enable(bmv, KEEP_FLAG);
       any_change = true;
     }
   }
 
-  /* Initially mark all existing faces as "don't keep", except hidden faces.
+  /* Initially mark all existing faces as "don't keep", except hidden faces (if keep_hidden).
    * Also, save current #BMFace pointers as creating faces will disturb the table. */
   Array<BMFace *> old_bmfs(bm->totface);
   BM_mesh_elem_index_ensure(bm, BM_FACE);
   for (int f = 0; f < bm->totface; ++f) {
     BMFace *bmf = BM_face_at_index(bm, f);
     old_bmfs[f] = bmf;
-    if (BM_elem_flag_test(bmf, BM_ELEM_HIDDEN)) {
+    if (keep_hidden && BM_elem_flag_test(bmf, BM_ELEM_HIDDEN)) {
       BM_elem_flag_enable(bmf, KEEP_FLAG);
     }
     else {
@@ -231,7 +245,7 @@ static bool apply_mesh_output_to_bmesh(BMesh *bm, IMesh &m_out)
     BMFace *bmf = BM_face_exists(face_bmverts.data(), flen);
     /* #BM_face_exists checks if the face exists with the vertices in either order.
      * We can only reuse the face if the orientations are the same. */
-    if (bmf != NULL && face_has_verts_in_order(bm, bmf, face_bmverts[0], face_bmverts[1])) {
+    if (bmf != nullptr && face_has_verts_in_order(bm, bmf, face_bmverts[0], face_bmverts[1])) {
       BM_elem_flag_enable(bmf, KEEP_FLAG);
     }
     else {
@@ -242,20 +256,20 @@ static bool apply_mesh_output_to_bmesh(BMesh *bm, IMesh &m_out)
         orig_face = old_bmfs[orig];
       }
       else {
-        orig_face = NULL;
+        orig_face = nullptr;
       }
       /* Make or find #BMEdge's. */
       for (int i = 0; i < flen; ++i) {
         BMVert *bmv1 = face_bmverts[i];
         BMVert *bmv2 = face_bmverts[(i + 1) % flen];
         BMEdge *bme = BM_edge_exists(bmv1, bmv2);
-        if (bme == NULL) {
-          BMEdge *orig_edge = NULL;
+        if (bme == nullptr) {
+          BMEdge *orig_edge = nullptr;
           if (face.edge_orig[i] != NO_INDEX) {
             orig_edge = old_edges[face.edge_orig[i]];
           }
           bme = BM_edge_create(bm, bmv1, bmv2, orig_edge, BM_CREATE_NOP);
-          if (orig_edge != NULL) {
+          if (orig_edge != nullptr) {
             BM_elem_select_copy(bm, bme, orig_edge);
           }
         }
@@ -269,15 +283,15 @@ static bool apply_mesh_output_to_bmesh(BMesh *bm, IMesh &m_out)
       }
       BMFace *bmf = BM_face_create(
           bm, face_bmverts.data(), face_bmedges.data(), flen, orig_face, BM_CREATE_NOP);
-      if (orig_face != NULL) {
+      if (orig_face != nullptr) {
         BM_elem_select_copy(bm, bmf, orig_face);
       }
       BM_elem_flag_enable(bmf, KEEP_FLAG);
       /* Now do interpolation of loop data (e.g., UV's) using the example face. */
-      if (orig_face != NULL) {
+      if (orig_face != nullptr) {
         BMIter liter;
         BMLoop *l = static_cast<BMLoop *>(BM_iter_new(&liter, bm, BM_LOOPS_OF_FACE, bmf));
-        while (l != NULL) {
+        while (l != nullptr) {
           BM_loop_interp_from_face(bm, l, orig_face, true, true);
           l = static_cast<BMLoop *>(BM_iter_step(&liter));
         }
@@ -290,8 +304,8 @@ static bool apply_mesh_output_to_bmesh(BMesh *bm, IMesh &m_out)
   /* #BM_ITER_MESH_MUTABLE macro needs type casts for C++, so expand here.
    * TODO(howard): make some nice C++ iterators for #BMesh. */
   BMIter iter;
-  BMFace *bmf = static_cast<BMFace *>(BM_iter_new(&iter, bm, BM_FACES_OF_MESH, NULL));
-  while (bmf != NULL) {
+  BMFace *bmf = static_cast<BMFace *>(BM_iter_new(&iter, bm, BM_FACES_OF_MESH, nullptr));
+  while (bmf != nullptr) {
 #  ifdef DEBUG
     iter.count = BM_iter_mesh_count(BM_FACES_OF_MESH, bm);
 #  endif
@@ -308,8 +322,8 @@ static bool apply_mesh_output_to_bmesh(BMesh *bm, IMesh &m_out)
     }
     bmf = bmf_next;
   }
-  BMVert *bmv = static_cast<BMVert *>(BM_iter_new(&iter, bm, BM_VERTS_OF_MESH, NULL));
-  while (bmv != NULL) {
+  BMVert *bmv = static_cast<BMVert *>(BM_iter_new(&iter, bm, BM_VERTS_OF_MESH, nullptr));
+  while (bmv != nullptr) {
 #  ifdef DEBUG
     iter.count = BM_iter_mesh_count(BM_VERTS_OF_MESH, bm);
 #  endif
@@ -335,6 +349,7 @@ static bool bmesh_boolean(BMesh *bm,
                           int nshapes,
                           const bool use_self,
                           const bool use_separate_all,
+                          const bool keep_hidden,
                           const BoolOpType boolean_mode)
 {
   IMeshArena arena;
@@ -364,7 +379,7 @@ static bool bmesh_boolean(BMesh *bm,
   }
   IMesh m_out = boolean_mesh(
       m_in, boolean_mode, nshapes, shape_fn, use_self, &m_triangulated, &arena);
-  bool any_change = apply_mesh_output_to_bmesh(bm, m_out);
+  bool any_change = apply_mesh_output_to_bmesh(bm, m_out, keep_hidden);
   if (use_separate_all) {
     /* We are supposed to separate all faces that are incident on intersection edges. */
     BM_mesh_edgesplit(bm, false, true, false);
@@ -374,8 +389,7 @@ static bool bmesh_boolean(BMesh *bm,
 
 #endif  // WITH_GMP
 
-}  // namespace meshintersect
-}  // namespace blender
+}  // namespace blender::meshintersect
 
 extern "C" {
 /**
@@ -402,6 +416,7 @@ bool BM_mesh_boolean(BMesh *bm,
                      void *user_data,
                      const int nshapes,
                      const bool use_self,
+                     const bool keep_hidden,
                      const int boolean_mode)
 {
   return blender::meshintersect::bmesh_boolean(
@@ -413,6 +428,7 @@ bool BM_mesh_boolean(BMesh *bm,
       nshapes,
       use_self,
       false,
+      keep_hidden,
       static_cast<blender::meshintersect::BoolOpType>(boolean_mode));
 }
 
@@ -431,7 +447,8 @@ bool BM_mesh_boolean_knife(BMesh *bm,
                            void *user_data,
                            const int nshapes,
                            const bool use_self,
-                           const bool use_separate_all)
+                           const bool use_separate_all,
+                           const bool keep_hidden)
 {
   return blender::meshintersect::bmesh_boolean(bm,
                                                looptris,
@@ -441,6 +458,7 @@ bool BM_mesh_boolean_knife(BMesh *bm,
                                                nshapes,
                                                use_self,
                                                use_separate_all,
+                                               keep_hidden,
                                                blender::meshintersect::BoolOpType::None);
 }
 #else
@@ -451,6 +469,7 @@ bool BM_mesh_boolean(BMesh *UNUSED(bm),
                      void *UNUSED(user_data),
                      const int UNUSED(nshapes),
                      const bool UNUSED(use_self),
+                     const bool UNUSED(keep_hidden),
                      const int UNUSED(boolean_mode))
 {
   UNUSED_VARS(looptris, test_fn);
@@ -472,7 +491,8 @@ bool BM_mesh_boolean_knife(BMesh *UNUSED(bm),
                            void *UNUSED(user_data),
                            const int UNUSED(nshapes),
                            const bool UNUSED(use_self),
-                           const bool UNUSED(use_separate_all))
+                           const bool UNUSED(use_separate_all),
+                           const bool UNUSED(keep_boolean))
 {
   UNUSED_VARS(looptris, test_fn);
   return false;
