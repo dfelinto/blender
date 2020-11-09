@@ -48,17 +48,17 @@ static bNodeSocketTemplate geo_node_edge_split_out[] = {
 namespace blender::nodes {
 static void geo_edge_split_exec(bNode *UNUSED(node), GeoNodeInputs inputs, GeoNodeOutputs outputs)
 {
-  GeometryPtr geometry = inputs.extract<GeometryPtr>("Geometry");
+  GeometrySetPtr geometry_set = inputs.extract<GeometrySetPtr>("Geometry");
 
-  if (!geometry.has_value() || !geometry->has_mesh()) {
-    outputs.set("Geometry", std::move(geometry));
+  if (!geometry_set.has_value() || !geometry_set->has_mesh()) {
+    outputs.set("Geometry", std::move(geometry_set));
     return;
   }
 
   const float split_angle = inputs.extract<float>("Angle");
   const bool use_sharp_flag = inputs.extract<bool>("Sharp Edges");
 
-  const Mesh *mesh_in = geometry->get_mesh_for_read();
+  const Mesh *mesh_in = geometry_set->get_mesh_for_read();
 
   /* Use modifier struct to pass arguments to the modifier code. */
   EdgeSplitModifierData emd;
@@ -70,10 +70,10 @@ static void geo_edge_split_exec(bNode *UNUSED(node), GeoNodeInputs inputs, GeoNo
   }
 
   Mesh *mesh_out = doEdgeSplit(mesh_in, &emd);
-  make_geometry_mutable(geometry);
-  geometry->replace_mesh(mesh_out);
+  make_geometry_set_mutable(geometry_set);
+  geometry_set->replace_mesh(mesh_out);
 
-  outputs.set("Geometry", std::move(geometry));
+  outputs.set("Geometry", std::move(geometry_set));
 }
 }  // namespace blender::nodes
 

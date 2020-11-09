@@ -126,10 +126,10 @@ static void geo_point_distribute_exec(bNode *UNUSED(node),
                                       GeoNodeInputs inputs,
                                       GeoNodeOutputs outputs)
 {
-  GeometryPtr geometry = inputs.extract<GeometryPtr>("Geometry");
+  GeometrySetPtr geometry_set = inputs.extract<GeometrySetPtr>("Geometry");
 
-  if (!geometry.has_value() || !geometry->has_mesh()) {
-    outputs.set("Geometry", std::move(geometry));
+  if (!geometry_set.has_value() || !geometry_set->has_mesh()) {
+    outputs.set("Geometry", std::move(geometry_set));
     return;
   }
 
@@ -137,18 +137,18 @@ static void geo_point_distribute_exec(bNode *UNUSED(node),
   const float minimum_radius = inputs.extract<float>("Minimum Radius");
 
   if (density <= 0.0f) {
-    outputs.set("Geometry", std::move(geometry));
+    outputs.set("Geometry", std::move(geometry_set));
     return;
   }
 
-  const Mesh *mesh_in = geometry->get_mesh_for_read();
+  const Mesh *mesh_in = geometry_set->get_mesh_for_read();
   PointCloud *pointcloud_out = scatter_pointcloud_from_mesh(mesh_in, density, minimum_radius);
 
   /* For now, replace any existing pointcloud in the geometry. */
-  make_geometry_mutable(geometry);
-  geometry->replace_pointcloud(pointcloud_out);
+  make_geometry_set_mutable(geometry_set);
+  geometry_set->replace_pointcloud(pointcloud_out);
 
-  outputs.set("Geometry", std::move(geometry));
+  outputs.set("Geometry", std::move(geometry_set));
 }
 }  // namespace blender::nodes
 

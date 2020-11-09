@@ -14,7 +14,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
-#include "BKE_geometry.hh"
+#include "BKE_geometry_set.hh"
 #include "BKE_lib_id.h"
 #include "BKE_mesh.h"
 #include "BKE_pointcloud.h"
@@ -66,22 +66,22 @@ bool GeometryComponent::is_mutable() const
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name Geometry
+/** \name Geometry Set
  * \{ */
 
-/* Makes a copy of the geometry. The individual components are shared with the original geometry.
- * Therefore, this is a relatively cheap operation.
+/* Makes a copy of the geometry set. The individual components are shared with the original
+ * geometry set. Therefore, this is a relatively cheap operation.
  */
-Geometry::Geometry(const Geometry &other) : components_(other.components_)
+GeometrySet::GeometrySet(const GeometrySet &other) : components_(other.components_)
 {
 }
 
-void Geometry::user_add()
+void GeometrySet::user_add()
 {
   users_.fetch_add(1);
 }
 
-void Geometry::user_remove()
+void GeometrySet::user_remove()
 {
   const int new_users = users_.fetch_sub(1) - 1;
   if (new_users == 0) {
@@ -89,17 +89,17 @@ void Geometry::user_remove()
   }
 }
 
-bool Geometry::is_mutable() const
+bool GeometrySet::is_mutable() const
 {
-  /* If the geometry is shared, it is read-only. */
+  /* If the geometry set is shared, it is read-only. */
   /* The user count can be 0, when this is called from the destructor. */
   return users_ <= 1;
 }
 
-/* This method can only be used when the geometry is mutable. It returns a mutable geometry
+/* This method can only be used when the geometry set is mutable. It returns a mutable geometry
  * component of the given type.
  */
-GeometryComponent &Geometry::get_component_for_write(GeometryComponentType component_type)
+GeometryComponent &GeometrySet::get_component_for_write(GeometryComponentType component_type)
 {
   BLI_assert(this->is_mutable());
   return components_.add_or_modify(
@@ -124,7 +124,7 @@ GeometryComponent &Geometry::get_component_for_write(GeometryComponentType compo
 }
 
 /* Get the component of the given type. Might return null if the component does not exist yet. */
-const GeometryComponent *Geometry::get_component_for_read(
+const GeometryComponent *GeometrySet::get_component_for_read(
     GeometryComponentType component_type) const
 {
   const GeometryComponentPtr *component = components_.lookup_ptr(component_type);
@@ -135,90 +135,90 @@ const GeometryComponent *Geometry::get_component_for_read(
 }
 
 /* Returns a read-only mesh or null. */
-const Mesh *Geometry::get_mesh_for_read() const
+const Mesh *GeometrySet::get_mesh_for_read() const
 {
   const MeshComponent *component = this->get_component_for_read<MeshComponent>();
   return (component == nullptr) ? nullptr : component->get_for_read();
 }
 
-/* Returns true when the geometry has a mesh component that has a mesh. */
-bool Geometry::has_mesh() const
+/* Returns true when the geometry set has a mesh component that has a mesh. */
+bool GeometrySet::has_mesh() const
 {
   const MeshComponent *component = this->get_component_for_read<MeshComponent>();
   return component != nullptr && component->has_mesh();
 }
 
 /* Returns a read-only point cloud of null. */
-const PointCloud *Geometry::get_pointcloud_for_read() const
+const PointCloud *GeometrySet::get_pointcloud_for_read() const
 {
   const PointCloudComponent *component = this->get_component_for_read<PointCloudComponent>();
   return (component == nullptr) ? nullptr : component->get_for_read();
 }
 
-/* Returns true when the geometry has a point cloud component that has a point cloud. */
-bool Geometry::has_pointcloud() const
+/* Returns true when the geometry set has a point cloud component that has a point cloud. */
+bool GeometrySet::has_pointcloud() const
 {
   const PointCloudComponent *component = this->get_component_for_read<PointCloudComponent>();
   return component != nullptr && component->has_pointcloud();
 }
 
-/* Create a new geometry that only contains the given mesh. Ownership of the mesh is transferred to
- * the new geometry. */
-GeometryPtr Geometry::create_with_mesh(Mesh *mesh, bool transfer_ownership)
+/* Create a new geometry set that only contains the given mesh. Ownership of the mesh is
+ * transferred to the new geometry. */
+GeometrySetPtr GeometrySet::create_with_mesh(Mesh *mesh, bool transfer_ownership)
 {
-  Geometry *geometry = new Geometry();
-  MeshComponent &component = geometry->get_component_for_write<MeshComponent>();
+  GeometrySet *geometry_set = new GeometrySet();
+  MeshComponent &component = geometry_set->get_component_for_write<MeshComponent>();
   component.replace(mesh, transfer_ownership);
-  return geometry;
+  return geometry_set;
 }
 
 /* Clear the existing mesh and replace it with the given one. */
-void Geometry::replace_mesh(Mesh *mesh, bool transfer_ownership)
+void GeometrySet::replace_mesh(Mesh *mesh, bool transfer_ownership)
 {
   MeshComponent &component = this->get_component_for_write<MeshComponent>();
   component.replace(mesh, transfer_ownership);
 }
 
 /* Clear the existing point cloud and replace with the given one. */
-void Geometry::replace_pointcloud(PointCloud *pointcloud, bool transfer_ownership)
+void GeometrySet::replace_pointcloud(PointCloud *pointcloud, bool transfer_ownership)
 {
   PointCloudComponent &pointcloud_component = this->get_component_for_write<PointCloudComponent>();
   pointcloud_component.replace(pointcloud, transfer_ownership);
 }
 
 /* Returns a mutable mesh or null. No ownership is transferred. */
-Mesh *Geometry::get_mesh_for_write()
+Mesh *GeometrySet::get_mesh_for_write()
 {
   MeshComponent &component = this->get_component_for_write<MeshComponent>();
   return component.get_for_write();
 }
 
 /* Returns a mutable point cloud or null. No ownership is transferred. */
-PointCloud *Geometry::get_pointcloud_for_write()
+PointCloud *GeometrySet::get_pointcloud_for_write()
 {
   PointCloudComponent &component = this->get_component_for_write<PointCloudComponent>();
   return component.get_for_write();
 }
 
 /**
- * Changes the given pointer so that it points to a mutable geometry. This might do nothing, create
- * a new empty geometry or copy the entire geometry.
+ * Changes the given pointer so that it points to a mutable geometry set. This might do nothing,
+ * create a new empty geometry set or copy the entire geometry set.
  */
-void make_geometry_mutable(GeometryPtr &geometry)
+void make_geometry_set_mutable(GeometrySetPtr &geometry_set)
 {
-  if (!geometry) {
+  if (!geometry_set) {
     /* If the pointer is null, create a new instance. */
-    geometry = GeometryPtr{new Geometry()};
+    geometry_set = GeometrySetPtr{new GeometrySet()};
   }
-  else if (geometry->is_mutable()) {
+  else if (geometry_set->is_mutable()) {
     /* If the instance is mutable already, do nothing. */
   }
   else {
     /* This geometry is shared, make a copy that is independent of the other users. */
-    Geometry *shared_geometry = geometry.release();
-    Geometry *new_geometry = new Geometry(*shared_geometry);
-    shared_geometry->user_remove();
-    geometry = GeometryPtr{new_geometry};
+    GeometrySet *shared_geometry_set = geometry_set.release();
+    GeometrySet *new_geometry_set = new GeometrySet(*shared_geometry_set);
+    shared_geometry_set->user_remove();
+    geometry_set = GeometrySetPtr{new_geometry_set};
   }
 }
 

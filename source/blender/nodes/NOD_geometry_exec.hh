@@ -18,15 +18,15 @@
 
 #include "FN_generic_value_map.hh"
 
-#include "BKE_geometry.hh"
+#include "BKE_geometry_set.hh"
 
 #include "DNA_node_types.h"
 
 namespace blender::nodes {
 
-using bke::Geometry;
-using bke::GeometryPtr;
-using bke::make_geometry_mutable;
+using bke::GeometrySet;
+using bke::GeometrySetPtr;
+using bke::make_geometry_set_mutable;
 using bke::MeshComponent;
 using bke::PointCloudComponent;
 using fn::CPPType;

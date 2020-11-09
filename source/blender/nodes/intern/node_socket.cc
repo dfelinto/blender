@@ -32,7 +32,7 @@
 #include "BLI_string.h"
 #include "BLI_utildefines.h"
 
-#include "BKE_geometry.hh"
+#include "BKE_geometry_set.hh"
 #include "BKE_lib_id.h"
 #include "BKE_node.h"
 #include "BKE_persistent_data_handle.hh"
@@ -667,10 +667,10 @@ static bNodeSocketType *make_socket_type_geometry()
 {
   bNodeSocketType *socktype = make_standard_socket_type(SOCK_GEOMETRY, PROP_NONE);
   socktype->get_cpp_type = []() {
-    return &blender::fn::CPPType::get<blender::bke::GeometryPtr>();
+    return &blender::fn::CPPType::get<blender::bke::GeometrySetPtr>();
   };
   socktype->get_cpp_value = [](const bNodeSocket &UNUSED(socket), void *r_value) {
-    new (r_value) blender::bke::GeometryPtr();
+    new (r_value) blender::bke::GeometrySetPtr();
   };
   return socktype;
 }

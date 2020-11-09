@@ -40,16 +40,16 @@ static void geo_subdivision_surface_exec(bNode *UNUSED(node),
                                          GeoNodeInputs inputs,
                                          GeoNodeOutputs outputs)
 {
-  GeometryPtr geometry = inputs.extract<GeometryPtr>("Geometry");
+  GeometrySetPtr geometry_set = inputs.extract<GeometrySetPtr>("Geometry");
 
-  if (!geometry.has_value() || !geometry->has_mesh()) {
-    outputs.set("Geometry", geometry);
+  if (!geometry_set.has_value() || !geometry_set->has_mesh()) {
+    outputs.set("Geometry", geometry_set);
     return;
   }
 
 #ifndef WITH_OPENSUBDIV
   /* Return input geometry if Blender is build without OpenSubdiv. */
-  outputs.set("Geometry", std::move(geometry));
+  outputs.set("Geometry", std::move(geometry_set));
   return;
 #else
   const int subdiv_level = clamp_i(inputs.extract<int>("Level"), 0, 30);
@@ -57,11 +57,11 @@ static void geo_subdivision_surface_exec(bNode *UNUSED(node),
   const bool boundary_smooth = inputs.extract<bool>("Boundary Smooth");
   const bool smooth_uvs = inputs.extract<bool>("Smooth UVs");
 
-  const Mesh *mesh_in = geometry->get_mesh_for_read();
+  const Mesh *mesh_in = geometry_set->get_mesh_for_read();
 
   /* Only process subdivion if level is greater than 0. */
   if (subdiv_level == 0) {
-    outputs.set("Geometry", std::move(geometry));
+    outputs.set("Geometry", std::move(geometry_set));
     return;
   }
 
@@ -87,20 +87,20 @@ static void geo_subdivision_surface_exec(bNode *UNUSED(node),
 
   /* In case of bad topology, skip to input mesh. */
   if (subdiv == nullptr) {
-    outputs.set("Geometry", std::move(geometry));
+    outputs.set("Geometry", std::move(geometry_set));
     return;
   }
 
   Mesh *mesh_out = BKE_subdiv_to_mesh(subdiv, &mesh_settings, mesh_in);
 
-  make_geometry_mutable(geometry);
+  make_geometry_set_mutable(geometry_set);
 
-  geometry->replace_mesh(mesh_out);
+  geometry_set->replace_mesh(mesh_out);
 
   // BKE_subdiv_stats_print(&subdiv->stats);
   BKE_subdiv_free(subdiv);
 
-  outputs.set("Geometry", std::move(geometry));
+  outputs.set("Geometry", std::move(geometry_set));
 #endif
 }
 }  // namespace blender::nodes

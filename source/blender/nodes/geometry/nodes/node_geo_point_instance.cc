@@ -34,18 +34,18 @@ static void geo_point_instance_exec(bNode *UNUSED(node),
                                     GeoNodeInputs inputs,
                                     GeoNodeOutputs outputs)
 {
-  GeometryPtr geometry = inputs.extract<GeometryPtr>("Geometry");
+  GeometrySetPtr geometry_set = inputs.extract<GeometrySetPtr>("Geometry");
 
-  if (!geometry.has_value() || !geometry->has_pointcloud()) {
-    outputs.set("Geometry", std::move(geometry));
+  if (!geometry_set.has_value() || !geometry_set->has_pointcloud()) {
+    outputs.set("Geometry", std::move(geometry_set));
     return;
   }
 
   /* For now make a mesh from the pointcloud instead of instancing another object / geometry. */
-  const PointCloud *pointcloud = geometry->get_pointcloud_for_read();
+  const PointCloud *pointcloud = geometry_set->get_pointcloud_for_read();
 
   if (pointcloud == nullptr) {
-    outputs.set("Geometry", std::move(geometry));
+    outputs.set("Geometry", std::move(geometry_set));
     return;
   }
 
@@ -54,10 +54,10 @@ static void geo_point_instance_exec(bNode *UNUSED(node),
   BKE_mesh_from_pointcloud(pointcloud, mesh_out);
 
   /* For now, replace any existing mesh in the geometry. */
-  make_geometry_mutable(geometry);
-  geometry->replace_mesh(mesh_out);
+  make_geometry_set_mutable(geometry_set);
+  geometry_set->replace_mesh(mesh_out);
 
-  outputs.set("Geometry", std::move(geometry));
+  outputs.set("Geometry", std::move(geometry_set));
 }
 }  // namespace blender::nodes
 

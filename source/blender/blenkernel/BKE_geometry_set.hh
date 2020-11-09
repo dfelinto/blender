@@ -32,8 +32,8 @@ struct PointCloud;
 
 namespace blender::bke {
 
-/* An automatically reference counted geometry. */
-using GeometryPtr = UserCounter<class Geometry>;
+/* An automatically reference counted geometry set. */
+using GeometrySetPtr = UserCounter<class GeometrySet>;
 
 /* Each geometry component has a specific type. The type determines what kind of data the component
  * stores. Functions modifying a geometry will usually just modify a subset of the component types.
@@ -82,31 +82,31 @@ template<typename T>
 inline constexpr bool is_geometry_component_v = std::is_base_of_v<GeometryComponent, T>;
 
 /**
- * A geometry contains zero or more geometry components. There is at most one component of each
+ * A geometry set contains zero or more geometry components. There is at most one component of each
  * type. Individual components might be shared between multiple geometries.
  *
  * Geometries are reference counted. This allows them to be shared without making unnecessary
  * copies. A geometry that is shared is immutable. If some code wants to change it,
- * #make_geometry_mutable should be called first.
+ * #make_geometry_set_mutable should be called first.
  */
-class Geometry {
+class GeometrySet {
  private:
-  /* Number of users of this geometry. If this number goes to zero, the geometry is freed. If it
-   * is above 1, the geometry is immutable. */
+  /* Number of users of this geometry set. If this number goes to zero, the set is freed. If
+   * it is above 1, the geometry set is immutable. */
   std::atomic<int> users_ = 1;
 
   using GeometryComponentPtr = UserCounter<class GeometryComponent>;
   Map<GeometryComponentType, GeometryComponentPtr> components_;
 
  public:
-  Geometry() = default;
-  Geometry(const Geometry &other);
-  Geometry(Geometry &&other) = delete;
-  ~Geometry() = default;
+  GeometrySet() = default;
+  GeometrySet(const GeometrySet &other);
+  GeometrySet(GeometrySet &&other) = delete;
+  ~GeometrySet() = default;
 
   /* Disable copy and move assignment operators. */
-  Geometry &operator=(const Geometry &other) = delete;
-  Geometry &operator=(Geometry &&other) = delete;
+  GeometrySet &operator=(const GeometrySet &other) = delete;
+  GeometrySet &operator=(GeometrySet &&other) = delete;
 
   void user_add();
   void user_remove();
@@ -127,7 +127,7 @@ class Geometry {
   }
 
   /* Utility methods for creation. */
-  static GeometryPtr create_with_mesh(Mesh *mesh, bool transfer_ownership = true);
+  static GeometrySetPtr create_with_mesh(Mesh *mesh, bool transfer_ownership = true);
 
   /* Utility methods for access. */
   bool has_mesh() const;
@@ -142,7 +142,7 @@ class Geometry {
   void replace_pointcloud(PointCloud *pointcloud, bool transfer_ownership = true);
 };
 
-void make_geometry_mutable(GeometryPtr &geometry);
+void make_geometry_set_mutable(GeometrySetPtr &geometry);
 
 /** A geometry component that can store a mesh. */
 class MeshComponent : public GeometryComponent {

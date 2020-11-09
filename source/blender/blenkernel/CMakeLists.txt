@@ -124,7 +124,7 @@ set(SRC
   intern/fmodifier.c
   intern/font.c
   intern/freestyle.c
-  intern/geometry.cc
+  intern/geometry_set.cc
   intern/gpencil.c
   intern/gpencil_curve.c
   intern/gpencil_geom.c
@@ -312,7 +312,7 @@ set(SRC
   BKE_fluid.h
   BKE_font.h
   BKE_freestyle.h
-  BKE_geometry.hh
+  BKE_geometry_set.hh
   BKE_global.h
   BKE_gpencil.h
   BKE_gpencil_curve.h

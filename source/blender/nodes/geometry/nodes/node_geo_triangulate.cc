@@ -38,24 +38,24 @@ static bNodeSocketTemplate geo_node_triangulate_out[] = {
 namespace blender::nodes {
 static void geo_triangulate_exec(bNode *UNUSED(node), GeoNodeInputs inputs, GeoNodeOutputs outputs)
 {
-  GeometryPtr geometry = inputs.extract<GeometryPtr>("Geometry");
+  GeometrySetPtr geometry_set = inputs.extract<GeometrySetPtr>("Geometry");
   const int min_vertices = std::max(inputs.extract<int>("Minimum Vertices"), 4);
 
-  if (!geometry.has_value()) {
-    outputs.set("Geometry", geometry);
+  if (!geometry_set.has_value()) {
+    outputs.set("Geometry", geometry_set);
     return;
   }
 
-  make_geometry_mutable(geometry);
+  make_geometry_set_mutable(geometry_set);
 
   /* #triangulate_mesh might modify the input mesh currently. */
-  Mesh *mesh_in = geometry->get_mesh_for_write();
+  Mesh *mesh_in = geometry_set->get_mesh_for_write();
   if (mesh_in != nullptr) {
     Mesh *mesh_out = triangulate_mesh(mesh_in, 3, 0, min_vertices, 0);
-    geometry->replace_mesh(mesh_out);
+    geometry_set->replace_mesh(mesh_out);
   }
 
-  outputs.set("Geometry", std::move(geometry));
+  outputs.set("Geometry", std::move(geometry_set));
 }
 }  // namespace blender::nodes
 

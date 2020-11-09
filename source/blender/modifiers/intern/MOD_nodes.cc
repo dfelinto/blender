@@ -652,11 +652,11 @@ static void initialize_group_input(NodesModifierData &nmd,
  * Currently, this uses a fairly basic and inefficient algorithm that might compute things more
  * often than necessary. It's going to be replaced soon.
  */
-static GeometryPtr compute_geometry(const DerivedNodeTree &tree,
-                                    Span<const DOutputSocket *> group_input_sockets,
-                                    const DInputSocket &socket_to_compute,
-                                    GeometryPtr input_geometry,
-                                    NodesModifierData *nmd)
+static GeometrySetPtr compute_geometry(const DerivedNodeTree &tree,
+                                       Span<const DOutputSocket *> group_input_sockets,
+                                       const DInputSocket &socket_to_compute,
+                                       GeometrySetPtr input_geometry_set,
+                                       NodesModifierData *nmd)
 {
   ResourceCollector resources;
   LinearAllocator<> &allocator = resources.linear_allocator();
@@ -671,8 +671,9 @@ static GeometryPtr compute_geometry(const DerivedNodeTree &tree,
      * modifier. */
     const DOutputSocket *first_input_socket = group_input_sockets[0];
     if (first_input_socket->bsocket()->type == SOCK_GEOMETRY) {
-      GeometryPtr *geometry_in = allocator.construct<GeometryPtr>(std::move(input_geometry));
-      group_inputs.add_new(first_input_socket, geometry_in);
+      GeometrySetPtr *geometry_set_in = allocator.construct<GeometrySetPtr>(
+          std::move(input_geometry_set));
+      group_inputs.add_new(first_input_socket, geometry_set_in);
       remaining_input_sockets = remaining_input_sockets.drop_front(1);
     }
 
@@ -693,7 +694,7 @@ static GeometryPtr compute_geometry(const DerivedNodeTree &tree,
   BLI_assert(results.size() == 1);
   GMutablePointer result = results[0];
 
-  GeometryPtr output_geometry = std::move(*(GeometryPtr *)result.get());
+  GeometrySetPtr output_geometry = std::move(*(GeometrySetPtr *)result.get());
   return output_geometry;
 }
 
@@ -771,12 +772,12 @@ static Mesh *modifyMesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh *
     return mesh;
   }
 
-  GeometryPtr input_geometry{Geometry::create_with_mesh(mesh, false)};
+  GeometrySetPtr input_geometry_set{GeometrySet::create_with_mesh(mesh, false)};
 
-  GeometryPtr new_geometry = compute_geometry(
-      tree, group_inputs, *group_outputs[0], std::move(input_geometry), nmd);
-  make_geometry_mutable(new_geometry);
-  Mesh *new_mesh = new_geometry->get_component_for_write<MeshComponent>().release();
+  GeometrySetPtr new_geometry_set = compute_geometry(
+      tree, group_inputs, *group_outputs[0], std::move(input_geometry_set), nmd);
+  make_geometry_set_mutable(new_geometry_set);
+  Mesh *new_mesh = new_geometry_set->get_component_for_write<MeshComponent>().release();
   if (new_mesh == nullptr) {
     return BKE_mesh_new_nomain(0, 0, 0, 0, 0);
   }

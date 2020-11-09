@@ -88,10 +88,10 @@ static void transform_pointcloud(PointCloud *pointcloud,
 namespace blender::nodes {
 static void geo_transform_exec(bNode *UNUSED(node), GeoNodeInputs inputs, GeoNodeOutputs outputs)
 {
-  GeometryPtr geometry = inputs.extract<GeometryPtr>("Geometry");
+  GeometrySetPtr geometry_set = inputs.extract<GeometrySetPtr>("Geometry");
 
-  if (!geometry.has_value()) {
-    outputs.set("Geometry", std::move(geometry));
+  if (!geometry_set.has_value()) {
+    outputs.set("Geometry", std::move(geometry_set));
     return;
   }
 
@@ -99,19 +99,19 @@ static void geo_transform_exec(bNode *UNUSED(node), GeoNodeInputs inputs, GeoNod
   const float3 rotation = inputs.extract<float3>("Rotation");
   const float3 scale = inputs.extract<float3>("Scale");
 
-  make_geometry_mutable(geometry);
+  make_geometry_set_mutable(geometry_set);
 
-  if (geometry->has_mesh()) {
-    Mesh *mesh = geometry->get_mesh_for_write();
+  if (geometry_set->has_mesh()) {
+    Mesh *mesh = geometry_set->get_mesh_for_write();
     transform_mesh(mesh, translation, rotation, scale);
   }
 
-  if (geometry->has_pointcloud()) {
-    PointCloud *pointcloud = geometry->get_pointcloud_for_write();
+  if (geometry_set->has_pointcloud()) {
+    PointCloud *pointcloud = geometry_set->get_pointcloud_for_write();
     transform_pointcloud(pointcloud, translation, rotation, scale);
   }
 
-  outputs.set("Geometry", std::move(geometry));
+  outputs.set("Geometry", std::move(geometry_set));
 }
 }  // namespace blender::nodes
 
