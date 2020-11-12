@@ -54,7 +54,7 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "RE_render_ext.h"
+#include "RE_texture.h"
 
 #include "DEG_depsgraph.h"
 #include "DEG_depsgraph_query.h"
