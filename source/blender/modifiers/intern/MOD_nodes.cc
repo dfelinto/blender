@@ -165,7 +165,11 @@ static bool isDisabled(const struct Scene *UNUSED(scene),
                        bool UNUSED(useRenderParams))
 {
   NodesModifierData *nmd = reinterpret_cast<NodesModifierData *>(md);
-  UNUSED_VARS(nmd);
+
+  if (nmd->node_group == nullptr) {
+    return true;
+  }
+
   return false;
 }
 
