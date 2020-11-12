@@ -57,6 +57,8 @@ static void geo_object_info_exec(GeoNodeExecParams params)
         /* Make a copy because the life time of the other mesh might be shorter. */
         Mesh *copied_mesh = BKE_mesh_copy_for_eval(mesh, false);
         geometry_set = GeometrySet::create_with_mesh(copied_mesh);
+        geometry_set->get_component_for_write<MeshComponent>().copy_vertex_group_names_from_object(
+            *object);
       }
     }
   }

@@ -19,6 +19,8 @@
 #include "BKE_mesh.h"
 #include "BKE_pointcloud.h"
 
+#include "DNA_object_types.h"
+
 #include "MEM_guardedalloc.h"
 
 namespace blender::bke {
@@ -270,6 +272,7 @@ void MeshComponent::clear()
     }
     mesh_ = nullptr;
   }
+  vertex_group_names_.clear();
 }
 
 bool MeshComponent::has_mesh() const
@@ -294,6 +297,22 @@ Mesh *MeshComponent::release()
   Mesh *mesh = mesh_;
   mesh_ = nullptr;
   return mesh;
+}
+
+void MeshComponent::copy_vertex_group_names_from_object(const Object &object)
+{
+  BLI_assert(this->is_mutable());
+  vertex_group_names_.clear();
+  int index = 0;
+  LISTBASE_FOREACH (const bDeformGroup *, group, &object.defbase) {
+    vertex_group_names_.add(group->name, index);
+    index++;
+  }
+}
+
+int MeshComponent::vertex_group_index(StringRef vertex_group_name) const
+{
+  return vertex_group_names_.lookup_default_as(vertex_group_name, -1);
 }
 
 /* Get the mesh from this component. This method can be used by multiple threads at the same

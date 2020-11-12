@@ -34,8 +34,7 @@
 static bNodeSocketTemplate geo_node_point_distribute_in[] = {
     {SOCK_GEOMETRY, N_("Geometry")},
     {SOCK_FLOAT, N_("Density"), 10.0f, 0.0f, 0.0f, 0.0f, 0.0f, 100000.0f, PROP_NONE},
-    /* Use an index, because the vertex group names are not available in the mesh... */
-    {SOCK_INT, N_("Density Attribute Index"), -1, 0, 0, 0, -1, 1000},
+    {SOCK_STRING, N_("Density Attribute")},
     {-1, ""},
 };
 
@@ -111,8 +110,7 @@ static void geo_point_distribute_exec(GeoNodeExecParams params)
   }
 
   const float density = params.extract_input<float>("Density");
-  const int density_attribute_index = std::max(
-      -1, params.extract_input<int>("Density Attribute Index"));
+  const std::string density_attribute = params.extract_input<std::string>("Density Attribute");
 
   if (density <= 0.0f) {
     geometry_set->replace_mesh(nullptr);
@@ -121,7 +119,9 @@ static void geo_point_distribute_exec(GeoNodeExecParams params)
     return;
   }
 
-  const Mesh *mesh_in = geometry_set->get_mesh_for_read();
+  const MeshComponent &mesh_component = *geometry_set->get_component_for_read<MeshComponent>();
+  const Mesh *mesh_in = mesh_component.get_for_read();
+  const int density_attribute_index = mesh_component.vertex_group_index(density_attribute);
   Vector<float3> points = scatter_points_from_mesh(mesh_in, density, density_attribute_index);
 
   PointCloud *pointcloud = BKE_pointcloud_new_nomain(points.size());
