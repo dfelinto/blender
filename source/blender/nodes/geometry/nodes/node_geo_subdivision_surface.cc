@@ -46,16 +46,11 @@ static void geo_subdivision_surface_exec(GeoNodeExecParams params)
   }
 
 #ifndef WITH_OPENSUBDIV
-  /* Return input geometry if Blender is build without OpenSubdiv. */
+  /* Return input geometry if Blender is built without OpenSubdiv. */
   params.set_output("Geometry", std::move(geometry_set));
   return;
 #else
   const int subdiv_level = clamp_i(params.extract_input<int>("Level"), 0, 30);
-  const bool use_crease = params.extract_input<bool>("Use Creases");
-  const bool boundary_smooth = params.extract_input<bool>("Boundary Smooth");
-  const bool smooth_uvs = params.extract_input<bool>("Smooth UVs");
-
-  const Mesh *mesh_in = geometry_set->get_mesh_for_read();
 
   /* Only process subdivion if level is greater than 0. */
   if (subdiv_level == 0) {
@@ -63,12 +58,17 @@ static void geo_subdivision_surface_exec(GeoNodeExecParams params)
     return;
   }
 
-  /* Mesh settings init. */
+  const bool use_crease = params.extract_input<bool>("Use Creases");
+  const bool boundary_smooth = params.extract_input<bool>("Boundary Smooth");
+  const bool smooth_uvs = params.extract_input<bool>("Smooth UVs");
+  const Mesh *mesh_in = geometry_set->get_mesh_for_read();
+
+  /* Initialize mesh settings. */
   SubdivToMeshSettings mesh_settings;
   mesh_settings.resolution = (1 << subdiv_level) + 1;
   mesh_settings.use_optimal_display = false;
 
-  /* Subdivision settings init. */
+  /* Initialize subdivision settings. */
   SubdivSettings subdiv_settings;
   subdiv_settings.is_simple = false;
   subdiv_settings.is_adaptive = false;
@@ -80,7 +80,7 @@ static void geo_subdivision_surface_exec(GeoNodeExecParams params)
   subdiv_settings.fvar_linear_interpolation = BKE_subdiv_fvar_interpolation_from_uv_smooth(
       smooth_uvs);
 
-  /* Apply subdiv to mesh. */
+  /* Apply subdivision to mesh. */
   Subdiv *subdiv = BKE_subdiv_update_from_mesh(nullptr, &subdiv_settings, mesh_in);
 
   /* In case of bad topology, skip to input mesh. */
