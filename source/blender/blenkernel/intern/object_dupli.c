@@ -47,6 +47,7 @@
 #include "BKE_editmesh.h"
 #include "BKE_editmesh_cache.h"
 #include "BKE_font.h"
+#include "BKE_geometry_set.h"
 #include "BKE_global.h"
 #include "BKE_idprop.h"
 #include "BKE_lattice.h"
@@ -807,6 +808,38 @@ static const DupliGenerator gen_dupli_verts_pointcloud = {
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name Instances Geometry Component Implementation
+ * \{ */
+
+static void make_duplis_instances_component(const DupliContext *ctx)
+{
+  float(*positions)[3];
+  Object **objects;
+  const int amount = BKE_geometry_set_instances(
+      ctx->object->runtime.geometry_set_eval, &positions, &objects);
+
+  for (int i = 0; i < amount; i++) {
+    Object *object = objects[i];
+    if (object == NULL) {
+      continue;
+    }
+    float mat[4][4];
+    unit_m4(mat);
+    copy_v3_v3(mat[3], positions[i]);
+    mul_m4_m4_pre(mat, ctx->object->obmat);
+    make_dupli(ctx, object, mat, i);
+    make_recursive_duplis(ctx, object, mat, i);
+  }
+}
+
+static const DupliGenerator gen_dupli_instances_component = {
+    0,
+    make_duplis_instances_component,
+};
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name Dupli-Faces Implementation (#OB_DUPLIFACES)
  * \{ */
 
@@ -1473,7 +1506,7 @@ static const DupliGenerator *get_dupli_generator(const DupliContext *ctx)
   int transflag = ctx->object->transflag;
   int restrictflag = ctx->object->restrictflag;
 
-  if ((transflag & OB_DUPLI) == 0) {
+  if ((transflag & OB_DUPLI) == 0 && ctx->object->runtime.geometry_set_eval == NULL) {
     return NULL;
   }
 
@@ -1481,6 +1514,12 @@ static const DupliGenerator *get_dupli_generator(const DupliContext *ctx)
   if (DEG_get_mode(ctx->depsgraph) == DAG_EVAL_RENDER ? (restrictflag & OB_RESTRICT_RENDER) :
                                                         (restrictflag & OB_RESTRICT_VIEWPORT)) {
     return NULL;
+  }
+
+  if (ctx->object->runtime.geometry_set_eval != NULL) {
+    if (BKE_geometry_set_has_instances(ctx->object->runtime.geometry_set_eval)) {
+      return &gen_dupli_instances_component;
+    }
   }
 
   if (transflag & OB_DUPLIPARTS) {
