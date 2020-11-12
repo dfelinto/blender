@@ -3157,6 +3157,12 @@ static void node_geometry_buts_subdivision_surface(uiLayout *layout,
 #endif
 }
 
+static void node_geometry_buts_triangulate(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
+{
+  uiItemR(layout, ptr, "quad_method", DEFAULT_FLAGS, "", ICON_NONE);
+  uiItemR(layout, ptr, "ngon_method", DEFAULT_FLAGS, "", ICON_NONE);
+}
+
 static void node_geometry_set_butfunc(bNodeType *ntype)
 {
   switch (ntype->type) {
@@ -3165,6 +3171,9 @@ static void node_geometry_set_butfunc(bNodeType *ntype)
       break;
     case GEO_NODE_SUBDIVISION_SURFACE:
       ntype->draw_buttons = node_geometry_buts_subdivision_surface;
+      break;
+    case GEO_NODE_TRIANGULATE:
+      ntype->draw_buttons = node_geometry_buts_triangulate;
       break;
   }
 }

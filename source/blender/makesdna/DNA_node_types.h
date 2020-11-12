@@ -1441,3 +1441,16 @@ typedef enum GeometryNodeBooleanOperation {
   GEO_NODE_BOOLEAN_UNION = 1,
   GEO_NODE_BOOLEAN_DIFFERENCE = 2,
 } GeometryNodeBooleanOperation;
+
+/* Triangulate Node */
+typedef enum GeometryNodeTriangulateNGons {
+  GEO_NODE_TRIANGULATE_NGON_BEAUTY = 0,
+  GEO_NODE_TRIANGULATE_NGON_EARCLIP = 1,
+} GeometryNodeTriangulateNGons;
+
+typedef enum GeometryNodeTriangulateQuads {
+  GEO_NODE_TRIANGULATE_QUAD_BEAUTY = 0,
+  GEO_NODE_TRIANGULATE_QUAD_FIXED = 1,
+  GEO_NODE_TRIANGULATE_QUAD_ALTERNATE = 2,
+  GEO_NODE_TRIANGULATE_QUAD_SHORTEDGE = 3,
+} GeometryNodeTriangulateQuads;

@@ -266,7 +266,7 @@ DefNode(FunctionNode, FN_NODE_COMBINE_STRINGS, 0,               "COMBINE_STRINGS
 DefNode(FunctionNode, FN_NODE_OBJECT_TRANSFORMS, 0,             "OBJECT_TRANSFORMS", ObjectTransforms, "Object Transforms", "")
 DefNode(FunctionNode, FN_NODE_RANDOM_FLOAT, 0,                  "RANDOM_FLOAT", RandomFloat, "Random Float", "")
 
-DefNode(GeometryNode, GEO_NODE_TRIANGULATE, 0, "TRIANGULATE", Triangulate, "Triangulate", "")
+DefNode(GeometryNode, GEO_NODE_TRIANGULATE, def_geo_triangulate, "TRIANGULATE", Triangulate, "Triangulate", "")
 DefNode(GeometryNode, GEO_NODE_EDGE_SPLIT, 0, "EDGE_SPLIT", EdgeSplit, "Edge Split", "")
 DefNode(GeometryNode, GEO_NODE_TRANSFORM, 0, "TRANSFORM", Transform, "Transform", "")
 DefNode(GeometryNode, GEO_NODE_SUBDIVISION_SURFACE, 0, "SUBDIVISION_SURFACE", SubdivisionSurface, "Subdivision Surface", "")

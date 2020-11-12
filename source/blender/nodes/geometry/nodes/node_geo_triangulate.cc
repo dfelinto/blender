@@ -14,6 +14,10 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
+#include "DNA_node_types.h"
+
+#include "RNA_enum_types.h"
+
 #include "node_geometry_util.hh"
 
 extern "C" {
@@ -35,6 +39,12 @@ static bNodeSocketTemplate geo_node_triangulate_out[] = {
     {-1, ""},
 };
 
+static void geo_triangulate_init(bNodeTree *UNUSED(ntree), bNode *node)
+{
+  node->custom1 = GEO_NODE_TRIANGULATE_QUAD_SHORTEDGE;
+  node->custom2 = GEO_NODE_TRIANGULATE_NGON_BEAUTY;
+}
+
 namespace blender::nodes {
 static void geo_triangulate_exec(GeoNodeExecParams params)
 {
@@ -46,12 +56,17 @@ static void geo_triangulate_exec(GeoNodeExecParams params)
     return;
   }
 
+  GeometryNodeTriangulateQuads quad_method = static_cast<GeometryNodeTriangulateQuads>(
+      params.node().custom1);
+  GeometryNodeTriangulateNGons ngon_method = static_cast<GeometryNodeTriangulateNGons>(
+      params.node().custom2);
+
   make_geometry_set_mutable(geometry_set);
 
   /* #triangulate_mesh might modify the input mesh currently. */
   Mesh *mesh_in = geometry_set->get_mesh_for_write();
   if (mesh_in != nullptr) {
-    Mesh *mesh_out = triangulate_mesh(mesh_in, 3, 0, min_vertices, 0);
+    Mesh *mesh_out = triangulate_mesh(mesh_in, quad_method, ngon_method, min_vertices, 0);
     geometry_set->replace_mesh(mesh_out);
   }
 
@@ -65,6 +80,7 @@ void register_node_type_geo_triangulate()
 
   geo_node_type_base(&ntype, GEO_NODE_TRIANGULATE, "Triangulate", 0, 0);
   node_type_socket_templates(&ntype, geo_node_triangulate_in, geo_node_triangulate_out);
+  node_type_init(&ntype, geo_triangulate_init);
   ntype.geometry_node_execute = blender::nodes::geo_triangulate_exec;
   nodeRegisterType(&ntype);
 }

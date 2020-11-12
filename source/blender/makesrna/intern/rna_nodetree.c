@@ -384,6 +384,44 @@ static const EnumPropertyItem rna_node_geometry_boolean_method_items[] = {
     {0, NULL, 0, NULL, NULL},
 };
 
+static const EnumPropertyItem rna_node_geometry_triangulate_quad_method_items[] = {
+    {GEO_NODE_TRIANGULATE_QUAD_BEAUTY,
+     "BEAUTY",
+     0,
+     "Beauty",
+     "Split the quads in nice triangles, slower method"},
+    {GEO_NODE_TRIANGULATE_QUAD_FIXED,
+     "FIXED",
+     0,
+     "Fixed",
+     "Split the quads on the first and third vertices"},
+    {GEO_NODE_TRIANGULATE_QUAD_ALTERNATE,
+     "FIXED_ALTERNATE",
+     0,
+     "Fixed Alternate",
+     "Split the quads on the 2nd and 4th vertices"},
+    {GEO_NODE_TRIANGULATE_QUAD_SHORTEDGE,
+     "SHORTEST_DIAGONAL",
+     0,
+     "Shortest Diagonal",
+     "Split the quads based on the distance between the vertices"},
+    {0, NULL, 0, NULL, NULL},
+};
+
+static const EnumPropertyItem rna_node_geometry_triangulate_ngon_method_items[] = {
+    {GEO_NODE_TRIANGULATE_NGON_BEAUTY,
+     "BEAUTY",
+     0,
+     "Beauty",
+     "Arrange the new triangles evenly (slow)"},
+    {GEO_NODE_TRIANGULATE_NGON_EARCLIP,
+     "CLIP",
+     0,
+     "Clip",
+     "Split the polygons with an ear clipping algorithm"},
+    {0, NULL, 0, NULL, NULL},
+};
+
 #endif
 
 #ifdef RNA_RUNTIME
@@ -8197,6 +8235,26 @@ static void def_geo_boolean(StructRNA *srna)
   RNA_def_property_enum_items(prop, rna_node_geometry_boolean_method_items);
   RNA_def_property_enum_default(prop, GEO_NODE_BOOLEAN_INTERSECT);
   RNA_def_property_ui_text(prop, "Operation", "");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+}
+
+static void def_geo_triangulate(StructRNA *srna)
+{
+  PropertyRNA *prop;
+
+  prop = RNA_def_property(srna, "quad_method", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, NULL, "custom1");
+  RNA_def_property_enum_items(prop, rna_node_geometry_triangulate_quad_method_items);
+  RNA_def_property_enum_default(prop, GEO_NODE_TRIANGULATE_QUAD_SHORTEDGE);
+  RNA_def_property_ui_text(prop, "Quad Method", "Method for splitting the quads into triangles");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+  prop = RNA_def_property(srna, "ngon_method", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, NULL, "custom2");
+  RNA_def_property_enum_items(prop, rna_node_geometry_triangulate_ngon_method_items);
+  RNA_def_property_enum_default(prop, GEO_NODE_TRIANGULATE_NGON_BEAUTY);
+  RNA_def_property_ui_text(
+      prop, "Polygon Method", "Method for splitting the polygons into triangles");
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
 }
 
