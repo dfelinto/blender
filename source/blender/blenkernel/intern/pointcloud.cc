@@ -33,6 +33,7 @@
 
 #include "BKE_anim_data.h"
 #include "BKE_customdata.h"
+#include "BKE_geometry_set.hh"
 #include "BKE_global.h"
 #include "BKE_idtype.h"
 #include "BKE_lib_id.h"
@@ -86,6 +87,8 @@ static void pointcloud_copy_data(Main *UNUSED(bmain), ID *id_dst, const ID *id_s
                   alloc_type,
                   pointcloud_dst->totpoint);
   BKE_pointcloud_update_customdata_pointers(pointcloud_dst);
+
+  pointcloud_dst->batch_cache = NULL;
 }
 
 static void pointcloud_free_data(ID *id)
@@ -329,12 +332,13 @@ PointCloud *BKE_pointcloud_copy_for_eval(struct PointCloud *pointcloud_src, bool
   return result;
 }
 
-static PointCloud *pointcloud_evaluate_modifiers(struct Depsgraph *depsgraph,
-                                                 struct Scene *scene,
-                                                 Object *object,
-                                                 PointCloud *pointcloud_input)
+static blender::bke::GeometrySetPtr pointcloud_evaluate_modifiers(
+    struct Depsgraph *depsgraph,
+    struct Scene *scene,
+    Object *object,
+    blender::bke::GeometrySetPtr geometry_set)
 {
-  PointCloud *pointcloud = pointcloud_input;
+  using namespace blender::bke;
 
   /* Modifier evaluation modes. */
   const bool use_render = (DEG_get_mode(depsgraph) == DAG_EVAL_RENDER);
@@ -355,55 +359,35 @@ static PointCloud *pointcloud_evaluate_modifiers(struct Depsgraph *depsgraph,
       continue;
     }
 
-    if ((mti->type == eModifierTypeType_OnlyDeform) &&
-        (mti->flags & eModifierTypeFlag_AcceptsVertexCosOnly)) {
-      /* Ensure we are not modifying the input. */
-      if (pointcloud == pointcloud_input) {
-        pointcloud = BKE_pointcloud_copy_for_eval(pointcloud, true);
-      }
-
-      /* Ensure we are not overwriting referenced data. */
-      CustomData_duplicate_referenced_layer_named(
-          &pointcloud->pdata, CD_PROP_FLOAT3, POINTCLOUD_ATTR_POSITION, pointcloud->totpoint);
-      BKE_pointcloud_update_customdata_pointers(pointcloud);
-
-      /* Created deformed coordinates array on demand. */
-      mti->deformVerts(md, &mectx, nullptr, pointcloud->co, pointcloud->totpoint);
-    }
-    else if (mti->modifyPointCloud) {
-      /* Ensure we are not modifying the input. */
-      if (pointcloud == pointcloud_input) {
-        pointcloud = BKE_pointcloud_copy_for_eval(pointcloud, true);
-      }
-
-      PointCloud *pointcloud_next = mti->modifyPointCloud(md, &mectx, pointcloud);
-
-      if (pointcloud_next && pointcloud_next != pointcloud) {
-        /* If the modifier returned a new pointcloud, release the old one. */
-        if (pointcloud != pointcloud_input) {
-          BKE_id_free(nullptr, pointcloud);
-        }
-        pointcloud = pointcloud_next;
-      }
+    if (mti->modifyPointCloud) {
+      GeometrySetC *modifier_input_geometry_set = wrap(geometry_set.release());
+      GeometrySetC *modifier_output_geometry_set = mti->modifyPointCloud(
+          md, &mectx, modifier_input_geometry_set);
+      geometry_set = unwrap(modifier_output_geometry_set);
     }
   }
 
-  return pointcloud;
+  return geometry_set;
 }
 
 void BKE_pointcloud_data_update(struct Depsgraph *depsgraph, struct Scene *scene, Object *object)
 {
+  using namespace blender::bke;
+
   /* Free any evaluated data and restore original data. */
   BKE_object_free_derived_caches(object);
 
   /* Evaluate modifiers. */
   PointCloud *pointcloud = static_cast<PointCloud *>(object->data);
-  PointCloud *pointcloud_eval = pointcloud_evaluate_modifiers(
-      depsgraph, scene, object, pointcloud);
+  GeometrySetPtr input_geometry_set = GeometrySet::create_with_pointcloud(
+      pointcloud, GeometryOwnershipType::ReadOnly);
+  GeometrySetPtr geometry_set_eval = pointcloud_evaluate_modifiers(
+      depsgraph, scene, object, std::move(input_geometry_set));
 
   /* Assign evaluated object. */
-  const bool is_owned = (pointcloud != pointcloud_eval);
-  BKE_object_eval_assign_data(object, &pointcloud_eval->id, is_owned);
+  PointCloud *dummy_pointcloud = BKE_pointcloud_new_nomain(0);
+  BKE_object_eval_assign_data(object, &dummy_pointcloud->id, true);
+  object->runtime.geometry_set_eval = wrap(geometry_set_eval.release());
 }
 
 /* Draw Cache */

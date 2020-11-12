@@ -169,22 +169,6 @@ static bool isDisabled(const struct Scene *UNUSED(scene),
   return false;
 }
 
-static PointCloud *modifyPointCloud(ModifierData *md,
-                                    const ModifierEvalContext *UNUSED(ctx),
-                                    PointCloud *pointcloud)
-{
-  NodesModifierData *nmd = reinterpret_cast<NodesModifierData *>(md);
-  UNUSED_VARS(nmd);
-  std::cout << __func__ << "\n";
-  return pointcloud;
-}
-
-/* To be replaced soon. */
-using namespace blender;
-using namespace blender::nodes;
-using namespace blender::fn;
-using namespace blender::bke;
-
 class GeometryNodesEvaluator {
  private:
   LinearAllocator<> allocator_;
@@ -816,27 +800,28 @@ static void check_property_socket_sync(const Object *ob, ModifierData *md)
   }
 }
 
-static Mesh *modifyMesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh *mesh)
+static GeometrySetPtr modifyGeometry(ModifierData *md,
+                                     const ModifierEvalContext *ctx,
+                                     GeometrySetPtr input_geometry_set)
 {
   NodesModifierData *nmd = reinterpret_cast<NodesModifierData *>(md);
   if (nmd->node_group == nullptr) {
-    return mesh;
+    return input_geometry_set;
   }
 
   check_property_socket_sync(ctx->object, md);
 
   NodeTreeRefMap tree_refs;
   DerivedNodeTree tree{nmd->node_group, tree_refs};
-  ResourceCollector resources;
 
   Span<const DNode *> input_nodes = tree.nodes_by_type("NodeGroupInput");
   Span<const DNode *> output_nodes = tree.nodes_by_type("NodeGroupOutput");
 
   if (input_nodes.size() > 1) {
-    return mesh;
+    return input_geometry_set;
   }
   if (output_nodes.size() != 1) {
-    return mesh;
+    return input_geometry_set;
   }
 
   Span<const DOutputSocket *> group_inputs = (input_nodes.size() == 1) ?
@@ -845,25 +830,41 @@ static Mesh *modifyMesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh *
   Span<const DInputSocket *> group_outputs = output_nodes[0]->inputs().drop_back(1);
 
   if (group_outputs.size() != 1) {
-    return mesh;
+    return input_geometry_set;
   }
 
   const DInputSocket *group_output = group_outputs[0];
   if (group_output->idname() != "NodeSocketGeometry") {
-    return mesh;
+    return input_geometry_set;
   }
 
-  GeometrySetPtr input_geometry_set{
-      GeometrySet::create_with_mesh(mesh, GeometryOwnershipType::Editable)};
-
-  GeometrySetPtr new_geometry_set = compute_geometry(
+  GeometrySetPtr output_geometry_set = compute_geometry(
       tree, group_inputs, *group_outputs[0], std::move(input_geometry_set), nmd);
-  make_geometry_set_mutable(new_geometry_set);
-  Mesh *new_mesh = new_geometry_set->get_component_for_write<MeshComponent>().release();
+  return output_geometry_set;
+}
+
+static Mesh *modifyMesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh *mesh)
+{
+  GeometrySetPtr input_geometry_set = GeometrySet::create_with_mesh(
+      mesh, GeometryOwnershipType::Editable);
+  GeometrySetPtr output_geometry_set = modifyGeometry(md, ctx, std::move(input_geometry_set));
+  if (!output_geometry_set.has_value()) {
+    return BKE_mesh_new_nomain(0, 0, 0, 0, 0);
+  }
+  Mesh *new_mesh = output_geometry_set->get_component_for_write<MeshComponent>().release();
   if (new_mesh == nullptr) {
     return BKE_mesh_new_nomain(0, 0, 0, 0, 0);
   }
   return new_mesh;
+}
+
+static GeometrySetC *modifyPointCloud(ModifierData *md,
+                                      const ModifierEvalContext *ctx,
+                                      GeometrySetC *geometry_set_c)
+{
+  GeometrySetPtr input_geometry_set = unwrap(geometry_set_c);
+  GeometrySetPtr output_geometry_set = modifyGeometry(md, ctx, std::move(input_geometry_set));
+  return wrap(output_geometry_set.release());
 }
 
 /* Drawing the properties manually with #uiItemR instead of #uiDefAutoButsRNA allows using
