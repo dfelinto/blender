@@ -19,15 +19,20 @@
 #include "FN_generic_value_map.hh"
 
 #include "BKE_geometry_set.hh"
+#include "BKE_persistent_data_handle.hh"
 
 #include "DNA_node_types.h"
 
 namespace blender::nodes {
 
+using bke::GeometryOwnershipType;
 using bke::GeometrySet;
 using bke::GeometrySetPtr;
+using bke::InstancesComponent;
 using bke::make_geometry_set_mutable;
 using bke::MeshComponent;
+using bke::PersistentDataHandleMap;
+using bke::PersistentObjectHandle;
 using bke::PointCloudComponent;
 using fn::CPPType;
 using fn::GMutablePointer;
@@ -37,10 +42,19 @@ class GeoNodeInputs {
  private:
   const bNode *node_;
   GValueMap<StringRef> &values_;
+  const PersistentDataHandleMap &handle_map_;
 
  public:
-  GeoNodeInputs(const bNode &node, GValueMap<StringRef> &values) : node_(&node), values_(values)
+  GeoNodeInputs(const bNode &node,
+                GValueMap<StringRef> &values,
+                const PersistentDataHandleMap &handle_map)
+      : node_(&node), values_(values), handle_map_(handle_map)
   {
+  }
+
+  const PersistentDataHandleMap &handle_map() const
+  {
+    return handle_map_;
   }
 
   /**

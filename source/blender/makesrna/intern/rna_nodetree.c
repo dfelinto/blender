@@ -2857,6 +2857,7 @@ static void rna_NodeSocketStandard_value_and_relation_update(struct bContext *C,
   bNodeTree *ntree = (bNodeTree *)ptr->owner_id;
   Main *bmain = CTX_data_main(C);
   ntreeUpdateTree(bmain, ntree);
+  DEG_relations_tag_update(bmain);
 }
 
 /* ******** Node Types ******** */
