@@ -768,7 +768,7 @@ static GeometrySetPtr compute_geometry(const DerivedNodeTree &tree,
 
 /**
  * \note This could be done in #initialize_group_input, though that would require adding the
- * the object as a paramete, so it's likely better to this check as a separate step.
+ * the object as a parameter, so it's likely better to this check as a separate step.
  */
 static void check_property_socket_sync(const Object *ob, ModifierData *md)
 {
