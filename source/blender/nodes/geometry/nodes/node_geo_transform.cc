@@ -35,7 +35,7 @@ static bNodeSocketTemplate geo_node_transform_out[] = {
     {-1, ""},
 };
 
-using blender::float3;
+namespace blender::nodes {
 
 static bool use_translate(const float3 rotation, const float3 scale)
 {
@@ -85,7 +85,28 @@ static void transform_pointcloud(PointCloud *pointcloud,
   }
 }
 
-namespace blender::nodes {
+static void transform_instances(InstancesComponent &instances,
+                                const float3 translation,
+                                const float3 rotation,
+                                const float3 scale)
+{
+  MutableSpan<float3> positions = instances.positions();
+
+  /* Use only translation if rotation and scale don't apply. */
+  if (use_translate(rotation, scale)) {
+    for (float3 &position : positions) {
+      add_v3_v3(position, translation);
+    }
+  }
+  else {
+    float mat[4][4];
+    loc_eul_size_to_mat4(mat, translation, rotation, scale);
+    for (float3 &position : positions) {
+      mul_m4_v3(mat, position);
+    }
+  }
+}
+
 static void geo_transform_exec(bNode *UNUSED(node), GeoNodeInputs inputs, GeoNodeOutputs outputs)
 {
   GeometrySetPtr geometry_set = inputs.extract<GeometrySetPtr>("Geometry");
@@ -109,6 +130,11 @@ static void geo_transform_exec(bNode *UNUSED(node), GeoNodeInputs inputs, GeoNod
   if (geometry_set->has_pointcloud()) {
     PointCloud *pointcloud = geometry_set->get_pointcloud_for_write();
     transform_pointcloud(pointcloud, translation, rotation, scale);
+  }
+
+  if (geometry_set->has_instances()) {
+    InstancesComponent &instances = geometry_set->get_component_for_write<InstancesComponent>();
+    transform_instances(instances, translation, rotation, scale);
   }
 
   outputs.set("Geometry", std::move(geometry_set));
