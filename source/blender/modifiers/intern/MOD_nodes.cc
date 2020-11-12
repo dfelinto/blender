@@ -274,9 +274,11 @@ class GeometryNodesEvaluator {
       value.destruct();
     }
     for (const int i : node.outputs().index_range()) {
-      GMutablePointer value = output_data[i];
-      node_outputs.set_by_move(node.output(i).identifier(), value);
-      value.destruct();
+      if (node.output(i).is_available()) {
+        GMutablePointer value = output_data[i];
+        node_outputs.set_by_move(node.output(i).identifier(), value);
+        value.destruct();
+      }
     }
   }
 
