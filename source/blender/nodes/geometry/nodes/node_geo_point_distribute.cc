@@ -15,6 +15,7 @@
  */
 
 #include "BLI_float3.hh"
+#include "BLI_hash.h"
 #include "BLI_math_vector.h"
 #include "BLI_rand.hh"
 #include "BLI_span.hh"
@@ -23,6 +24,7 @@
 #include "DNA_meshdata_types.h"
 #include "DNA_pointcloud_types.h"
 
+#include "BKE_deform.h"
 #include "BKE_mesh.h"
 #include "BKE_mesh_runtime.h"
 #include "BKE_pointcloud.h"
@@ -32,7 +34,8 @@
 static bNodeSocketTemplate geo_node_point_distribute_in[] = {
     {SOCK_GEOMETRY, N_("Geometry")},
     {SOCK_FLOAT, N_("Density"), 10.0f, 0.0f, 0.0f, 0.0f, 0.0f, 100000.0f, PROP_NONE},
-    {SOCK_FLOAT, N_("Minimum Radius"), 10.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1000.0f, PROP_NONE},
+    /* Use an index, because the vertex group names are not available in the mesh... */
+    {SOCK_INT, N_("Density Attribute Index"), -1, 0, 0, 0, -1, 1000},
     {-1, ""},
 };
 
@@ -41,87 +44,63 @@ static bNodeSocketTemplate geo_node_point_distribute_out[] = {
     {-1, ""},
 };
 
-static void mesh_loop_tri_corner_coords(
-    const Mesh *mesh, const int index, float **r_v0, float **r_v1, float **r_v2)
-{
-  MVert *mverts = mesh->mvert;
-  MLoop *mloops = mesh->mloop;
+namespace blender::nodes {
 
-  MLoopTri looptri = mesh->runtime.looptris.array[index];
-  const MLoop *mloop_0 = &mloops[looptri.tri[0]];
-  const MLoop *mloop_1 = &mloops[looptri.tri[1]];
-  const MLoop *mloop_2 = &mloops[looptri.tri[2]];
-  *r_v0 = mverts[mloop_0->v].co;
-  *r_v1 = mverts[mloop_1->v].co;
-  *r_v2 = mverts[mloop_2->v].co;
-}
-
-using blender::float3;
-
-static PointCloud *scatter_pointcloud_from_mesh(const Mesh *mesh,
-                                                const float density,
-                                                const float UNUSED(minimum_radius))
+static Vector<float3> scatter_points_from_mesh(const Mesh *mesh,
+                                               const float density,
+                                               const int density_attribute_index)
 {
   /* This only updates a cache and can be considered to be logically const. */
-  BKE_mesh_runtime_looptri_ensure(const_cast<Mesh *>(mesh));
-  const int looptris_len = mesh->runtime.looptris.len;
-  blender::Array<float> weights(looptris_len);
+  const MLoopTri *looptris = BKE_mesh_runtime_looptri_ensure(const_cast<Mesh *>(mesh));
+  const int looptris_len = BKE_mesh_runtime_looptri_len(mesh);
 
-  /* Calculate area for every triangle and the total area for the whole mesh. */
-  float area_total = 0.0f;
-  for (int i = 0; i < looptris_len; i++) {
-    float *v0, *v1, *v2;
-    mesh_loop_tri_corner_coords(mesh, i, &v0, &v1, &v2);
-    const float tri_area = area_tri_v3(v0, v1, v2);
-
-    weights[i] = tri_area;
-    area_total += tri_area;
+  Array<float> vertex_density_factors(mesh->totvert);
+  if (density_attribute_index == -1) {
+    vertex_density_factors.fill(1.0f);
+  }
+  else {
+    MDeformVert *dverts = mesh->dvert;
+    BKE_defvert_extract_vgroup_to_vertweights(
+        dverts, density_attribute_index, mesh->totvert, vertex_density_factors.data(), false);
   }
 
-  /* Fill an array with the sums of each weight. No need to normalize by the area of the largest
-   * triangle since it's all relative anyway. Reuse the orginal weights array to avoid allocating
-   * another.
-   *
-   * TODO: Multiply by a vertex group / attribute here as well. */
-  float weight_total = 0.0f;
-  for (int i = 0; i < looptris_len; i++) {
-    weight_total += weights[i];
-    weights[i] = weight_total;
-  }
+  Vector<float3> points;
 
-  /* Calculate the total number of points and create the pointcloud. */
-  const int points_len = round_fl_to_int(area_total * density);
-  PointCloud *pointcloud = BKE_pointcloud_new_nomain(points_len);
+  for (const int looptri_index : IndexRange(looptris_len)) {
+    const MLoopTri &looptri = looptris[looptri_index];
+    const int v0_index = mesh->mloop[looptri.tri[0]].v;
+    const int v1_index = mesh->mloop[looptri.tri[1]].v;
+    const int v2_index = mesh->mloop[looptri.tri[2]].v;
+    const float3 v0_pos = mesh->mvert[v0_index].co;
+    const float3 v1_pos = mesh->mvert[v1_index].co;
+    const float3 v2_pos = mesh->mvert[v2_index].co;
+    const float v0_density_factor = vertex_density_factors[v0_index];
+    const float v1_density_factor = vertex_density_factors[v1_index];
+    const float v2_density_factor = vertex_density_factors[v2_index];
+    const float looptri_density_factor = (v0_density_factor + v1_density_factor +
+                                          v2_density_factor) /
+                                         3.0f;
+    const float area = area_tri_v3(v0_pos, v1_pos, v2_pos);
 
-  /* Distribute the points. */
-  blender::RandomNumberGenerator rng(0);
-  for (int i = 0; i < points_len; i++) {
-    const int random_weight_total = rng.get_float() * weight_total;
+    const int looptri_seed = BLI_hash_int(looptri_index);
+    RandomNumberGenerator looptri_rng(looptri_seed);
 
-    /* Find the triangle index based on the weights. TODO: Use binary search. */
-    int i_tri = 0;
-    for (; i_tri < looptris_len; i_tri++) {
-      if (weights[i_tri] > random_weight_total) {
-        break;
-      }
+    const float points_amount_fl = area * density * looptri_density_factor;
+    const float add_point_probability = fractf(points_amount_fl);
+    const bool add_point = add_point_probability > looptri_rng.get_float();
+    const int point_amount = (int)points_amount_fl + (int)add_point;
+
+    for (int i = 0; i < point_amount; i++) {
+      const float3 bary_coords = looptri_rng.get_barycentric_coordinates();
+      float3 point_pos;
+      interp_v3_v3v3v3(point_pos, v0_pos, v1_pos, v2_pos, bary_coords);
+      points.append(point_pos);
     }
-    BLI_assert(i_tri < looptris_len);
-
-    /* Place the point randomly in the selected triangle. */
-    float *v0, *v1, *v2;
-    mesh_loop_tri_corner_coords(mesh, i_tri, &v0, &v1, &v2);
-
-    float3 co = rng.get_triangle_sample_3d(v0, v1, v2);
-    pointcloud->co[i][0] = co.x;
-    pointcloud->co[i][1] = co.y;
-    pointcloud->co[i][2] = co.z;
-    pointcloud->radius[i] = 0.05f; /* TODO: Use radius attribute / vertex vgroup. */
   }
 
-  return pointcloud;
+  return points;
 }
 
-namespace blender::nodes {
 static void geo_point_distribute_exec(bNode *UNUSED(node),
                                       GeoNodeInputs inputs,
                                       GeoNodeOutputs outputs)
@@ -134,19 +113,28 @@ static void geo_point_distribute_exec(bNode *UNUSED(node),
   }
 
   const float density = inputs.extract<float>("Density");
-  const float minimum_radius = inputs.extract<float>("Minimum Radius");
+  const int density_attribute_index = std::max(-1, inputs.extract<int>("Density Attribute Index"));
 
   if (density <= 0.0f) {
+    geometry_set->replace_mesh(nullptr);
+    geometry_set->replace_pointcloud(nullptr);
     outputs.set("Geometry", std::move(geometry_set));
     return;
   }
 
   const Mesh *mesh_in = geometry_set->get_mesh_for_read();
-  PointCloud *pointcloud_out = scatter_pointcloud_from_mesh(mesh_in, density, minimum_radius);
+  Vector<float3> points = scatter_points_from_mesh(mesh_in, density, density_attribute_index);
 
-  /* For now, replace any existing pointcloud in the geometry. */
+  PointCloud *pointcloud = BKE_pointcloud_new_nomain(points.size());
+  memcpy(pointcloud->co, points.data(), sizeof(float3) * points.size());
+  for (const int i : points.index_range()) {
+    *(float3 *)(pointcloud->co + i) = points[i];
+    pointcloud->radius[i] = 0.05f;
+  }
+
   make_geometry_set_mutable(geometry_set);
-  geometry_set->replace_pointcloud(pointcloud_out);
+  geometry_set->replace_mesh(nullptr);
+  geometry_set->replace_pointcloud(pointcloud);
 
   outputs.set("Geometry", std::move(geometry_set));
 }
