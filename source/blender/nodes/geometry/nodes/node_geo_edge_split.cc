@@ -46,17 +46,17 @@ static bNodeSocketTemplate geo_node_edge_split_out[] = {
 };
 
 namespace blender::nodes {
-static void geo_edge_split_exec(bNode *UNUSED(node), GeoNodeInputs inputs, GeoNodeOutputs outputs)
+static void geo_edge_split_exec(GeoNodeExecParams params)
 {
-  GeometrySetPtr geometry_set = inputs.extract<GeometrySetPtr>("Geometry");
+  GeometrySetPtr geometry_set = params.extract_input<GeometrySetPtr>("Geometry");
 
   if (!geometry_set.has_value() || !geometry_set->has_mesh()) {
-    outputs.set("Geometry", std::move(geometry_set));
+    params.set_output("Geometry", std::move(geometry_set));
     return;
   }
 
-  const float split_angle = inputs.extract<float>("Angle");
-  const bool use_sharp_flag = inputs.extract<bool>("Sharp Edges");
+  const float split_angle = params.extract_input<float>("Angle");
+  const bool use_sharp_flag = params.extract_input<bool>("Sharp Edges");
 
   const Mesh *mesh_in = geometry_set->get_mesh_for_read();
 
@@ -73,7 +73,7 @@ static void geo_edge_split_exec(bNode *UNUSED(node), GeoNodeInputs inputs, GeoNo
   make_geometry_set_mutable(geometry_set);
   geometry_set->replace_mesh(mesh_out);
 
-  outputs.set("Geometry", std::move(geometry_set));
+  params.set_output("Geometry", std::move(geometry_set));
 }
 }  // namespace blender::nodes
 

@@ -38,23 +38,23 @@ using fn::CPPType;
 using fn::GMutablePointer;
 using fn::GValueMap;
 
-class GeoNodeInputs {
+class GeoNodeExecParams {
  private:
-  const bNode *node_;
-  GValueMap<StringRef> &values_;
+  const bNode &node_;
+  GValueMap<StringRef> &input_values_;
+  GValueMap<StringRef> &output_values_;
   const PersistentDataHandleMap &handle_map_;
 
  public:
-  GeoNodeInputs(const bNode &node,
-                GValueMap<StringRef> &values,
-                const PersistentDataHandleMap &handle_map)
-      : node_(&node), values_(values), handle_map_(handle_map)
+  GeoNodeExecParams(const bNode &node,
+                    GValueMap<StringRef> &input_values,
+                    GValueMap<StringRef> &output_values,
+                    const PersistentDataHandleMap &handle_map)
+      : node_(node),
+        input_values_(input_values),
+        output_values_(output_values),
+        handle_map_(handle_map)
   {
-  }
-
-  const PersistentDataHandleMap &handle_map() const
-  {
-    return handle_map_;
   }
 
   /**
@@ -63,12 +63,12 @@ class GeoNodeInputs {
    * The node calling becomes responsible for destructing the value before it is done
    * executing. This method can only be called once for each identifier.
    */
-  GMutablePointer extract(StringRef identifier)
+  GMutablePointer extract_input(StringRef identifier)
   {
 #ifdef DEBUG
-    this->check_extract(identifier);
+    this->check_extract_input(identifier);
 #endif
-    return values_.extract(identifier);
+    return input_values_.extract(identifier);
   }
 
   /**
@@ -76,55 +76,55 @@ class GeoNodeInputs {
    *
    * This method can only be called once for each identifier.
    */
-  template<typename T> T extract(StringRef identifier)
+  template<typename T> T extract_input(StringRef identifier)
   {
 #ifdef DEBUG
-    this->check_extract(identifier, &CPPType::get<T>());
+    this->check_extract_input(identifier, &CPPType::get<T>());
 #endif
-    return values_.extract<T>(identifier);
-  }
-
- private:
-  void check_extract(StringRef identifier, const CPPType *requested_type = nullptr);
-};
-
-class GeoNodeOutputs {
- private:
-  const bNode *node_;
-  GValueMap<StringRef> &values_;
-
- public:
-  GeoNodeOutputs(const bNode &node, GValueMap<StringRef> &values) : node_(&node), values_(values)
-  {
+    return input_values_.extract<T>(identifier);
   }
 
   /**
    * Move-construct a new value based on the given value and store it for the given socket
    * identifier.
    */
-  void set_by_move(StringRef identifier, GMutablePointer value)
+  void set_output_by_move(StringRef identifier, GMutablePointer value)
   {
 #ifdef DEBUG
     BLI_assert(value.type() != nullptr);
     BLI_assert(value.get() != nullptr);
-    this->check_set(identifier, *value.type());
+    this->check_set_output(identifier, *value.type());
 #endif
-    values_.add_new_by_move(identifier, value);
+    output_values_.add_new_by_move(identifier, value);
   }
 
   /**
    * Store the output value for the given socket identifier.
    */
-  template<typename T> void set(StringRef identifier, T &&value)
+  template<typename T> void set_output(StringRef identifier, T &&value)
   {
 #ifdef DEBUG
-    this->check_set(identifier, CPPType::get<std::decay_t<T>>());
+    this->check_set_output(identifier, CPPType::get<std::decay_t<T>>());
 #endif
-    values_.add_new(identifier, std::forward<T>(value));
+    output_values_.add_new(identifier, std::forward<T>(value));
+  }
+
+  /**
+   * Get the node that is currently being executed.
+   */
+  const bNode &node() const
+  {
+    return node_;
+  }
+
+  const PersistentDataHandleMap &handle_map() const
+  {
+    return handle_map_;
   }
 
  private:
-  void check_set(StringRef identifier, const CPPType &value_type);
+  void check_extract_input(StringRef identifier, const CPPType *requested_type = nullptr);
+  void check_set_output(StringRef identifier, const CPPType &value_type);
 };
 
 }  // namespace blender::nodes

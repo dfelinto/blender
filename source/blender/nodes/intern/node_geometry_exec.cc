@@ -19,10 +19,10 @@
 
 namespace blender::nodes {
 
-void GeoNodeInputs::check_extract(StringRef identifier, const CPPType *requested_type)
+void GeoNodeExecParams::check_extract_input(StringRef identifier, const CPPType *requested_type)
 {
   bNodeSocket *found_socket = nullptr;
-  LISTBASE_FOREACH (bNodeSocket *, socket, &node_->inputs) {
+  LISTBASE_FOREACH (bNodeSocket *, socket, &node_.inputs) {
     if (identifier == socket->identifier) {
       found_socket = socket;
       break;
@@ -31,7 +31,7 @@ void GeoNodeInputs::check_extract(StringRef identifier, const CPPType *requested
   if (found_socket == nullptr) {
     std::cout << "Did not find an input socket with the identifier '" << identifier << "'.\n";
     std::cout << "Possible identifiers are: ";
-    LISTBASE_FOREACH (bNodeSocket *, socket, &node_->inputs) {
+    LISTBASE_FOREACH (bNodeSocket *, socket, &node_.inputs) {
       if ((socket->flag & SOCK_UNAVAIL) == 0) {
         std::cout << "'" << socket->identifier << "', ";
       }
@@ -44,7 +44,7 @@ void GeoNodeInputs::check_extract(StringRef identifier, const CPPType *requested
               << "' is disabled.\n";
     BLI_assert(false);
   }
-  else if (!values_.contains(identifier)) {
+  else if (!input_values_.contains(identifier)) {
     std::cout << "The identifier '" << identifier
               << "' is valid, but there is no value for it anymore.\n";
     std::cout << "Most likely it has been extracted before.\n";
@@ -60,10 +60,10 @@ void GeoNodeInputs::check_extract(StringRef identifier, const CPPType *requested
   }
 }
 
-void GeoNodeOutputs::check_set(StringRef identifier, const CPPType &value_type)
+void GeoNodeExecParams::check_set_output(StringRef identifier, const CPPType &value_type)
 {
   bNodeSocket *found_socket = nullptr;
-  LISTBASE_FOREACH (bNodeSocket *, socket, &node_->outputs) {
+  LISTBASE_FOREACH (bNodeSocket *, socket, &node_.outputs) {
     if (identifier == socket->identifier) {
       found_socket = socket;
       break;
@@ -72,7 +72,7 @@ void GeoNodeOutputs::check_set(StringRef identifier, const CPPType &value_type)
   if (found_socket == nullptr) {
     std::cout << "Did not find an output socket with the identifier '" << identifier << "'.\n";
     std::cout << "Possible identifiers are: ";
-    LISTBASE_FOREACH (bNodeSocket *, socket, &node_->outputs) {
+    LISTBASE_FOREACH (bNodeSocket *, socket, &node_.outputs) {
       if ((socket->flag & SOCK_UNAVAIL) == 0) {
         std::cout << "'" << socket->identifier << "', ";
       }
@@ -85,7 +85,7 @@ void GeoNodeOutputs::check_set(StringRef identifier, const CPPType &value_type)
               << "' is disabled.\n";
     BLI_assert(false);
   }
-  else if (values_.contains(identifier)) {
+  else if (output_values_.contains(identifier)) {
     std::cout << "The identifier '" << identifier << "' has been set already.\n";
     BLI_assert(false);
   }

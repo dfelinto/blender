@@ -34,11 +34,11 @@ static bNodeSocketTemplate geo_node_object_info_out[] = {
 };
 
 namespace blender::nodes {
-static void geo_object_info_exec(bNode *UNUSED(node), GeoNodeInputs inputs, GeoNodeOutputs outputs)
+static void geo_object_info_exec(GeoNodeExecParams params)
 {
-  bke::PersistentObjectHandle object_handle = inputs.extract<bke::PersistentObjectHandle>(
+  bke::PersistentObjectHandle object_handle = params.extract_input<bke::PersistentObjectHandle>(
       "Object");
-  Object *object = inputs.handle_map().lookup(object_handle);
+  Object *object = params.handle_map().lookup(object_handle);
 
   float3 location = {0, 0, 0};
   float3 rotation = {0, 0, 0};
@@ -61,10 +61,10 @@ static void geo_object_info_exec(bNode *UNUSED(node), GeoNodeInputs inputs, GeoN
     }
   }
 
-  outputs.set("Location", location);
-  outputs.set("Rotation", rotation);
-  outputs.set("Scale", scale);
-  outputs.set("Geometry", geometry_set);
+  params.set_output("Location", location);
+  params.set_output("Rotation", rotation);
+  params.set_output("Scale", scale);
+  params.set_output("Geometry", geometry_set);
 }
 }  // namespace blender::nodes
 

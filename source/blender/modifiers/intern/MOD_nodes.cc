@@ -251,9 +251,8 @@ class GeometryNodesEvaluator {
 
     /* Execute the node. */
     GValueMap<StringRef> node_outputs_map{allocator_};
-    GeoNodeInputs node_inputs{bnode, node_inputs_map, handle_map_};
-    GeoNodeOutputs node_outputs{bnode, node_outputs_map};
-    this->execute_node(node, node_inputs, node_outputs);
+    GeoNodeExecParams params{bnode, node_inputs_map, node_outputs_map, handle_map_};
+    this->execute_node(node, params);
 
     /* Forward computed outputs to linked input sockets. */
     for (const DOutputSocket *output_socket : node.outputs()) {
@@ -264,23 +263,23 @@ class GeometryNodesEvaluator {
     }
   }
 
-  void execute_node(const DNode &node, GeoNodeInputs node_inputs, GeoNodeOutputs node_outputs)
+  void execute_node(const DNode &node, GeoNodeExecParams params)
   {
-    bNode *bnode = node.bnode();
-    if (bnode->typeinfo->geometry_node_execute != nullptr) {
-      bnode->typeinfo->geometry_node_execute(bnode, node_inputs, node_outputs);
+    const bNode &bnode = params.node();
+    if (bnode.typeinfo->geometry_node_execute != nullptr) {
+      bnode.typeinfo->geometry_node_execute(params);
       return;
     }
 
     /* Use the multi-function implementation of the node. */
     const MultiFunction &fn = *mf_by_node_.lookup(&node);
-    MFContextBuilder context;
-    MFParamsBuilder params{fn, 1};
+    MFContextBuilder fn_context;
+    MFParamsBuilder fn_params{fn, 1};
     Vector<GMutablePointer> input_data;
     for (const DInputSocket *dsocket : node.inputs()) {
       if (dsocket->is_available()) {
-        GMutablePointer data = node_inputs.extract(dsocket->identifier());
-        params.add_readonly_single_input(GSpan(*data.type(), data.get(), 1));
+        GMutablePointer data = params.extract_input(dsocket->identifier());
+        fn_params.add_readonly_single_input(GSpan(*data.type(), data.get(), 1));
         input_data.append(data);
       }
     }
@@ -289,18 +288,18 @@ class GeometryNodesEvaluator {
       if (dsocket->is_available()) {
         const CPPType &type = *socket_cpp_type_get(*dsocket->typeinfo());
         void *buffer = allocator_.allocate(type.size(), type.alignment());
-        params.add_uninitialized_single_output(GMutableSpan(type, buffer, 1));
+        fn_params.add_uninitialized_single_output(GMutableSpan(type, buffer, 1));
         output_data.append(GMutablePointer(type, buffer));
       }
     }
-    fn.call(IndexRange(1), params, context);
+    fn.call(IndexRange(1), fn_params, fn_context);
     for (GMutablePointer value : input_data) {
       value.destruct();
     }
     for (const int i : node.outputs().index_range()) {
       if (node.output(i).is_available()) {
         GMutablePointer value = output_data[i];
-        node_outputs.set_by_move(node.output(i).identifier(), value);
+        params.set_output_by_move(node.output(i).identifier(), value);
         value.destruct();
       }
     }

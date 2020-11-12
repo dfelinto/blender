@@ -34,13 +34,11 @@ static bNodeSocketTemplate geo_node_point_instance_out[] = {
 };
 
 namespace blender::nodes {
-static void geo_point_instance_exec(bNode *UNUSED(node),
-                                    GeoNodeInputs inputs,
-                                    GeoNodeOutputs outputs)
+static void geo_point_instance_exec(GeoNodeExecParams params)
 {
-  GeometrySetPtr geometry_set = inputs.extract<GeometrySetPtr>("Geometry");
+  GeometrySetPtr geometry_set = params.extract_input<GeometrySetPtr>("Geometry");
   if (!geometry_set.has_value()) {
-    outputs.set("Geometry", std::move(geometry_set));
+    params.set_output("Geometry", std::move(geometry_set));
     return;
   }
 
@@ -56,16 +54,16 @@ static void geo_point_instance_exec(bNode *UNUSED(node),
     }
   }
 
-  bke::PersistentObjectHandle object_handle = inputs.extract<bke::PersistentObjectHandle>(
+  bke::PersistentObjectHandle object_handle = params.extract_input<bke::PersistentObjectHandle>(
       "Object");
-  Object *object = inputs.handle_map().lookup(object_handle);
+  Object *object = params.handle_map().lookup(object_handle);
 
   make_geometry_set_mutable(geometry_set);
   bke::InstancesComponent &instances =
       geometry_set->get_component_for_write<bke::InstancesComponent>();
   instances.replace(std::move(positions), object);
 
-  outputs.set("Geometry", std::move(geometry_set));
+  params.set_output("Geometry", std::move(geometry_set));
 }
 }  // namespace blender::nodes
 

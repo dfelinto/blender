@@ -101,24 +101,23 @@ static Vector<float3> scatter_points_from_mesh(const Mesh *mesh,
   return points;
 }
 
-static void geo_point_distribute_exec(bNode *UNUSED(node),
-                                      GeoNodeInputs inputs,
-                                      GeoNodeOutputs outputs)
+static void geo_point_distribute_exec(GeoNodeExecParams params)
 {
-  GeometrySetPtr geometry_set = inputs.extract<GeometrySetPtr>("Geometry");
+  GeometrySetPtr geometry_set = params.extract_input<GeometrySetPtr>("Geometry");
 
   if (!geometry_set.has_value() || !geometry_set->has_mesh()) {
-    outputs.set("Geometry", std::move(geometry_set));
+    params.set_output("Geometry", std::move(geometry_set));
     return;
   }
 
-  const float density = inputs.extract<float>("Density");
-  const int density_attribute_index = std::max(-1, inputs.extract<int>("Density Attribute Index"));
+  const float density = params.extract_input<float>("Density");
+  const int density_attribute_index = std::max(
+      -1, params.extract_input<int>("Density Attribute Index"));
 
   if (density <= 0.0f) {
     geometry_set->replace_mesh(nullptr);
     geometry_set->replace_pointcloud(nullptr);
-    outputs.set("Geometry", std::move(geometry_set));
+    params.set_output("Geometry", std::move(geometry_set));
     return;
   }
 
@@ -136,7 +135,7 @@ static void geo_point_distribute_exec(bNode *UNUSED(node),
   geometry_set->replace_mesh(nullptr);
   geometry_set->replace_pointcloud(pointcloud);
 
-  outputs.set("Geometry", std::move(geometry_set));
+  params.set_output("Geometry", std::move(geometry_set));
 }
 }  // namespace blender::nodes
 

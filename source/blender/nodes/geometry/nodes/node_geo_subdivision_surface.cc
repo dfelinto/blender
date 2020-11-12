@@ -36,32 +36,30 @@ static bNodeSocketTemplate geo_node_subdivision_surface_out[] = {
 };
 
 namespace blender::nodes {
-static void geo_subdivision_surface_exec(bNode *UNUSED(node),
-                                         GeoNodeInputs inputs,
-                                         GeoNodeOutputs outputs)
+static void geo_subdivision_surface_exec(GeoNodeExecParams params)
 {
-  GeometrySetPtr geometry_set = inputs.extract<GeometrySetPtr>("Geometry");
+  GeometrySetPtr geometry_set = params.extract_input<GeometrySetPtr>("Geometry");
 
   if (!geometry_set.has_value() || !geometry_set->has_mesh()) {
-    outputs.set("Geometry", geometry_set);
+    params.set_output("Geometry", geometry_set);
     return;
   }
 
 #ifndef WITH_OPENSUBDIV
   /* Return input geometry if Blender is build without OpenSubdiv. */
-  outputs.set("Geometry", std::move(geometry_set));
+  params.set_output("Geometry", std::move(geometry_set));
   return;
 #else
-  const int subdiv_level = clamp_i(inputs.extract<int>("Level"), 0, 30);
-  const bool use_crease = inputs.extract<bool>("Use Creases");
-  const bool boundary_smooth = inputs.extract<bool>("Boundary Smooth");
-  const bool smooth_uvs = inputs.extract<bool>("Smooth UVs");
+  const int subdiv_level = clamp_i(params.extract_input<int>("Level"), 0, 30);
+  const bool use_crease = params.extract_input<bool>("Use Creases");
+  const bool boundary_smooth = params.extract_input<bool>("Boundary Smooth");
+  const bool smooth_uvs = params.extract_input<bool>("Smooth UVs");
 
   const Mesh *mesh_in = geometry_set->get_mesh_for_read();
 
   /* Only process subdivion if level is greater than 0. */
   if (subdiv_level == 0) {
-    outputs.set("Geometry", std::move(geometry_set));
+    params.set_output("Geometry", std::move(geometry_set));
     return;
   }
 
@@ -87,7 +85,7 @@ static void geo_subdivision_surface_exec(bNode *UNUSED(node),
 
   /* In case of bad topology, skip to input mesh. */
   if (subdiv == nullptr) {
-    outputs.set("Geometry", std::move(geometry_set));
+    params.set_output("Geometry", std::move(geometry_set));
     return;
   }
 
@@ -100,7 +98,7 @@ static void geo_subdivision_surface_exec(bNode *UNUSED(node),
   // BKE_subdiv_stats_print(&subdiv->stats);
   BKE_subdiv_free(subdiv);
 
-  outputs.set("Geometry", std::move(geometry_set));
+  params.set_output("Geometry", std::move(geometry_set));
 #endif
 }
 }  // namespace blender::nodes

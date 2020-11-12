@@ -103,35 +103,35 @@ static Mesh *mesh_boolean_calc(const Mesh *mesh_a, const Mesh *mesh_b, int boole
 }
 
 namespace blender::nodes {
-static void geo_boolean_exec(bNode *node, GeoNodeInputs inputs, GeoNodeOutputs outputs)
+static void geo_boolean_exec(GeoNodeExecParams params)
 {
-  GeometrySetPtr geometry_set_in_a = inputs.extract<GeometrySetPtr>("Geometry A");
-  GeometrySetPtr geometry_set_in_b = inputs.extract<GeometrySetPtr>("Geometry B");
+  GeometrySetPtr geometry_set_in_a = params.extract_input<GeometrySetPtr>("Geometry A");
+  GeometrySetPtr geometry_set_in_b = params.extract_input<GeometrySetPtr>("Geometry B");
   GeometrySetPtr geometry_set_out;
 
   if (!geometry_set_in_a.has_value() || !geometry_set_in_b.has_value()) {
-    outputs.set("Geometry", std::move(geometry_set_out));
+    params.set_output("Geometry", std::move(geometry_set_out));
     return;
   }
 
   const Mesh *mesh_in_a = geometry_set_in_a->get_mesh_for_read();
   const Mesh *mesh_in_b = geometry_set_in_b->get_mesh_for_read();
   if (mesh_in_a == nullptr || mesh_in_b == nullptr) {
-    outputs.set("Geometry", std::move(geometry_set_out));
+    params.set_output("Geometry", std::move(geometry_set_out));
     return;
   }
 
-  GeometryNodeBooleanOperation operation = (GeometryNodeBooleanOperation)node->custom1;
+  GeometryNodeBooleanOperation operation = (GeometryNodeBooleanOperation)params.node().custom1;
   if (operation < 0 || operation > 2) {
     BLI_assert(false);
-    outputs.set("Geometry", std::move(geometry_set_out));
+    params.set_output("Geometry", std::move(geometry_set_out));
     return;
   }
 
   Mesh *mesh_out = mesh_boolean_calc(mesh_in_a, mesh_in_b, operation);
   geometry_set_out = GeometrySet::create_with_mesh(mesh_out);
 
-  outputs.set("Geometry", std::move(geometry_set_out));
+  params.set_output("Geometry", std::move(geometry_set_out));
 }
 }  // namespace blender::nodes
 

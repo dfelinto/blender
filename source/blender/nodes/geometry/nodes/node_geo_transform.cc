@@ -107,18 +107,18 @@ static void transform_instances(InstancesComponent &instances,
   }
 }
 
-static void geo_transform_exec(bNode *UNUSED(node), GeoNodeInputs inputs, GeoNodeOutputs outputs)
+static void geo_transform_exec(GeoNodeExecParams params)
 {
-  GeometrySetPtr geometry_set = inputs.extract<GeometrySetPtr>("Geometry");
+  GeometrySetPtr geometry_set = params.extract_input<GeometrySetPtr>("Geometry");
 
   if (!geometry_set.has_value()) {
-    outputs.set("Geometry", std::move(geometry_set));
+    params.set_output("Geometry", std::move(geometry_set));
     return;
   }
 
-  const float3 translation = inputs.extract<float3>("Translation");
-  const float3 rotation = inputs.extract<float3>("Rotation");
-  const float3 scale = inputs.extract<float3>("Scale");
+  const float3 translation = params.extract_input<float3>("Translation");
+  const float3 rotation = params.extract_input<float3>("Rotation");
+  const float3 scale = params.extract_input<float3>("Scale");
 
   make_geometry_set_mutable(geometry_set);
 
@@ -137,7 +137,7 @@ static void geo_transform_exec(bNode *UNUSED(node), GeoNodeInputs inputs, GeoNod
     transform_instances(instances, translation, rotation, scale);
   }
 
-  outputs.set("Geometry", std::move(geometry_set));
+  params.set_output("Geometry", std::move(geometry_set));
 }
 }  // namespace blender::nodes
 
