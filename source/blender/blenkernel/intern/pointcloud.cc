@@ -88,7 +88,7 @@ static void pointcloud_copy_data(Main *UNUSED(bmain), ID *id_dst, const ID *id_s
                   pointcloud_dst->totpoint);
   BKE_pointcloud_update_customdata_pointers(pointcloud_dst);
 
-  pointcloud_dst->batch_cache = NULL;
+  pointcloud_dst->batch_cache = nullptr;
 }
 
 static void pointcloud_free_data(ID *id)
@@ -235,8 +235,8 @@ void *BKE_pointcloud_add_default(Main *bmain, const char *name)
 
 PointCloud *BKE_pointcloud_new_nomain(const int totpoint)
 {
-  PointCloud *pointcloud = static_cast<PointCloud *>(
-      BKE_libblock_alloc(NULL, ID_PT, BKE_idtype_idcode_to_name(ID_PT), LIB_ID_CREATE_LOCALIZE));
+  PointCloud *pointcloud = static_cast<PointCloud *>(BKE_libblock_alloc(
+      nullptr, ID_PT, BKE_idtype_idcode_to_name(ID_PT), LIB_ID_CREATE_LOCALIZE));
 
   pointcloud_init_data(&pointcloud->id);
 
@@ -245,7 +245,7 @@ PointCloud *BKE_pointcloud_new_nomain(const int totpoint)
   CustomData_add_layer_named(&pointcloud->pdata,
                              CD_PROP_FLOAT,
                              CD_CALLOC,
-                             NULL,
+                             nullptr,
                              pointcloud->totpoint,
                              POINTCLOUD_ATTR_RADIUS);
 
