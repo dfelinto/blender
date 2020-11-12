@@ -423,11 +423,17 @@ static IDProperty *socket_add_property(IDProperty *settings_prop_group,
   }
 
   /* Create the properties for the socket's UI settings. */
-  IDP_AddToGroup(prop_ui_group, property_type.create_min_ui_prop(socket, "min"));
-  IDP_AddToGroup(prop_ui_group, property_type.create_min_ui_prop(socket, "soft_min"));
-  IDP_AddToGroup(prop_ui_group, property_type.create_max_ui_prop(socket, "max"));
-  IDP_AddToGroup(prop_ui_group, property_type.create_max_ui_prop(socket, "soft_max"));
-  IDP_AddToGroup(prop_ui_group, property_type.create_default_ui_prop(socket, "default"));
+  if (property_type.create_min_ui_prop != nullptr) {
+    IDP_AddToGroup(prop_ui_group, property_type.create_min_ui_prop(socket, "min"));
+    IDP_AddToGroup(prop_ui_group, property_type.create_min_ui_prop(socket, "soft_min"));
+  }
+  if (property_type.create_max_ui_prop != nullptr) {
+    IDP_AddToGroup(prop_ui_group, property_type.create_max_ui_prop(socket, "max"));
+    IDP_AddToGroup(prop_ui_group, property_type.create_max_ui_prop(socket, "soft_max"));
+  }
+  if (property_type.create_default_ui_prop != nullptr) {
+    IDP_AddToGroup(prop_ui_group, property_type.create_default_ui_prop(socket, "default"));
+  }
   if (property_type.rna_subtype_get != nullptr) {
     const char *subtype_identifier = nullptr;
     RNA_enum_identifier(rna_enum_property_subtype_items,
