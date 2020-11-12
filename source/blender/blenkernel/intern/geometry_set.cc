@@ -38,6 +38,8 @@ GeometryComponent *GeometryComponent::create(GeometryComponentType component_typ
       return new MeshComponent();
     case GeometryComponentType::PointCloud:
       return new PointCloudComponent();
+    case GeometryComponentType::Instances:
+      return new InstancesComponent();
   }
   BLI_assert(false);
   return nullptr;
@@ -162,28 +164,44 @@ bool GeometrySet::has_pointcloud() const
   return component != nullptr && component->has_pointcloud();
 }
 
-/* Create a new geometry set that only contains the given mesh. Ownership of the mesh is
- * transferred to the new geometry. */
-GeometrySetPtr GeometrySet::create_with_mesh(Mesh *mesh, bool transfer_ownership)
+/* Returns true when the geometry set has an instances component that has at least one instance. */
+bool GeometrySet::has_instances() const
+{
+  const InstancesComponent *component = this->get_component_for_read<InstancesComponent>();
+  return component != nullptr && component->instances_amount() >= 1;
+}
+
+/* Create a new geometry set that only contains the given mesh. */
+GeometrySetPtr GeometrySet::create_with_mesh(Mesh *mesh, GeometryOwnershipType ownership)
 {
   GeometrySet *geometry_set = new GeometrySet();
   MeshComponent &component = geometry_set->get_component_for_write<MeshComponent>();
-  component.replace(mesh, transfer_ownership);
+  component.replace(mesh, ownership);
+  return geometry_set;
+}
+
+/* Create a new geometry set that only contains the given point cloud. */
+GeometrySetPtr GeometrySet::create_with_pointcloud(PointCloud *pointcloud,
+                                                   GeometryOwnershipType ownership)
+{
+  GeometrySet *geometry_set = new GeometrySet();
+  PointCloudComponent &component = geometry_set->get_component_for_write<PointCloudComponent>();
+  component.replace(pointcloud, ownership);
   return geometry_set;
 }
 
 /* Clear the existing mesh and replace it with the given one. */
-void GeometrySet::replace_mesh(Mesh *mesh, bool transfer_ownership)
+void GeometrySet::replace_mesh(Mesh *mesh, GeometryOwnershipType ownership)
 {
   MeshComponent &component = this->get_component_for_write<MeshComponent>();
-  component.replace(mesh, transfer_ownership);
+  component.replace(mesh, ownership);
 }
 
 /* Clear the existing point cloud and replace with the given one. */
-void GeometrySet::replace_pointcloud(PointCloud *pointcloud, bool transfer_ownership)
+void GeometrySet::replace_pointcloud(PointCloud *pointcloud, GeometryOwnershipType ownership)
 {
   PointCloudComponent &pointcloud_component = this->get_component_for_write<PointCloudComponent>();
-  pointcloud_component.replace(pointcloud, transfer_ownership);
+  pointcloud_component.replace(pointcloud, ownership);
 }
 
 /* Returns a mutable mesh or null. No ownership is transferred. */
@@ -238,7 +256,7 @@ GeometryComponent *MeshComponent::copy() const
   MeshComponent *new_component = new MeshComponent();
   if (mesh_ != nullptr) {
     new_component->mesh_ = BKE_mesh_copy_for_eval(mesh_, false);
-    new_component->owned_ = true;
+    new_component->ownership_ = GeometryOwnershipType::Owned;
   }
   return new_component;
 }
@@ -247,7 +265,7 @@ void MeshComponent::clear()
 {
   BLI_assert(this->is_mutable());
   if (mesh_ != nullptr) {
-    if (owned_) {
+    if (ownership_ == GeometryOwnershipType::Owned) {
       BKE_id_free(nullptr, mesh_);
     }
     mesh_ = nullptr;
@@ -260,12 +278,12 @@ bool MeshComponent::has_mesh() const
 }
 
 /* Clear the component and replace it with the new mesh. */
-void MeshComponent::replace(Mesh *mesh, bool transfer_ownership)
+void MeshComponent::replace(Mesh *mesh, GeometryOwnershipType ownership)
 {
   BLI_assert(this->is_mutable());
   this->clear();
   mesh_ = mesh;
-  owned_ = transfer_ownership;
+  ownership_ = ownership;
 }
 
 /* Return the mesh and clear the component. The caller takes over responsibility for freeing the
@@ -290,6 +308,10 @@ const Mesh *MeshComponent::get_for_read() const
 Mesh *MeshComponent::get_for_write()
 {
   BLI_assert(this->is_mutable());
+  if (ownership_ == GeometryOwnershipType::ReadOnly) {
+    mesh_ = BKE_mesh_copy_for_eval(mesh_, false);
+    ownership_ = GeometryOwnershipType::Owned;
+  }
   return mesh_;
 }
 
@@ -309,7 +331,7 @@ GeometryComponent *PointCloudComponent::copy() const
   PointCloudComponent *new_component = new PointCloudComponent();
   if (pointcloud_ != nullptr) {
     new_component->pointcloud_ = BKE_pointcloud_copy_for_eval(pointcloud_, false);
-    new_component->owned_ = true;
+    new_component->ownership_ = GeometryOwnershipType::Owned;
   }
   return new_component;
 }
@@ -318,7 +340,7 @@ void PointCloudComponent::clear()
 {
   BLI_assert(this->is_mutable());
   if (pointcloud_ != nullptr) {
-    if (owned_) {
+    if (ownership_ == GeometryOwnershipType::Owned) {
       BKE_id_free(nullptr, pointcloud_);
     }
     pointcloud_ = nullptr;
@@ -331,12 +353,12 @@ bool PointCloudComponent::has_pointcloud() const
 }
 
 /* Clear the component and replace it with the new point cloud. */
-void PointCloudComponent::replace(PointCloud *pointcloud, bool transfer_ownership)
+void PointCloudComponent::replace(PointCloud *pointcloud, GeometryOwnershipType ownership)
 {
   BLI_assert(this->is_mutable());
   this->clear();
   pointcloud_ = pointcloud;
-  owned_ = transfer_ownership;
+  ownership_ = ownership;
 }
 
 /* Return the point cloud and clear the component. The caller takes over responsibility for freeing
@@ -363,9 +385,99 @@ const PointCloud *PointCloudComponent::get_for_read() const
 PointCloud *PointCloudComponent::get_for_write()
 {
   BLI_assert(this->is_mutable());
+  if (ownership_ == GeometryOwnershipType::ReadOnly) {
+    pointcloud_ = BKE_pointcloud_copy_for_eval(pointcloud_, false);
+    ownership_ = GeometryOwnershipType::Owned;
+  }
   return pointcloud_;
 }
 
 /** \} */
 
+/* -------------------------------------------------------------------- */
+/** \name Instances Component
+ * \{ */
+
+GeometryComponent *InstancesComponent::copy() const
+{
+  InstancesComponent *new_component = new InstancesComponent();
+  new_component->positions_ = positions_;
+  new_component->objects_ = objects_;
+  return new_component;
+}
+
+void InstancesComponent::replace(Vector<float3> positions, Vector<const Object *> objects)
+{
+  BLI_assert(positions.size() == objects.size());
+  positions_ = std::move(positions);
+  objects_ = std::move(objects);
+}
+
+void InstancesComponent::replace(Vector<float3> positions, const Object *object)
+{
+  positions_ = std::move(positions);
+  objects_.clear();
+  objects_.append_n_times(object, positions_.size());
+}
+
+Span<const Object *> InstancesComponent::objects() const
+{
+  return objects_;
+}
+
+Span<float3> InstancesComponent::positions() const
+{
+  return positions_;
+}
+
+MutableSpan<float3> InstancesComponent::positions()
+{
+  return positions_;
+}
+
+int InstancesComponent::instances_amount() const
+{
+  BLI_assert(positions_.size() == objects_.size());
+  return objects_.size();
+}
+
+/** \} */
+
 }  // namespace blender::bke
+
+/* -------------------------------------------------------------------- */
+/** \name C API
+ * \{ */
+
+void BKE_geometry_set_user_add(GeometrySetC *geometry_set_c)
+{
+  blender::bke::unwrap(geometry_set_c)->user_add();
+}
+
+void BKE_geometry_set_user_remove(GeometrySetC *geometry_set_c)
+{
+  blender::bke::unwrap(geometry_set_c)->user_remove();
+}
+
+bool BKE_geometry_set_has_instances(const GeometrySetC *geometry_set_c)
+{
+  return blender::bke::unwrap(geometry_set_c)
+             ->get_component_for_read<blender::bke::InstancesComponent>() != nullptr;
+}
+
+int BKE_geometry_set_instances(const GeometrySetC *geometry_set_c,
+                               float (**r_positions)[3],
+                               Object ***r_objects)
+{
+  using namespace blender::bke;
+  const GeometrySet *geometry_set = unwrap(geometry_set_c);
+  const InstancesComponent *component = geometry_set->get_component_for_read<InstancesComponent>();
+  if (component == nullptr) {
+    return 0;
+  }
+  *r_positions = (float(*)[3])component->positions().data();
+  *r_objects = (Object **)component->objects().data();
+  return component->instances_amount();
+}
+
+/** \} */

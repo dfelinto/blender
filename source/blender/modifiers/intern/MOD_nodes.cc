@@ -772,7 +772,8 @@ static Mesh *modifyMesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh *
     return mesh;
   }
 
-  GeometrySetPtr input_geometry_set{GeometrySet::create_with_mesh(mesh, false)};
+  GeometrySetPtr input_geometry_set{
+      GeometrySet::create_with_mesh(mesh, GeometryOwnershipType::Editable)};
 
   GeometrySetPtr new_geometry_set = compute_geometry(
       tree, group_inputs, *group_outputs[0], std::move(input_geometry_set), nmd);

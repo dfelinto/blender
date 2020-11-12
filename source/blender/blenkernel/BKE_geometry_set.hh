@@ -23,12 +23,16 @@
 #include <atomic>
 #include <iostream>
 
+#include "BLI_float3.hh"
 #include "BLI_hash.hh"
 #include "BLI_map.hh"
 #include "BLI_user_counter.hh"
 
+#include "BKE_geometry_set.h"
+
 struct Mesh;
 struct PointCloud;
+struct Object;
 
 namespace blender::bke {
 
@@ -39,8 +43,18 @@ using GeometrySetPtr = UserCounter<class GeometrySet>;
  * stores. Functions modifying a geometry will usually just modify a subset of the component types.
  */
 enum class GeometryComponentType {
-  Mesh,
-  PointCloud,
+  Mesh = 0,
+  PointCloud = 1,
+  Instances = 2,
+};
+
+enum class GeometryOwnershipType {
+  /* The geometry is owned. This implies that it can be changed. */
+  Owned = 0,
+  /* The geometry can be changed, but someone else is responsible for freeing it. */
+  Editable = 1,
+  /* The geometry cannot be changed and someone else is responsible for freeing it. */
+  ReadOnly = 2,
 };
 
 }  // namespace blender::bke
@@ -127,19 +141,24 @@ class GeometrySet {
   }
 
   /* Utility methods for creation. */
-  static GeometrySetPtr create_with_mesh(Mesh *mesh, bool transfer_ownership = true);
+  static GeometrySetPtr create_with_mesh(
+      Mesh *mesh, GeometryOwnershipType ownership = GeometryOwnershipType::Owned);
+  static GeometrySetPtr create_with_pointcloud(
+      PointCloud *pointcloud, GeometryOwnershipType ownership = GeometryOwnershipType::Owned);
 
   /* Utility methods for access. */
   bool has_mesh() const;
   bool has_pointcloud() const;
+  bool has_instances() const;
   const Mesh *get_mesh_for_read() const;
   const PointCloud *get_pointcloud_for_read() const;
   Mesh *get_mesh_for_write();
   PointCloud *get_pointcloud_for_write();
 
   /* Utility methods for replacement. */
-  void replace_mesh(Mesh *mesh, bool transfer_ownership = true);
-  void replace_pointcloud(PointCloud *pointcloud, bool transfer_ownership = true);
+  void replace_mesh(Mesh *mesh, GeometryOwnershipType ownership = GeometryOwnershipType::Owned);
+  void replace_pointcloud(PointCloud *pointcloud,
+                          GeometryOwnershipType ownership = GeometryOwnershipType::Owned);
 };
 
 void make_geometry_set_mutable(GeometrySetPtr &geometry);
@@ -148,7 +167,7 @@ void make_geometry_set_mutable(GeometrySetPtr &geometry);
 class MeshComponent : public GeometryComponent {
  private:
   Mesh *mesh_ = nullptr;
-  bool owned_ = false;
+  GeometryOwnershipType ownership_ = GeometryOwnershipType::Owned;
 
  public:
   ~MeshComponent();
@@ -156,7 +175,7 @@ class MeshComponent : public GeometryComponent {
 
   void clear();
   bool has_mesh() const;
-  void replace(Mesh *mesh, bool transfer_ownership = true);
+  void replace(Mesh *mesh, GeometryOwnershipType ownership = GeometryOwnershipType::Owned);
   Mesh *release();
 
   const Mesh *get_for_read() const;
@@ -169,7 +188,7 @@ class MeshComponent : public GeometryComponent {
 class PointCloudComponent : public GeometryComponent {
  private:
   PointCloud *pointcloud_ = nullptr;
-  bool owned_ = false;
+  GeometryOwnershipType ownership_ = GeometryOwnershipType::Owned;
 
  public:
   ~PointCloudComponent();
@@ -177,7 +196,8 @@ class PointCloudComponent : public GeometryComponent {
 
   void clear();
   bool has_pointcloud() const;
-  void replace(PointCloud *pointcloud, bool transfer_ownership = true);
+  void replace(PointCloud *pointcloud,
+               GeometryOwnershipType ownership = GeometryOwnershipType::Owned);
   PointCloud *release();
 
   const PointCloud *get_for_read() const;
@@ -185,5 +205,46 @@ class PointCloudComponent : public GeometryComponent {
 
   static constexpr inline GeometryComponentType type = GeometryComponentType::PointCloud;
 };
+
+/** A geometry component that stores instances. */
+class InstancesComponent : public GeometryComponent {
+ private:
+  Vector<float3> positions_;
+  Vector<const Object *> objects_;
+
+ public:
+  ~InstancesComponent() = default;
+  GeometryComponent *copy() const override;
+
+  void replace(Vector<float3> positions, Vector<const Object *> objects);
+  void replace(Vector<float3> positions, const Object *object);
+
+  Span<const Object *> objects() const;
+  Span<float3> positions() const;
+  MutableSpan<float3> positions();
+  int instances_amount() const;
+
+  static constexpr inline GeometryComponentType type = GeometryComponentType::Instances;
+};
+
+inline GeometrySetC *wrap(blender::bke::GeometrySet *geometry_set)
+{
+  return reinterpret_cast<GeometrySetC *>(geometry_set);
+}
+
+inline const GeometrySetC *wrap(const blender::bke::GeometrySet *geometry_set)
+{
+  return reinterpret_cast<const GeometrySetC *>(geometry_set);
+}
+
+inline blender::bke::GeometrySet *unwrap(GeometrySetC *geometry_set_c)
+{
+  return reinterpret_cast<blender::bke::GeometrySet *>(geometry_set_c);
+}
+
+inline const blender::bke::GeometrySet *unwrap(const GeometrySetC *geometry_set_c)
+{
+  return reinterpret_cast<const blender::bke::GeometrySet *>(geometry_set_c);
+}
 
 }  // namespace blender::bke
