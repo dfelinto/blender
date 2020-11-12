@@ -15,12 +15,16 @@
  */
 
 #include "BKE_mesh.h"
+#include "BKE_persistent_data_handle.hh"
+#include "DNA_mesh_types.h"
+#include "DNA_meshdata_types.h"
 #include "DNA_pointcloud_types.h"
 
 #include "node_geometry_util.hh"
 
 static bNodeSocketTemplate geo_node_point_instance_in[] = {
     {SOCK_GEOMETRY, N_("Geometry")},
+    {SOCK_OBJECT, N_("Object")},
     {-1, ""},
 };
 
@@ -35,27 +39,31 @@ static void geo_point_instance_exec(bNode *UNUSED(node),
                                     GeoNodeOutputs outputs)
 {
   GeometrySetPtr geometry_set = inputs.extract<GeometrySetPtr>("Geometry");
-
-  if (!geometry_set.has_value() || !geometry_set->has_pointcloud()) {
+  if (!geometry_set.has_value()) {
     outputs.set("Geometry", std::move(geometry_set));
     return;
   }
 
-  /* For now make a mesh from the pointcloud instead of instancing another object / geometry. */
-  const PointCloud *pointcloud = geometry_set->get_pointcloud_for_read();
-
-  if (pointcloud == nullptr) {
-    outputs.set("Geometry", std::move(geometry_set));
-    return;
+  Vector<float3> positions;
+  if (geometry_set->has_pointcloud()) {
+    const PointCloud *pointcloud = geometry_set->get_pointcloud_for_read();
+    positions.extend((const float3 *)pointcloud->co, pointcloud->totpoint);
+  }
+  if (geometry_set->has_mesh()) {
+    const Mesh *mesh = geometry_set->get_mesh_for_read();
+    for (const int i : IndexRange(mesh->totvert)) {
+      positions.append(mesh->mvert[i].co);
+    }
   }
 
-  /* TODO: Carry over attributes from poincloud verts to the instances. */
-  Mesh *mesh_out = BKE_mesh_new_nomain(pointcloud->totpoint, 0, 0, 0, 0);
-  BKE_mesh_from_pointcloud(pointcloud, mesh_out);
+  bke::PersistentObjectHandle object_handle = inputs.extract<bke::PersistentObjectHandle>(
+      "Object");
+  Object *object = inputs.handle_map().lookup(object_handle);
 
-  /* For now, replace any existing mesh in the geometry. */
   make_geometry_set_mutable(geometry_set);
-  geometry_set->replace_mesh(mesh_out);
+  bke::InstancesComponent &instances =
+      geometry_set->get_component_for_write<bke::InstancesComponent>();
+  instances.replace(std::move(positions), object);
 
   outputs.set("Geometry", std::move(geometry_set));
 }
