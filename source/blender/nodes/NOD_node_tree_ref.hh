@@ -177,6 +177,8 @@ class NodeTreeRef : NonCopyable, NonMovable {
   Span<const InputSocketRef *> input_sockets() const;
   Span<const OutputSocketRef *> output_sockets() const;
 
+  bool has_link_cycles() const;
+
   bNodeTree *btree() const;
 
   std::string to_dot() const;
