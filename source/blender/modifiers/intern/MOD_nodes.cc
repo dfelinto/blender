@@ -814,6 +814,11 @@ static GeometrySetPtr modifyGeometry(ModifierData *md,
   NodeTreeRefMap tree_refs;
   DerivedNodeTree tree{nmd->node_group, tree_refs};
 
+  if (tree.has_link_cycles()) {
+    BKE_modifier_set_error(ctx->object, md, "Node group has cycles");
+    return input_geometry_set;
+  }
+
   Span<const DNode *> input_nodes = tree.nodes_by_type("NodeGroupInput");
   Span<const DNode *> output_nodes = tree.nodes_by_type("NodeGroupOutput");
 
