@@ -4687,6 +4687,7 @@ static void registerGeometryNodes(void)
   register_node_type_geo_boolean();
   register_node_type_geo_point_distribute();
   register_node_type_geo_point_instance();
+  register_node_type_geo_object_info();
 }
 
 static void registerFunctionNodes(void)

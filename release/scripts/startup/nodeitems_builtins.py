@@ -485,6 +485,9 @@ def not_implemented_node(idname):
 
 geometry_node_categories = [
     # Geometry Nodes
+    GeometryNodeCategory("GEO_INPUT", "Input", items=[
+        NodeItem("GeometryNodeObjectInfo"),
+    ]),
     GeometryNodeCategory("GEO_MESH", "Mesh", items=[
         NodeItem("GeometryNodeTriangulate"),
         NodeItem("GeometryNodeEdgeSplit"),
