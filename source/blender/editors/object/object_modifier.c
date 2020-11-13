@@ -234,7 +234,7 @@ ModifierData *ED_object_modifier_add(
       /* ensure skin-node customdata exists */
       BKE_mesh_ensure_skin_customdata(ob->data);
     }
-    else if (type == eModifierType_Nodes) {
+    else if (type == eModifierType_Empty) {
       MOD_nodes_init(bmain, (NodesModifierData *)new_md);
     }
   }

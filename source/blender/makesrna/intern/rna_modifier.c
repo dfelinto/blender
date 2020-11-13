@@ -163,7 +163,7 @@ const EnumPropertyItem rna_enum_object_modifier_type_items[] = {
      ICON_MOD_MULTIRES,
      "Multiresolution",
      "Subdivide the mesh in a way that allows editing the higher subdivision levels"},
-    {eModifierType_Nodes, "NODES", ICON_MESH_DATA, "Nodes", ""}, /* TODO: Use correct icon. */
+    {eModifierType_Empty, "EMPTY", ICON_MESH_DATA, "Empty", ""}, /* TODO: Use correct icon. */
     {eModifierType_Remesh,
      "REMESH",
      ICON_MOD_REMESH,

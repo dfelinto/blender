@@ -945,7 +945,7 @@ static void panel_draw(const bContext *UNUSED(C), Panel *panel)
 
 static void panelRegister(ARegionType *region_type)
 {
-  modifier_panel_register(region_type, eModifierType_Nodes, panel_draw);
+  modifier_panel_register(region_type, eModifierType_Empty, panel_draw);
 }
 
 static void blendWrite(BlendWriter *writer, const ModifierData *md)
