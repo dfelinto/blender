@@ -511,10 +511,10 @@ geometry_node_categories = [
         NodeItem("ShaderNodeCombineXYZ"),
         NodeItem("FunctionNodeBooleanMath"),
         NodeItem("FunctionNodeFloatCompare"),
-        NodeItem("FunctionNodeCombineStrings"),
+        # NodeItem("FunctionNodeCombineStrings"),
         NodeItem("FunctionNodeRandomFloat"),
         NodeItem("ShaderNodeValue"),
-        NodeItem("FunctionNodeGroupInstanceID"),
+        # NodeItem("FunctionNodeGroupInstanceID"),
     ]),
     GeometryNodeCategory("GEO_GROUP", "Group", items=node_group_items),
     GeometryNodeCategory("GEO_LAYOUT", "Layout", items=[
