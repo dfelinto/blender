@@ -573,7 +573,7 @@
     .flag = 0, \
   }
 
-#define _DNA_DEFAULT_EmptyModifierData \
+#define _DNA_DEFAULT_NodesModifierData \
   { 0 }
 
 #define _DNA_DEFAULT_SkinModifierData \

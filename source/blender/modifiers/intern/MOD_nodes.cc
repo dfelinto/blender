@@ -83,11 +83,11 @@ using namespace blender::bke;
 
 static void initData(ModifierData *md)
 {
-  EmptyModifierData *emd = (EmptyModifierData *)md;
+  NodesModifierData *nmd = (NodesModifierData *)md;
 
-  BLI_assert(MEMCMP_STRUCT_AFTER_IS_ZERO(emd, modifier));
+  BLI_assert(MEMCMP_STRUCT_AFTER_IS_ZERO(nmd, modifier));
 
-  MEMCPY_STRUCT_AFTER(emd, DNA_struct_default_get(EmptyModifierData), modifier);
+  MEMCPY_STRUCT_AFTER(nmd, DNA_struct_default_get(NodesModifierData), modifier);
 }
 
 static void addIdsUsedBySocket(const ListBase *sockets, Set<ID *> &ids)
@@ -121,12 +121,12 @@ static void findUsedIds(const bNodeTree &tree, Set<ID *> &ids)
 
 static void updateDepsgraph(ModifierData *md, const ModifierUpdateDepsgraphContext *ctx)
 {
-  EmptyModifierData *emd = reinterpret_cast<EmptyModifierData *>(md);
-  if (emd->node_group != nullptr) {
-    DEG_add_node_tree_relation(ctx->node, emd->node_group, "Nodes Modifier");
+  NodesModifierData *nmd = reinterpret_cast<NodesModifierData *>(md);
+  if (nmd->node_group != nullptr) {
+    DEG_add_node_tree_relation(ctx->node, nmd->node_group, "Nodes Modifier");
 
     Set<ID *> used_ids;
-    findUsedIds(*emd->node_group, used_ids);
+    findUsedIds(*nmd->node_group, used_ids);
     for (ID *id : used_ids) {
       if (GS(id->name) == ID_OB) {
         DEG_add_object_relation(ctx->node, (Object *)id, DEG_OB_COMP_TRANSFORM, "Nodes Modifier");
@@ -140,8 +140,8 @@ static void updateDepsgraph(ModifierData *md, const ModifierUpdateDepsgraphConte
 
 static void foreachIDLink(ModifierData *md, Object *ob, IDWalkFunc walk, void *userData)
 {
-  EmptyModifierData *emd = reinterpret_cast<EmptyModifierData *>(md);
-  walk(userData, ob, (ID **)&emd->node_group, IDWALK_CB_USER);
+  NodesModifierData *nmd = reinterpret_cast<NodesModifierData *>(md);
+  walk(userData, ob, (ID **)&nmd->node_group, IDWALK_CB_USER);
 
   struct ForeachSettingData {
     IDWalkFunc walk;
@@ -150,7 +150,7 @@ static void foreachIDLink(ModifierData *md, Object *ob, IDWalkFunc walk, void *u
   } settings = {walk, userData, ob};
 
   IDP_foreach_property(
-      emd->settings.properties,
+      nmd->settings.properties,
       IDP_TYPE_FILTER_ID,
       [](IDProperty *id_prop, void *user_data) {
         ForeachSettingData *settings = (ForeachSettingData *)user_data;
@@ -164,9 +164,9 @@ static bool isDisabled(const struct Scene *UNUSED(scene),
                        ModifierData *md,
                        bool UNUSED(useRenderParams))
 {
-  EmptyModifierData *emd = reinterpret_cast<EmptyModifierData *>(md);
+  NodesModifierData *nmd = reinterpret_cast<NodesModifierData *>(md);
 
-  if (emd->node_group == nullptr) {
+  if (nmd->node_group == nullptr) {
     return true;
   }
 
@@ -612,34 +612,34 @@ static const SocketPropertyType *get_socket_property_type(const bNodeSocket &bso
  * inputs. If any properties correspond to the old properties by name and type, carry over
  * the values.
  */
-void MOD_nodes_update_interface(Object *object, EmptyModifierData *emd)
+void MOD_nodes_update_interface(Object *object, NodesModifierData *nmd)
 {
-  if (emd->node_group == nullptr) {
+  if (nmd->node_group == nullptr) {
     return;
   }
 
-  IDProperty *old_properties = emd->settings.properties;
+  IDProperty *old_properties = nmd->settings.properties;
 
   {
     IDPropertyTemplate idprop = {0};
-    emd->settings.properties = IDP_New(IDP_GROUP, &idprop, "Nodes Modifier Settings");
+    nmd->settings.properties = IDP_New(IDP_GROUP, &idprop, "Nodes Modifier Settings");
   }
 
   IDProperty *ui_container_group;
   {
     IDPropertyTemplate idprop = {0};
     ui_container_group = IDP_New(IDP_GROUP, &idprop, "_RNA_UI");
-    IDP_AddToGroup(emd->settings.properties, ui_container_group);
+    IDP_AddToGroup(nmd->settings.properties, ui_container_group);
   }
 
-  LISTBASE_FOREACH (bNodeSocket *, socket, &emd->node_group->inputs) {
+  LISTBASE_FOREACH (bNodeSocket *, socket, &nmd->node_group->inputs) {
     const SocketPropertyType *property_type = get_socket_property_type(*socket);
     if (property_type == nullptr) {
       continue;
     }
 
     IDProperty *new_prop = socket_add_property(
-        emd->settings.properties, ui_container_group, *property_type, *socket);
+        nmd->settings.properties, ui_container_group, *property_type, *socket);
 
     if (old_properties != nullptr) {
       IDProperty *old_prop = IDP_GetPropertyFromGroup(old_properties, socket->identifier);
@@ -656,10 +656,10 @@ void MOD_nodes_update_interface(Object *object, EmptyModifierData *emd)
   DEG_id_tag_update(&object->id, ID_RECALC_GEOMETRY);
 }
 
-void MOD_nodes_init(Main *bmain, EmptyModifierData *emd)
+void MOD_nodes_init(Main *bmain, NodesModifierData *nmd)
 {
   bNodeTree *ntree = ntreeAddTree(bmain, "Geometry Node Group", ntreeType_Geometry->idname);
-  emd->node_group = ntree;
+  nmd->node_group = ntree;
 
   ntreeAddSocketInterface(ntree, SOCK_IN, "NodeSocketGeometry", "Geometry");
   ntreeAddSocketInterface(ntree, SOCK_OUT, "NodeSocketGeometry", "Geometry");
@@ -680,7 +680,7 @@ void MOD_nodes_init(Main *bmain, EmptyModifierData *emd)
   ntreeUpdateTree(bmain, ntree);
 }
 
-static void initialize_group_input(EmptyModifierData &emd,
+static void initialize_group_input(NodesModifierData &nmd,
                                    const bNodeSocket &socket,
                                    const CPPType &cpp_type,
                                    void *r_value)
@@ -690,11 +690,11 @@ static void initialize_group_input(EmptyModifierData &emd,
     cpp_type.copy_to_uninitialized(cpp_type.default_value(), r_value);
     return;
   }
-  if (emd.settings.properties == nullptr) {
+  if (nmd.settings.properties == nullptr) {
     socket_cpp_value_get(socket, r_value);
     return;
   }
-  const IDProperty *property = IDP_GetPropertyFromGroup(emd.settings.properties,
+  const IDProperty *property = IDP_GetPropertyFromGroup(nmd.settings.properties,
                                                         socket.identifier);
   if (property == nullptr) {
     socket_cpp_value_get(socket, r_value);
@@ -727,7 +727,7 @@ static GeometrySetPtr compute_geometry(const DerivedNodeTree &tree,
                                        Span<const DOutputSocket *> group_input_sockets,
                                        const DInputSocket &socket_to_compute,
                                        GeometrySetPtr input_geometry_set,
-                                       EmptyModifierData *emd)
+                                       NodesModifierData *nmd)
 {
   ResourceCollector resources;
   LinearAllocator<> &allocator = resources.linear_allocator();
@@ -752,7 +752,7 @@ static GeometrySetPtr compute_geometry(const DerivedNodeTree &tree,
     for (const DOutputSocket *socket : remaining_input_sockets) {
       const CPPType &cpp_type = *socket_cpp_type_get(*socket->typeinfo());
       void *value_in = allocator.allocate(cpp_type.size(), cpp_type.alignment());
-      initialize_group_input(*emd, *socket->bsocket(), cpp_type, value_in);
+      initialize_group_input(*nmd, *socket->bsocket(), cpp_type, value_in);
       group_inputs.add_new(socket, {cpp_type, value_in});
     }
   }
@@ -778,16 +778,16 @@ static GeometrySetPtr compute_geometry(const DerivedNodeTree &tree,
  */
 static void check_property_socket_sync(const Object *ob, ModifierData *md)
 {
-  EmptyModifierData *emd = reinterpret_cast<EmptyModifierData *>(md);
+  NodesModifierData *nmd = reinterpret_cast<NodesModifierData *>(md);
 
   int i = 0;
-  LISTBASE_FOREACH_INDEX (const bNodeSocket *, socket, &emd->node_group->inputs, i) {
+  LISTBASE_FOREACH_INDEX (const bNodeSocket *, socket, &nmd->node_group->inputs, i) {
     /* The first socket is the special geometry socket for the modifier object. */
     if (i == 0 && socket->type == SOCK_GEOMETRY) {
       continue;
     }
 
-    IDProperty *property = IDP_GetPropertyFromGroup(emd->settings.properties, socket->identifier);
+    IDProperty *property = IDP_GetPropertyFromGroup(nmd->settings.properties, socket->identifier);
     if (property == nullptr) {
       if (socket->type == SOCK_STRING) {
         BKE_modifier_set_error(ob, md, "String sockets cannot be exposed in the modifier");
@@ -813,7 +813,7 @@ static void check_property_socket_sync(const Object *ob, ModifierData *md)
     }
   }
 
-  if (!BLI_listbase_is_single(&emd->node_group->outputs)) {
+  if (!BLI_listbase_is_single(&nmd->node_group->outputs)) {
     BKE_modifier_set_error(ob, md, "The node group must have a single geometry output");
   }
 }
@@ -822,15 +822,15 @@ static GeometrySetPtr modifyGeometry(ModifierData *md,
                                      const ModifierEvalContext *ctx,
                                      GeometrySetPtr input_geometry_set)
 {
-  EmptyModifierData *emd = reinterpret_cast<EmptyModifierData *>(md);
-  if (emd->node_group == nullptr) {
+  NodesModifierData *nmd = reinterpret_cast<NodesModifierData *>(md);
+  if (nmd->node_group == nullptr) {
     return input_geometry_set;
   }
 
   check_property_socket_sync(ctx->object, md);
 
   NodeTreeRefMap tree_refs;
-  DerivedNodeTree tree{emd->node_group, tree_refs};
+  DerivedNodeTree tree{nmd->node_group, tree_refs};
 
   if (tree.has_link_cycles()) {
     BKE_modifier_set_error(ctx->object, md, "Node group has cycles");
@@ -862,7 +862,7 @@ static GeometrySetPtr modifyGeometry(ModifierData *md,
   }
 
   GeometrySetPtr output_geometry_set = compute_geometry(
-      tree, group_inputs, *group_outputs[0], std::move(input_geometry_set), emd);
+      tree, group_inputs, *group_outputs[0], std::move(input_geometry_set), nmd);
   return output_geometry_set;
 }
 
@@ -923,19 +923,19 @@ static void panel_draw(const bContext *UNUSED(C), Panel *panel)
   uiLayout *layout = panel->layout;
 
   PointerRNA *ptr = modifier_panel_get_property_pointers(panel, nullptr);
-  EmptyModifierData *emd = static_cast<EmptyModifierData *>(ptr->data);
+  NodesModifierData *nmd = static_cast<NodesModifierData *>(ptr->data);
 
   uiLayoutSetPropSep(layout, true);
   uiLayoutSetPropDecorate(layout, false);
 
   uiItemR(layout, ptr, "node_group", 0, nullptr, ICON_MESH_DATA);
 
-  if (emd->node_group != nullptr && emd->settings.properties != nullptr) {
+  if (nmd->node_group != nullptr && nmd->settings.properties != nullptr) {
     PointerRNA settings_ptr;
-    RNA_pointer_create(ptr->owner_id, &RNA_EmptyModifierSettings, &emd->settings, &settings_ptr);
+    RNA_pointer_create(ptr->owner_id, &RNA_NodesModifierSettings, &nmd->settings, &settings_ptr);
 
-    LISTBASE_FOREACH (bNodeSocket *, socket, &emd->node_group->inputs) {
-      draw_property_for_socket(layout, &settings_ptr, emd->settings.properties, *socket);
+    LISTBASE_FOREACH (bNodeSocket *, socket, &nmd->node_group->inputs) {
+      draw_property_for_socket(layout, &settings_ptr, nmd->settings.properties, *socket);
     }
   }
 
@@ -945,53 +945,53 @@ static void panel_draw(const bContext *UNUSED(C), Panel *panel)
 
 static void panelRegister(ARegionType *region_type)
 {
-  modifier_panel_register(region_type, eModifierType_Empty, panel_draw);
+  modifier_panel_register(region_type, eModifierType_Nodes, panel_draw);
 }
 
 static void blendWrite(BlendWriter *writer, const ModifierData *md)
 {
-  const EmptyModifierData *emd = reinterpret_cast<const EmptyModifierData *>(md);
-  if (emd->settings.properties != nullptr) {
+  const NodesModifierData *nmd = reinterpret_cast<const NodesModifierData *>(md);
+  if (nmd->settings.properties != nullptr) {
     /* Note that the property settings are based on the socket type info
      * and don't necessarily need to be written, but we can't just free them. */
-    IDP_BlendWrite(writer, emd->settings.properties);
+    IDP_BlendWrite(writer, nmd->settings.properties);
   }
 }
 
 static void blendRead(BlendDataReader *reader, ModifierData *md)
 {
-  EmptyModifierData *emd = reinterpret_cast<EmptyModifierData *>(md);
-  BLO_read_data_address(reader, &emd->settings.properties);
-  IDP_BlendDataRead(reader, &emd->settings.properties);
+  NodesModifierData *nmd = reinterpret_cast<NodesModifierData *>(md);
+  BLO_read_data_address(reader, &nmd->settings.properties);
+  IDP_BlendDataRead(reader, &nmd->settings.properties);
 }
 
 static void copyData(const ModifierData *md, ModifierData *target, const int flag)
 {
-  const EmptyModifierData *emd = reinterpret_cast<const EmptyModifierData *>(md);
-  EmptyModifierData *temd = reinterpret_cast<EmptyModifierData *>(target);
+  const NodesModifierData *nmd = reinterpret_cast<const NodesModifierData *>(md);
+  NodesModifierData *tnmd = reinterpret_cast<NodesModifierData *>(target);
 
   BKE_modifier_copydata_generic(md, target, flag);
 
-  if (emd->settings.properties != nullptr) {
-    temd->settings.properties = IDP_CopyProperty_ex(emd->settings.properties, flag);
+  if (nmd->settings.properties != nullptr) {
+    tnmd->settings.properties = IDP_CopyProperty_ex(nmd->settings.properties, flag);
   }
 }
 
 static void freeData(ModifierData *md)
 {
-  EmptyModifierData *emd = reinterpret_cast<EmptyModifierData *>(md);
-  if (emd->settings.properties != nullptr) {
-    IDP_FreeProperty_ex(emd->settings.properties, false);
-    emd->settings.properties = nullptr;
+  NodesModifierData *nmd = reinterpret_cast<NodesModifierData *>(md);
+  if (nmd->settings.properties != nullptr) {
+    IDP_FreeProperty_ex(nmd->settings.properties, false);
+    nmd->settings.properties = nullptr;
   }
 }
 
-ModifierTypeInfo modifierType_Empty = {
-    /* name */ "Empty",
-    /* structName */ "EmptyModifierData",
-    /* structSize */ sizeof(EmptyModifierData),
+ModifierTypeInfo modifierType_Nodes = {
+    /* name */ "Nodes",
+    /* structName */ "NodesModifierData",
+    /* structSize */ sizeof(NodesModifierData),
 #ifdef WITH_GEOMETRY_NODES
-    /* srna */ &RNA_EmptyModifier,
+    /* srna */ &RNA_NodesModifier,
 #else
     /* srna */ &RNA_Modifier,
 #endif
