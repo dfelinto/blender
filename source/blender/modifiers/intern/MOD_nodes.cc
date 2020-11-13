@@ -913,8 +913,7 @@ static void panel_draw(const bContext *UNUSED(C), Panel *panel)
 #ifdef WITH_GEOMETRY_NODES
   uiLayout *layout = panel->layout;
 
-  PointerRNA ob_ptr;
-  PointerRNA *ptr = modifier_panel_get_property_pointers(panel, &ob_ptr);
+  PointerRNA *ptr = modifier_panel_get_property_pointers(panel, nullptr);
   NodesModifierData *nmd = static_cast<NodesModifierData *>(ptr->data);
 
   uiLayoutSetPropSep(layout, true);
