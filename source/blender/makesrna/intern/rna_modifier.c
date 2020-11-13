@@ -163,7 +163,7 @@ const EnumPropertyItem rna_enum_object_modifier_type_items[] = {
      ICON_MOD_MULTIRES,
      "Multiresolution",
      "Subdivide the mesh in a way that allows editing the higher subdivision levels"},
-    {eModifierType_Nodes, "NODES", ICON_MESH_DATA, "Nodes", ""}, /* TODO: Use correct icon. */
+    {eModifierType_Empty, "EMPTY", ICON_MESH_DATA, "Empty", ""}, /* TODO: Use correct icon. */
     {eModifierType_Remesh,
      "REMESH",
      ICON_MOD_REMESH,
@@ -1586,25 +1586,25 @@ static int rna_MeshSequenceCacheModifier_read_velocity_get(PointerRNA *ptr)
 #  endif
 }
 
-static bool rna_NodesModifier_node_group_poll(PointerRNA *ptr, PointerRNA value)
+static bool rna_EmptyModifier_node_group_poll(PointerRNA *ptr, PointerRNA value)
 {
-  NodesModifierData *nmd = ptr->data;
+  EmptyModifierData *emd = ptr->data;
   bNodeTree *ntree = value.data;
-  UNUSED_VARS(nmd, ntree);
+  UNUSED_VARS(emd, ntree);
   return true;
 }
 
-static void rna_NodesModifier_node_group_update(Main *bmain, Scene *scene, PointerRNA *ptr)
+static void rna_EmptyModifier_node_group_update(Main *bmain, Scene *scene, PointerRNA *ptr)
 {
   Object *object = (Object *)ptr->owner_id;
-  NodesModifierData *nmd = ptr->data;
+  EmptyModifierData *emd = ptr->data;
   rna_Modifier_dependency_update(bmain, scene, ptr);
-  MOD_nodes_update_interface(object, nmd);
+  MOD_nodes_update_interface(object, emd);
 }
 
-static IDProperty *rna_NodesModifierSettings_properties(PointerRNA *ptr, bool create)
+static IDProperty *rna_EmptyModifierSettings_properties(PointerRNA *ptr, bool create)
 {
-  NodesModifierSettings *settings = ptr->data;
+  EmptyModifierSettings *settings = ptr->data;
   if (create && settings->properties == NULL) {
     IDPropertyTemplate val = {0};
     settings->properties = IDP_New(IDP_GROUP, &val, "Nodes Modifier Settings");
@@ -1612,7 +1612,7 @@ static IDProperty *rna_NodesModifierSettings_properties(PointerRNA *ptr, bool cr
   return settings->properties;
 }
 
-static char *rna_NodesModifierSettings_path(PointerRNA *UNUSED(ptr))
+static char *rna_EmptyModifierSettings_path(PointerRNA *UNUSED(ptr))
 {
   return BLI_strdup("settings");
 }
@@ -6935,12 +6935,12 @@ static void rna_def_modifier_nodes_settings(BlenderRNA *brna)
 {
   StructRNA *srna;
 
-  srna = RNA_def_struct(brna, "NodesModifierSettings", NULL);
-  RNA_def_struct_nested(brna, srna, "NodesModifier");
-  RNA_def_struct_path_func(srna, "rna_NodesModifierSettings_path");
+  srna = RNA_def_struct(brna, "EmptyModifierSettings", NULL);
+  RNA_def_struct_nested(brna, srna, "EmptyModifier");
+  RNA_def_struct_path_func(srna, "rna_EmptyModifierSettings_path");
   RNA_def_struct_ui_text(
       srna, "Nodes Modifier Settings", "Settings that are passed into the node group");
-  RNA_def_struct_idprops_func(srna, "rna_NodesModifierSettings_properties");
+  RNA_def_struct_idprops_func(srna, "rna_EmptyModifierSettings_properties");
 }
 
 static void rna_def_modifier_nodes(BlenderRNA *brna)
@@ -6948,18 +6948,18 @@ static void rna_def_modifier_nodes(BlenderRNA *brna)
   StructRNA *srna;
   PropertyRNA *prop;
 
-  srna = RNA_def_struct(brna, "NodesModifier", "Modifier");
+  srna = RNA_def_struct(brna, "EmptyModifier", "Modifier");
   RNA_def_struct_ui_text(srna, "Nodes Modifier", "");
-  RNA_def_struct_sdna(srna, "NodesModifierData");
+  RNA_def_struct_sdna(srna, "EmptyModifierData");
   RNA_def_struct_ui_icon(srna, ICON_MESH_DATA); /* TODO: Use correct icon. */
 
   RNA_define_lib_overridable(true);
 
   prop = RNA_def_property(srna, "node_group", PROP_POINTER, PROP_NONE);
   RNA_def_property_ui_text(prop, "Node Group", "Node group that controls what this modifier does");
-  RNA_def_property_pointer_funcs(prop, NULL, NULL, NULL, "rna_NodesModifier_node_group_poll");
+  RNA_def_property_pointer_funcs(prop, NULL, NULL, NULL, "rna_EmptyModifier_node_group_poll");
   RNA_def_property_flag(prop, PROP_EDITABLE);
-  RNA_def_property_update(prop, 0, "rna_NodesModifier_node_group_update");
+  RNA_def_property_update(prop, 0, "rna_EmptyModifier_node_group_update");
 
   prop = RNA_def_property(srna, "settings", PROP_POINTER, PROP_NONE);
   RNA_def_property_flag(prop, PROP_NEVER_NULL);

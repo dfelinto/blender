@@ -18,15 +18,15 @@
 
 struct Main;
 struct Object;
-struct NodesModifierData;
+struct EmptyModifierData;
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-void MOD_nodes_update_interface(struct Object *object, struct NodesModifierData *nmd);
+void MOD_nodes_update_interface(struct Object *object, struct EmptyModifierData *emd);
 
-void MOD_nodes_init(struct Main *bmain, struct NodesModifierData *nmd);
+void MOD_nodes_init(struct Main *bmain, struct EmptyModifierData *emd);
 
 #ifdef __cplusplus
 }
