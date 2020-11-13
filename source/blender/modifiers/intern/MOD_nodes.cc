@@ -789,23 +789,32 @@ static void check_property_socket_sync(const Object *ob, ModifierData *md)
 
     IDProperty *property = IDP_GetPropertyFromGroup(nmd->settings.properties, socket->identifier);
     if (property == nullptr) {
-      BKE_modifier_set_error(ob,
-                             md,
-                             "Missing property for input socket \"%s\" (\"%s\") ",
-                             socket->name,
-                             socket->identifier);
+      if (socket->type == SOCK_STRING) {
+        BKE_modifier_set_error(ob, md, "String sockets cannot be exposed in the modifier");
+      }
+      else if (socket->type == SOCK_OBJECT) {
+        BKE_modifier_set_error(ob, md, "Object sockets cannot be exposed in the modifier");
+      }
+      else if (socket->type == SOCK_GEOMETRY) {
+        BKE_modifier_set_error(ob, md, "The node group can only have one geometry input");
+      }
+      else {
+        BKE_modifier_set_error(
+            ob, md, "Missing modifier property for input socket \"%s\"", socket->name);
+      }
       continue;
     }
 
     const SocketPropertyType *property_type = get_socket_property_type(*socket);
     if (!property_type->is_correct_type(*property)) {
-      BKE_modifier_set_error(ob,
-                             md,
-                             "Property type does not match for input socket \"%s\" (\"%s\") ",
-                             socket->name,
-                             socket->identifier);
+      BKE_modifier_set_error(
+          ob, md, "Property type does not match for input socket \"(%s)\"", socket->name);
       continue;
     }
+  }
+
+  if (!BLI_listbase_is_single(&nmd->node_group->outputs)) {
+    BKE_modifier_set_error(ob, md, "The node group must have a single geometry output");
   }
 }
 
