@@ -987,7 +987,7 @@ static void freeData(ModifierData *md)
 }
 
 ModifierTypeInfo modifierType_Nodes = {
-    /* name */ "Nodes",
+    /* name */ "Empty",
     /* structName */ "NodesModifierData",
     /* structSize */ sizeof(NodesModifierData),
 #ifdef WITH_GEOMETRY_NODES
