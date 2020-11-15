@@ -813,8 +813,15 @@ static void check_property_socket_sync(const Object *ob, ModifierData *md)
     }
   }
 
-  if (!BLI_listbase_is_single(&nmd->node_group->outputs)) {
-    BKE_modifier_set_error(ob, md, "The node group must have a single geometry output");
+  bool has_geometry_output = false;
+  LISTBASE_FOREACH (const bNodeSocket *, socket, &nmd->node_group->outputs) {
+    if (socket->type == SOCK_GEOMETRY) {
+      has_geometry_output = true;
+    }
+  }
+
+  if (!has_geometry_output) {
+    BKE_modifier_set_error(ob, md, "The node group must have a geometry output");
   }
 }
 
@@ -852,7 +859,7 @@ static GeometrySetPtr modifyGeometry(ModifierData *md,
                                                  Span<const DOutputSocket *>{};
   Span<const DInputSocket *> group_outputs = output_nodes[0]->inputs().drop_back(1);
 
-  if (group_outputs.size() != 1) {
+  if (group_outputs.size() == 0) {
     return input_geometry_set;
   }
 
