@@ -25,15 +25,8 @@
 
 namespace blender::nodes {
 
-using bke::GeometryOwnershipType;
-using bke::GeometrySet;
-using bke::GeometrySetPtr;
-using bke::InstancesComponent;
-using bke::make_geometry_set_mutable;
-using bke::MeshComponent;
 using bke::PersistentDataHandleMap;
 using bke::PersistentObjectHandle;
-using bke::PointCloudComponent;
 using fn::CPPType;
 using fn::GMutablePointer;
 using fn::GValueMap;

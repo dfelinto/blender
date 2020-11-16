@@ -23,7 +23,11 @@
 
 #include "MEM_guardedalloc.h"
 
-namespace blender::bke {
+using blender::float3;
+using blender::MutableSpan;
+using blender::Span;
+using blender::StringRef;
+using blender::Vector;
 
 /* -------------------------------------------------------------------- */
 /** \name Geometry Component
@@ -462,34 +466,29 @@ int InstancesComponent::instances_amount() const
 
 /** \} */
 
-}  // namespace blender::bke
-
 /* -------------------------------------------------------------------- */
 /** \name C API
  * \{ */
 
-void BKE_geometry_set_user_add(GeometrySetC *geometry_set_c)
+void BKE_geometry_set_user_add(GeometrySet *geometry_set)
 {
-  blender::bke::unwrap(geometry_set_c)->user_add();
+  geometry_set->user_add();
 }
 
-void BKE_geometry_set_user_remove(GeometrySetC *geometry_set_c)
+void BKE_geometry_set_user_remove(GeometrySet *geometry_set)
 {
-  blender::bke::unwrap(geometry_set_c)->user_remove();
+  geometry_set->user_remove();
 }
 
-bool BKE_geometry_set_has_instances(const GeometrySetC *geometry_set_c)
+bool BKE_geometry_set_has_instances(const GeometrySet *geometry_set)
 {
-  return blender::bke::unwrap(geometry_set_c)
-             ->get_component_for_read<blender::bke::InstancesComponent>() != nullptr;
+  return geometry_set->get_component_for_read<InstancesComponent>() != nullptr;
 }
 
-int BKE_geometry_set_instances(const GeometrySetC *geometry_set_c,
+int BKE_geometry_set_instances(const GeometrySet *geometry_set,
                                float (**r_positions)[3],
                                Object ***r_objects)
 {
-  using namespace blender::bke;
-  const GeometrySet *geometry_set = unwrap(geometry_set_c);
   const InstancesComponent *component = geometry_set->get_component_for_read<InstancesComponent>();
   if (component == nullptr) {
     return 0;

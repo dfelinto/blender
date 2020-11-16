@@ -25,15 +25,14 @@ extern "C" {
 #endif
 
 struct Object;
+struct GeometrySet;
 
-typedef struct GeometrySetC GeometrySetC;
+void BKE_geometry_set_user_add(struct GeometrySet *geometry_set);
+void BKE_geometry_set_user_remove(struct GeometrySet *geometry_set);
 
-void BKE_geometry_set_user_add(GeometrySetC *geometry_set_c);
-void BKE_geometry_set_user_remove(GeometrySetC *geometry_set_c);
+bool BKE_geometry_set_has_instances(const struct GeometrySet *geometry_set);
 
-bool BKE_geometry_set_has_instances(const GeometrySetC *geometry_set_c);
-
-int BKE_geometry_set_instances(const GeometrySetC *geometry_set_c,
+int BKE_geometry_set_instances(const struct GeometrySet *geometry_set,
                                float (**r_positions)[3],
                                struct Object ***r_objects);
 

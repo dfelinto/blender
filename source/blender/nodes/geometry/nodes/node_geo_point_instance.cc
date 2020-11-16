@@ -59,8 +59,7 @@ static void geo_point_instance_exec(GeoNodeExecParams params)
   Object *object = params.handle_map().lookup(object_handle);
 
   make_geometry_set_mutable(geometry_set);
-  bke::InstancesComponent &instances =
-      geometry_set->get_component_for_write<bke::InstancesComponent>();
+  InstancesComponent &instances = geometry_set->get_component_for_write<InstancesComponent>();
   instances.replace(std::move(positions), object);
 
   params.set_output("Geometry", std::move(geometry_set));

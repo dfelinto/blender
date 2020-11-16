@@ -332,14 +332,11 @@ PointCloud *BKE_pointcloud_copy_for_eval(struct PointCloud *pointcloud_src, bool
   return result;
 }
 
-static blender::bke::GeometrySetPtr pointcloud_evaluate_modifiers(
-    struct Depsgraph *depsgraph,
-    struct Scene *scene,
-    Object *object,
-    blender::bke::GeometrySetPtr geometry_set)
+static GeometrySetPtr pointcloud_evaluate_modifiers(struct Depsgraph *depsgraph,
+                                                    struct Scene *scene,
+                                                    Object *object,
+                                                    GeometrySetPtr geometry_set)
 {
-  using namespace blender::bke;
-
   /* Modifier evaluation modes. */
   const bool use_render = (DEG_get_mode(depsgraph) == DAG_EVAL_RENDER);
   const int required_mode = use_render ? eModifierMode_Render : eModifierMode_Realtime;
@@ -360,10 +357,10 @@ static blender::bke::GeometrySetPtr pointcloud_evaluate_modifiers(
     }
 
     if (mti->modifyPointCloud) {
-      GeometrySetC *modifier_input_geometry_set = wrap(geometry_set.release());
-      GeometrySetC *modifier_output_geometry_set = mti->modifyPointCloud(
+      GeometrySet *modifier_input_geometry_set = geometry_set.release();
+      GeometrySet *modifier_output_geometry_set = mti->modifyPointCloud(
           md, &mectx, modifier_input_geometry_set);
-      geometry_set = unwrap(modifier_output_geometry_set);
+      geometry_set = modifier_output_geometry_set;
     }
   }
 
@@ -372,8 +369,6 @@ static blender::bke::GeometrySetPtr pointcloud_evaluate_modifiers(
 
 void BKE_pointcloud_data_update(struct Depsgraph *depsgraph, struct Scene *scene, Object *object)
 {
-  using namespace blender::bke;
-
   /* Free any evaluated data and restore original data. */
   BKE_object_free_derived_caches(object);
 
@@ -387,7 +382,7 @@ void BKE_pointcloud_data_update(struct Depsgraph *depsgraph, struct Scene *scene
   /* Assign evaluated object. */
   PointCloud *dummy_pointcloud = BKE_pointcloud_new_nomain(0);
   BKE_object_eval_assign_data(object, &dummy_pointcloud->id, true);
-  object->runtime.geometry_set_eval = wrap(geometry_set_eval.release());
+  object->runtime.geometry_set_eval = geometry_set_eval.release();
 }
 
 /* Draw Cache */

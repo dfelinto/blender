@@ -61,7 +61,6 @@
 #endif
 
 namespace deg = blender::deg;
-namespace bke = blender::bke;
 
 /* ************************ DEG ITERATORS ********************* */
 
@@ -144,8 +143,7 @@ bool deg_iterator_components_step(BLI_Iterator *iter)
     return true;
   }
 
-  bke::GeometrySet *geometry_set = bke::unwrap(
-      data->geometry_component_owner->runtime.geometry_set_eval);
+  GeometrySet *geometry_set = data->geometry_component_owner->runtime.geometry_set_eval;
   if (geometry_set == nullptr) {
     data->geometry_component_owner = nullptr;
     return false;

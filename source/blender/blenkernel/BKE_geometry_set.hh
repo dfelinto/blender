@@ -34,10 +34,8 @@ struct Mesh;
 struct PointCloud;
 struct Object;
 
-namespace blender::bke {
-
 /* An automatically reference counted geometry set. */
-using GeometrySetPtr = UserCounter<class GeometrySet>;
+using GeometrySetPtr = blender::UserCounter<class GeometrySet>;
 
 /* Each geometry component has a specific type. The type determines what kind of data the component
  * stores. Functions modifying a geometry will usually just modify a subset of the component types.
@@ -57,19 +55,15 @@ enum class GeometryOwnershipType {
   ReadOnly = 2,
 };
 
-}  // namespace blender::bke
-
 /* Make it possible to use the component type as key in hash tables. */
 namespace blender {
-template<> struct DefaultHash<bke::GeometryComponentType> {
-  uint64_t operator()(const bke::GeometryComponentType &value) const
+template<> struct DefaultHash<GeometryComponentType> {
+  uint64_t operator()(const GeometryComponentType &value) const
   {
     return (uint64_t)value;
   }
 };
 }  // namespace blender
-
-namespace blender::bke {
 
 /**
  * This is the base class for specialized geometry component types.
@@ -109,8 +103,8 @@ class GeometrySet {
    * it is above 1, the geometry set is immutable. */
   std::atomic<int> users_ = 1;
 
-  using GeometryComponentPtr = UserCounter<class GeometryComponent>;
-  Map<GeometryComponentType, GeometryComponentPtr> components_;
+  using GeometryComponentPtr = blender::UserCounter<class GeometryComponent>;
+  blender::Map<GeometryComponentType, GeometryComponentPtr> components_;
 
  public:
   GeometrySet() = default;
@@ -171,7 +165,7 @@ class MeshComponent : public GeometryComponent {
   /* Due to historical design choices, vertex group data is stored in the mesh, but the vertex
    * group names are stored on an object. Since we don't have an object here, we copy over the
    * names into this map. */
-  Map<std::string, int> vertex_group_names_;
+  blender::Map<std::string, int> vertex_group_names_;
 
  public:
   ~MeshComponent();
@@ -183,7 +177,7 @@ class MeshComponent : public GeometryComponent {
   Mesh *release();
 
   void copy_vertex_group_names_from_object(const struct Object &object);
-  int vertex_group_index(StringRef vertex_group_name) const;
+  int vertex_group_index(blender::StringRef vertex_group_name) const;
 
   const Mesh *get_for_read() const;
   Mesh *get_for_write();
@@ -216,42 +210,21 @@ class PointCloudComponent : public GeometryComponent {
 /** A geometry component that stores instances. */
 class InstancesComponent : public GeometryComponent {
  private:
-  Vector<float3> positions_;
-  Vector<const Object *> objects_;
+  blender::Vector<blender::float3> positions_;
+  blender::Vector<const Object *> objects_;
 
  public:
   ~InstancesComponent() = default;
   GeometryComponent *copy() const override;
 
-  void replace(Vector<float3> positions, Vector<const Object *> objects);
-  void replace(Vector<float3> positions, const Object *object);
+  void replace(blender::Vector<blender::float3> positions,
+               blender::Vector<const Object *> objects);
+  void replace(blender::Vector<blender::float3> positions, const Object *object);
 
-  Span<const Object *> objects() const;
-  Span<float3> positions() const;
-  MutableSpan<float3> positions();
+  blender::Span<const Object *> objects() const;
+  blender::Span<blender::float3> positions() const;
+  blender::MutableSpan<blender::float3> positions();
   int instances_amount() const;
 
   static constexpr inline GeometryComponentType type = GeometryComponentType::Instances;
 };
-
-inline GeometrySetC *wrap(blender::bke::GeometrySet *geometry_set)
-{
-  return reinterpret_cast<GeometrySetC *>(geometry_set);
-}
-
-inline const GeometrySetC *wrap(const blender::bke::GeometrySet *geometry_set)
-{
-  return reinterpret_cast<const GeometrySetC *>(geometry_set);
-}
-
-inline blender::bke::GeometrySet *unwrap(GeometrySetC *geometry_set_c)
-{
-  return reinterpret_cast<blender::bke::GeometrySet *>(geometry_set_c);
-}
-
-inline const blender::bke::GeometrySet *unwrap(const GeometrySetC *geometry_set_c)
-{
-  return reinterpret_cast<const blender::bke::GeometrySet *>(geometry_set_c);
-}
-
-}  // namespace blender::bke

@@ -43,7 +43,7 @@ struct ModifierData;
 struct Object;
 struct Scene;
 struct bArmature;
-struct GeometrySetC;
+struct GeometrySet;
 
 typedef enum {
   /* Should not be used, only for None modifier type */
@@ -247,9 +247,9 @@ typedef struct ModifierTypeInfo {
   struct Hair *(*modifyHair)(struct ModifierData *md,
                              const struct ModifierEvalContext *ctx,
                              struct Hair *hair);
-  struct GeometrySetC *(*modifyPointCloud)(struct ModifierData *md,
-                                           const struct ModifierEvalContext *ctx,
-                                           struct GeometrySetC *geometry_set_c);
+  struct GeometrySet *(*modifyPointCloud)(struct ModifierData *md,
+                                          const struct ModifierEvalContext *ctx,
+                                          struct GeometrySet *geometry_set);
   struct Volume *(*modifyVolume)(struct ModifierData *md,
                                  const struct ModifierEvalContext *ctx,
                                  struct Volume *volume);

@@ -890,13 +890,13 @@ static Mesh *modifyMesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh *
   return new_mesh;
 }
 
-static GeometrySetC *modifyPointCloud(ModifierData *md,
-                                      const ModifierEvalContext *ctx,
-                                      GeometrySetC *geometry_set_c)
+static GeometrySet *modifyPointCloud(ModifierData *md,
+                                     const ModifierEvalContext *ctx,
+                                     GeometrySet *geometry_set)
 {
-  GeometrySetPtr input_geometry_set = unwrap(geometry_set_c);
+  GeometrySetPtr input_geometry_set = geometry_set;
   GeometrySetPtr output_geometry_set = modifyGeometry(md, ctx, std::move(input_geometry_set));
-  return wrap(output_geometry_set.release());
+  return output_geometry_set.release();
 }
 
 /* Drawing the properties manually with #uiItemR instead of #uiDefAutoButsRNA allows using
