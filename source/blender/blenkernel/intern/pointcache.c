@@ -1363,6 +1363,58 @@ static int ptcache_path(PTCacheID *pid, char *filename)
   return BLI_path_slash_ensure(filename); /* new strlen() */
 }
 
+static size_t ptcache_filename_ext_append(PTCacheID *pid,
+                                          char *filename,
+                                          const size_t filename_len,
+                                          const bool use_frame_number,
+                                          const int cfra)
+{
+  size_t len = filename_len;
+  char *filename_ext;
+  filename_ext = filename + filename_len;
+  *filename_ext = '\0';
+
+  /* PointCaches are inserted in object's list on demand, we need a valid index now. */
+  if (pid->cache->index < 0) {
+    BLI_assert(GS(pid->owner_id->name) == ID_OB);
+    pid->cache->index = pid->stack_index = BKE_object_insert_ptcache((Object *)pid->owner_id);
+  }
+
+  const char *ext = ptcache_file_extension(pid);
+  if (use_frame_number) {
+    if (pid->cache->flag & PTCACHE_EXTERNAL) {
+      if (pid->cache->index >= 0) {
+        len += BLI_snprintf_rlen(
+            filename_ext, MAX_PTCACHE_FILE - len, "_%06d_%02u%s", cfra, pid->stack_index, ext);
+      }
+      else {
+        len += BLI_snprintf_rlen(filename_ext, MAX_PTCACHE_FILE - len, "_%06d%s", cfra, ext);
+      }
+    }
+    else {
+      len += BLI_snprintf_rlen(
+          filename_ext, MAX_PTCACHE_FILE - len, "_%06d_%02u%s", cfra, pid->stack_index, ext);
+    }
+  }
+  else {
+    if (pid->cache->flag & PTCACHE_EXTERNAL) {
+      if (pid->cache->index >= 0) {
+        len += BLI_snprintf_rlen(
+            filename_ext, MAX_PTCACHE_FILE - len, "_%02u%s", pid->stack_index, ext);
+      }
+      else {
+        len += BLI_snprintf_rlen(filename_ext, MAX_PTCACHE_FILE - len, "%s", ext);
+      }
+    }
+    else {
+      len += BLI_snprintf_rlen(
+          filename_ext, MAX_PTCACHE_FILE - len, "_%02u%s", pid->stack_index, ext);
+    }
+  }
+
+  return len;
+}
+
 static int ptcache_filename(PTCacheID *pid, char *filename, int cfra, short do_path, short do_ext)
 {
   int len = 0;
@@ -1384,7 +1436,7 @@ static int ptcache_filename(PTCacheID *pid, char *filename, int cfra, short do_p
     idname = (pid->owner_id->name + 2);
     /* convert chars to hex so they are always a valid filename */
     while ('\0' != *idname) {
-      BLI_snprintf(newname, MAX_PTCACHE_FILE, "%02X", (unsigned int)(*idname++));
+      BLI_snprintf(newname, MAX_PTCACHE_FILE - len, "%02X", (unsigned int)(*idname++));
       newname += 2;
       len += 2;
     }
@@ -1397,28 +1449,7 @@ static int ptcache_filename(PTCacheID *pid, char *filename, int cfra, short do_p
   }
 
   if (do_ext) {
-    if (pid->cache->index < 0) {
-      BLI_assert(GS(pid->owner_id->name) == ID_OB);
-      pid->cache->index = pid->stack_index = BKE_object_insert_ptcache((Object *)pid->owner_id);
-    }
-
-    const char *ext = ptcache_file_extension(pid);
-
-    if (pid->cache->flag & PTCACHE_EXTERNAL) {
-      if (pid->cache->index >= 0) {
-        /* Always 6 chars. */
-        BLI_snprintf(newname, MAX_PTCACHE_FILE, "_%06d_%02u%s", cfra, pid->stack_index, ext);
-      }
-      else {
-        /* Always 6 chars. */
-        BLI_snprintf(newname, MAX_PTCACHE_FILE, "_%06d%s", cfra, ext);
-      }
-    }
-    else {
-      /* Always 6 chars. */
-      BLI_snprintf(newname, MAX_PTCACHE_FILE, "_%06d_%02u%s", cfra, pid->stack_index, ext);
-    }
-    len += 16;
+    len += ptcache_filename_ext_append(pid, filename, (size_t)len, true, cfra);
   }
 
   return len; /* make sure the above string is always 16 chars */
@@ -1431,7 +1462,7 @@ static PTCacheFile *ptcache_file_open(PTCacheID *pid, int mode, int cfra)
 {
   PTCacheFile *pf;
   FILE *fp = NULL;
-  char filename[FILE_MAX * 2];
+  char filename[MAX_PTCACHE_FILE];
 
 #ifndef DURIAN_POINTCACHE_LIB_OK
   /* don't allow writing for linked objects */
@@ -2588,8 +2619,6 @@ void BKE_ptcache_id_clear(PTCacheID *pid, int mode, unsigned int cfra)
 
   /*if (!G.relbase_valid) return; */ /* save blend file before using pointcache */
 
-  const char *fext = ptcache_file_extension(pid);
-
   /* clear all files in the temp dir with the prefix of the ID and the ".bphys" suffix */
   switch (mode) {
     case PTCACHE_CLEAR_ALL:
@@ -2612,7 +2641,7 @@ void BKE_ptcache_id_clear(PTCacheID *pid, int mode, unsigned int cfra)
           len += 1;
         }
 
-        BLI_snprintf(ext, sizeof(ext), "_%02u%s", pid->stack_index, fext);
+        ptcache_filename_ext_append(pid, ext, 0, false, 0);
 
         while ((de = readdir(dir)) != NULL) {
           if (strstr(de->d_name, ext)) {               /* do we have the right extension?*/
@@ -2809,9 +2838,7 @@ void BKE_ptcache_id_time(
         return;
       }
 
-      const char *fext = ptcache_file_extension(pid);
-
-      BLI_snprintf(ext, sizeof(ext), "_%02u%s", pid->stack_index, fext);
+      ptcache_filename_ext_append(pid, ext, 0, false, 0);
 
       while ((de = readdir(dir)) != NULL) {
         if (strstr(de->d_name, ext)) {               /* do we have the right extension?*/
@@ -3523,9 +3550,7 @@ void BKE_ptcache_disk_cache_rename(PTCacheID *pid, const char *name_src, const c
     return;
   }
 
-  const char *fext = ptcache_file_extension(pid);
-
-  BLI_snprintf(ext, sizeof(ext), "_%02u%s", pid->stack_index, fext);
+  ptcache_filename_ext_append(pid, ext, 0, false, 0);
 
   /* put new name into cache */
   BLI_strncpy(pid->cache->name, name_dst, sizeof(pid->cache->name));
