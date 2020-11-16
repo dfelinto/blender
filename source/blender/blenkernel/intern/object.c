@@ -1556,7 +1556,7 @@ void BKE_object_free_derived_caches(Object *ob)
   }
 
   if (ob->runtime.geometry_set_eval != NULL) {
-    BKE_geometry_set_user_remove(ob->runtime.geometry_set_eval);
+    BKE_geometry_set_free(ob->runtime.geometry_set_eval);
     ob->runtime.geometry_set_eval = NULL;
   }
 }

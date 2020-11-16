@@ -27,8 +27,7 @@ extern "C" {
 struct Object;
 struct GeometrySet;
 
-void BKE_geometry_set_user_add(struct GeometrySet *geometry_set);
-void BKE_geometry_set_user_remove(struct GeometrySet *geometry_set);
+void BKE_geometry_set_free(struct GeometrySet *geometry_set);
 
 bool BKE_geometry_set_has_instances(const struct GeometrySet *geometry_set);
 

@@ -666,9 +666,9 @@ static bNodeSocketType *make_socket_type_object()
 static bNodeSocketType *make_socket_type_geometry()
 {
   bNodeSocketType *socktype = make_standard_socket_type(SOCK_GEOMETRY, PROP_NONE);
-  socktype->get_cpp_type = []() { return &blender::fn::CPPType::get<GeometrySetPtr>(); };
+  socktype->get_cpp_type = []() { return &blender::fn::CPPType::get<GeometrySet>(); };
   socktype->get_cpp_value = [](const bNodeSocket &UNUSED(socket), void *r_value) {
-    new (r_value) GeometrySetPtr();
+    new (r_value) GeometrySet();
   };
   return socktype;
 }

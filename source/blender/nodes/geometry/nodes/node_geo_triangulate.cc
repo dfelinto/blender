@@ -48,26 +48,19 @@ static void geo_triangulate_init(bNodeTree *UNUSED(ntree), bNode *node)
 namespace blender::nodes {
 static void geo_triangulate_exec(GeoNodeExecParams params)
 {
-  GeometrySetPtr geometry_set = params.extract_input<GeometrySetPtr>("Geometry");
+  GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
   const int min_vertices = std::max(params.extract_input<int>("Minimum Vertices"), 4);
-
-  if (!geometry_set.has_value()) {
-    params.set_output("Geometry", geometry_set);
-    return;
-  }
 
   GeometryNodeTriangulateQuads quad_method = static_cast<GeometryNodeTriangulateQuads>(
       params.node().custom1);
   GeometryNodeTriangulateNGons ngon_method = static_cast<GeometryNodeTriangulateNGons>(
       params.node().custom2);
 
-  make_geometry_set_mutable(geometry_set);
-
   /* #triangulate_mesh might modify the input mesh currently. */
-  Mesh *mesh_in = geometry_set->get_mesh_for_write();
+  Mesh *mesh_in = geometry_set.get_mesh_for_write();
   if (mesh_in != nullptr) {
     Mesh *mesh_out = triangulate_mesh(mesh_in, quad_method, ngon_method, min_vertices, 0);
-    geometry_set->replace_mesh(mesh_out);
+    geometry_set.replace_mesh(mesh_out);
   }
 
   params.set_output("Geometry", std::move(geometry_set));

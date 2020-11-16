@@ -723,11 +723,11 @@ static void fill_data_handle_map(const DerivedNodeTree &tree, PersistentDataHand
  * Currently, this uses a fairly basic and inefficient algorithm that might compute things more
  * often than necessary. It's going to be replaced soon.
  */
-static GeometrySetPtr compute_geometry(const DerivedNodeTree &tree,
-                                       Span<const DOutputSocket *> group_input_sockets,
-                                       const DInputSocket &socket_to_compute,
-                                       GeometrySetPtr input_geometry_set,
-                                       NodesModifierData *nmd)
+static GeometrySet compute_geometry(const DerivedNodeTree &tree,
+                                    Span<const DOutputSocket *> group_input_sockets,
+                                    const DInputSocket &socket_to_compute,
+                                    GeometrySet input_geometry_set,
+                                    NodesModifierData *nmd)
 {
   ResourceCollector resources;
   LinearAllocator<> &allocator = resources.linear_allocator();
@@ -742,7 +742,7 @@ static GeometrySetPtr compute_geometry(const DerivedNodeTree &tree,
      * modifier. */
     const DOutputSocket *first_input_socket = group_input_sockets[0];
     if (first_input_socket->bsocket()->type == SOCK_GEOMETRY) {
-      GeometrySetPtr *geometry_set_in = allocator.construct<GeometrySetPtr>(
+      GeometrySet *geometry_set_in = allocator.construct<GeometrySet>(
           std::move(input_geometry_set));
       group_inputs.add_new(first_input_socket, geometry_set_in);
       remaining_input_sockets = remaining_input_sockets.drop_front(1);
@@ -768,7 +768,7 @@ static GeometrySetPtr compute_geometry(const DerivedNodeTree &tree,
   BLI_assert(results.size() == 1);
   GMutablePointer result = results[0];
 
-  GeometrySetPtr output_geometry = std::move(*(GeometrySetPtr *)result.get());
+  GeometrySet output_geometry = std::move(*(GeometrySet *)result.get());
   return output_geometry;
 }
 
@@ -825,13 +825,13 @@ static void check_property_socket_sync(const Object *ob, ModifierData *md)
   }
 }
 
-static GeometrySetPtr modifyGeometry(ModifierData *md,
-                                     const ModifierEvalContext *ctx,
-                                     GeometrySetPtr input_geometry_set)
+static void modifyGeometry(ModifierData *md,
+                           const ModifierEvalContext *ctx,
+                           GeometrySet &geometry_set)
 {
   NodesModifierData *nmd = reinterpret_cast<NodesModifierData *>(md);
   if (nmd->node_group == nullptr) {
-    return input_geometry_set;
+    return;
   }
 
   check_property_socket_sync(ctx->object, md);
@@ -841,17 +841,17 @@ static GeometrySetPtr modifyGeometry(ModifierData *md,
 
   if (tree.has_link_cycles()) {
     BKE_modifier_set_error(ctx->object, md, "Node group has cycles");
-    return input_geometry_set;
+    return;
   }
 
   Span<const DNode *> input_nodes = tree.nodes_by_type("NodeGroupInput");
   Span<const DNode *> output_nodes = tree.nodes_by_type("NodeGroupOutput");
 
   if (input_nodes.size() > 1) {
-    return input_geometry_set;
+    return;
   }
   if (output_nodes.size() != 1) {
-    return input_geometry_set;
+    return;
   }
 
   Span<const DOutputSocket *> group_inputs = (input_nodes.size() == 1) ?
@@ -860,43 +860,36 @@ static GeometrySetPtr modifyGeometry(ModifierData *md,
   Span<const DInputSocket *> group_outputs = output_nodes[0]->inputs().drop_back(1);
 
   if (group_outputs.size() == 0) {
-    return input_geometry_set;
+    return;
   }
 
   const DInputSocket *group_output = group_outputs[0];
   if (group_output->idname() != "NodeSocketGeometry") {
-    return input_geometry_set;
+    return;
   }
 
-  GeometrySetPtr output_geometry_set = compute_geometry(
-      tree, group_inputs, *group_outputs[0], std::move(input_geometry_set), nmd);
-  return output_geometry_set;
+  geometry_set = compute_geometry(
+      tree, group_inputs, *group_outputs[0], std::move(geometry_set), nmd);
 }
 
 static Mesh *modifyMesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh *mesh)
 {
-  GeometrySetPtr input_geometry_set = GeometrySet::create_with_mesh(
-      mesh, GeometryOwnershipType::Editable);
-  input_geometry_set->get_component_for_write<MeshComponent>().copy_vertex_group_names_from_object(
+  GeometrySet geometry_set = GeometrySet::create_with_mesh(mesh, GeometryOwnershipType::Editable);
+  geometry_set.get_component_for_write<MeshComponent>().copy_vertex_group_names_from_object(
       *ctx->object);
-  GeometrySetPtr output_geometry_set = modifyGeometry(md, ctx, std::move(input_geometry_set));
-  if (!output_geometry_set.has_value()) {
-    return BKE_mesh_new_nomain(0, 0, 0, 0, 0);
-  }
-  Mesh *new_mesh = output_geometry_set->get_component_for_write<MeshComponent>().release();
+  modifyGeometry(md, ctx, geometry_set);
+  Mesh *new_mesh = geometry_set.get_component_for_write<MeshComponent>().release();
   if (new_mesh == nullptr) {
     return BKE_mesh_new_nomain(0, 0, 0, 0, 0);
   }
   return new_mesh;
 }
 
-static GeometrySet *modifyPointCloud(ModifierData *md,
-                                     const ModifierEvalContext *ctx,
-                                     GeometrySet *geometry_set)
+static void modifyPointCloud(ModifierData *md,
+                             const ModifierEvalContext *ctx,
+                             GeometrySet *geometry_set)
 {
-  GeometrySetPtr input_geometry_set = geometry_set;
-  GeometrySetPtr output_geometry_set = modifyGeometry(md, ctx, std::move(input_geometry_set));
-  return output_geometry_set.release();
+  modifyGeometry(md, ctx, *geometry_set);
 }
 
 /* Drawing the properties manually with #uiItemR instead of #uiDefAutoButsRNA allows using

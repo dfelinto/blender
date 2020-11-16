@@ -105,17 +105,12 @@ static Mesh *mesh_boolean_calc(const Mesh *mesh_a, const Mesh *mesh_b, int boole
 namespace blender::nodes {
 static void geo_boolean_exec(GeoNodeExecParams params)
 {
-  GeometrySetPtr geometry_set_in_a = params.extract_input<GeometrySetPtr>("Geometry A");
-  GeometrySetPtr geometry_set_in_b = params.extract_input<GeometrySetPtr>("Geometry B");
-  GeometrySetPtr geometry_set_out;
+  GeometrySet geometry_set_in_a = params.extract_input<GeometrySet>("Geometry A");
+  GeometrySet geometry_set_in_b = params.extract_input<GeometrySet>("Geometry B");
+  GeometrySet geometry_set_out;
 
-  if (!geometry_set_in_a.has_value() || !geometry_set_in_b.has_value()) {
-    params.set_output("Geometry", std::move(geometry_set_out));
-    return;
-  }
-
-  const Mesh *mesh_in_a = geometry_set_in_a->get_mesh_for_read();
-  const Mesh *mesh_in_b = geometry_set_in_b->get_mesh_for_read();
+  const Mesh *mesh_in_a = geometry_set_in_a.get_mesh_for_read();
+  const Mesh *mesh_in_b = geometry_set_in_b.get_mesh_for_read();
   if (mesh_in_a == nullptr || mesh_in_b == nullptr) {
     params.set_output("Geometry", std::move(geometry_set_out));
     return;

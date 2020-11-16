@@ -102,9 +102,9 @@ static Vector<float3> scatter_points_from_mesh(const Mesh *mesh,
 
 static void geo_point_distribute_exec(GeoNodeExecParams params)
 {
-  GeometrySetPtr geometry_set = params.extract_input<GeometrySetPtr>("Geometry");
+  GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
 
-  if (!geometry_set.has_value() || !geometry_set->has_mesh()) {
+  if (!geometry_set.has_mesh()) {
     params.set_output("Geometry", std::move(geometry_set));
     return;
   }
@@ -113,13 +113,13 @@ static void geo_point_distribute_exec(GeoNodeExecParams params)
   const std::string density_attribute = params.extract_input<std::string>("Density Attribute");
 
   if (density <= 0.0f) {
-    geometry_set->replace_mesh(nullptr);
-    geometry_set->replace_pointcloud(nullptr);
+    geometry_set.replace_mesh(nullptr);
+    geometry_set.replace_pointcloud(nullptr);
     params.set_output("Geometry", std::move(geometry_set));
     return;
   }
 
-  const MeshComponent &mesh_component = *geometry_set->get_component_for_read<MeshComponent>();
+  const MeshComponent &mesh_component = *geometry_set.get_component_for_read<MeshComponent>();
   const Mesh *mesh_in = mesh_component.get_for_read();
   const int density_attribute_index = mesh_component.vertex_group_index(density_attribute);
   Vector<float3> points = scatter_points_from_mesh(mesh_in, density, density_attribute_index);
@@ -131,9 +131,8 @@ static void geo_point_distribute_exec(GeoNodeExecParams params)
     pointcloud->radius[i] = 0.05f;
   }
 
-  make_geometry_set_mutable(geometry_set);
-  geometry_set->replace_mesh(nullptr);
-  geometry_set->replace_pointcloud(pointcloud);
+  geometry_set.replace_mesh(nullptr);
+  geometry_set.replace_pointcloud(pointcloud);
 
   params.set_output("Geometry", std::move(geometry_set));
 }

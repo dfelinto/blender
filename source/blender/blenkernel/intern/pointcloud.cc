@@ -332,10 +332,10 @@ PointCloud *BKE_pointcloud_copy_for_eval(struct PointCloud *pointcloud_src, bool
   return result;
 }
 
-static GeometrySetPtr pointcloud_evaluate_modifiers(struct Depsgraph *depsgraph,
-                                                    struct Scene *scene,
-                                                    Object *object,
-                                                    GeometrySetPtr geometry_set)
+static void pointcloud_evaluate_modifiers(struct Depsgraph *depsgraph,
+                                          struct Scene *scene,
+                                          Object *object,
+                                          GeometrySet &geometry_set)
 {
   /* Modifier evaluation modes. */
   const bool use_render = (DEG_get_mode(depsgraph) == DAG_EVAL_RENDER);
@@ -357,14 +357,9 @@ static GeometrySetPtr pointcloud_evaluate_modifiers(struct Depsgraph *depsgraph,
     }
 
     if (mti->modifyPointCloud) {
-      GeometrySet *modifier_input_geometry_set = geometry_set.release();
-      GeometrySet *modifier_output_geometry_set = mti->modifyPointCloud(
-          md, &mectx, modifier_input_geometry_set);
-      geometry_set = modifier_output_geometry_set;
+      mti->modifyPointCloud(md, &mectx, &geometry_set);
     }
   }
-
-  return geometry_set;
 }
 
 void BKE_pointcloud_data_update(struct Depsgraph *depsgraph, struct Scene *scene, Object *object)
@@ -374,15 +369,14 @@ void BKE_pointcloud_data_update(struct Depsgraph *depsgraph, struct Scene *scene
 
   /* Evaluate modifiers. */
   PointCloud *pointcloud = static_cast<PointCloud *>(object->data);
-  GeometrySetPtr input_geometry_set = GeometrySet::create_with_pointcloud(
-      pointcloud, GeometryOwnershipType::ReadOnly);
-  GeometrySetPtr geometry_set_eval = pointcloud_evaluate_modifiers(
-      depsgraph, scene, object, std::move(input_geometry_set));
+  GeometrySet geometry_set = GeometrySet::create_with_pointcloud(pointcloud,
+                                                                 GeometryOwnershipType::ReadOnly);
+  pointcloud_evaluate_modifiers(depsgraph, scene, object, geometry_set);
 
   /* Assign evaluated object. */
   PointCloud *dummy_pointcloud = BKE_pointcloud_new_nomain(0);
   BKE_object_eval_assign_data(object, &dummy_pointcloud->id, true);
-  object->runtime.geometry_set_eval = geometry_set_eval.release();
+  object->runtime.geometry_set_eval = new GeometrySet(geometry_set);
 }
 
 /* Draw Cache */

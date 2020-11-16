@@ -34,9 +34,6 @@ struct Mesh;
 struct PointCloud;
 struct Object;
 
-/* An automatically reference counted geometry set. */
-using GeometrySetPtr = blender::UserCounter<class GeometrySet>;
-
 /* Each geometry component has a specific type. The type determines what kind of data the component
  * stores. Functions modifying a geometry will usually just modify a subset of the component types.
  */
@@ -91,35 +88,18 @@ inline constexpr bool is_geometry_component_v = std::is_base_of_v<GeometryCompon
 
 /**
  * A geometry set contains zero or more geometry components. There is at most one component of each
- * type. Individual components might be shared between multiple geometries.
+ * type. Individual components might be shared between multiple geometries. Shared components are
+ * copied automatically when write access is requested.
  *
- * Geometries are reference counted. This allows them to be shared without making unnecessary
- * copies. A geometry that is shared is immutable. If some code wants to change it,
- * #make_geometry_set_mutable should be called first.
+ * Copying a geometry set is a relatively cheap operation, because it does not copy the referenced
+ * geometry components.
  */
 class GeometrySet {
  private:
-  /* Number of users of this geometry set. If this number goes to zero, the set is freed. If
-   * it is above 1, the geometry set is immutable. */
-  std::atomic<int> users_ = 1;
-
   using GeometryComponentPtr = blender::UserCounter<class GeometryComponent>;
   blender::Map<GeometryComponentType, GeometryComponentPtr> components_;
 
  public:
-  GeometrySet() = default;
-  GeometrySet(const GeometrySet &other);
-  GeometrySet(GeometrySet &&other) = delete;
-  ~GeometrySet() = default;
-
-  /* Disable copy and move assignment operators. */
-  GeometrySet &operator=(const GeometrySet &other) = delete;
-  GeometrySet &operator=(GeometrySet &&other) = delete;
-
-  void user_add();
-  void user_remove();
-  bool is_mutable() const;
-
   GeometryComponent &get_component_for_write(GeometryComponentType component_type);
   template<typename Component> Component &get_component_for_write()
   {
@@ -134,10 +114,14 @@ class GeometrySet {
     return static_cast<const Component *>(get_component_for_read(Component::type));
   }
 
+  friend std::ostream &operator<<(std::ostream &stream, const GeometrySet &geometry_set);
+  friend bool operator==(const GeometrySet &a, const GeometrySet &b);
+  uint64_t hash() const;
+
   /* Utility methods for creation. */
-  static GeometrySetPtr create_with_mesh(
+  static GeometrySet create_with_mesh(
       Mesh *mesh, GeometryOwnershipType ownership = GeometryOwnershipType::Owned);
-  static GeometrySetPtr create_with_pointcloud(
+  static GeometrySet create_with_pointcloud(
       PointCloud *pointcloud, GeometryOwnershipType ownership = GeometryOwnershipType::Owned);
 
   /* Utility methods for access. */
@@ -154,8 +138,6 @@ class GeometrySet {
   void replace_pointcloud(PointCloud *pointcloud,
                           GeometryOwnershipType ownership = GeometryOwnershipType::Owned);
 };
-
-void make_geometry_set_mutable(GeometrySetPtr &geometry);
 
 /** A geometry component that can store a mesh. */
 class MeshComponent : public GeometryComponent {

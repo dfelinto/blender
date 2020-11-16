@@ -38,9 +38,9 @@ static bNodeSocketTemplate geo_node_subdivision_surface_out[] = {
 namespace blender::nodes {
 static void geo_subdivision_surface_exec(GeoNodeExecParams params)
 {
-  GeometrySetPtr geometry_set = params.extract_input<GeometrySetPtr>("Geometry");
+  GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
 
-  if (!geometry_set.has_value() || !geometry_set->has_mesh()) {
+  if (!geometry_set.has_mesh()) {
     params.set_output("Geometry", geometry_set);
     return;
   }
@@ -61,7 +61,7 @@ static void geo_subdivision_surface_exec(GeoNodeExecParams params)
   const bool use_crease = params.extract_input<bool>("Use Creases");
   const bool boundary_smooth = params.extract_input<bool>("Boundary Smooth");
   const bool smooth_uvs = params.extract_input<bool>("Smooth UVs");
-  const Mesh *mesh_in = geometry_set->get_mesh_for_read();
+  const Mesh *mesh_in = geometry_set.get_mesh_for_read();
 
   /* Initialize mesh settings. */
   SubdivToMeshSettings mesh_settings;
@@ -91,9 +91,7 @@ static void geo_subdivision_surface_exec(GeoNodeExecParams params)
 
   Mesh *mesh_out = BKE_subdiv_to_mesh(subdiv, &mesh_settings, mesh_in);
 
-  make_geometry_set_mutable(geometry_set);
-
-  geometry_set->replace_mesh(mesh_out);
+  geometry_set.replace_mesh(mesh_out);
 
   // BKE_subdiv_stats_print(&subdiv->stats);
   BKE_subdiv_free(subdiv);

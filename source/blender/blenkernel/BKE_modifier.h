@@ -247,9 +247,9 @@ typedef struct ModifierTypeInfo {
   struct Hair *(*modifyHair)(struct ModifierData *md,
                              const struct ModifierEvalContext *ctx,
                              struct Hair *hair);
-  struct GeometrySet *(*modifyPointCloud)(struct ModifierData *md,
-                                          const struct ModifierEvalContext *ctx,
-                                          struct GeometrySet *geometry_set);
+  void (*modifyPointCloud)(struct ModifierData *md,
+                           const struct ModifierEvalContext *ctx,
+                           struct GeometrySet *geometry_set);
   struct Volume *(*modifyVolume)(struct ModifierData *md,
                                  const struct ModifierEvalContext *ctx,
                                  struct Volume *volume);

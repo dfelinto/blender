@@ -77,39 +77,11 @@ bool GeometryComponent::is_mutable() const
 /** \name Geometry Set
  * \{ */
 
-/* Makes a copy of the geometry set. The individual components are shared with the original
- * geometry set. Therefore, this is a relatively cheap operation.
- */
-GeometrySet::GeometrySet(const GeometrySet &other) : components_(other.components_)
-{
-}
-
-void GeometrySet::user_add()
-{
-  users_.fetch_add(1);
-}
-
-void GeometrySet::user_remove()
-{
-  const int new_users = users_.fetch_sub(1) - 1;
-  if (new_users == 0) {
-    delete this;
-  }
-}
-
-bool GeometrySet::is_mutable() const
-{
-  /* If the geometry set is shared, it is read-only. */
-  /* The user count can be 0, when this is called from the destructor. */
-  return users_ <= 1;
-}
-
 /* This method can only be used when the geometry set is mutable. It returns a mutable geometry
  * component of the given type.
  */
 GeometryComponent &GeometrySet::get_component_for_write(GeometryComponentType component_type)
 {
-  BLI_assert(this->is_mutable());
   return components_.add_or_modify(
       component_type,
       [&](GeometryComponentPtr *value_ptr) -> GeometryComponent & {
@@ -140,6 +112,27 @@ const GeometryComponent *GeometrySet::get_component_for_read(
     return component->get();
   }
   return nullptr;
+}
+
+std::ostream &operator<<(std::ostream &stream, const GeometrySet &geometry_set)
+{
+  stream << "<GeometrySet at " << &geometry_set << ", " << geometry_set.components_.size()
+         << " components>";
+  return stream;
+}
+
+/* This generally should not be used. It is necessary currently, so that GeometrySet can by used by
+ * the CPPType system. */
+bool operator==(const GeometrySet &UNUSED(a), const GeometrySet &UNUSED(b))
+{
+  return false;
+}
+
+/* This generally should not be used. It is necessary currently, so that GeometrySet can by used by
+ * the CPPType system. */
+uint64_t GeometrySet::hash() const
+{
+  return reinterpret_cast<uint64_t>(this);
 }
 
 /* Returns a read-only mesh or null. */
@@ -178,20 +171,20 @@ bool GeometrySet::has_instances() const
 }
 
 /* Create a new geometry set that only contains the given mesh. */
-GeometrySetPtr GeometrySet::create_with_mesh(Mesh *mesh, GeometryOwnershipType ownership)
+GeometrySet GeometrySet::create_with_mesh(Mesh *mesh, GeometryOwnershipType ownership)
 {
-  GeometrySet *geometry_set = new GeometrySet();
-  MeshComponent &component = geometry_set->get_component_for_write<MeshComponent>();
+  GeometrySet geometry_set;
+  MeshComponent &component = geometry_set.get_component_for_write<MeshComponent>();
   component.replace(mesh, ownership);
   return geometry_set;
 }
 
 /* Create a new geometry set that only contains the given point cloud. */
-GeometrySetPtr GeometrySet::create_with_pointcloud(PointCloud *pointcloud,
-                                                   GeometryOwnershipType ownership)
+GeometrySet GeometrySet::create_with_pointcloud(PointCloud *pointcloud,
+                                                GeometryOwnershipType ownership)
 {
-  GeometrySet *geometry_set = new GeometrySet();
-  PointCloudComponent &component = geometry_set->get_component_for_write<PointCloudComponent>();
+  GeometrySet geometry_set;
+  PointCloudComponent &component = geometry_set.get_component_for_write<PointCloudComponent>();
   component.replace(pointcloud, ownership);
   return geometry_set;
 }
@@ -222,28 +215,6 @@ PointCloud *GeometrySet::get_pointcloud_for_write()
 {
   PointCloudComponent &component = this->get_component_for_write<PointCloudComponent>();
   return component.get_for_write();
-}
-
-/**
- * Changes the given pointer so that it points to a mutable geometry set. This might do nothing,
- * create a new empty geometry set or copy the entire geometry set.
- */
-void make_geometry_set_mutable(GeometrySetPtr &geometry_set)
-{
-  if (!geometry_set) {
-    /* If the pointer is null, create a new instance. */
-    geometry_set = GeometrySetPtr{new GeometrySet()};
-  }
-  else if (geometry_set->is_mutable()) {
-    /* If the instance is mutable already, do nothing. */
-  }
-  else {
-    /* This geometry is shared, make a copy that is independent of the other users. */
-    GeometrySet *shared_geometry_set = geometry_set.release();
-    GeometrySet *new_geometry_set = new GeometrySet(*shared_geometry_set);
-    shared_geometry_set->user_remove();
-    geometry_set = GeometrySetPtr{new_geometry_set};
-  }
 }
 
 /** \} */
@@ -470,14 +441,9 @@ int InstancesComponent::instances_amount() const
 /** \name C API
  * \{ */
 
-void BKE_geometry_set_user_add(GeometrySet *geometry_set)
+void BKE_geometry_set_free(GeometrySet *geometry_set)
 {
-  geometry_set->user_add();
-}
-
-void BKE_geometry_set_user_remove(GeometrySet *geometry_set)
-{
-  geometry_set->user_remove();
+  delete geometry_set;
 }
 
 bool BKE_geometry_set_has_instances(const GeometrySet *geometry_set)

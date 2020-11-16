@@ -109,31 +109,23 @@ static void transform_instances(InstancesComponent &instances,
 
 static void geo_transform_exec(GeoNodeExecParams params)
 {
-  GeometrySetPtr geometry_set = params.extract_input<GeometrySetPtr>("Geometry");
-
-  if (!geometry_set.has_value()) {
-    params.set_output("Geometry", std::move(geometry_set));
-    return;
-  }
-
+  GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
   const float3 translation = params.extract_input<float3>("Translation");
   const float3 rotation = params.extract_input<float3>("Rotation");
   const float3 scale = params.extract_input<float3>("Scale");
 
-  make_geometry_set_mutable(geometry_set);
-
-  if (geometry_set->has_mesh()) {
-    Mesh *mesh = geometry_set->get_mesh_for_write();
+  if (geometry_set.has_mesh()) {
+    Mesh *mesh = geometry_set.get_mesh_for_write();
     transform_mesh(mesh, translation, rotation, scale);
   }
 
-  if (geometry_set->has_pointcloud()) {
-    PointCloud *pointcloud = geometry_set->get_pointcloud_for_write();
+  if (geometry_set.has_pointcloud()) {
+    PointCloud *pointcloud = geometry_set.get_pointcloud_for_write();
     transform_pointcloud(pointcloud, translation, rotation, scale);
   }
 
-  if (geometry_set->has_instances()) {
-    InstancesComponent &instances = geometry_set->get_component_for_write<InstancesComponent>();
+  if (geometry_set.has_instances()) {
+    InstancesComponent &instances = geometry_set.get_component_for_write<InstancesComponent>();
     transform_instances(instances, translation, rotation, scale);
   }
 

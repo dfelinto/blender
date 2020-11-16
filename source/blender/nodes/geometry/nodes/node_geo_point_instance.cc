@@ -36,19 +36,15 @@ static bNodeSocketTemplate geo_node_point_instance_out[] = {
 namespace blender::nodes {
 static void geo_point_instance_exec(GeoNodeExecParams params)
 {
-  GeometrySetPtr geometry_set = params.extract_input<GeometrySetPtr>("Geometry");
-  if (!geometry_set.has_value()) {
-    params.set_output("Geometry", std::move(geometry_set));
-    return;
-  }
+  GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
 
   Vector<float3> positions;
-  if (geometry_set->has_pointcloud()) {
-    const PointCloud *pointcloud = geometry_set->get_pointcloud_for_read();
+  if (geometry_set.has_pointcloud()) {
+    const PointCloud *pointcloud = geometry_set.get_pointcloud_for_read();
     positions.extend((const float3 *)pointcloud->co, pointcloud->totpoint);
   }
-  if (geometry_set->has_mesh()) {
-    const Mesh *mesh = geometry_set->get_mesh_for_read();
+  if (geometry_set.has_mesh()) {
+    const Mesh *mesh = geometry_set.get_mesh_for_read();
     for (const int i : IndexRange(mesh->totvert)) {
       positions.append(mesh->mvert[i].co);
     }
@@ -58,8 +54,7 @@ static void geo_point_instance_exec(GeoNodeExecParams params)
       "Object");
   Object *object = params.handle_map().lookup(object_handle);
 
-  make_geometry_set_mutable(geometry_set);
-  InstancesComponent &instances = geometry_set->get_component_for_write<InstancesComponent>();
+  InstancesComponent &instances = geometry_set.get_component_for_write<InstancesComponent>();
   instances.replace(std::move(positions), object);
 
   params.set_output("Geometry", std::move(geometry_set));
