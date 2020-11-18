@@ -203,6 +203,12 @@ class ConstantReadAttribute final : public ReadAttribute {
     type.copy_to_uninitialized(value, value_);
   }
 
+  ~ConstantReadAttribute()
+  {
+    this->cpp_type_.destruct(value_);
+    MEM_freeN(value_);
+  }
+
   void get_internal(const int64_t UNUSED(index), void *r_value) const override
   {
     this->cpp_type_.copy_to_uninitialized(value_, r_value);
