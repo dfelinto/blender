@@ -143,7 +143,7 @@ const EnumPropertyItem rna_enum_object_modifier_type_items[] = {
      ICON_MOD_EDGESPLIT,
      "Edge Split",
      "Split away joined faces at the edges"},
-    {eModifierType_Empty, "EMPTY", ICON_MESH_DATA, "Empty", ""}, /* TODO: Use correct icon. */
+    {eModifierType_Empty, "EMPTY", ICON_NODETREE, "Empty", ""},
     {eModifierType_Mask,
      "MASK",
      ICON_MOD_MASK,
@@ -6950,7 +6950,7 @@ static void rna_def_modifier_nodes(BlenderRNA *brna)
   srna = RNA_def_struct(brna, "NodesModifier", "Modifier");
   RNA_def_struct_ui_text(srna, "Nodes Modifier", "");
   RNA_def_struct_sdna(srna, "NodesModifierData");
-  RNA_def_struct_ui_icon(srna, ICON_MESH_DATA); /* TODO: Use correct icon. */
+  RNA_def_struct_ui_icon(srna, ICON_NODETREE);
 
   RNA_define_lib_overridable(true);
 

@@ -927,7 +927,7 @@ static void panel_draw(const bContext *UNUSED(C), Panel *panel)
   uiLayoutSetPropSep(layout, true);
   uiLayoutSetPropDecorate(layout, false);
 
-  uiItemR(layout, ptr, "node_group", 0, nullptr, ICON_MESH_DATA);
+  uiItemR(layout, ptr, "node_group", 0, nullptr, ICON_NODETREE);
 
   if (nmd->node_group != nullptr && nmd->settings.properties != nullptr) {
     PointerRNA settings_ptr;
@@ -994,7 +994,7 @@ ModifierTypeInfo modifierType_Nodes = {
     static_cast<ModifierTypeFlag>(eModifierTypeFlag_AcceptsMesh |
                                   eModifierTypeFlag_SupportsEditmode |
                                   eModifierTypeFlag_EnableInEditmode),
-    /* icon */ ICON_MESH_DATA, /* TODO: Use correct icon. */
+    /* icon */ ICON_NODETREE,
 
     /* copyData */ copyData,
 
