@@ -274,6 +274,7 @@ DefNode(GeometryNode, GEO_NODE_BOOLEAN, def_geo_boolean, "BOOLEAN", Boolean, "Bo
 DefNode(GeometryNode, GEO_NODE_POINT_DISTRIBUTE, 0, "POINT_DISTRIBUTE", PointDistribute, "Point Distribute", "")
 DefNode(GeometryNode, GEO_NODE_POINT_INSTANCE, 0, "POINT_INSTANCE", PointInstance, "Point Instance", "")
 DefNode(GeometryNode, GEO_NODE_OBJECT_INFO, 0, "OBJECT_INFO", ObjectInfo, "Object Info", "")
+DefNode(GeometryNode, GEO_NODE_RANDOM_ATTRIBUTE, def_geo_random_attribute, "RANDOM_ATTRIBUTE", RandomAttribute, "Random Attribute", "")
 
 /* undefine macros */
 #undef DefNode

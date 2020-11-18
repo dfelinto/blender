@@ -499,6 +499,9 @@ geometry_node_categories = [
         NodeItem("GeometryNodePointDistribute"),
         NodeItem("GeometryNodePointInstance"),
     ]),
+    GeometryNodeCategory("GEO_ATTRIBUTES", "Attributes", items=[
+        NodeItem("GeometryNodeRandomAttribute"),
+    ]),
     GeometryNodeCategory("GEO_MATH", "Misc", items=[
         NodeItem("ShaderNodeMapRange"),
         NodeItem("ShaderNodeClamp"),

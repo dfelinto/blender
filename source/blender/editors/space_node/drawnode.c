@@ -3163,6 +3163,14 @@ static void node_geometry_buts_triangulate(uiLayout *layout, bContext *UNUSED(C)
   uiItemR(layout, ptr, "ngon_method", DEFAULT_FLAGS, "", ICON_NONE);
 }
 
+static void node_geometry_buts_random_attribute(uiLayout *layout,
+                                                bContext *UNUSED(C),
+                                                PointerRNA *ptr)
+{
+  uiItemR(layout, ptr, "data_type", DEFAULT_FLAGS, "", ICON_NONE);
+  uiItemR(layout, ptr, "domain", DEFAULT_FLAGS, "", ICON_NONE);
+}
+
 static void node_geometry_set_butfunc(bNodeType *ntype)
 {
   switch (ntype->type) {
@@ -3174,6 +3182,9 @@ static void node_geometry_set_butfunc(bNodeType *ntype)
       break;
     case GEO_NODE_TRIANGULATE:
       ntype->draw_buttons = node_geometry_buts_triangulate;
+      break;
+    case GEO_NODE_RANDOM_ATTRIBUTE:
+      ntype->draw_buttons = node_geometry_buts_random_attribute;
       break;
   }
 }

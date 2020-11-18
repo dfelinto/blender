@@ -34,6 +34,7 @@ void register_node_type_geo_triangulate(void);
 void register_node_type_geo_point_distribute(void);
 void register_node_type_geo_point_instance(void);
 void register_node_type_geo_object_info(void);
+void register_node_type_geo_random_attribute(void);
 
 #ifdef __cplusplus
 }

@@ -36,6 +36,7 @@
 #include "DNA_texture_types.h"
 
 #include "BKE_animsys.h"
+#include "BKE_attribute.h"
 #include "BKE_image.h"
 #include "BKE_node.h"
 #include "BKE_texture.h"
@@ -8256,6 +8257,30 @@ static void def_geo_triangulate(StructRNA *srna)
   RNA_def_property_ui_text(
       prop, "Polygon Method", "Method for splitting the polygons into triangles");
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+}
+
+static void def_geo_attribute_create_common(StructRNA *srna)
+{
+  PropertyRNA *prop;
+
+  prop = RNA_def_property(srna, "data_type", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, NULL, "custom1");
+  RNA_def_property_enum_items(prop, rna_enum_attribute_type_items);
+  RNA_def_property_enum_default(prop, CD_PROP_FLOAT);
+  RNA_def_property_ui_text(prop, "Data Type", "Type of data stored in attribute");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+  prop = RNA_def_property(srna, "domain", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, NULL, "custom2");
+  RNA_def_property_enum_items(prop, rna_enum_attribute_domain_items);
+  RNA_def_property_enum_default(prop, ATTR_DOMAIN_VERTEX);
+  RNA_def_property_ui_text(prop, "Domain", "");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+}
+
+static void def_geo_random_attribute(StructRNA *srna)
+{
+  def_geo_attribute_create_common(srna);
 }
 
 /* -------------------------------------------------------------------------- */

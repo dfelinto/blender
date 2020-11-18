@@ -4688,6 +4688,7 @@ static void registerGeometryNodes(void)
   register_node_type_geo_point_distribute();
   register_node_type_geo_point_instance();
   register_node_type_geo_object_info();
+  register_node_type_geo_random_attribute();
 }
 
 static void registerFunctionNodes(void)
