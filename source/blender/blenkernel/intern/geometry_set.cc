@@ -400,18 +400,22 @@ GeometryComponent *InstancesComponent::copy() const
   return new_component;
 }
 
-void InstancesComponent::replace(Vector<float3> positions, Vector<const Object *> objects)
+void InstancesComponent::clear()
 {
-  BLI_assert(positions.size() == objects.size());
-  positions_ = std::move(positions);
-  objects_ = std::move(objects);
-}
-
-void InstancesComponent::replace(Vector<float3> positions, const Object *object)
-{
-  positions_ = std::move(positions);
   objects_.clear();
-  objects_.append_n_times(object, positions_.size());
+  positions_.clear();
+  rotations_.clear();
+  scales_.clear();
+}
+void InstancesComponent::add_instance(const Object *object,
+                                      blender::float3 position,
+                                      blender::float3 rotation,
+                                      blender::float3 scale)
+{
+  objects_.append(object);
+  positions_.append(position);
+  rotations_.append(rotation);
+  scales_.append(scale);
 }
 
 Span<const Object *> InstancesComponent::objects() const
@@ -422,6 +426,16 @@ Span<const Object *> InstancesComponent::objects() const
 Span<float3> InstancesComponent::positions() const
 {
   return positions_;
+}
+
+blender::Span<blender::float3> InstancesComponent::rotations() const
+{
+  return rotations_;
+}
+
+blender::Span<blender::float3> InstancesComponent::scales() const
+{
+  return scales_;
 }
 
 MutableSpan<float3> InstancesComponent::positions()
@@ -453,6 +467,8 @@ bool BKE_geometry_set_has_instances(const GeometrySet *geometry_set)
 
 int BKE_geometry_set_instances(const GeometrySet *geometry_set,
                                float (**r_positions)[3],
+                               float (**r_rotations)[3],
+                               float (**r_scales)[3],
                                Object ***r_objects)
 {
   const InstancesComponent *component = geometry_set->get_component_for_read<InstancesComponent>();
@@ -460,6 +476,8 @@ int BKE_geometry_set_instances(const GeometrySet *geometry_set,
     return 0;
   }
   *r_positions = (float(*)[3])component->positions().data();
+  *r_rotations = (float(*)[3])component->rotations().data();
+  *r_scales = (float(*)[3])component->scales().data();
   *r_objects = (Object **)component->objects().data();
   return component->instances_amount();
 }

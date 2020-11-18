@@ -193,18 +193,24 @@ class PointCloudComponent : public GeometryComponent {
 class InstancesComponent : public GeometryComponent {
  private:
   blender::Vector<blender::float3> positions_;
+  blender::Vector<blender::float3> rotations_;
+  blender::Vector<blender::float3> scales_;
   blender::Vector<const Object *> objects_;
 
  public:
   ~InstancesComponent() = default;
   GeometryComponent *copy() const override;
 
-  void replace(blender::Vector<blender::float3> positions,
-               blender::Vector<const Object *> objects);
-  void replace(blender::Vector<blender::float3> positions, const Object *object);
+  void clear();
+  void add_instance(const Object *object,
+                    blender::float3 position,
+                    blender::float3 rotation = {0, 0, 0},
+                    blender::float3 scale = {1, 1, 1});
 
   blender::Span<const Object *> objects() const;
   blender::Span<blender::float3> positions() const;
+  blender::Span<blender::float3> rotations() const;
+  blender::Span<blender::float3> scales() const;
   blender::MutableSpan<blender::float3> positions();
   int instances_amount() const;
 

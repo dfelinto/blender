@@ -33,6 +33,8 @@ bool BKE_geometry_set_has_instances(const struct GeometrySet *geometry_set);
 
 int BKE_geometry_set_instances(const struct GeometrySet *geometry_set,
                                float (**r_positions)[3],
+                               float (**r_rotations)[3],
+                               float (**r_scales)[3],
                                struct Object ***r_objects);
 
 #ifdef __cplusplus
