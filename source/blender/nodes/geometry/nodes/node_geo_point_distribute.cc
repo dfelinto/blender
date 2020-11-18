@@ -47,21 +47,11 @@ namespace blender::nodes {
 
 static Vector<float3> scatter_points_from_mesh(const Mesh *mesh,
                                                const float density,
-                                               const int density_attribute_index)
+                                               const FloatReadAttribute &density_factors)
 {
   /* This only updates a cache and can be considered to be logically const. */
   const MLoopTri *looptris = BKE_mesh_runtime_looptri_ensure(const_cast<Mesh *>(mesh));
   const int looptris_len = BKE_mesh_runtime_looptri_len(mesh);
-
-  Array<float> vertex_density_factors(mesh->totvert);
-  if (density_attribute_index == -1) {
-    vertex_density_factors.fill(1.0f);
-  }
-  else {
-    MDeformVert *dverts = mesh->dvert;
-    BKE_defvert_extract_vgroup_to_vertweights(
-        dverts, density_attribute_index, mesh->totvert, vertex_density_factors.data(), false);
-  }
 
   Vector<float3> points;
 
@@ -73,9 +63,9 @@ static Vector<float3> scatter_points_from_mesh(const Mesh *mesh,
     const float3 v0_pos = mesh->mvert[v0_index].co;
     const float3 v1_pos = mesh->mvert[v1_index].co;
     const float3 v2_pos = mesh->mvert[v2_index].co;
-    const float v0_density_factor = vertex_density_factors[v0_index];
-    const float v1_density_factor = vertex_density_factors[v1_index];
-    const float v2_density_factor = vertex_density_factors[v2_index];
+    const float v0_density_factor = std::max(0.0f, density_factors[v0_index]);
+    const float v1_density_factor = std::max(0.0f, density_factors[v1_index]);
+    const float v2_density_factor = std::max(0.0f, density_factors[v2_index]);
     const float looptri_density_factor = (v0_density_factor + v1_density_factor +
                                           v2_density_factor) /
                                          3.0f;
@@ -121,8 +111,11 @@ static void geo_point_distribute_exec(GeoNodeExecParams params)
 
   const MeshComponent &mesh_component = *geometry_set.get_component_for_read<MeshComponent>();
   const Mesh *mesh_in = mesh_component.get_for_read();
-  const int density_attribute_index = mesh_component.vertex_group_index(density_attribute);
-  Vector<float3> points = scatter_points_from_mesh(mesh_in, density, density_attribute_index);
+
+  const FloatReadAttribute density_factors = bke::mesh_attribute_get_for_read<float>(
+      mesh_component, density_attribute, ATTR_DOMAIN_VERTEX, 1.0f);
+
+  Vector<float3> points = scatter_points_from_mesh(mesh_in, density, density_factors);
 
   PointCloud *pointcloud = BKE_pointcloud_new_nomain(points.size());
   memcpy(pointcloud->co, points.data(), sizeof(float3) * points.size());
