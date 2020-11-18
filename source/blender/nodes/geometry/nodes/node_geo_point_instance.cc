@@ -38,31 +38,41 @@ static void geo_point_instance_exec(GeoNodeExecParams params)
 {
   GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
 
-  Vector<float3> instance_positions;
-  if (geometry_set.has_pointcloud()) {
-    const PointCloudComponent &pointcloud_component =
-        *geometry_set.get_component_for_read<PointCloudComponent>();
-    Float3ReadAttribute positions = bke::pointcloud_attribute_get_for_read<float3>(
-        pointcloud_component, "Position", {0, 0, 0});
-    for (const int i : IndexRange(positions.size())) {
-      instance_positions.append(positions[i]);
-    }
-  }
-  if (geometry_set.has_mesh()) {
-    const MeshComponent &mesh_component = *geometry_set.get_component_for_read<MeshComponent>();
-    Float3ReadAttribute positions = bke::mesh_attribute_get_for_read<float3>(
-        mesh_component, "Position", ATTR_DOMAIN_VERTEX, {0, 0, 0});
-    for (const int i : IndexRange(positions.size())) {
-      instance_positions.append(positions[i]);
-    }
-  }
-
   bke::PersistentObjectHandle object_handle = params.extract_input<bke::PersistentObjectHandle>(
       "Object");
   Object *object = params.handle_map().lookup(object_handle);
 
   InstancesComponent &instances = geometry_set.get_component_for_write<InstancesComponent>();
-  instances.replace(std::move(instance_positions), object);
+
+  const PointCloudComponent *pointcloud_component =
+      geometry_set.get_component_for_read<PointCloudComponent>();
+  if (pointcloud_component != nullptr) {
+    Float3ReadAttribute positions = bke::pointcloud_attribute_get_for_read<float3>(
+        *pointcloud_component, "Position", {0, 0, 0});
+    FloatReadAttribute radii = bke::pointcloud_attribute_get_for_read<float>(
+        *pointcloud_component, "Radius", 1.0f);
+
+    for (const int i : IndexRange(positions.size())) {
+      const float radius = radii[i];
+      instances.add_instance(object, positions[i], {0, 0, 0}, {radius, radius, radius});
+    }
+  }
+
+  const MeshComponent *mesh_component = geometry_set.get_component_for_read<MeshComponent>();
+  if (mesh_component != nullptr) {
+    Float3ReadAttribute positions = bke::mesh_attribute_get_for_read<float3>(
+        *mesh_component, "Position", ATTR_DOMAIN_VERTEX, {0, 0, 0});
+    FloatReadAttribute radii = bke::mesh_attribute_get_for_read<float>(
+        *mesh_component, "Radius", ATTR_DOMAIN_VERTEX, 1.0f);
+
+    for (const int i : IndexRange(positions.size())) {
+      const float radius = radii[i];
+      instances.add_instance(object, positions[i], {0, 0, 0}, {radius, radius, radius});
+    }
+  }
+
+  geometry_set.replace_mesh(nullptr);
+  geometry_set.replace_pointcloud(nullptr);
 
   params.set_output("Geometry", std::move(geometry_set));
 }
