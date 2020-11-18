@@ -919,7 +919,6 @@ static void draw_property_for_socket(uiLayout *layout,
 
 static void panel_draw(const bContext *UNUSED(C), Panel *panel)
 {
-#ifdef WITH_GEOMETRY_NODES
   uiLayout *layout = panel->layout;
 
   PointerRNA *ptr = modifier_panel_get_property_pointers(panel, nullptr);
@@ -940,7 +939,6 @@ static void panel_draw(const bContext *UNUSED(C), Panel *panel)
   }
 
   modifier_panel_end(layout, ptr);
-#endif
 }
 
 static void panelRegister(ARegionType *region_type)
@@ -990,11 +988,7 @@ ModifierTypeInfo modifierType_Nodes = {
     /* name */ "Empty",
     /* structName */ "NodesModifierData",
     /* structSize */ sizeof(NodesModifierData),
-#ifdef WITH_GEOMETRY_NODES
     /* srna */ &RNA_NodesModifier,
-#else
-    /* srna */ &RNA_Modifier,
-#endif
     /* type */ eModifierTypeType_Constructive,
     /* flags */
     static_cast<ModifierTypeFlag>(eModifierTypeFlag_AcceptsMesh |

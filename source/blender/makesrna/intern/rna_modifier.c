@@ -6930,7 +6930,6 @@ static void rna_def_modifier_weightednormal(BlenderRNA *brna)
   RNA_define_lib_overridable(false);
 }
 
-#  ifdef WITH_GEOMETRY_NODES
 static void rna_def_modifier_nodes_settings(BlenderRNA *brna)
 {
   StructRNA *srna;
@@ -6969,7 +6968,6 @@ static void rna_def_modifier_nodes(BlenderRNA *brna)
 
   rna_def_modifier_nodes_settings(brna);
 }
-#  endif
 
 static void rna_def_modifier_mesh_to_volume(BlenderRNA *brna)
 {
@@ -7325,9 +7323,7 @@ void RNA_def_modifier(BlenderRNA *brna)
   rna_def_modifier_meshseqcache(brna);
   rna_def_modifier_surfacedeform(brna);
   rna_def_modifier_weightednormal(brna);
-#  ifdef WITH_GEOMETRY_NODES
   rna_def_modifier_nodes(brna);
-#  endif
   rna_def_modifier_mesh_to_volume(brna);
   rna_def_modifier_volume_displace(brna);
   rna_def_modifier_volume_to_mesh(brna);
