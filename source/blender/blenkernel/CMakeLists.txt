@@ -78,6 +78,7 @@ set(SRC
   intern/armature_deform.c
   intern/armature_update.c
   intern/attribute.c
+  intern/attribute_access.cc
   intern/autoexec.c
   intern/blender.c
   intern/blender_copybuffer.c
@@ -267,6 +268,7 @@ set(SRC
   BKE_appdir.h
   BKE_armature.h
   BKE_attribute.h
+  BKE_attribute_access.hh
   BKE_autoexec.h
   BKE_blender.h
   BKE_blender_copybuffer.h

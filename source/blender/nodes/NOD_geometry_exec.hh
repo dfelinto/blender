@@ -18,6 +18,7 @@
 
 #include "FN_generic_value_map.hh"
 
+#include "BKE_attribute_access.hh"
 #include "BKE_geometry_set.hh"
 #include "BKE_persistent_data_handle.hh"
 
@@ -25,8 +26,16 @@
 
 namespace blender::nodes {
 
+using bke::Float3ReadAttribute;
+using bke::Float3WriteAttribute;
+using bke::FloatReadAttribute;
+using bke::FloatWriteAttribute;
 using bke::PersistentDataHandleMap;
 using bke::PersistentObjectHandle;
+using bke::ReadAttribute;
+using bke::ReadAttributePtr;
+using bke::WriteAttribute;
+using bke::WriteAttributePtr;
 using fn::CPPType;
 using fn::GMutablePointer;
 using fn::GValueMap;
