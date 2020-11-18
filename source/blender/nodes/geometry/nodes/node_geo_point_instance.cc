@@ -38,15 +38,22 @@ static void geo_point_instance_exec(GeoNodeExecParams params)
 {
   GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
 
-  Vector<float3> positions;
+  Vector<float3> instance_positions;
   if (geometry_set.has_pointcloud()) {
-    const PointCloud *pointcloud = geometry_set.get_pointcloud_for_read();
-    positions.extend((const float3 *)pointcloud->co, pointcloud->totpoint);
+    const PointCloudComponent &pointcloud_component =
+        *geometry_set.get_component_for_read<PointCloudComponent>();
+    Float3ReadAttribute positions = bke::pointcloud_attribute_get_for_read<float3>(
+        pointcloud_component, "Position", {0, 0, 0});
+    for (const int i : IndexRange(positions.size())) {
+      instance_positions.append(positions[i]);
+    }
   }
   if (geometry_set.has_mesh()) {
-    const Mesh *mesh = geometry_set.get_mesh_for_read();
-    for (const int i : IndexRange(mesh->totvert)) {
-      positions.append(mesh->mvert[i].co);
+    const MeshComponent &mesh_component = *geometry_set.get_component_for_read<MeshComponent>();
+    Float3ReadAttribute positions = bke::mesh_attribute_get_for_read<float3>(
+        mesh_component, "Position", ATTR_DOMAIN_VERTEX, {0, 0, 0});
+    for (const int i : IndexRange(positions.size())) {
+      instance_positions.append(positions[i]);
     }
   }
 
@@ -55,7 +62,7 @@ static void geo_point_instance_exec(GeoNodeExecParams params)
   Object *object = params.handle_map().lookup(object_handle);
 
   InstancesComponent &instances = geometry_set.get_component_for_write<InstancesComponent>();
-  instances.replace(std::move(positions), object);
+  instances.replace(std::move(instance_positions), object);
 
   params.set_output("Geometry", std::move(geometry_set));
 }
