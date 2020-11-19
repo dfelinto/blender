@@ -29,6 +29,10 @@
 #include "DNA_texture_types.h"
 #include "DNA_vec_types.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct AnimData;
 struct ID;
 struct Image;
@@ -1454,3 +1458,7 @@ typedef enum GeometryNodeTriangulateQuads {
   GEO_NODE_TRIANGULATE_QUAD_ALTERNATE = 2,
   GEO_NODE_TRIANGULATE_QUAD_SHORTEDGE = 3,
 } GeometryNodeTriangulateQuads;
+
+#ifdef __cplusplus
+}
+#endif

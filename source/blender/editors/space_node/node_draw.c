@@ -1291,7 +1291,7 @@ static void node_draw_basis(const bContext *C,
   }
 
   /* body */
-  if (!nodeIsRegistered(node)) {
+  if (nodeTypeUndefined(node)) {
     /* use warning color to indicate undefined types */
     UI_GetThemeColor4fv(TH_REDALERT, color);
   }
