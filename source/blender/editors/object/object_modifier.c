@@ -239,6 +239,8 @@ ModifierData *ED_object_modifier_add(
     }
   }
 
+  BKE_object_modifier_set_active(ob, new_md);
+
   DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
   DEG_relations_tag_update(bmain);
 
@@ -921,6 +923,7 @@ int ED_object_modifier_copy(
   BKE_modifier_copydata(md, nmd);
   BLI_insertlinkafter(&ob->modifiers, md, nmd);
   BKE_modifier_unique_name(&ob->modifiers, nmd);
+  BKE_object_modifier_set_active(ob, nmd);
 
   nmd->flag |= eModifierFlag_OverrideLibrary_Local;
 
@@ -1607,6 +1610,48 @@ void OBJECT_OT_modifier_copy(wmOperatorType *ot)
 
   ot->invoke = modifier_copy_invoke;
   ot->exec = modifier_copy_exec;
+  ot->poll = edit_modifier_liboverride_allowed_poll;
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_INTERNAL;
+  edit_modifier_properties(ot);
+}
+
+/** \} */
+
+/* ------------------------------------------------------------------- */
+/** \name Set Active Modifier Operator
+ * \{ */
+
+static int modifier_set_active_exec(bContext *C, wmOperator *op)
+{
+  Object *ob = ED_object_active_context(C);
+  ModifierData *md = edit_modifier_property_get(op, ob, 0);
+
+  BKE_object_modifier_set_active(ob, md);
+
+  WM_event_add_notifier(C, NC_OBJECT | ND_MODIFIER, ob);
+
+  return OPERATOR_FINISHED;
+}
+
+static int modifier_set_active_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+{
+  int retval;
+  if (edit_modifier_invoke_properties(C, op, event, &retval)) {
+    return modifier_set_active_exec(C, op);
+  }
+  return retval;
+}
+
+void OBJECT_OT_modifier_set_active(wmOperatorType *ot)
+{
+  ot->name = "Set Active Modifier";
+  ot->description = "Activate the modifier to use as the context";
+  ot->idname = "OBJECT_OT_modifier_set_active";
+
+  ot->invoke = modifier_set_active_invoke;
+  ot->exec = modifier_set_active_exec;
   ot->poll = edit_modifier_liboverride_allowed_poll;
 
   /* flags */
