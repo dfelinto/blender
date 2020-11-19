@@ -20,6 +20,8 @@
 #include "BKE_mesh_wrapper.h"
 #include "BKE_modifier.h"
 
+#include "BLI_math_matrix.h"
+
 static bNodeSocketTemplate geo_node_object_info_in[] = {
     {SOCK_OBJECT, N_("Object")},
     {-1, ""},
@@ -45,20 +47,31 @@ static void geo_object_info_exec(GeoNodeExecParams params)
   float3 scale = {0, 0, 0};
   GeometrySet geometry_set;
 
+  const Object *self_object = params.self_object();
+
   if (object != nullptr) {
     float quaternion[4];
     mat4_decompose(location, quaternion, scale, object->obmat);
     quat_to_eul(rotation, quaternion);
 
-    if (object->type == OB_MESH) {
-      Mesh *mesh = BKE_modifier_get_evaluated_mesh_from_evaluated_object(object, false);
-      if (mesh != nullptr) {
-        BKE_mesh_wrapper_ensure_mdata(mesh);
-        /* Make a copy because the life time of the other mesh might be shorter. */
-        Mesh *copied_mesh = BKE_mesh_copy_for_eval(mesh, false);
-        geometry_set = GeometrySet::create_with_mesh(copied_mesh);
-        geometry_set.get_component_for_write<MeshComponent>().copy_vertex_group_names_from_object(
-            *object);
+    if (object != self_object) {
+      if (object->type == OB_MESH) {
+        Mesh *mesh = BKE_modifier_get_evaluated_mesh_from_evaluated_object(object, false);
+        if (mesh != nullptr) {
+          BKE_mesh_wrapper_ensure_mdata(mesh);
+
+          /* Make a copy because the life time of the other mesh might be shorter. */
+          Mesh *copied_mesh = BKE_mesh_copy_for_eval(mesh, false);
+
+          /* Transform into the local space of the object that is being modified. */
+          float transform[4][4];
+          mul_m4_m4m4(transform, self_object->imat, object->obmat);
+          BKE_mesh_transform(copied_mesh, transform, true);
+
+          MeshComponent &mesh_component = geometry_set.get_component_for_write<MeshComponent>();
+          mesh_component.replace(copied_mesh);
+          mesh_component.copy_vertex_group_names_from_object(*object);
+        }
       }
     }
   }
