@@ -1541,6 +1541,29 @@ static bool rna_Modifier_show_expanded_get(PointerRNA *ptr)
   return md->ui_expand_flag & UI_PANEL_DATA_EXPAND_ROOT;
 }
 
+static void rna_Modifier_is_active_set(PointerRNA *ptr, bool value)
+{
+  ModifierData *md = ptr->data;
+
+  if (value) {
+    /* Disable the active flag of all other modifiers. */
+    for (ModifierData *prev_md = md->prev; prev_md != NULL; prev_md = prev_md->prev) {
+      prev_md->flag &= ~eModifierFlag_Active;
+    }
+    for (ModifierData *next_md = md->next; next_md != NULL; next_md = next_md->next) {
+      next_md->flag &= ~eModifierFlag_Active;
+    }
+  }
+
+  SET_FLAG_FROM_TEST(md->flag, value, eModifierFlag_Active);
+}
+
+static bool rna_Modifier_is_active_get(PointerRNA *ptr)
+{
+  ModifierData *md = ptr->data;
+  return md->flag & eModifierFlag_Active;
+}
+
 static int rna_MeshSequenceCacheModifier_has_velocity_get(PointerRNA *ptr)
 {
 #  ifdef WITH_ALEMBIC
@@ -7257,6 +7280,13 @@ void RNA_def_modifier(BlenderRNA *brna)
   RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
   RNA_def_property_ui_text(prop, "Expanded", "Set modifier expanded in the user interface");
   RNA_def_property_ui_icon(prop, ICON_DISCLOSURE_TRI_RIGHT, 1);
+  RNA_def_property_update(prop, NC_OBJECT | ND_MODIFIER, NULL);
+
+  prop = RNA_def_property(srna, "is_active", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_funcs(prop, "rna_Modifier_is_active_get", "rna_Modifier_is_active_set");
+  RNA_def_property_flag(prop, PROP_NO_DEG_UPDATE);
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+  RNA_def_property_ui_text(prop, "Active", "The active modifier in the list");
   RNA_def_property_update(prop, NC_OBJECT | ND_MODIFIER, NULL);
 
   prop = RNA_def_property(srna, "use_apply_on_spline", PROP_BOOLEAN, PROP_NONE);
