@@ -285,11 +285,6 @@ void MeshComponent::copy_vertex_group_names_from_object(const Object &object)
   }
 }
 
-int MeshComponent::vertex_group_index(StringRef vertex_group_name) const
-{
-  return vertex_group_names_.lookup_default_as(vertex_group_name, -1);
-}
-
 /* Get the mesh from this component. This method can be used by multiple threads at the same
  * time. Therefore, the returned mesh should not be modified. No ownership is transferred. */
 const Mesh *MeshComponent::get_for_read() const

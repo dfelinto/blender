@@ -47,10 +47,9 @@ static void geo_point_instance_exec(GeoNodeExecParams params)
   const PointCloudComponent *pointcloud_component =
       geometry_set.get_component_for_read<PointCloudComponent>();
   if (pointcloud_component != nullptr) {
-    Float3ReadAttribute positions = bke::pointcloud_attribute_get_for_read<float3>(
-        *pointcloud_component, "Position", {0, 0, 0});
-    FloatReadAttribute radii = bke::pointcloud_attribute_get_for_read<float>(
-        *pointcloud_component, "Radius", 1.0f);
+    Float3ReadAttribute positions = pointcloud_component->attribute_get_for_read<float3>(
+        "Position", {0, 0, 0});
+    FloatReadAttribute radii = pointcloud_component->attribute_get_for_read<float>("Radius", 1.0f);
 
     for (const int i : IndexRange(positions.size())) {
       const float radius = radii[i];
@@ -60,10 +59,10 @@ static void geo_point_instance_exec(GeoNodeExecParams params)
 
   const MeshComponent *mesh_component = geometry_set.get_component_for_read<MeshComponent>();
   if (mesh_component != nullptr) {
-    Float3ReadAttribute positions = bke::mesh_attribute_get_for_read<float3>(
-        *mesh_component, "Position", ATTR_DOMAIN_VERTEX, {0, 0, 0});
-    FloatReadAttribute radii = bke::mesh_attribute_get_for_read<float>(
-        *mesh_component, "Radius", ATTR_DOMAIN_VERTEX, 1.0f);
+    Float3ReadAttribute positions = mesh_component->attribute_get_for_read<float3>(
+        "Position", ATTR_DOMAIN_VERTEX, {0, 0, 0});
+    FloatReadAttribute radii = mesh_component->attribute_get_for_read<float>(
+        "Radius", ATTR_DOMAIN_VERTEX, 1.0f);
 
     for (const int i : IndexRange(positions.size())) {
       const float radius = radii[i];

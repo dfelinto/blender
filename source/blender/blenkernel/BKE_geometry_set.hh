@@ -28,6 +28,7 @@
 #include "BLI_map.hh"
 #include "BLI_user_counter.hh"
 
+#include "BKE_attribute_access.hh"
 #include "BKE_geometry_set.h"
 
 struct Mesh;
@@ -50,6 +51,12 @@ enum class GeometryOwnershipType {
   Editable = 1,
   /* The geometry cannot be changed and someone else is responsible for freeing it. */
   ReadOnly = 2,
+};
+
+enum class AttributeDeleteStatus {
+  Deleted,
+  NotFound,
+  CannotBeDeleted,
 };
 
 /* Make it possible to use the component type as key in hash tables. */
@@ -159,10 +166,31 @@ class MeshComponent : public GeometryComponent {
   Mesh *release();
 
   void copy_vertex_group_names_from_object(const struct Object &object);
-  int vertex_group_index(blender::StringRef vertex_group_name) const;
 
   const Mesh *get_for_read() const;
   Mesh *get_for_write();
+
+  blender::bke::ReadAttributePtr attribute_get_for_read(
+      const blender::StringRef attribute_name) const;
+
+  blender::bke::WriteAttributePtr attribute_get_for_write(const blender::StringRef attribute_name);
+
+  blender::bke::ReadAttributePtr attribute_get_for_read(const blender::StringRef attribute_name,
+                                                        const blender::fn::CPPType &cpp_type,
+                                                        const AttributeDomain domain,
+                                                        const void *default_value = nullptr) const;
+
+  template<typename T>
+  blender::bke::TypedReadAttribute<T> attribute_get_for_read(
+      const blender::StringRef attribute_name,
+      const AttributeDomain domain,
+      const T &default_value) const
+  {
+    return this->attribute_get_for_read(
+        attribute_name, blender::fn::CPPType::get<T>(), domain, &default_value);
+  }
+
+  AttributeDeleteStatus attribute_delete(const blender::StringRef attribute_name);
 
   static constexpr inline GeometryComponentType type = GeometryComponentType::Mesh;
 };
@@ -185,6 +213,25 @@ class PointCloudComponent : public GeometryComponent {
 
   const PointCloud *get_for_read() const;
   PointCloud *get_for_write();
+
+  blender::bke::ReadAttributePtr attribute_get_for_read(
+      const blender::StringRef attribute_name) const;
+
+  blender::bke::WriteAttributePtr attribute_get_for_write(const blender::StringRef attribute_name);
+
+  blender::bke::ReadAttributePtr attribute_get_for_read(const blender::StringRef attribute_name,
+                                                        const blender::fn::CPPType &cpp_type,
+                                                        const void *default_value) const;
+
+  template<typename T>
+  blender::bke::TypedReadAttribute<T> attribute_get_for_read(
+      const blender::StringRef attribute_name, const T &default_value) const
+  {
+    return this->attribute_get_for_read(
+        attribute_name, blender::fn::CPPType::get<T>(), &default_value);
+  }
+
+  AttributeDeleteStatus attribute_delete(const blender::StringRef attribute_name);
 
   static constexpr inline GeometryComponentType type = GeometryComponentType::PointCloud;
 };

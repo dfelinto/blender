@@ -82,18 +82,23 @@ static void geo_random_attribute_exec(GeoNodeExecParams params)
   RandomNumberGenerator rng;
   rng.seed_random(seed);
 
+  const CPPType &attribute_type = *bke::custom_data_type_to_cpp_type(data_type);
+
   MeshComponent &mesh_component = geometry_set.get_component_for_write<MeshComponent>();
   Mesh *mesh = mesh_component.get_for_write();
   if (mesh != nullptr) {
-    WriteAttributePtr attribute = bke::mesh_attribute_get_for_write(mesh_component,
-                                                                    attribute_name);
+    WriteAttributePtr attribute = mesh_component.attribute_get_for_write(attribute_name);
+    if (attribute && attribute->cpp_type() != attribute_type) {
+      if (mesh_component.attribute_delete(attribute_name) == AttributeDeleteStatus::Deleted) {
+        attribute = {};
+      }
+    }
     if (!attribute) {
       BKE_id_attribute_new(&mesh->id, attribute_name.c_str(), data_type, domain, nullptr);
-      attribute = bke::mesh_attribute_get_for_write(mesh_component, attribute_name);
+      attribute = mesh_component.attribute_get_for_write(attribute_name);
     }
 
     if (attribute) {
-      const int size = attribute->size();
       if (attribute->cpp_type().is<float>()) {
         FloatWriteAttribute float_attribute = std::move(attribute);
         randomize_attribute(float_attribute, min_value.x, max_value.x, rng);
@@ -109,15 +114,19 @@ static void geo_random_attribute_exec(GeoNodeExecParams params)
       geometry_set.get_component_for_write<PointCloudComponent>();
   PointCloud *pointcloud = pointcloud_component.get_for_write();
   if (pointcloud != nullptr) {
-    WriteAttributePtr attribute = bke::pointcloud_attribute_get_for_write(pointcloud_component,
-                                                                          attribute_name);
+    WriteAttributePtr attribute = pointcloud_component.attribute_get_for_write(attribute_name);
+    if (attribute && attribute->cpp_type() != attribute_type) {
+      if (pointcloud_component.attribute_delete(attribute_name) ==
+          AttributeDeleteStatus::Deleted) {
+        attribute = {};
+      }
+    }
     if (!attribute) {
       BKE_id_attribute_new(&pointcloud->id, attribute_name.c_str(), data_type, domain, nullptr);
-      attribute = bke::pointcloud_attribute_get_for_write(pointcloud_component, attribute_name);
+      attribute = pointcloud_component.attribute_get_for_write(attribute_name);
     }
 
     if (attribute) {
-      const int size = attribute->size();
       if (attribute->cpp_type().is<float>()) {
         FloatWriteAttribute float_attribute = std::move(attribute);
         randomize_attribute(float_attribute, min_value.x, max_value.x, rng);

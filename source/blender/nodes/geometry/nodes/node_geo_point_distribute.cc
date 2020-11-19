@@ -112,8 +112,8 @@ static void geo_point_distribute_exec(GeoNodeExecParams params)
   const MeshComponent &mesh_component = *geometry_set.get_component_for_read<MeshComponent>();
   const Mesh *mesh_in = mesh_component.get_for_read();
 
-  const FloatReadAttribute density_factors = bke::mesh_attribute_get_for_read<float>(
-      mesh_component, density_attribute, ATTR_DOMAIN_VERTEX, 1.0f);
+  const FloatReadAttribute density_factors = mesh_component.attribute_get_for_read<float>(
+      density_attribute, ATTR_DOMAIN_VERTEX, 1.0f);
 
   Vector<float3> points = scatter_points_from_mesh(mesh_in, density, density_factors);
 

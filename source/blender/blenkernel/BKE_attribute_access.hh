@@ -19,7 +19,8 @@
 #include "FN_cpp_type.hh"
 
 #include "BKE_attribute.h"
-#include "BKE_geometry_set.hh"
+
+#include "BLI_float3.hh"
 
 struct Mesh;
 
@@ -196,65 +197,6 @@ using Float3ReadAttribute = TypedReadAttribute<float3>;
 using FloatWriteAttribute = TypedWriteAttribute<float>;
 using Float3WriteAttribute = TypedWriteAttribute<float3>;
 
-/* --------------------------------------------------------------------
- * Main attribute getters.
- */
-
-ReadAttributePtr mesh_attribute_get_for_read(const MeshComponent &mesh_component,
-                                             const StringRef attribute_name);
-WriteAttributePtr mesh_attribute_get_for_write(MeshComponent &mesh_component,
-                                               const StringRef attribute_name);
-
-ReadAttributePtr pointcloud_attribute_get_for_read(const PointCloudComponent &pointcloud_component,
-                                                   const StringRef attribute_name);
-WriteAttributePtr pointcloud_attribute_get_for_write(
-    const PointCloudComponent &pointcloud_component, const StringRef attribute_name);
-
-/* --------------------------------------------------------------------
- * Utilities for getting more specific attributes.
- */
-
-ReadAttributePtr mesh_attribute_adapt_domain(const MeshComponent &mesh_component,
-                                             ReadAttributePtr attribute,
-                                             const AttributeDomain to_domain);
-
-ReadAttributePtr mesh_attribute_get_for_read(const MeshComponent &mesh_component,
-                                             const StringRef attribute_name,
-                                             const CPPType &cpp_type,
-                                             const AttributeDomain domain,
-                                             const void *default_value = nullptr);
-
-template<typename T>
-TypedReadAttribute<T> mesh_attribute_get_for_read(const MeshComponent &mesh_component,
-                                                  const StringRef attribute_name,
-                                                  const AttributeDomain domain,
-                                                  const T &default_value)
-{
-  ReadAttributePtr attribute = mesh_attribute_get_for_read(
-      mesh_component,
-      attribute_name,
-      CPPType::get<T>(),
-      domain,
-      static_cast<const void *>(&default_value));
-  BLI_assert(attribute);
-  return attribute;
-}
-
-ReadAttributePtr pointcloud_attribute_get_for_read(const PointCloudComponent &pointcloud_component,
-                                                   const StringRef attribute_name,
-                                                   const CPPType &cpp_type,
-                                                   const void *default_value = nullptr);
-
-template<typename T>
-TypedReadAttribute<T> pointcloud_attribute_get_for_read(
-    const PointCloudComponent &pointcloud_component,
-    const StringRef attribute_name,
-    const T &default_value)
-{
-  ReadAttributePtr attribute = pointcloud_attribute_get_for_read(
-      pointcloud_component, attribute_name, CPPType::get<T>(), &default_value);
-  BLI_assert(attribute);
-  return attribute;
-}
+const CPPType *custom_data_type_to_cpp_type(const int type);
 
 }  // namespace blender::bke
