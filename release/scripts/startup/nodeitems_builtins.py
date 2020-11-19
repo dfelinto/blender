@@ -485,45 +485,51 @@ def not_implemented_node(idname):
 
 geometry_node_categories = [
     # Geometry Nodes
+    GeometryNodeCategory("GEO_ATTRIBUTE", "Attribute", items=[
+        NodeItem("GeometryNodeRandomAttribute"),
+    ]),
+    GeometryNodeCategory("GEO_COLOR", "Color", items=[
+        NodeItem("ShaderNodeValToRGB"),
+        NodeItem("ShaderNodeSeparateRGB"),
+        NodeItem("ShaderNodeCombineRGB"),
+    ]),
     GeometryNodeCategory("GEO_INPUT", "Input", items=[
         NodeItem("GeometryNodeObjectInfo"),
+        NodeItem("FunctionNodeRandomFloat"),
+        NodeItem("ShaderNodeValue"),
+    ]),
+    GeometryNodeCategory("GEO_GEOMETRY", "Geometry", items=[
+        NodeItem("GeometryNodeTransform"),
+        NodeItem("GeometryNodeBoolean"),
     ]),
     GeometryNodeCategory("GEO_MESH", "Mesh", items=[
         NodeItem("GeometryNodeTriangulate"),
         NodeItem("GeometryNodeEdgeSplit"),
-        NodeItem("GeometryNodeTransform"),
-        NodeItem("GeometryNodeBoolean"),
         NodeItem("GeometryNodeSubdivisionSurface"),
     ]),
     GeometryNodeCategory("GEO_SCATTERING", "Scattering", items=[
         NodeItem("GeometryNodePointDistribute"),
         NodeItem("GeometryNodePointInstance"),
     ]),
-    GeometryNodeCategory("GEO_ATTRIBUTES", "Attributes", items=[
-        NodeItem("GeometryNodeRandomAttribute"),
-    ]),
-    GeometryNodeCategory("GEO_MATH", "Misc", items=[
+    GeometryNodeCategory("GEO_UTILITIES", "Utilities", items=[
         NodeItem("ShaderNodeMapRange"),
         NodeItem("ShaderNodeClamp"),
         NodeItem("ShaderNodeMath"),
-        NodeItem("ShaderNodeValToRGB"),
-        NodeItem("ShaderNodeVectorMath"),
-        NodeItem("ShaderNodeSeparateRGB"),
-        NodeItem("ShaderNodeCombineRGB"),
-        NodeItem("ShaderNodeSeparateXYZ"),
-        NodeItem("ShaderNodeCombineXYZ"),
         NodeItem("FunctionNodeBooleanMath"),
         NodeItem("FunctionNodeFloatCompare"),
-        # NodeItem("FunctionNodeCombineStrings"),
-        NodeItem("FunctionNodeRandomFloat"),
-        NodeItem("ShaderNodeValue"),
-        # NodeItem("FunctionNodeGroupInstanceID"),
+    ]),
+    GeometryNodeCategory("GEO_VECTOR", "Vector", items=[
+        NodeItem("ShaderNodeSeparateXYZ"),
+        NodeItem("ShaderNodeCombineXYZ"),
+        NodeItem("ShaderNodeVectorMath"),
     ]),
     GeometryNodeCategory("GEO_GROUP", "Group", items=node_group_items),
     GeometryNodeCategory("GEO_LAYOUT", "Layout", items=[
         NodeItem("NodeFrame"),
         NodeItem("NodeReroute"),
     ]),
+    # NodeItem("FunctionNodeCombineStrings"),
+    # NodeItem("FunctionNodeGroupInstanceID"),
 ]
 
 
