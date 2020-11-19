@@ -31,7 +31,7 @@ class NewGeometryNodeTree(bpy.types.Operator):
         return context.area.type == 'NODE_EDITOR' and context.space_data.tree_type == 'GeometryNodeTree'
 
     def execute(self, context):
-        group = bpy.data.node_groups.new("Geometry Node Group", 'GeometryNodeTree')
+        group = bpy.data.node_groups.new("Geometry Nodes", 'GeometryNodeTree')
         group.inputs.new('NodeSocketGeometry', "Geometry")
         group.outputs.new('NodeSocketGeometry', "Geometry")
         input_node = group.nodes.new('NodeGroupInput')

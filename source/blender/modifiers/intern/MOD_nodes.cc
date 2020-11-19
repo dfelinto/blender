@@ -663,7 +663,7 @@ void MOD_nodes_update_interface(Object *object, NodesModifierData *nmd)
 
 void MOD_nodes_init(Main *bmain, NodesModifierData *nmd)
 {
-  bNodeTree *ntree = ntreeAddTree(bmain, "Geometry Node Group", ntreeType_Geometry->idname);
+  bNodeTree *ntree = ntreeAddTree(bmain, "Geometry Nodes", ntreeType_Geometry->idname);
   nmd->node_group = ntree;
 
   ntreeAddSocketInterface(ntree, SOCK_IN, "NodeSocketGeometry", "Geometry");
