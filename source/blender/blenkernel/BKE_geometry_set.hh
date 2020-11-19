@@ -101,7 +101,7 @@ inline constexpr bool is_geometry_component_v = std::is_base_of_v<GeometryCompon
  * Copying a geometry set is a relatively cheap operation, because it does not copy the referenced
  * geometry components.
  */
-class GeometrySet {
+struct GeometrySet {
  private:
   using GeometryComponentPtr = blender::UserCounter<class GeometryComponent>;
   blender::Map<GeometryComponentType, GeometryComponentPtr> components_;
