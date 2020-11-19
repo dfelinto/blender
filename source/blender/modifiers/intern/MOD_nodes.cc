@@ -130,7 +130,9 @@ static void updateDepsgraph(ModifierData *md, const ModifierUpdateDepsgraphConte
     for (ID *id : used_ids) {
       if (GS(id->name) == ID_OB) {
         DEG_add_object_relation(ctx->node, (Object *)id, DEG_OB_COMP_TRANSFORM, "Nodes Modifier");
-        DEG_add_object_relation(ctx->node, (Object *)id, DEG_OB_COMP_GEOMETRY, "Nodes Modifier");
+        if (id != &ctx->object->id) {
+          DEG_add_object_relation(ctx->node, (Object *)id, DEG_OB_COMP_GEOMETRY, "Nodes Modifier");
+        }
       }
     }
   }
@@ -181,16 +183,19 @@ class GeometryNodesEvaluator {
   MultiFunctionByNode &mf_by_node_;
   const DataTypeConversions &conversions_;
   const PersistentDataHandleMap &handle_map_;
+  const Object *self_object_;
 
  public:
   GeometryNodesEvaluator(const Map<const DOutputSocket *, GMutablePointer> &group_input_data,
                          Vector<const DInputSocket *> group_outputs,
                          MultiFunctionByNode &mf_by_node,
-                         const PersistentDataHandleMap &handle_map)
+                         const PersistentDataHandleMap &handle_map,
+                         const Object *self_object)
       : group_outputs_(std::move(group_outputs)),
         mf_by_node_(mf_by_node),
         conversions_(get_implicit_type_conversions()),
-        handle_map_(handle_map)
+        handle_map_(handle_map),
+        self_object_(self_object)
   {
     for (auto item : group_input_data.items()) {
       this->forward_to_inputs(*item.key, item.value);
@@ -255,7 +260,7 @@ class GeometryNodesEvaluator {
 
     /* Execute the node. */
     GValueMap<StringRef> node_outputs_map{allocator_};
-    GeoNodeExecParams params{bnode, node_inputs_map, node_outputs_map, handle_map_};
+    GeoNodeExecParams params{bnode, node_inputs_map, node_outputs_map, handle_map_, self_object_};
     this->execute_node(node, params);
 
     /* Forward computed outputs to linked input sockets. */
@@ -727,7 +732,8 @@ static GeometrySet compute_geometry(const DerivedNodeTree &tree,
                                     Span<const DOutputSocket *> group_input_sockets,
                                     const DInputSocket &socket_to_compute,
                                     GeometrySet input_geometry_set,
-                                    NodesModifierData *nmd)
+                                    NodesModifierData *nmd,
+                                    const ModifierEvalContext *ctx)
 {
   ResourceCollector resources;
   LinearAllocator<> &allocator = resources.linear_allocator();
@@ -763,7 +769,8 @@ static GeometrySet compute_geometry(const DerivedNodeTree &tree,
   PersistentDataHandleMap handle_map;
   fill_data_handle_map(tree, handle_map);
 
-  GeometryNodesEvaluator evaluator{group_inputs, group_outputs, mf_by_node, handle_map};
+  GeometryNodesEvaluator evaluator{
+      group_inputs, group_outputs, mf_by_node, handle_map, ctx->object};
   Vector<GMutablePointer> results = evaluator.execute();
   BLI_assert(results.size() == 1);
   GMutablePointer result = results[0];
@@ -869,7 +876,7 @@ static void modifyGeometry(ModifierData *md,
   }
 
   geometry_set = compute_geometry(
-      tree, group_inputs, *group_outputs[0], std::move(geometry_set), nmd);
+      tree, group_inputs, *group_outputs[0], std::move(geometry_set), nmd, ctx);
 }
 
 static Mesh *modifyMesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh *mesh)

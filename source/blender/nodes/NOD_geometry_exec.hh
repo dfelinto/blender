@@ -46,16 +46,19 @@ class GeoNodeExecParams {
   GValueMap<StringRef> &input_values_;
   GValueMap<StringRef> &output_values_;
   const PersistentDataHandleMap &handle_map_;
+  const Object *self_object_;
 
  public:
   GeoNodeExecParams(const bNode &node,
                     GValueMap<StringRef> &input_values,
                     GValueMap<StringRef> &output_values,
-                    const PersistentDataHandleMap &handle_map)
+                    const PersistentDataHandleMap &handle_map,
+                    const Object *self_object)
       : node_(node),
         input_values_(input_values),
         output_values_(output_values),
-        handle_map_(handle_map)
+        handle_map_(handle_map),
+        self_object_(self_object)
   {
   }
 
@@ -122,6 +125,11 @@ class GeoNodeExecParams {
   const PersistentDataHandleMap &handle_map() const
   {
     return handle_map_;
+  }
+
+  const Object *self_object() const
+  {
+    return self_object_;
   }
 
  private:
