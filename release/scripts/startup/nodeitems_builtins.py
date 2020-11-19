@@ -493,21 +493,21 @@ geometry_node_categories = [
         NodeItem("ShaderNodeSeparateRGB"),
         NodeItem("ShaderNodeCombineRGB"),
     ]),
+    GeometryNodeCategory("GEO_GEOMETRY", "Geometry", items=[
+        NodeItem("GeometryNodeTransform"),
+        NodeItem("GeometryNodeBoolean"),
+    ]),
     GeometryNodeCategory("GEO_INPUT", "Input", items=[
         NodeItem("GeometryNodeObjectInfo"),
         NodeItem("FunctionNodeRandomFloat"),
         NodeItem("ShaderNodeValue"),
-    ]),
-    GeometryNodeCategory("GEO_GEOMETRY", "Geometry", items=[
-        NodeItem("GeometryNodeTransform"),
-        NodeItem("GeometryNodeBoolean"),
     ]),
     GeometryNodeCategory("GEO_MESH", "Mesh", items=[
         NodeItem("GeometryNodeTriangulate"),
         NodeItem("GeometryNodeEdgeSplit"),
         NodeItem("GeometryNodeSubdivisionSurface"),
     ]),
-    GeometryNodeCategory("GEO_SCATTERING", "Scattering", items=[
+    GeometryNodeCategory("GEO_POINT", "Point", items=[
         NodeItem("GeometryNodePointDistribute"),
         NodeItem("GeometryNodePointInstance"),
     ]),
