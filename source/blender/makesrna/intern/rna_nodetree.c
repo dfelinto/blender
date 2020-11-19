@@ -1858,6 +1858,46 @@ static StructRNA *rna_Node_register(Main *bmain,
   return nt->rna_ext.srna;
 }
 
+static const EnumPropertyItem *generic_attribute_supported_list(
+    const EnumPropertyItem *original_item_array, bool (*value_supported)(int value))
+{
+  EnumPropertyItem *item_array = NULL;
+  int items_len = 0;
+
+  for (const EnumPropertyItem *item = original_item_array; item->identifier != NULL; item++) {
+    if (value_supported(item->value)) {
+      RNA_enum_items_add_value(&item_array, &items_len, original_item_array, item->value);
+    }
+  }
+
+  RNA_enum_item_end(&item_array, &items_len);
+  return item_array;
+}
+
+static bool attribute_random_type_supported(int value)
+{
+  return ELEM(value, CD_PROP_FLOAT, CD_PROP_FLOAT3);
+}
+static const EnumPropertyItem *rna_GeometryNodeAttributeRandom_type_itemf(
+    bContext *UNUSED(C), PointerRNA *UNUSED(ptr), PropertyRNA *UNUSED(prop), bool *r_free)
+{
+  *r_free = true;
+  return generic_attribute_supported_list(rna_enum_attribute_type_items,
+                                          attribute_random_type_supported);
+}
+
+static bool attribute_random_domain_supported(int value)
+{
+  return ELEM(value, ATTR_DOMAIN_VERTEX, ATTR_DOMAIN_POINT);
+}
+static const EnumPropertyItem *rna_GeometryNodeAttributeRandom_domain_itemf(
+    bContext *UNUSED(C), PointerRNA *UNUSED(ptr), PropertyRNA *UNUSED(prop), bool *r_free)
+{
+  *r_free = true;
+  return generic_attribute_supported_list(rna_enum_attribute_domain_items,
+                                          attribute_random_domain_supported);
+}
+
 static StructRNA *rna_ShaderNode_register(Main *bmain,
                                           ReportList *reports,
                                           void *data,
@@ -8259,13 +8299,22 @@ static void def_geo_triangulate(StructRNA *srna)
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
 }
 
-static void def_geo_attribute_create_common(StructRNA *srna)
+/**
+ * \note Passing the item functions as arguments here allows reusing the same
+ * original list of items from Attribute RNA.
+ */
+static void def_geo_attribute_create_common(StructRNA *srna,
+                                            const char *type_items_func,
+                                            const char *domain_items_func)
 {
   PropertyRNA *prop;
 
   prop = RNA_def_property(srna, "data_type", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, NULL, "custom1");
   RNA_def_property_enum_items(prop, rna_enum_attribute_type_items);
+  if (type_items_func != NULL) {
+    RNA_def_property_enum_funcs(prop, NULL, NULL, type_items_func);
+  }
   RNA_def_property_enum_default(prop, CD_PROP_FLOAT);
   RNA_def_property_ui_text(prop, "Data Type", "Type of data stored in attribute");
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
@@ -8273,6 +8322,9 @@ static void def_geo_attribute_create_common(StructRNA *srna)
   prop = RNA_def_property(srna, "domain", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, NULL, "custom2");
   RNA_def_property_enum_items(prop, rna_enum_attribute_domain_items);
+  if (domain_items_func != NULL) {
+    RNA_def_property_enum_funcs(prop, NULL, NULL, domain_items_func);
+  }
   RNA_def_property_enum_default(prop, ATTR_DOMAIN_VERTEX);
   RNA_def_property_ui_text(prop, "Domain", "");
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
@@ -8280,7 +8332,9 @@ static void def_geo_attribute_create_common(StructRNA *srna)
 
 static void def_geo_random_attribute(StructRNA *srna)
 {
-  def_geo_attribute_create_common(srna);
+  def_geo_attribute_create_common(srna,
+                                  "rna_GeometryNodeAttributeRandom_type_itemf",
+                                  "rna_GeometryNodeAttributeRandom_domain_itemf");
 }
 
 /* -------------------------------------------------------------------------- */
