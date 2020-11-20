@@ -1888,7 +1888,7 @@ static const EnumPropertyItem *rna_GeometryNodeAttributeRandom_type_itemf(
 
 static bool attribute_random_domain_supported(int value)
 {
-  return ELEM(value, ATTR_DOMAIN_VERTEX, ATTR_DOMAIN_POINT);
+  return value == ATTR_DOMAIN_POINT;
 }
 static const EnumPropertyItem *rna_GeometryNodeAttributeRandom_domain_itemf(
     bContext *UNUSED(C), PointerRNA *UNUSED(ptr), PropertyRNA *UNUSED(prop), bool *r_free)
@@ -8334,7 +8334,7 @@ static void def_geo_attribute_create_common(StructRNA *srna,
   if (domain_items_func != NULL) {
     RNA_def_property_enum_funcs(prop, NULL, NULL, domain_items_func);
   }
-  RNA_def_property_enum_default(prop, ATTR_DOMAIN_VERTEX);
+  RNA_def_property_enum_default(prop, ATTR_DOMAIN_POINT);
   RNA_def_property_ui_text(prop, "Domain", "");
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
 }

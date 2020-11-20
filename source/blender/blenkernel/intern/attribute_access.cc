@@ -52,7 +52,7 @@ class VertexWeightWriteAttribute final : public WriteAttribute {
 
  public:
   VertexWeightWriteAttribute(MDeformVert *dverts, const int totvert, const int dvert_index)
-      : WriteAttribute(ATTR_DOMAIN_VERTEX, CPPType::get<float>(), totvert),
+      : WriteAttribute(ATTR_DOMAIN_POINT, CPPType::get<float>(), totvert),
         dverts_(dverts, totvert),
         dvert_index_(dvert_index)
   {
@@ -92,7 +92,7 @@ class VertexWeightReadAttribute final : public ReadAttribute {
 
  public:
   VertexWeightReadAttribute(const MDeformVert *dverts, const int totvert, const int dvert_index)
-      : ReadAttribute(ATTR_DOMAIN_VERTEX, CPPType::get<float>(), totvert),
+      : ReadAttribute(ATTR_DOMAIN_POINT, CPPType::get<float>(), totvert),
         dverts_(dverts, totvert),
         dvert_index_(dvert_index)
   {
@@ -652,7 +652,7 @@ bool PointCloudComponent::attribute_try_create(const StringRef attribute_name,
 bool MeshComponent::attribute_domain_supported(const AttributeDomain domain) const
 {
   return ELEM(
-      domain, ATTR_DOMAIN_CORNER, ATTR_DOMAIN_VERTEX, ATTR_DOMAIN_EDGE, ATTR_DOMAIN_POLYGON);
+      domain, ATTR_DOMAIN_CORNER, ATTR_DOMAIN_POINT, ATTR_DOMAIN_EDGE, ATTR_DOMAIN_POLYGON);
 }
 
 bool MeshComponent::attribute_domain_with_type_supported(const AttributeDomain domain,
@@ -674,7 +674,7 @@ int MeshComponent::attribute_domain_size(const AttributeDomain domain) const
   switch (domain) {
     case ATTR_DOMAIN_CORNER:
       return mesh_->totloop;
-    case ATTR_DOMAIN_VERTEX:
+    case ATTR_DOMAIN_POINT:
       return mesh_->totvert;
     case ATTR_DOMAIN_EDGE:
       return mesh_->totedge;
@@ -702,7 +702,7 @@ ReadAttributePtr MeshComponent::attribute_try_get_for_read(const StringRef attri
     auto get_vertex_position = [](const MVert &vert) { return float3(vert.co); };
     return std::make_unique<
         blender::bke::DerivedArrayReadAttribute<MVert, float3, decltype(get_vertex_position)>>(
-        ATTR_DOMAIN_VERTEX, blender::Span(mesh_->mvert, mesh_->totvert), get_vertex_position);
+        ATTR_DOMAIN_POINT, blender::Span(mesh_->mvert, mesh_->totvert), get_vertex_position);
   }
 
   ReadAttributePtr corner_attribute = read_attribute_from_custom_data(
@@ -718,7 +718,7 @@ ReadAttributePtr MeshComponent::attribute_try_get_for_read(const StringRef attri
   }
 
   ReadAttributePtr vertex_attribute = read_attribute_from_custom_data(
-      mesh_->vdata, mesh_->totvert, attribute_name, ATTR_DOMAIN_VERTEX);
+      mesh_->vdata, mesh_->totvert, attribute_name, ATTR_DOMAIN_POINT);
   if (vertex_attribute) {
     return vertex_attribute;
   }
@@ -753,7 +753,7 @@ WriteAttributePtr MeshComponent::attribute_try_get_for_write(const StringRef att
                                                  float3,
                                                  decltype(get_vertex_position),
                                                  decltype(set_vertex_position)>>(
-        ATTR_DOMAIN_VERTEX,
+        ATTR_DOMAIN_POINT,
         blender::MutableSpan(mesh_->mvert, mesh_->totvert),
         get_vertex_position,
         set_vertex_position);
@@ -772,7 +772,7 @@ WriteAttributePtr MeshComponent::attribute_try_get_for_write(const StringRef att
   }
 
   WriteAttributePtr vertex_attribute = write_attribute_from_custom_data(
-      mesh_->vdata, mesh_->totvert, attribute_name, ATTR_DOMAIN_VERTEX);
+      mesh_->vdata, mesh_->totvert, attribute_name, ATTR_DOMAIN_POINT);
   if (vertex_attribute) {
     return vertex_attribute;
   }
@@ -846,7 +846,7 @@ bool MeshComponent::attribute_try_create(const StringRef attribute_name,
           &mesh->ldata, data_type, CD_DEFAULT, nullptr, mesh->totloop, attribute_name_c);
       return true;
     }
-    case ATTR_DOMAIN_VERTEX: {
+    case ATTR_DOMAIN_POINT: {
       if (custom_data_has_layer_with_name(mesh->vdata, attribute_name)) {
         return false;
       }

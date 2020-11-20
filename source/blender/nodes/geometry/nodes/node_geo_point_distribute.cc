@@ -113,7 +113,7 @@ static void geo_point_distribute_exec(GeoNodeExecParams params)
   const Mesh *mesh_in = mesh_component.get_for_read();
 
   const FloatReadAttribute density_factors = mesh_component.attribute_get_for_read<float>(
-      density_attribute, ATTR_DOMAIN_VERTEX, 1.0f);
+      density_attribute, ATTR_DOMAIN_POINT, 1.0f);
 
   Vector<float3> points = scatter_points_from_mesh(mesh_in, density, density_factors);
 
