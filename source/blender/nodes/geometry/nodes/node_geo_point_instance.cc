@@ -34,6 +34,22 @@ static bNodeSocketTemplate geo_node_point_instance_out[] = {
 };
 
 namespace blender::nodes {
+
+static void add_instances_from_geometry_component(InstancesComponent &instances,
+                                                  const GeometryComponent &src_geometry,
+                                                  const AttributeDomain domain,
+                                                  Object *object)
+{
+  Float3ReadAttribute positions = src_geometry.attribute_get_for_read<float3>(
+      "Position", domain, {0, 0, 0});
+  FloatReadAttribute radii = src_geometry.attribute_get_for_read<float>("Radius", domain, 1.0f);
+
+  for (const int i : IndexRange(positions.size())) {
+    const float radius = radii[i];
+    instances.add_instance(object, positions[i], {0, 0, 0}, {radius, radius, radius});
+  }
+}
+
 static void geo_point_instance_exec(GeoNodeExecParams params)
 {
   GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
@@ -42,38 +58,25 @@ static void geo_point_instance_exec(GeoNodeExecParams params)
       "Object");
   Object *object = params.handle_map().lookup(object_handle);
 
-  InstancesComponent &instances = geometry_set.get_component_for_write<InstancesComponent>();
-
-  const PointCloudComponent *pointcloud_component =
-      geometry_set.get_component_for_read<PointCloudComponent>();
-  if (pointcloud_component != nullptr) {
-    Float3ReadAttribute positions = pointcloud_component->attribute_get_for_read<float3>(
-        "Position", ATTR_DOMAIN_POINT, {0, 0, 0});
-    FloatReadAttribute radii = pointcloud_component->attribute_get_for_read<float>(
-        "Radius", ATTR_DOMAIN_POINT, 1.0f);
-
-    for (const int i : IndexRange(positions.size())) {
-      const float radius = radii[i];
-      instances.add_instance(object, positions[i], {0, 0, 0}, {radius, radius, radius});
+  if (object != nullptr) {
+    InstancesComponent &instances = geometry_set.get_component_for_write<InstancesComponent>();
+    if (geometry_set.has<MeshComponent>()) {
+      add_instances_from_geometry_component(instances,
+                                            *geometry_set.get_component_for_read<MeshComponent>(),
+                                            ATTR_DOMAIN_VERTEX,
+                                            object);
+    }
+    if (geometry_set.has<PointCloudComponent>()) {
+      add_instances_from_geometry_component(
+          instances,
+          *geometry_set.get_component_for_read<PointCloudComponent>(),
+          ATTR_DOMAIN_POINT,
+          object);
     }
   }
 
-  const MeshComponent *mesh_component = geometry_set.get_component_for_read<MeshComponent>();
-  if (mesh_component != nullptr) {
-    Float3ReadAttribute positions = mesh_component->attribute_get_for_read<float3>(
-        "Position", ATTR_DOMAIN_VERTEX, {0, 0, 0});
-    FloatReadAttribute radii = mesh_component->attribute_get_for_read<float>(
-        "Radius", ATTR_DOMAIN_VERTEX, 1.0f);
-
-    for (const int i : IndexRange(positions.size())) {
-      const float radius = radii[i];
-      instances.add_instance(object, positions[i], {0, 0, 0}, {radius, radius, radius});
-    }
-  }
-
-  geometry_set.replace_mesh(nullptr);
-  geometry_set.replace_pointcloud(nullptr);
-
+  geometry_set.remove<MeshComponent>();
+  geometry_set.remove<PointCloudComponent>();
   params.set_output("Geometry", std::move(geometry_set));
 }
 }  // namespace blender::nodes

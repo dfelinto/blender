@@ -193,6 +193,13 @@ struct GeometrySet {
     return this->has(Component::type);
   }
 
+  void remove(const GeometryComponentType component_type);
+  template<typename Component> void remove()
+  {
+    BLI_STATIC_ASSERT(is_geometry_component_v<Component>, "");
+    return this->remove(Component::type);
+  }
+
   friend std::ostream &operator<<(std::ostream &stream, const GeometrySet &geometry_set);
   friend bool operator==(const GeometrySet &a, const GeometrySet &b);
   uint64_t hash() const;
