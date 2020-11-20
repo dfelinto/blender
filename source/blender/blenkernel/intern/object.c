@@ -1274,15 +1274,22 @@ void BKE_object_modifier_gpencil_hook_reset(Object *ob, HookGpencilModifierData 
   }
 }
 
+/**
+ * Set the object's active modifier.
+ *
+ * \param md: If NULL, only clear the active modifier, otherwise
+ * it must be in the #Object.modifiers list.
+ */
 void BKE_object_modifier_set_active(Object *ob, ModifierData *md)
 {
-  BLI_assert(BLI_findindex(&ob->modifiers, md) != -1);
-
   LISTBASE_FOREACH (ModifierData *, md_iter, &ob->modifiers) {
     md_iter->flag &= ~eModifierFlag_Active;
   }
 
-  md->flag |= eModifierFlag_Active;
+  if (md != NULL) {
+    BLI_assert(BLI_findindex(&ob->modifiers, md) != -1);
+    md->flag |= eModifierFlag_Active;
+  }
 }
 
 ModifierData *BKE_object_active_modifier(const Object *ob)

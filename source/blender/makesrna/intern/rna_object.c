@@ -1624,6 +1624,11 @@ static void rna_Object_active_modifier_set(PointerRNA *ptr, PointerRNA value, Re
   Object *ob = (Object *)ptr->owner_id;
   ModifierData *md = value.data;
 
+  if (RNA_pointer_is_null(&value)) {
+    BKE_object_modifier_set_active(ob, NULL);
+    return;
+  }
+
   if (BLI_findindex(&ob->modifiers, md) == -1) {
     BKE_reportf(
         reports, RPT_ERROR, "Modifier \"%s\" is not in the object's modifier list", md->name);
