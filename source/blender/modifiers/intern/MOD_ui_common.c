@@ -306,11 +306,20 @@ static void modifier_panel_header(const bContext *C, Panel *panel)
   int index = BLI_findindex(&ob->modifiers, md);
 
   /* Modifier Icon. */
+  uiItemS_ex(layout, 0.1f);
   sub = uiLayoutRow(layout, true);
   if (mti->isDisabled && mti->isDisabled(scene, md, 0)) {
     uiLayoutSetRedAlert(sub, true);
   }
-  uiItemL(sub, "", RNA_struct_ui_icon(ptr->type));
+  uiLayoutSetEmboss(sub, UI_EMBOSS_NONE);
+  uiItemFullO(sub,
+              "OBJECT_OT_modifier_set_active",
+              "",
+              RNA_struct_ui_icon(ptr->type),
+              NULL,
+              WM_OP_INVOKE_DEFAULT,
+              0,
+              NULL);
 
   row = uiLayoutRow(layout, true);
 
@@ -417,6 +426,7 @@ PanelType *modifier_panel_register(ARegionType *region_type, ModifierType type, 
   /* Give the panel the special flag that says it was built here and corresponds to a
    * modifier rather than a #PanelType. */
   panel_type->flag = PANEL_TYPE_HEADER_EXPAND | PANEL_TYPE_DRAW_BOX | PANEL_TYPE_INSTANCED;
+  panel_type->active_property = "is_active";
   panel_type->reorder = modifier_reorder;
   panel_type->get_list_data_expand_flag = get_modifier_expand_flag;
   panel_type->set_list_data_expand_flag = set_modifier_expand_flag;
