@@ -305,11 +305,13 @@ class GeometryNodesEvaluator {
     for (GMutablePointer value : input_data) {
       value.destruct();
     }
+    int output_index = 0;
     for (const int i : node.outputs().index_range()) {
       if (node.output(i).is_available()) {
-        GMutablePointer value = output_data[i];
+        GMutablePointer value = output_data[output_index];
         params.set_output_by_move(node.output(i).identifier(), value);
         value.destruct();
+        output_index++;
       }
     }
   }
