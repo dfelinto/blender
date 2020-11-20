@@ -249,6 +249,15 @@ class GeometryNodesEvaluator {
     const DNode &node = socket_to_compute.node();
     const bNode &bnode = *node.bnode();
 
+    if (!socket_to_compute.is_available()) {
+      /* If the output is not available, use a default value. */
+      const CPPType &type = *socket_cpp_type_get(*socket_to_compute.typeinfo());
+      void *buffer = allocator_.allocate(type.size(), type.alignment());
+      type.copy_to_uninitialized(type.default_value(), buffer);
+      this->forward_to_inputs(socket_to_compute, {type, buffer});
+      return;
+    }
+
     /* Prepare inputs required to execute the node. */
     GValueMap<StringRef> node_inputs_map{allocator_};
     for (const DInputSocket *input_socket : node.inputs()) {
