@@ -25,6 +25,9 @@
 static bNodeSocketTemplate geo_node_point_instance_in[] = {
     {SOCK_GEOMETRY, N_("Geometry")},
     {SOCK_OBJECT, N_("Object")},
+    {SOCK_STRING, N_("Position Attribute")},
+    {SOCK_STRING, N_("Rotation Attribute")},
+    {SOCK_STRING, N_("Scale Attribute")},
     {-1, ""},
 };
 
@@ -35,18 +38,38 @@ static bNodeSocketTemplate geo_node_point_instance_out[] = {
 
 namespace blender::nodes {
 
+static void set_default_string(bNode *node, const int socket_index, StringRef str)
+{
+  bNodeSocket *socket = static_cast<bNodeSocket *>(BLI_findlink(&node->inputs, socket_index));
+  bNodeSocketValueString *value = static_cast<bNodeSocketValueString *>(socket->default_value);
+  str.copy(value->value);
+}
+
+static void geo_node_point_instance_init(bNodeTree *UNUSED(tree), bNode *node)
+{
+  set_default_string(node, 2, "Position");
+  set_default_string(node, 3, "Rotation");
+  set_default_string(node, 4, "Scale");
+}
+
 static void add_instances_from_geometry_component(InstancesComponent &instances,
                                                   const GeometryComponent &src_geometry,
-                                                  Object *object)
+                                                  Object *object,
+                                                  const GeoNodeExecParams &params)
 {
+  const std::string position_attribute = params.get_input<std::string>("Position Attribute");
+  const std::string rotation_attribute = params.get_input<std::string>("Rotation Attribute");
+  const std::string scale_attribute = params.get_input<std::string>("Scale Attribute");
+
   Float3ReadAttribute positions = src_geometry.attribute_get_for_read<float3>(
-      "Position", ATTR_DOMAIN_POINT, {0, 0, 0});
-  FloatReadAttribute radii = src_geometry.attribute_get_for_read<float>(
-      "Radius", ATTR_DOMAIN_POINT, 1.0f);
+      position_attribute, ATTR_DOMAIN_POINT, {0, 0, 0});
+  Float3ReadAttribute rotations = src_geometry.attribute_get_for_read<float3>(
+      rotation_attribute, ATTR_DOMAIN_POINT, {0, 0, 0});
+  Float3ReadAttribute scales = src_geometry.attribute_get_for_read<float3>(
+      scale_attribute, ATTR_DOMAIN_POINT, {1, 1, 1});
 
   for (const int i : IndexRange(positions.size())) {
-    const float radius = radii[i];
-    instances.add_instance(object, positions[i], {0, 0, 0}, {radius, radius, radius});
+    instances.add_instance(object, positions[i], rotations[i], scales[i]);
   }
 }
 
@@ -62,11 +85,11 @@ static void geo_point_instance_exec(GeoNodeExecParams params)
     InstancesComponent &instances = geometry_set.get_component_for_write<InstancesComponent>();
     if (geometry_set.has<MeshComponent>()) {
       add_instances_from_geometry_component(
-          instances, *geometry_set.get_component_for_read<MeshComponent>(), object);
+          instances, *geometry_set.get_component_for_read<MeshComponent>(), object, params);
     }
     if (geometry_set.has<PointCloudComponent>()) {
       add_instances_from_geometry_component(
-          instances, *geometry_set.get_component_for_read<PointCloudComponent>(), object);
+          instances, *geometry_set.get_component_for_read<PointCloudComponent>(), object, params);
     }
   }
 
@@ -82,6 +105,7 @@ void register_node_type_geo_point_instance()
 
   geo_node_type_base(&ntype, GEO_NODE_POINT_INSTANCE, "Point Instance", 0, 0);
   node_type_socket_templates(&ntype, geo_node_point_instance_in, geo_node_point_instance_out);
+  node_type_init(&ntype, blender::nodes::geo_node_point_instance_init);
   ntype.geometry_node_execute = blender::nodes::geo_point_instance_exec;
   nodeRegisterType(&ntype);
 }
