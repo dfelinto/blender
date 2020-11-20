@@ -48,8 +48,9 @@ static void geo_point_instance_exec(GeoNodeExecParams params)
       geometry_set.get_component_for_read<PointCloudComponent>();
   if (pointcloud_component != nullptr) {
     Float3ReadAttribute positions = pointcloud_component->attribute_get_for_read<float3>(
-        "Position", {0, 0, 0});
-    FloatReadAttribute radii = pointcloud_component->attribute_get_for_read<float>("Radius", 1.0f);
+        "Position", ATTR_DOMAIN_POINT, {0, 0, 0});
+    FloatReadAttribute radii = pointcloud_component->attribute_get_for_read<float>(
+        "Radius", ATTR_DOMAIN_POINT, 1.0f);
 
     for (const int i : IndexRange(positions.size())) {
       const float radius = radii[i];

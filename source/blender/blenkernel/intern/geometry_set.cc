@@ -114,6 +114,11 @@ const GeometryComponent *GeometrySet::get_component_for_read(
   return nullptr;
 }
 
+bool GeometrySet::has(const GeometryComponentType component_type) const
+{
+  return components_.contains(component_type);
+}
+
 std::ostream &operator<<(std::ostream &stream, const GeometrySet &geometry_set)
 {
   stream << "<GeometrySet at " << &geometry_set << ", " << geometry_set.components_.size()

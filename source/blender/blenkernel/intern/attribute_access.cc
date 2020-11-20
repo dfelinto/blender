@@ -53,7 +53,7 @@ class VertexWeightWriteAttribute final : public WriteAttribute {
 
   void get_internal(const int64_t index, void *r_value) const override
   {
-    this->get_internal(dverts_, dvert_index_, index, r_value);
+    get_internal(dverts_, dvert_index_, index, r_value);
   }
 
   void set_internal(const int64_t index, const void *value) override
@@ -219,15 +219,63 @@ class ConstantReadAttribute final : public ReadAttribute {
 
 /** \} */
 
+const blender::fn::CPPType *custom_data_type_to_cpp_type(const CustomDataType type)
+{
+  switch (type) {
+    case CD_PROP_FLOAT:
+      return &CPPType::get<float>();
+    case CD_PROP_FLOAT2:
+      return &CPPType::get<float2>();
+    case CD_PROP_FLOAT3:
+      return &CPPType::get<float3>();
+    case CD_PROP_INT32:
+      return &CPPType::get<int>();
+    case CD_PROP_COLOR:
+      return &CPPType::get<Color4f>();
+    default:
+      return nullptr;
+  }
+  return nullptr;
+}
+
+CustomDataType cpp_type_to_custom_data_type(const blender::fn::CPPType &type)
+{
+  if (type.is<float>()) {
+    return CD_PROP_FLOAT;
+  }
+  if (type.is<float2>()) {
+    return CD_PROP_FLOAT2;
+  }
+  if (type.is<float3>()) {
+    return CD_PROP_FLOAT3;
+  }
+  if (type.is<int>()) {
+    return CD_PROP_INT32;
+  }
+  if (type.is<Color4f>()) {
+    return CD_PROP_COLOR;
+  }
+  return static_cast<CustomDataType>(-1);
+}
+
+}  // namespace blender::bke
+
 /* -------------------------------------------------------------------- */
 /** \name Utilities for accessing attributes.
  * \{ */
+
+using blender::float3;
+using blender::StringRef;
+using blender::bke::ReadAttributePtr;
+using blender::bke::WriteAttributePtr;
 
 static ReadAttributePtr read_attribute_from_custom_data(const CustomData &custom_data,
                                                         const int size,
                                                         const StringRef attribute_name,
                                                         const AttributeDomain domain)
 {
+  using namespace blender;
+  using namespace blender::bke;
   for (const CustomDataLayer &layer : Span(custom_data.layers, custom_data.totlayer)) {
     if (layer.name != nullptr && layer.name == attribute_name) {
       switch (layer.type) {
@@ -257,6 +305,8 @@ static WriteAttributePtr write_attribute_from_custom_data(CustomData custom_data
                                                           const StringRef attribute_name,
                                                           const AttributeDomain domain)
 {
+  using namespace blender;
+  using namespace blender::bke;
   for (const CustomDataLayer &layer : Span(custom_data.layers, custom_data.totlayer)) {
     if (layer.name != nullptr && layer.name == attribute_name) {
       switch (layer.type) {
@@ -281,55 +331,15 @@ static WriteAttributePtr write_attribute_from_custom_data(CustomData custom_data
   return {};
 }
 
-const CPPType *custom_data_type_to_cpp_type(const int type)
-{
-  switch (type) {
-    case CD_PROP_FLOAT:
-      return &CPPType::get<float>();
-    case CD_PROP_FLOAT2:
-      return &CPPType::get<float2>();
-    case CD_PROP_FLOAT3:
-      return &CPPType::get<float3>();
-    case CD_PROP_INT32:
-      return &CPPType::get<int>();
-    case CD_PROP_COLOR:
-      return &CPPType::get<Color4f>();
-  }
-  return nullptr;
-}
-
-/** \} */
-
-static int get_domain_length(const Mesh *mesh, const AttributeDomain domain)
-{
-  if (mesh == nullptr) {
-    return 0;
-  }
-  switch (domain) {
-    case ATTR_DOMAIN_CORNER:
-      return mesh->totloop;
-    case ATTR_DOMAIN_VERTEX:
-      return mesh->totvert;
-    case ATTR_DOMAIN_EDGE:
-      return mesh->totedge;
-    case ATTR_DOMAIN_POLYGON:
-      return mesh->totpoly;
-    default:
-      break;
-  }
-  return 0;
-}
-
 /* Returns true when the layer was found and is deleted. */
 static bool delete_named_custom_data_layer(CustomData &custom_data,
                                            const StringRef attribute_name,
                                            const int size)
 {
-  for (const int index : IndexRange(custom_data.totlayer)) {
+  for (const int index : blender::IndexRange(custom_data.totlayer)) {
     const CustomDataLayer &layer = custom_data.layers[index];
     if (layer.name == attribute_name) {
-      CustomData_free_layer(
-          &custom_data, layer.type, size, index - custom_data.typemap[layer.type]);
+      CustomData_free_layer(&custom_data, layer.type, size, index);
       return true;
     }
   }
@@ -338,16 +348,308 @@ static bool delete_named_custom_data_layer(CustomData &custom_data,
 
 /** \} */
 
-}  // namespace blender::bke
+/* -------------------------------------------------------------------- */
+/** \name GeometryComponent
+ * \{ */
 
-blender::bke::ReadAttributePtr MeshComponent::attribute_get_for_read(
-    const blender::StringRef attribute_name) const
+bool GeometryComponent::attribute_domain_supported(const AttributeDomain UNUSED(domain)) const
 {
-  using namespace blender;
-  using namespace blender::bke;
+  return false;
+}
 
+bool GeometryComponent::attribute_domain_with_type_supported(
+    const AttributeDomain UNUSED(domain), const CustomDataType UNUSED(data_type)) const
+{
+  return false;
+}
+
+int GeometryComponent::attribute_domain_size(const AttributeDomain UNUSED(domain)) const
+{
+  BLI_assert(false);
+  return 0;
+}
+
+bool GeometryComponent::attribute_is_builtin(const StringRef UNUSED(attribute_name)) const
+{
+  return true;
+}
+
+ReadAttributePtr GeometryComponent::attribute_try_get_for_read(
+    const StringRef UNUSED(attribute_name)) const
+{
+  return {};
+}
+
+ReadAttributePtr GeometryComponent::attribute_try_adapt_domain(ReadAttributePtr attribute,
+                                                               const AttributeDomain domain) const
+{
+  if (attribute && attribute->domain() == domain) {
+    return attribute;
+  }
+  return {};
+}
+
+WriteAttributePtr GeometryComponent::attribute_try_get_for_write(
+    const StringRef UNUSED(attribute_name))
+{
+  return {};
+}
+
+bool GeometryComponent::attribute_try_delete(const StringRef UNUSED(attribute_name))
+{
+  return false;
+}
+
+bool GeometryComponent::attribute_try_create(const StringRef UNUSED(attribute_name),
+                                             const AttributeDomain UNUSED(domain),
+                                             const CustomDataType UNUSED(data_type))
+{
+  return false;
+}
+
+ReadAttributePtr GeometryComponent::attribute_try_get_for_read(
+    const StringRef attribute_name,
+    const AttributeDomain domain,
+    const CustomDataType data_type) const
+{
+  if (!this->attribute_domain_with_type_supported(domain, data_type)) {
+    return {};
+  }
+
+  ReadAttributePtr attribute = this->attribute_try_get_for_read(attribute_name);
+  if (!attribute) {
+    return {};
+  }
+
+  if (attribute->domain() != domain) {
+    attribute = this->attribute_try_adapt_domain(std::move(attribute), domain);
+    if (!attribute) {
+      return {};
+    }
+  }
+
+  const blender::fn::CPPType *cpp_type = blender::bke::custom_data_type_to_cpp_type(data_type);
+  BLI_assert(cpp_type != nullptr);
+  if (attribute->cpp_type() != *cpp_type) {
+    /* TODO: Support some type conversions. */
+    return {};
+  }
+
+  return attribute;
+}
+
+ReadAttributePtr GeometryComponent::attribute_get_for_read(const StringRef attribute_name,
+                                                           const AttributeDomain domain,
+                                                           const CustomDataType data_type,
+                                                           const void *default_value) const
+{
+  BLI_assert(this->attribute_domain_with_type_supported(domain, data_type));
+
+  ReadAttributePtr attribute = this->attribute_try_get_for_read(attribute_name, domain, data_type);
+  if (attribute) {
+    return attribute;
+  }
+
+  const blender::fn::CPPType *cpp_type = blender::bke::custom_data_type_to_cpp_type(data_type);
+  BLI_assert(cpp_type != nullptr);
+  const int domain_size = this->attribute_domain_size(domain);
+  return std::make_unique<blender::bke::ConstantReadAttribute>(
+      domain, domain_size, *cpp_type, default_value);
+}
+
+WriteAttributePtr GeometryComponent::attribute_try_ensure_for_write(const StringRef attribute_name,
+                                                                    const AttributeDomain domain,
+                                                                    const CustomDataType data_type)
+{
+  const blender::fn::CPPType *cpp_type = blender::bke::custom_data_type_to_cpp_type(data_type);
+  BLI_assert(cpp_type != nullptr);
+
+  WriteAttributePtr attribute = this->attribute_try_get_for_write(attribute_name);
+  if (attribute && attribute->domain() == domain && attribute->cpp_type() == *cpp_type) {
+    return attribute;
+  }
+
+  if (attribute) {
+    if (!this->attribute_try_delete(attribute_name)) {
+      return {};
+    }
+  }
+  if (!this->attribute_domain_with_type_supported(domain, data_type)) {
+    return {};
+  }
+  if (!this->attribute_try_create(attribute_name, domain, data_type)) {
+    return {};
+  }
+  return this->attribute_try_get_for_write(attribute_name);
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name PointCloudComponent
+ * \{ */
+
+bool PointCloudComponent::attribute_domain_supported(const AttributeDomain domain) const
+{
+  return domain == ATTR_DOMAIN_POINT;
+}
+
+bool PointCloudComponent::attribute_domain_with_type_supported(
+    const AttributeDomain domain, const CustomDataType data_type) const
+{
+  return domain == ATTR_DOMAIN_POINT && ELEM(data_type,
+                                             CD_PROP_FLOAT,
+                                             CD_PROP_FLOAT2,
+                                             CD_PROP_FLOAT3,
+                                             CD_PROP_INT32,
+                                             CD_PROP_COLOR);
+}
+
+int PointCloudComponent::attribute_domain_size(const AttributeDomain domain) const
+{
+  BLI_assert(domain == ATTR_DOMAIN_POINT);
+  UNUSED_VARS_NDEBUG(domain);
+  if (pointcloud_ == nullptr) {
+    return 0;
+  }
+  return pointcloud_->totpoint;
+}
+
+bool PointCloudComponent::attribute_is_builtin(const StringRef attribute_name) const
+{
+  return attribute_name == "Position";
+}
+
+ReadAttributePtr PointCloudComponent::attribute_try_get_for_read(
+    const StringRef attribute_name) const
+{
+  if (pointcloud_ == nullptr) {
+    return {};
+  }
+
+  return read_attribute_from_custom_data(
+      pointcloud_->pdata, pointcloud_->totpoint, attribute_name, ATTR_DOMAIN_POINT);
+}
+
+WriteAttributePtr PointCloudComponent::attribute_try_get_for_write(const StringRef attribute_name)
+{
+  PointCloud *pointcloud = this->get_for_write();
+  if (pointcloud == nullptr) {
+    return {};
+  }
+
+  return write_attribute_from_custom_data(
+      pointcloud->pdata, pointcloud->totpoint, attribute_name, ATTR_DOMAIN_POINT);
+}
+
+bool PointCloudComponent::attribute_try_delete(const StringRef attribute_name)
+{
+  if (this->attribute_is_builtin(attribute_name)) {
+    return false;
+  }
+  PointCloud *pointcloud = this->get_for_write();
+  if (pointcloud == nullptr) {
+    return false;
+  }
+  delete_named_custom_data_layer(pointcloud->pdata, attribute_name, pointcloud->totpoint);
+  return true;
+}
+
+static bool custom_data_has_layer_with_name(const CustomData &custom_data, const StringRef name)
+{
+  for (const CustomDataLayer &layer : blender::Span(custom_data.layers, custom_data.totlayer)) {
+    if (layer.name == name) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool PointCloudComponent::attribute_try_create(const StringRef attribute_name,
+                                               const AttributeDomain domain,
+                                               const CustomDataType data_type)
+{
+  if (this->attribute_is_builtin(attribute_name)) {
+    return false;
+  }
+  if (!this->attribute_domain_with_type_supported(domain, data_type)) {
+    return false;
+  }
+  PointCloud *pointcloud = this->get_for_write();
+  if (pointcloud == nullptr) {
+    return false;
+  }
+  if (custom_data_has_layer_with_name(pointcloud->pdata, attribute_name)) {
+    return false;
+  }
+
+  char attribute_name_c[MAX_NAME];
+  attribute_name.copy(attribute_name_c);
+  CustomData_add_layer_named(
+      &pointcloud->pdata, data_type, CD_DEFAULT, nullptr, pointcloud_->totpoint, attribute_name_c);
+  return true;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name MeshComponent
+ * \{ */
+
+bool MeshComponent::attribute_domain_supported(const AttributeDomain domain) const
+{
+  return ELEM(
+      domain, ATTR_DOMAIN_CORNER, ATTR_DOMAIN_VERTEX, ATTR_DOMAIN_EDGE, ATTR_DOMAIN_POLYGON);
+}
+
+bool MeshComponent::attribute_domain_with_type_supported(const AttributeDomain domain,
+                                                         const CustomDataType data_type) const
+{
+  if (!this->attribute_domain_supported(domain)) {
+    return false;
+  }
+  return ELEM(
+      data_type, CD_PROP_FLOAT, CD_PROP_FLOAT2, CD_PROP_FLOAT3, CD_PROP_INT32, CD_PROP_COLOR);
+}
+
+int MeshComponent::attribute_domain_size(const AttributeDomain domain) const
+{
+  BLI_assert(this->attribute_domain_supported(domain));
+  if (mesh_ == nullptr) {
+    return 0;
+  }
+  switch (domain) {
+    case ATTR_DOMAIN_CORNER:
+      return mesh_->totloop;
+    case ATTR_DOMAIN_VERTEX:
+      return mesh_->totvert;
+    case ATTR_DOMAIN_EDGE:
+      return mesh_->totedge;
+    case ATTR_DOMAIN_POLYGON:
+      return mesh_->totpoly;
+    default:
+      BLI_assert(false);
+      break;
+  }
+  return 0;
+}
+
+bool MeshComponent::attribute_is_builtin(const StringRef attribute_name) const
+{
+  return attribute_name == "Position";
+}
+
+ReadAttributePtr MeshComponent::attribute_try_get_for_read(const StringRef attribute_name) const
+{
   if (mesh_ == nullptr) {
     return {};
+  }
+
+  if (attribute_name == "Position") {
+    auto get_vertex_position = [](const MVert &vert) { return float3(vert.co); };
+    return std::make_unique<
+        blender::bke::DerivedArrayReadAttribute<MVert, float3, decltype(get_vertex_position)>>(
+        ATTR_DOMAIN_VERTEX, blender::Span(mesh_->mvert, mesh_->totvert), get_vertex_position);
   }
 
   ReadAttributePtr corner_attribute = read_attribute_from_custom_data(
@@ -356,16 +658,9 @@ blender::bke::ReadAttributePtr MeshComponent::attribute_get_for_read(
     return corner_attribute;
   }
 
-  if (attribute_name == "Position") {
-    auto get_vertex_position = [](const MVert &vert) { return float3(vert.co); };
-    return std::make_unique<
-        DerivedArrayReadAttribute<MVert, float3, decltype(get_vertex_position)>>(
-        ATTR_DOMAIN_VERTEX, Span(mesh_->mvert, mesh_->totvert), get_vertex_position);
-  }
-
   const int vertex_group_index = vertex_group_names_.lookup_default(attribute_name, -1);
   if (vertex_group_index >= 0) {
-    return std::make_unique<VertexWeightReadAttribute>(
+    return std::make_unique<blender::bke::VertexWeightReadAttribute>(
         mesh_->dvert, mesh_->totvert, vertex_group_index);
   }
 
@@ -390,14 +685,25 @@ blender::bke::ReadAttributePtr MeshComponent::attribute_get_for_read(
   return {};
 }
 
-blender::bke::WriteAttributePtr MeshComponent::attribute_get_for_write(
-    const blender::StringRef attribute_name)
+WriteAttributePtr MeshComponent::attribute_try_get_for_write(const StringRef attribute_name)
 {
-  using namespace blender;
-  using namespace blender::bke;
-
-  if (mesh_ == nullptr) {
+  Mesh *mesh = this->get_for_write();
+  if (mesh == nullptr) {
     return {};
+  }
+
+  if (attribute_name == "Position") {
+    auto get_vertex_position = [](const MVert &vert) { return float3(vert.co); };
+    auto set_vertex_position = [](MVert &vert, const float3 &co) { copy_v3_v3(vert.co, co); };
+    return std::make_unique<
+        blender::bke::DerivedArrayWriteAttribute<MVert,
+                                                 float3,
+                                                 decltype(get_vertex_position),
+                                                 decltype(set_vertex_position)>>(
+        ATTR_DOMAIN_VERTEX,
+        blender::MutableSpan(mesh_->mvert, mesh_->totvert),
+        get_vertex_position,
+        set_vertex_position);
   }
 
   WriteAttributePtr corner_attribute = write_attribute_from_custom_data(
@@ -406,22 +712,9 @@ blender::bke::WriteAttributePtr MeshComponent::attribute_get_for_write(
     return corner_attribute;
   }
 
-  if (attribute_name == "Position") {
-    auto get_vertex_position = [](const MVert &vert) { return float3(vert.co); };
-    auto set_vertex_position = [](MVert &vert, const float3 &co) { copy_v3_v3(vert.co, co); };
-    return std::make_unique<DerivedArrayWriteAttribute<MVert,
-                                                       float3,
-                                                       decltype(get_vertex_position),
-                                                       decltype(set_vertex_position)>>(
-        ATTR_DOMAIN_VERTEX,
-        MutableSpan(mesh_->mvert, mesh_->totvert),
-        get_vertex_position,
-        set_vertex_position);
-  }
-
   const int vertex_group_index = vertex_group_names_.lookup_default_as(attribute_name, -1);
   if (vertex_group_index >= 0) {
-    return std::make_unique<VertexWeightWriteAttribute>(
+    return std::make_unique<blender::bke::VertexWeightWriteAttribute>(
         mesh_->dvert, mesh_->totvert, vertex_group_index);
   }
 
@@ -446,140 +739,90 @@ blender::bke::WriteAttributePtr MeshComponent::attribute_get_for_write(
   return {};
 }
 
-blender::bke::ReadAttributePtr MeshComponent::attribute_get_for_read(
-    const blender::StringRef attribute_name,
-    const blender::fn::CPPType &cpp_type,
-    const AttributeDomain domain,
-    const void *default_value) const
+bool MeshComponent::attribute_try_delete(const StringRef attribute_name)
 {
-  using namespace blender;
-  using namespace blender::bke;
-
-  ReadAttributePtr attribute = this->attribute_get_for_read(attribute_name);
-  auto get_default_or_empty = [&]() -> ReadAttributePtr {
-    if (default_value != nullptr) {
-      const int length = get_domain_length(mesh_, domain);
-      return std::make_unique<ConstantReadAttribute>(domain, length, cpp_type, default_value);
-    }
-    return {};
-  };
-
-  if (!attribute) {
-    return get_default_or_empty();
+  if (this->attribute_is_builtin(attribute_name)) {
+    return false;
   }
-  if (attribute->domain() != domain) {
-    /* TODO: Support domain interpolation. */
-    return {};
-  }
-  if (!attribute) {
-    return get_default_or_empty();
-  }
-  if (attribute->cpp_type() != cpp_type) {
-    /* TODO: Support some type conversions. */
-    return get_default_or_empty();
-  }
-  return attribute;
-}
-
-AttributeDeleteStatus MeshComponent::attribute_delete(const blender::StringRef attribute_name)
-{
-  using namespace blender;
-  using namespace blender::bke;
-
-  if (attribute_name == "Position") {
-    return AttributeDeleteStatus::CannotBeDeleted;
+  Mesh *mesh = this->get_for_write();
+  if (mesh == nullptr) {
+    return false;
   }
 
-  if (mesh_ == nullptr) {
-    return AttributeDeleteStatus::CannotBeDeleted;
-  }
-
-  bool deleted = false;
-  deleted |= delete_named_custom_data_layer(mesh_->ldata, attribute_name, mesh_->totloop);
-  deleted |= delete_named_custom_data_layer(mesh_->vdata, attribute_name, mesh_->totvert);
-  deleted |= delete_named_custom_data_layer(mesh_->edata, attribute_name, mesh_->totedge);
-  deleted |= delete_named_custom_data_layer(mesh_->pdata, attribute_name, mesh_->totpoly);
+  delete_named_custom_data_layer(mesh_->ldata, attribute_name, mesh_->totloop);
+  delete_named_custom_data_layer(mesh_->vdata, attribute_name, mesh_->totvert);
+  delete_named_custom_data_layer(mesh_->edata, attribute_name, mesh_->totedge);
+  delete_named_custom_data_layer(mesh_->pdata, attribute_name, mesh_->totpoly);
 
   const int vertex_group_index = vertex_group_names_.lookup_default_as(attribute_name, -1);
   if (vertex_group_index != -1) {
-    for (MDeformVert &dvert : MutableSpan(mesh_->dvert, mesh_->totvert)) {
+    for (MDeformVert &dvert : blender::MutableSpan(mesh_->dvert, mesh_->totvert)) {
       MDeformWeight *weight = BKE_defvert_find_index(&dvert, vertex_group_index);
       BKE_defvert_remove_group(&dvert, weight);
     }
     vertex_group_names_.remove_as(attribute_name);
-    deleted = true;
   }
 
-  if (deleted) {
-    return AttributeDeleteStatus::Deleted;
-  }
-  return AttributeDeleteStatus::NotFound;
+  return true;
 }
 
-blender::bke::ReadAttributePtr PointCloudComponent::attribute_get_for_read(
-    const blender::StringRef attribute_name) const
+bool MeshComponent::attribute_try_create(const StringRef attribute_name,
+                                         const AttributeDomain domain,
+                                         const CustomDataType data_type)
 {
-  if (pointcloud_ == nullptr) {
-    return {};
+  if (this->attribute_is_builtin(attribute_name)) {
+    return false;
+  }
+  if (!this->attribute_domain_with_type_supported(domain, data_type)) {
+    return false;
+  }
+  Mesh *mesh = this->get_for_write();
+  if (mesh == nullptr) {
+    return false;
   }
 
-  return blender::bke::read_attribute_from_custom_data(
-      pointcloud_->pdata, pointcloud_->totpoint, attribute_name, ATTR_DOMAIN_POINT);
-}
+  char attribute_name_c[MAX_NAME];
+  attribute_name.copy(attribute_name_c);
 
-blender::bke::ReadAttributePtr PointCloudComponent::attribute_get_for_read(
-    const blender::StringRef attribute_name,
-    const blender::fn::CPPType &cpp_type,
-    const void *default_value) const
-{
-  using namespace blender;
-  using namespace blender::bke;
-
-  ReadAttributePtr attribute = this->attribute_get_for_read(attribute_name);
-  auto get_default_or_empty = [&]() -> ReadAttributePtr {
-    if (default_value != nullptr) {
-      const int length = pointcloud_ == nullptr ? 0 : pointcloud_->totpoint;
-      return std::make_unique<ConstantReadAttribute>(
-          ATTR_DOMAIN_POINT, length, cpp_type, default_value);
+  switch (domain) {
+    case ATTR_DOMAIN_CORNER: {
+      if (custom_data_has_layer_with_name(mesh->ldata, attribute_name)) {
+        return false;
+      }
+      CustomData_add_layer_named(
+          &mesh->ldata, data_type, CD_DEFAULT, nullptr, mesh->totloop, attribute_name_c);
+      return true;
     }
-    return {};
-  };
-
-  if (!attribute) {
-    return get_default_or_empty();
+    case ATTR_DOMAIN_VERTEX: {
+      if (custom_data_has_layer_with_name(mesh->vdata, attribute_name)) {
+        return false;
+      }
+      if (vertex_group_names_.contains_as(attribute_name)) {
+        return false;
+      }
+      CustomData_add_layer_named(
+          &mesh->vdata, data_type, CD_DEFAULT, nullptr, mesh->totvert, attribute_name_c);
+      return true;
+    }
+    case ATTR_DOMAIN_EDGE: {
+      if (custom_data_has_layer_with_name(mesh->edata, attribute_name)) {
+        return false;
+      }
+      CustomData_add_layer_named(
+          &mesh->edata, data_type, CD_DEFAULT, nullptr, mesh->totedge, attribute_name_c);
+      return true;
+    }
+    case ATTR_DOMAIN_POLYGON: {
+      if (custom_data_has_layer_with_name(mesh->pdata, attribute_name)) {
+        return false;
+      }
+      CustomData_add_layer_named(
+          &mesh->pdata, data_type, CD_DEFAULT, nullptr, mesh->totpoly, attribute_name_c);
+      return true;
+    }
+    default:
+      return false;
   }
-  if (attribute->cpp_type() != cpp_type) {
-    /* TODO: Support some type conversions. */
-    return get_default_or_empty();
-  }
-  return attribute;
 }
 
-blender::bke::WriteAttributePtr PointCloudComponent::attribute_get_for_write(
-    const blender::StringRef attribute_name)
-{
-  if (pointcloud_ == nullptr) {
-    return {};
-  }
-
-  return blender::bke::write_attribute_from_custom_data(
-      pointcloud_->pdata, pointcloud_->totpoint, attribute_name, ATTR_DOMAIN_POINT);
-}
-
-AttributeDeleteStatus PointCloudComponent::attribute_delete(
-    const blender::StringRef attribute_name)
-{
-  if (attribute_name == "Position") {
-    return AttributeDeleteStatus::CannotBeDeleted;
-  }
-
-  if (pointcloud_ == nullptr) {
-    return AttributeDeleteStatus::NotFound;
-  }
-
-  if (blender::bke::delete_named_custom_data_layer(
-          pointcloud_->pdata, attribute_name, pointcloud_->totpoint)) {
-    return AttributeDeleteStatus::Deleted;
-  }
-  return AttributeDeleteStatus::NotFound;
-}
+/** \} */

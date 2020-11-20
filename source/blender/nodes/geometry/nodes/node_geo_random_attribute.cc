@@ -26,6 +26,8 @@ static bNodeSocketTemplate geo_node_random_attribute_in[] = {
     {SOCK_STRING, N_("Attribute")},
     {SOCK_VECTOR, N_("Min"), 0.0f, 0.0f, 0.0f, 0.0f, -FLT_MAX, FLT_MAX},
     {SOCK_VECTOR, N_("Max"), 1.0f, 1.0f, 1.0f, 0.0f, -FLT_MAX, FLT_MAX},
+    {SOCK_FLOAT, N_("Min"), 0.0f, 0.0f, 0.0f, 0.0f, -FLT_MAX, FLT_MAX},
+    {SOCK_FLOAT, N_("Max"), 1.0f, 0.0f, 0.0f, 0.0f, -FLT_MAX, FLT_MAX},
     {SOCK_INT, N_("Seed"), 0, 0, 0, 0, -10000, 10000},
     {-1, ""},
 };
@@ -35,9 +37,24 @@ static bNodeSocketTemplate geo_node_random_attribute_out[] = {
     {-1, ""},
 };
 
-static void geo_attribute_random_init(bNodeTree *UNUSED(tree), bNode *node)
+static void geo_node_random_attribute_init(bNodeTree *UNUSED(tree), bNode *node)
 {
   node->custom1 = CD_PROP_FLOAT;
+}
+
+static void geo_node_random_attribute_update(bNodeTree *UNUSED(ntree), bNode *node)
+{
+  bNodeSocket *sock_min_vector = (bNodeSocket *)BLI_findlink(&node->inputs, 2);
+  bNodeSocket *sock_max_vector = sock_min_vector->next;
+  bNodeSocket *sock_min_float = sock_max_vector->next;
+  bNodeSocket *sock_max_float = sock_min_float->next;
+
+  const int data_type = node->custom1;
+
+  nodeSetSocketAvailability(sock_min_vector, data_type == CD_PROP_FLOAT3);
+  nodeSetSocketAvailability(sock_max_vector, data_type == CD_PROP_FLOAT3);
+  nodeSetSocketAvailability(sock_min_float, data_type == CD_PROP_FLOAT);
+  nodeSetSocketAvailability(sock_max_float, data_type == CD_PROP_FLOAT);
 }
 
 namespace blender::nodes {
@@ -67,75 +84,55 @@ static void randomize_attribute(Float3WriteAttribute &attribute,
   }
 }
 
-static void geo_random_attribute_exec(GeoNodeExecParams params)
+static void randomize_attribute(GeometryComponent &component,
+                                const GeoNodeExecParams &params,
+                                RandomNumberGenerator &rng)
 {
   const bNode &node = params.node();
-  const int data_type = node.custom1;
+  const CustomDataType data_type = static_cast<CustomDataType>(node.custom1);
   const AttributeDomain domain = static_cast<AttributeDomain>(node.custom2);
+  const std::string attribute_name = params.get_input<std::string>("Attribute");
 
-  GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
-  const std::string attribute_name = params.extract_input<std::string>("Attribute");
-  const float3 min_value = params.extract_input<float3>("Min");
-  const float3 max_value = params.extract_input<float3>("Max");
-  const int seed = params.extract_input<int>("Seed");
-
-  RandomNumberGenerator rng;
-  rng.seed_random(seed);
-
-  const CPPType &attribute_type = *bke::custom_data_type_to_cpp_type(data_type);
-
-  MeshComponent &mesh_component = geometry_set.get_component_for_write<MeshComponent>();
-  Mesh *mesh = mesh_component.get_for_write();
-  if (mesh != nullptr) {
-    WriteAttributePtr attribute = mesh_component.attribute_get_for_write(attribute_name);
-    if (attribute && attribute->cpp_type() != attribute_type) {
-      if (mesh_component.attribute_delete(attribute_name) == AttributeDeleteStatus::Deleted) {
-        attribute = {};
-      }
-    }
-    if (!attribute) {
-      BKE_id_attribute_new(&mesh->id, attribute_name.c_str(), data_type, domain, nullptr);
-      attribute = mesh_component.attribute_get_for_write(attribute_name);
-    }
-
-    if (attribute) {
-      if (attribute->cpp_type().is<float>()) {
-        FloatWriteAttribute float_attribute = std::move(attribute);
-        randomize_attribute(float_attribute, min_value.x, max_value.x, rng);
-      }
-      else if (attribute->cpp_type().is<float3>()) {
-        Float3WriteAttribute float3_attribute = std::move(attribute);
-        randomize_attribute(float3_attribute, min_value, max_value, rng);
-      }
-    }
+  WriteAttributePtr attribute = component.attribute_try_ensure_for_write(
+      attribute_name, domain, data_type);
+  if (!attribute) {
+    return;
   }
 
-  PointCloudComponent &pointcloud_component =
-      geometry_set.get_component_for_write<PointCloudComponent>();
-  PointCloud *pointcloud = pointcloud_component.get_for_write();
-  if (pointcloud != nullptr) {
-    WriteAttributePtr attribute = pointcloud_component.attribute_get_for_write(attribute_name);
-    if (attribute && attribute->cpp_type() != attribute_type) {
-      if (pointcloud_component.attribute_delete(attribute_name) ==
-          AttributeDeleteStatus::Deleted) {
-        attribute = {};
-      }
+  switch (data_type) {
+    case CD_PROP_FLOAT: {
+      FloatWriteAttribute float_attribute = std::move(attribute);
+      const float min_value = params.get_input<float>("Min_001");
+      const float max_value = params.get_input<float>("Max_001");
+      randomize_attribute(float_attribute, min_value, max_value, rng);
+      break;
     }
-    if (!attribute) {
-      BKE_id_attribute_new(&pointcloud->id, attribute_name.c_str(), data_type, domain, nullptr);
-      attribute = pointcloud_component.attribute_get_for_write(attribute_name);
+    case CD_PROP_FLOAT3: {
+      Float3WriteAttribute float3_attribute = std::move(attribute);
+      const float3 min_value = params.get_input<float3>("Min");
+      const float3 max_value = params.get_input<float3>("Max");
+      randomize_attribute(float3_attribute, min_value, max_value, rng);
+      break;
     }
+    default:
+      break;
+  }
+}
 
-    if (attribute) {
-      if (attribute->cpp_type().is<float>()) {
-        FloatWriteAttribute float_attribute = std::move(attribute);
-        randomize_attribute(float_attribute, min_value.x, max_value.x, rng);
-      }
-      else if (attribute->cpp_type().is<float3>()) {
-        Float3WriteAttribute float3_attribute = std::move(attribute);
-        randomize_attribute(float3_attribute, min_value, max_value, rng);
-      }
-    }
+static void geo_random_attribute_exec(GeoNodeExecParams params)
+{
+  GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
+  const int seed = params.get_input<int>("Seed");
+
+  if (geometry_set.has<MeshComponent>()) {
+    RandomNumberGenerator rng;
+    rng.seed_random(seed);
+    randomize_attribute(geometry_set.get_component_for_write<MeshComponent>(), params, rng);
+  }
+  if (geometry_set.has<PointCloudComponent>()) {
+    RandomNumberGenerator rng;
+    rng.seed_random(seed + 3245231);
+    randomize_attribute(geometry_set.get_component_for_write<PointCloudComponent>(), params, rng);
   }
 
   params.set_output("Geometry", geometry_set);
@@ -149,7 +146,8 @@ void register_node_type_geo_random_attribute()
 
   geo_node_type_base(&ntype, GEO_NODE_RANDOM_ATTRIBUTE, "Random Attribute", 0, 0);
   node_type_socket_templates(&ntype, geo_node_random_attribute_in, geo_node_random_attribute_out);
-  node_type_init(&ntype, geo_attribute_random_init);
+  node_type_init(&ntype, geo_node_random_attribute_init);
+  node_type_update(&ntype, geo_node_random_attribute_update);
   ntype.geometry_node_execute = blender::nodes::geo_random_attribute_exec;
   nodeRegisterType(&ntype);
 }

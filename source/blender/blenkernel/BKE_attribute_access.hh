@@ -197,6 +197,7 @@ using Float3ReadAttribute = TypedReadAttribute<float3>;
 using FloatWriteAttribute = TypedWriteAttribute<float>;
 using Float3WriteAttribute = TypedWriteAttribute<float3>;
 
-const CPPType *custom_data_type_to_cpp_type(const int type);
+const CPPType *custom_data_type_to_cpp_type(const CustomDataType type);
+CustomDataType cpp_type_to_custom_data_type(const CPPType &type);
 
 }  // namespace blender::bke

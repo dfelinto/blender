@@ -53,12 +53,6 @@ enum class GeometryOwnershipType {
   ReadOnly = 2,
 };
 
-enum class AttributeDeleteStatus {
-  Deleted,
-  NotFound,
-  CannotBeDeleted,
-};
-
 /* Make it possible to use the component type as key in hash tables. */
 namespace blender {
 template<> struct DefaultHash<GeometryComponentType> {
@@ -88,6 +82,77 @@ class GeometryComponent {
   void user_add();
   void user_remove();
   bool is_mutable() const;
+
+  /* Returns true when the geometry component supports this attribute domain. */
+  virtual bool attribute_domain_supported(const AttributeDomain domain) const;
+  /* Returns true when the given data type is supported in the given domain. */
+  virtual bool attribute_domain_with_type_supported(const AttributeDomain domain,
+                                                    const CustomDataType data_type) const;
+  /* Can only be used with supported domain types. */
+  virtual int attribute_domain_size(const AttributeDomain domain) const;
+  /* Attributes with these names cannot be created or removed via this api. */
+  virtual bool attribute_is_builtin(const blender::StringRef attribute_name) const;
+
+  /* Get read-only access to the highest priority attribute with the given name.
+   * Returns null if the attribute does not exist. */
+  virtual blender::bke::ReadAttributePtr attribute_try_get_for_read(
+      const blender::StringRef attribute_name) const;
+
+  /* Get read and write access to the highest priority attribute with the given name.
+   * Returns null if the attribute does not exist. */
+  virtual blender::bke::WriteAttributePtr attribute_try_get_for_write(
+      const blender::StringRef attribute_name);
+
+  /* Get a read-only attribute for the domain based on the given attribute. This can be used to
+   * interpolate from one domain to another.
+   * Returns null if the interpolation is not implemented. */
+  virtual blender::bke::ReadAttributePtr attribute_try_adapt_domain(
+      blender::bke::ReadAttributePtr attribute, const AttributeDomain domain) const;
+
+  /* Returns true when the attribute has been deleted. */
+  virtual bool attribute_try_delete(const blender::StringRef attribute_name);
+
+  /* Returns true when the attribute has been created. */
+  virtual bool attribute_try_create(const blender::StringRef attribute_name,
+                                    const AttributeDomain domain,
+                                    const CustomDataType data_type);
+
+  /* Get a read-only attribute for the given domain and data type.
+   * Returns null when it does not exist. */
+  blender::bke::ReadAttributePtr attribute_try_get_for_read(
+      const blender::StringRef attribute_name,
+      const AttributeDomain domain,
+      const CustomDataType data_type) const;
+
+  /* Get a read-only attribute for the given domain and data type.
+   * Returns a constant attribute based on the default value if the attribute does not exist.
+   * Never returns null. */
+  blender::bke::ReadAttributePtr attribute_get_for_read(const blender::StringRef attribute_name,
+                                                        const AttributeDomain domain,
+                                                        const CustomDataType data_type,
+                                                        const void *default_value) const;
+
+  /* Get a typed read-only attribute for the given domain and type. */
+  template<typename T>
+  blender::bke::TypedReadAttribute<T> attribute_get_for_read(
+      const blender::StringRef attribute_name,
+      const AttributeDomain domain,
+      const T &default_value) const
+  {
+    const blender::fn::CPPType &cpp_type = blender::fn::CPPType::get<T>();
+    const CustomDataType type = blender::bke::cpp_type_to_custom_data_type(cpp_type);
+    return this->attribute_get_for_read(attribute_name, domain, type, &default_value);
+  }
+
+  /**
+   * Returns the attribute with the given parameters if it exists.
+   * If an exact match does not exist, other attributes with the same name are deleted and a new
+   * attribute is created if possible.
+   */
+  blender::bke::WriteAttributePtr attribute_try_ensure_for_write(
+      const blender::StringRef attribute_name,
+      const AttributeDomain domain,
+      const CustomDataType data_type);
 };
 
 template<typename T>
@@ -119,6 +184,13 @@ struct GeometrySet {
   {
     BLI_STATIC_ASSERT(is_geometry_component_v<Component>, "");
     return static_cast<const Component *>(get_component_for_read(Component::type));
+  }
+
+  bool has(const GeometryComponentType component_type) const;
+  template<typename Component> bool has() const
+  {
+    BLI_STATIC_ASSERT(is_geometry_component_v<Component>, "");
+    return this->has(Component::type);
   }
 
   friend std::ostream &operator<<(std::ostream &stream, const GeometrySet &geometry_set);
@@ -170,27 +242,21 @@ class MeshComponent : public GeometryComponent {
   const Mesh *get_for_read() const;
   Mesh *get_for_write();
 
-  blender::bke::ReadAttributePtr attribute_get_for_read(
-      const blender::StringRef attribute_name) const;
+  bool attribute_domain_supported(const AttributeDomain domain) const final;
+  bool attribute_domain_with_type_supported(const AttributeDomain domain,
+                                            const CustomDataType data_type) const final;
+  int attribute_domain_size(const AttributeDomain domain) const final;
+  bool attribute_is_builtin(const blender::StringRef attribute_name) const final;
 
-  blender::bke::WriteAttributePtr attribute_get_for_write(const blender::StringRef attribute_name);
+  blender::bke::ReadAttributePtr attribute_try_get_for_read(
+      const blender::StringRef attribute_name) const final;
+  blender::bke::WriteAttributePtr attribute_try_get_for_write(
+      const blender::StringRef attribute_name) final;
 
-  blender::bke::ReadAttributePtr attribute_get_for_read(const blender::StringRef attribute_name,
-                                                        const blender::fn::CPPType &cpp_type,
-                                                        const AttributeDomain domain,
-                                                        const void *default_value = nullptr) const;
-
-  template<typename T>
-  blender::bke::TypedReadAttribute<T> attribute_get_for_read(
-      const blender::StringRef attribute_name,
-      const AttributeDomain domain,
-      const T &default_value) const
-  {
-    return this->attribute_get_for_read(
-        attribute_name, blender::fn::CPPType::get<T>(), domain, &default_value);
-  }
-
-  AttributeDeleteStatus attribute_delete(const blender::StringRef attribute_name);
+  bool attribute_try_delete(const blender::StringRef attribute_name) final;
+  bool attribute_try_create(const blender::StringRef attribute_name,
+                            const AttributeDomain domain,
+                            const CustomDataType data_type) final;
 
   static constexpr inline GeometryComponentType type = GeometryComponentType::Mesh;
 };
@@ -214,24 +280,21 @@ class PointCloudComponent : public GeometryComponent {
   const PointCloud *get_for_read() const;
   PointCloud *get_for_write();
 
-  blender::bke::ReadAttributePtr attribute_get_for_read(
-      const blender::StringRef attribute_name) const;
+  bool attribute_domain_supported(const AttributeDomain domain) const final;
+  bool attribute_domain_with_type_supported(const AttributeDomain domain,
+                                            const CustomDataType data_type) const final;
+  int attribute_domain_size(const AttributeDomain domain) const final;
+  bool attribute_is_builtin(const blender::StringRef attribute_name) const final;
 
-  blender::bke::WriteAttributePtr attribute_get_for_write(const blender::StringRef attribute_name);
+  blender::bke::ReadAttributePtr attribute_try_get_for_read(
+      const blender::StringRef attribute_name) const final;
+  blender::bke::WriteAttributePtr attribute_try_get_for_write(
+      const blender::StringRef attribute_name) final;
 
-  blender::bke::ReadAttributePtr attribute_get_for_read(const blender::StringRef attribute_name,
-                                                        const blender::fn::CPPType &cpp_type,
-                                                        const void *default_value) const;
-
-  template<typename T>
-  blender::bke::TypedReadAttribute<T> attribute_get_for_read(
-      const blender::StringRef attribute_name, const T &default_value) const
-  {
-    return this->attribute_get_for_read(
-        attribute_name, blender::fn::CPPType::get<T>(), &default_value);
-  }
-
-  AttributeDeleteStatus attribute_delete(const blender::StringRef attribute_name);
+  bool attribute_try_delete(const blender::StringRef attribute_name) final;
+  bool attribute_try_create(const blender::StringRef attribute_name,
+                            const AttributeDomain domain,
+                            const CustomDataType data_type) final;
 
   static constexpr inline GeometryComponentType type = GeometryComponentType::PointCloud;
 };
