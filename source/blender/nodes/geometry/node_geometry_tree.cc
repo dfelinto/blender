@@ -42,19 +42,19 @@ static void geometry_node_tree_get_from_context(const bContext *C,
   ViewLayer *view_layer = CTX_data_view_layer(C);
   Object *ob = OBACT(view_layer);
 
-  if (ob == NULL) {
+  if (ob == nullptr) {
     return;
   }
 
   const ModifierData *md = BKE_object_active_modifier(ob);
 
-  if (md == NULL) {
+  if (md == nullptr) {
     return;
   }
 
   if (md->type == eModifierType_Nodes) {
     NodesModifierData *nmd = (NodesModifierData *)md;
-    if (nmd->node_group != NULL) {
+    if (nmd->node_group != nullptr) {
       *r_from = &ob->id;
       *r_id = &ob->id;
       // *r_id = &nmd->node_group->id;
