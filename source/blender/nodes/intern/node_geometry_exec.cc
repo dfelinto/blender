@@ -19,7 +19,8 @@
 
 namespace blender::nodes {
 
-void GeoNodeExecParams::check_extract_input(StringRef identifier, const CPPType *requested_type)
+void GeoNodeExecParams::check_extract_input(StringRef identifier,
+                                            const CPPType *requested_type) const
 {
   bNodeSocket *found_socket = nullptr;
   LISTBASE_FOREACH (bNodeSocket *, socket, &node_.inputs) {
@@ -60,7 +61,7 @@ void GeoNodeExecParams::check_extract_input(StringRef identifier, const CPPType 
   }
 }
 
-void GeoNodeExecParams::check_set_output(StringRef identifier, const CPPType &value_type)
+void GeoNodeExecParams::check_set_output(StringRef identifier, const CPPType &value_type) const
 {
   bNodeSocket *found_socket = nullptr;
   LISTBASE_FOREACH (bNodeSocket *, socket, &node_.outputs) {

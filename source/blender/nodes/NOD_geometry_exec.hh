@@ -90,6 +90,20 @@ class GeoNodeExecParams {
   }
 
   /**
+   * Get the input value for the input socket with the given identifier.
+   *
+   * This makes a copy of the value, which is fine for most types but should be avoided for
+   * geometry sets.
+   */
+  template<typename T> T get_input(StringRef identifier) const
+  {
+#ifdef DEBUG
+    this->check_extract_input(identifier, &CPPType::get<T>());
+#endif
+    return input_values_.lookup<T>(identifier);
+  }
+
+  /**
    * Move-construct a new value based on the given value and store it for the given socket
    * identifier.
    */
@@ -133,8 +147,8 @@ class GeoNodeExecParams {
   }
 
  private:
-  void check_extract_input(StringRef identifier, const CPPType *requested_type = nullptr);
-  void check_set_output(StringRef identifier, const CPPType &value_type);
+  void check_extract_input(StringRef identifier, const CPPType *requested_type = nullptr) const;
+  void check_set_output(StringRef identifier, const CPPType &value_type) const;
 };
 
 }  // namespace blender::nodes
