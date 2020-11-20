@@ -109,17 +109,28 @@ static void geo_boolean_exec(GeoNodeExecParams params)
   GeometrySet geometry_set_in_b = params.extract_input<GeometrySet>("Geometry B");
   GeometrySet geometry_set_out;
 
-  const Mesh *mesh_in_a = geometry_set_in_a.get_mesh_for_read();
-  const Mesh *mesh_in_b = geometry_set_in_b.get_mesh_for_read();
-  if (mesh_in_a == nullptr || mesh_in_b == nullptr) {
-    params.set_output("Geometry", std::move(geometry_set_out));
-    return;
-  }
-
   GeometryNodeBooleanOperation operation = (GeometryNodeBooleanOperation)params.node().custom1;
   if (operation < 0 || operation > 2) {
     BLI_assert(false);
     params.set_output("Geometry", std::move(geometry_set_out));
+    return;
+  }
+
+  const Mesh *mesh_in_a = geometry_set_in_a.get_mesh_for_read();
+  const Mesh *mesh_in_b = geometry_set_in_b.get_mesh_for_read();
+
+  if (mesh_in_a == nullptr || mesh_in_b == nullptr) {
+    if (operation == GEO_NODE_BOOLEAN_UNION) {
+      if (mesh_in_a != nullptr) {
+        params.set_output("Geometry", geometry_set_in_a);
+      }
+      else {
+        params.set_output("Geometry", geometry_set_in_b);
+      }
+    }
+    else {
+      params.set_output("Geometry", geometry_set_in_a);
+    }
     return;
   }
 
