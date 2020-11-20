@@ -29,6 +29,13 @@
 #include "BLI_float2.hh"
 #include "BLI_span.hh"
 
+#include "NOD_node_tree_multi_function.hh"
+
+using blender::float3;
+using blender::StringRef;
+using blender::bke::ReadAttributePtr;
+using blender::bke::WriteAttributePtr;
+
 namespace blender::bke {
 
 /* -------------------------------------------------------------------- */
@@ -217,6 +224,38 @@ class ConstantReadAttribute final : public ReadAttribute {
   }
 };
 
+class ConvertedReadAttribute final : public ReadAttribute {
+ private:
+  const CPPType &from_type_;
+  const CPPType &to_type_;
+  ReadAttributePtr base_attribute_;
+  const nodes::DataTypeConversions &conversions_;
+
+  static constexpr int MaxValueSize = 64;
+  static constexpr int MaxValueAlignment = 64;
+
+ public:
+  ConvertedReadAttribute(ReadAttributePtr base_attribute, const CPPType &to_type)
+      : ReadAttribute(base_attribute->domain(), to_type, base_attribute->size()),
+        from_type_(base_attribute->cpp_type()),
+        to_type_(to_type),
+        base_attribute_(std::move(base_attribute)),
+        conversions_(nodes::get_implicit_type_conversions())
+  {
+    if (from_type_.size() > MaxValueSize || from_type_.alignment() > MaxValueAlignment) {
+      throw std::runtime_error(
+          "type is larger than expected, the buffer size has to be increased");
+    }
+  }
+
+  void get_internal(const int64_t index, void *r_value) const override
+  {
+    AlignedBuffer<MaxValueSize, MaxValueAlignment> buffer;
+    base_attribute_->get(index, buffer.ptr());
+    conversions_.convert(from_type_, to_type_, buffer.ptr(), r_value);
+  }
+};
+
 /** \} */
 
 const blender::fn::CPPType *custom_data_type_to_cpp_type(const CustomDataType type)
@@ -263,11 +302,6 @@ CustomDataType cpp_type_to_custom_data_type(const blender::fn::CPPType &type)
 /* -------------------------------------------------------------------- */
 /** \name Utilities for accessing attributes.
  * \{ */
-
-using blender::float3;
-using blender::StringRef;
-using blender::bke::ReadAttributePtr;
-using blender::bke::WriteAttributePtr;
 
 static ReadAttributePtr read_attribute_from_custom_data(const CustomData &custom_data,
                                                         const int size,
@@ -407,6 +441,23 @@ bool GeometryComponent::attribute_try_create(const StringRef UNUSED(attribute_na
   return false;
 }
 
+static ReadAttributePtr try_adapt_data_type(ReadAttributePtr attribute,
+                                            const blender::fn::CPPType &to_type)
+{
+  const blender::fn::CPPType &from_type = attribute->cpp_type();
+  if (from_type == to_type) {
+    return attribute;
+  }
+
+  const blender::nodes::DataTypeConversions &conversions =
+      blender::nodes::get_implicit_type_conversions();
+  if (!conversions.is_convertible(from_type, to_type)) {
+    return {};
+  }
+
+  return std::make_unique<blender::bke::ConvertedReadAttribute>(std::move(attribute), to_type);
+}
+
 ReadAttributePtr GeometryComponent::attribute_try_get_for_read(
     const StringRef attribute_name,
     const AttributeDomain domain,
@@ -431,8 +482,10 @@ ReadAttributePtr GeometryComponent::attribute_try_get_for_read(
   const blender::fn::CPPType *cpp_type = blender::bke::custom_data_type_to_cpp_type(data_type);
   BLI_assert(cpp_type != nullptr);
   if (attribute->cpp_type() != *cpp_type) {
-    /* TODO: Support some type conversions. */
-    return {};
+    attribute = try_adapt_data_type(std::move(attribute), *cpp_type);
+    if (!attribute) {
+      return {};
+    }
   }
 
   return attribute;
