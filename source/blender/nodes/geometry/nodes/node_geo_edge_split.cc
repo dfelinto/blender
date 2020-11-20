@@ -27,6 +27,7 @@ Mesh *doEdgeSplit(const Mesh *mesh, EdgeSplitModifierData *emd);
 
 static bNodeSocketTemplate geo_node_edge_split_in[] = {
     {SOCK_GEOMETRY, N_("Geometry")},
+    {SOCK_BOOLEAN, N_("Edge Angle"), true},
     {SOCK_FLOAT,
      N_("Angle"),
      DEG2RADF(30.0f),
@@ -55,16 +56,24 @@ static void geo_edge_split_exec(GeoNodeExecParams params)
     return;
   }
 
-  const float split_angle = params.extract_input<float>("Angle");
   const bool use_sharp_flag = params.extract_input<bool>("Sharp Edges");
+  const bool use_edge_angle = params.extract_input<bool>("Edge Angle");
 
+  if (!use_edge_angle && !use_sharp_flag) {
+    params.set_output("Geometry", std::move(geometry_set));
+    return;
+  }
+
+  const float split_angle = params.extract_input<float>("Angle");
   const Mesh *mesh_in = geometry_set.get_mesh_for_read();
 
   /* Use modifier struct to pass arguments to the modifier code. */
   EdgeSplitModifierData emd;
   memset(&emd, 0, sizeof(EdgeSplitModifierData));
   emd.split_angle = split_angle;
-  emd.flags = MOD_EDGESPLIT_FROMANGLE;
+  if (use_edge_angle) {
+    emd.flags = MOD_EDGESPLIT_FROMANGLE;
+  }
   if (use_sharp_flag) {
     emd.flags |= MOD_EDGESPLIT_FROMFLAG;
   }
