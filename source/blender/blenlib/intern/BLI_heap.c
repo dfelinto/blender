@@ -183,8 +183,8 @@ static struct HeapNode *heap_node_alloc(Heap *heap)
 
 static void heap_node_free(Heap *heap, HeapNode *node)
 {
-  node->ptr = heap->nodes.free;
-  heap->nodes.free = node;
+  // node->ptr = heap->nodes.free;
+  // heap->nodes.free = node;
 }
 
 /** \} */
@@ -330,6 +330,16 @@ float BLI_heap_top_value(const Heap *heap)
   BLI_assert(heap->size != 0);
 
   return heap->tree[0]->value;
+}
+
+/**
+ * Return the heap node at idx.
+ */
+HeapNode *BLI_heap_idx(const Heap *heap, unsigned int idx)
+{
+  BLI_assert(idx < heap->size);
+
+  return heap->tree[idx];
 }
 
 /**

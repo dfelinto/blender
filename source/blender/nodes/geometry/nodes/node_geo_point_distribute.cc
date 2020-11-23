@@ -29,11 +29,14 @@
 #include "BKE_mesh_runtime.h"
 #include "BKE_pointcloud.h"
 
+#include "cySampleElim.hh"
 #include "node_geometry_util.hh"
 
 static bNodeSocketTemplate geo_node_point_distribute_in[] = {
     {SOCK_GEOMETRY, N_("Geometry")},
-    {SOCK_FLOAT, N_("Density"), 10.0f, 0.0f, 0.0f, 0.0f, 0.0f, 100000.0f, PROP_NONE},
+    {SOCK_FLOAT, N_("Maximum Density"), 10.0f, 0.0f, 0.0f, 0.0f, 0.0f, 100000.0f, PROP_NONE},
+    {SOCK_FLOAT, N_("Minimum Distance"), 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 100000.0f, PROP_NONE},
+    {SOCK_BOOLEAN, N_("Use Point Culling")},
     {SOCK_STRING, N_("Density Attribute")},
     {-1, ""},
 };
@@ -47,7 +50,8 @@ namespace blender::nodes {
 
 static Vector<float3> scatter_points_from_mesh(const Mesh *mesh,
                                                const float density,
-                                               const FloatReadAttribute &density_factors)
+                                               const FloatReadAttribute &density_factors,
+                                               float &total_mesh_area)
 {
   /* This only updates a cache and can be considered to be logically const. */
   const MLoopTri *looptris = BKE_mesh_runtime_looptri_ensure(const_cast<Mesh *>(mesh));
@@ -70,6 +74,7 @@ static Vector<float3> scatter_points_from_mesh(const Mesh *mesh,
                                           v2_density_factor) /
                                          3.0f;
     const float area = area_tri_v3(v0_pos, v1_pos, v2_pos);
+    total_mesh_area += area;
 
     const int looptri_seed = BLI_hash_int(looptri_index);
     RandomNumberGenerator looptri_rng(looptri_seed);
@@ -100,7 +105,9 @@ static void geo_node_point_distribute_exec(GeoNodeExecParams params)
     return;
   }
 
-  const float density = params.extract_input<float>("Density");
+  const float density = params.extract_input<float>("Maximum Density");
+  const float min_dist = params.extract_input<float>("Minimum Distance");
+  const bool use_point_cull = params.extract_input<bool>("Use Point Culling");
   const std::string density_attribute = params.extract_input<std::string>("Density Attribute");
 
   if (density <= 0.0f) {
@@ -114,7 +121,28 @@ static void geo_node_point_distribute_exec(GeoNodeExecParams params)
   const FloatReadAttribute density_factors = mesh_component.attribute_get_for_read<float>(
       density_attribute, ATTR_DOMAIN_POINT, 1.0f);
 
-  Vector<float3> points = scatter_points_from_mesh(mesh_in, density, density_factors);
+  float total_mesh_area = 0.0f;
+  Vector<float3> points = scatter_points_from_mesh(
+      mesh_in, density, density_factors, total_mesh_area);
+
+  if (use_point_cull) {
+    cy::WeightedSampleElimination<float3, float, 3, size_t> wse;
+    Vector<float3> output_points(points.size());
+    bool is_progressive = false;
+
+    float d_max = 2 * min_dist;
+    int num_points = wse.Eliminate_all(points.data(),
+                                       points.size(),
+                                       output_points.data(),
+                                       output_points.size(),
+                                       is_progressive,
+                                       d_max,
+                                       2);
+
+    output_points.resize(num_points);
+
+    points = output_points;
+  }
 
   PointCloud *pointcloud = BKE_pointcloud_new_nomain(points.size());
   memcpy(pointcloud->co, points.data(), sizeof(float3) * points.size());
