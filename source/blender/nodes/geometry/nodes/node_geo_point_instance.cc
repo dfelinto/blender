@@ -73,7 +73,7 @@ static void add_instances_from_geometry_component(InstancesComponent &instances,
   }
 }
 
-static void geo_point_instance_exec(GeoNodeExecParams params)
+static void geo_node_point_instance_exec(GeoNodeExecParams params)
 {
   GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
 
@@ -106,6 +106,6 @@ void register_node_type_geo_point_instance()
   geo_node_type_base(&ntype, GEO_NODE_POINT_INSTANCE, "Point Instance", 0, 0);
   node_type_socket_templates(&ntype, geo_node_point_instance_in, geo_node_point_instance_out);
   node_type_init(&ntype, blender::nodes::geo_node_point_instance_init);
-  ntype.geometry_node_execute = blender::nodes::geo_point_instance_exec;
+  ntype.geometry_node_execute = blender::nodes::geo_node_point_instance_exec;
   nodeRegisterType(&ntype);
 }

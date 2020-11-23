@@ -107,7 +107,7 @@ static void transform_instances(InstancesComponent &instances,
   }
 }
 
-static void geo_transform_exec(GeoNodeExecParams params)
+static void geo_node_transform_exec(GeoNodeExecParams params)
 {
   GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
   const float3 translation = params.extract_input<float3>("Translation");
@@ -139,6 +139,6 @@ void register_node_type_geo_transform()
 
   geo_node_type_base(&ntype, GEO_NODE_TRANSFORM, "Transform", 0, 0);
   node_type_socket_templates(&ntype, geo_node_transform_in, geo_node_transform_out);
-  ntype.geometry_node_execute = blender::nodes::geo_transform_exec;
+  ntype.geometry_node_execute = blender::nodes::geo_node_transform_exec;
   nodeRegisterType(&ntype);
 }

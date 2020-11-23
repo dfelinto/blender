@@ -36,7 +36,7 @@ static bNodeSocketTemplate geo_node_object_info_out[] = {
 };
 
 namespace blender::nodes {
-static void geo_object_info_exec(GeoNodeExecParams params)
+static void geo_node_object_info_exec(GeoNodeExecParams params)
 {
   bke::PersistentObjectHandle object_handle = params.extract_input<bke::PersistentObjectHandle>(
       "Object");
@@ -89,6 +89,6 @@ void register_node_type_geo_object_info()
 
   geo_node_type_base(&ntype, GEO_NODE_OBJECT_INFO, "Object Info", 0, 0);
   node_type_socket_templates(&ntype, geo_node_object_info_in, geo_node_object_info_out);
-  ntype.geometry_node_execute = blender::nodes::geo_object_info_exec;
+  ntype.geometry_node_execute = blender::nodes::geo_node_object_info_exec;
   nodeRegisterType(&ntype);
 }

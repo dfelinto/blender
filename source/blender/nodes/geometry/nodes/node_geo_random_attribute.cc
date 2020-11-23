@@ -119,7 +119,7 @@ static void randomize_attribute(GeometryComponent &component,
   }
 }
 
-static void geo_random_attribute_exec(GeoNodeExecParams params)
+static void geo_node_random_attribute_exec(GeoNodeExecParams params)
 {
   GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
   const int seed = params.get_input<int>("Seed");
@@ -148,6 +148,6 @@ void register_node_type_geo_random_attribute()
   node_type_socket_templates(&ntype, geo_node_random_attribute_in, geo_node_random_attribute_out);
   node_type_init(&ntype, geo_node_random_attribute_init);
   node_type_update(&ntype, geo_node_random_attribute_update);
-  ntype.geometry_node_execute = blender::nodes::geo_random_attribute_exec;
+  ntype.geometry_node_execute = blender::nodes::geo_node_random_attribute_exec;
   nodeRegisterType(&ntype);
 }

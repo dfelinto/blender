@@ -43,7 +43,7 @@ static void attribute_math_calc(GeometryComponent &component, const GeoNodeExecP
   UNUSED_VARS(component, params);
 }
 
-static void geo_attribute_math_exec(GeoNodeExecParams params)
+static void geo_node_attribute_math_exec(GeoNodeExecParams params)
 {
   GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
 
@@ -65,6 +65,6 @@ void register_node_type_geo_attribute_math()
 
   geo_node_type_base(&ntype, GEO_NODE_ATTRIBUTE_MATH, "Attribute Math", 0, 0);
   node_type_socket_templates(&ntype, geo_node_attribute_math_in, geo_node_attribute_math_out);
-  ntype.geometry_node_execute = blender::nodes::geo_attribute_math_exec;
+  ntype.geometry_node_execute = blender::nodes::geo_node_attribute_math_exec;
   nodeRegisterType(&ntype);
 }

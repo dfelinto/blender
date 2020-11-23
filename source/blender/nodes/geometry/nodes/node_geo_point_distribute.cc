@@ -90,7 +90,7 @@ static Vector<float3> scatter_points_from_mesh(const Mesh *mesh,
   return points;
 }
 
-static void geo_point_distribute_exec(GeoNodeExecParams params)
+static void geo_node_point_distribute_exec(GeoNodeExecParams params)
 {
   GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
 
@@ -137,6 +137,6 @@ void register_node_type_geo_point_distribute()
 
   geo_node_type_base(&ntype, GEO_NODE_POINT_DISTRIBUTE, "Point Distribute", 0, 0);
   node_type_socket_templates(&ntype, geo_node_point_distribute_in, geo_node_point_distribute_out);
-  ntype.geometry_node_execute = blender::nodes::geo_point_distribute_exec;
+  ntype.geometry_node_execute = blender::nodes::geo_node_point_distribute_exec;
   nodeRegisterType(&ntype);
 }

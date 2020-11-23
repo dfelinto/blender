@@ -103,7 +103,7 @@ static Mesh *mesh_boolean_calc(const Mesh *mesh_a, const Mesh *mesh_b, int boole
 }
 
 namespace blender::nodes {
-static void geo_boolean_exec(GeoNodeExecParams params)
+static void geo_node_boolean_exec(GeoNodeExecParams params)
 {
   GeometrySet geometry_set_in_a = params.extract_input<GeometrySet>("Geometry A");
   GeometrySet geometry_set_in_b = params.extract_input<GeometrySet>("Geometry B");
@@ -147,6 +147,6 @@ void register_node_type_geo_boolean()
 
   geo_node_type_base(&ntype, GEO_NODE_BOOLEAN, "Boolean", 0, 0);
   node_type_socket_templates(&ntype, geo_node_boolean_in, geo_node_boolean_out);
-  ntype.geometry_node_execute = blender::nodes::geo_boolean_exec;
+  ntype.geometry_node_execute = blender::nodes::geo_node_boolean_exec;
   nodeRegisterType(&ntype);
 }

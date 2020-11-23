@@ -46,7 +46,7 @@ static void geo_triangulate_init(bNodeTree *UNUSED(ntree), bNode *node)
 }
 
 namespace blender::nodes {
-static void geo_triangulate_exec(GeoNodeExecParams params)
+static void geo_node_triangulate_exec(GeoNodeExecParams params)
 {
   GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
   const int min_vertices = std::max(params.extract_input<int>("Minimum Vertices"), 4);
@@ -74,6 +74,6 @@ void register_node_type_geo_triangulate()
   geo_node_type_base(&ntype, GEO_NODE_TRIANGULATE, "Triangulate", 0, 0);
   node_type_socket_templates(&ntype, geo_node_triangulate_in, geo_node_triangulate_out);
   node_type_init(&ntype, geo_triangulate_init);
-  ntype.geometry_node_execute = blender::nodes::geo_triangulate_exec;
+  ntype.geometry_node_execute = blender::nodes::geo_node_triangulate_exec;
   nodeRegisterType(&ntype);
 }
