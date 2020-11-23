@@ -26,6 +26,7 @@
 #include "BLI_float3.hh"
 #include "BLI_hash.hh"
 #include "BLI_map.hh"
+#include "BLI_set.hh"
 #include "BLI_user_counter.hh"
 
 #include "BKE_attribute_access.hh"
@@ -70,18 +71,22 @@ class GeometryComponent {
  private:
   /* The reference count has two purposes. When it becomes zero, the component is freed. When it is
    * larger than one, the component becomes immutable. */
-  std::atomic<int> users_ = 1;
+  mutable std::atomic<int> users_ = 1;
+  GeometryComponentType type_;
 
  public:
+  GeometryComponent(GeometryComponentType type);
   virtual ~GeometryComponent();
   static GeometryComponent *create(GeometryComponentType component_type);
 
   /* The returned component should be of the same type as the type this is called on. */
   virtual GeometryComponent *copy() const = 0;
 
-  void user_add();
-  void user_remove();
+  void user_add() const;
+  void user_remove() const;
   bool is_mutable() const;
+
+  GeometryComponentType type() const;
 
   /* Returns true when the geometry component supports this attribute domain. */
   virtual bool attribute_domain_supported(const AttributeDomain domain) const;
@@ -116,6 +121,9 @@ class GeometryComponent {
   virtual bool attribute_try_create(const blender::StringRef attribute_name,
                                     const AttributeDomain domain,
                                     const CustomDataType data_type);
+
+  virtual blender::Set<std::string> attribute_names() const;
+  virtual bool is_empty() const;
 
   /* Get a read-only attribute for the given domain and data type.
    * Returns null when it does not exist. */
@@ -176,29 +184,31 @@ struct GeometrySet {
   template<typename Component> Component &get_component_for_write()
   {
     BLI_STATIC_ASSERT(is_geometry_component_v<Component>, "");
-    return static_cast<Component &>(this->get_component_for_write(Component::type));
+    return static_cast<Component &>(this->get_component_for_write(Component::static_type));
   }
 
   const GeometryComponent *get_component_for_read(GeometryComponentType component_type) const;
   template<typename Component> const Component *get_component_for_read() const
   {
     BLI_STATIC_ASSERT(is_geometry_component_v<Component>, "");
-    return static_cast<const Component *>(get_component_for_read(Component::type));
+    return static_cast<const Component *>(get_component_for_read(Component::static_type));
   }
 
   bool has(const GeometryComponentType component_type) const;
   template<typename Component> bool has() const
   {
     BLI_STATIC_ASSERT(is_geometry_component_v<Component>, "");
-    return this->has(Component::type);
+    return this->has(Component::static_type);
   }
 
   void remove(const GeometryComponentType component_type);
   template<typename Component> void remove()
   {
     BLI_STATIC_ASSERT(is_geometry_component_v<Component>, "");
-    return this->remove(Component::type);
+    return this->remove(Component::static_type);
   }
+
+  void add(const GeometryComponent &component);
 
   friend std::ostream &operator<<(std::ostream &stream, const GeometrySet &geometry_set);
   friend bool operator==(const GeometrySet &a, const GeometrySet &b);
@@ -236,6 +246,7 @@ class MeshComponent : public GeometryComponent {
   blender::Map<std::string, int> vertex_group_names_;
 
  public:
+  MeshComponent();
   ~MeshComponent();
   GeometryComponent *copy() const override;
 
@@ -265,7 +276,10 @@ class MeshComponent : public GeometryComponent {
                             const AttributeDomain domain,
                             const CustomDataType data_type) final;
 
-  static constexpr inline GeometryComponentType type = GeometryComponentType::Mesh;
+  blender::Set<std::string> attribute_names() const final;
+  bool is_empty() const final;
+
+  static constexpr inline GeometryComponentType static_type = GeometryComponentType::Mesh;
 };
 
 /** A geometry component that stores a point cloud. */
@@ -275,6 +289,7 @@ class PointCloudComponent : public GeometryComponent {
   GeometryOwnershipType ownership_ = GeometryOwnershipType::Owned;
 
  public:
+  PointCloudComponent();
   ~PointCloudComponent();
   GeometryComponent *copy() const override;
 
@@ -303,7 +318,10 @@ class PointCloudComponent : public GeometryComponent {
                             const AttributeDomain domain,
                             const CustomDataType data_type) final;
 
-  static constexpr inline GeometryComponentType type = GeometryComponentType::PointCloud;
+  blender::Set<std::string> attribute_names() const final;
+  bool is_empty() const final;
+
+  static constexpr inline GeometryComponentType static_type = GeometryComponentType::PointCloud;
 };
 
 /** A geometry component that stores instances. */
@@ -315,6 +333,7 @@ class InstancesComponent : public GeometryComponent {
   blender::Vector<const Object *> objects_;
 
  public:
+  InstancesComponent();
   ~InstancesComponent() = default;
   GeometryComponent *copy() const override;
 
@@ -331,5 +350,7 @@ class InstancesComponent : public GeometryComponent {
   blender::MutableSpan<blender::float3> positions();
   int instances_amount() const;
 
-  static constexpr inline GeometryComponentType type = GeometryComponentType::Instances;
+  bool is_empty() const final;
+
+  static constexpr inline GeometryComponentType static_type = GeometryComponentType::Instances;
 };

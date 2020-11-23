@@ -34,6 +34,7 @@
 #include "NOD_node_tree_multi_function.hh"
 
 using blender::float3;
+using blender::Set;
 using blender::StringRef;
 using blender::bke::ReadAttributePtr;
 using blender::bke::WriteAttributePtr;
@@ -392,6 +393,19 @@ static bool delete_named_custom_data_layer(CustomData &custom_data,
   return false;
 }
 
+static void get_custom_data_layer_attribute_names(const CustomData &custom_data,
+                                                  const GeometryComponent &component,
+                                                  const AttributeDomain domain,
+                                                  Set<std::string> &r_names)
+{
+  for (const CustomDataLayer &layer : blender::Span(custom_data.layers, custom_data.totlayer)) {
+    if (component.attribute_domain_with_type_supported(domain,
+                                                       static_cast<CustomDataType>(layer.type))) {
+      r_names.add(layer.name);
+    }
+  }
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -451,6 +465,11 @@ bool GeometryComponent::attribute_try_create(const StringRef UNUSED(attribute_na
                                              const CustomDataType UNUSED(data_type))
 {
   return false;
+}
+
+Set<std::string> GeometryComponent::attribute_names() const
+{
+  return {};
 }
 
 static ReadAttributePtr try_adapt_data_type(ReadAttributePtr attribute,
@@ -517,6 +536,9 @@ ReadAttributePtr GeometryComponent::attribute_get_for_read(const StringRef attri
 
   const blender::fn::CPPType *cpp_type = blender::bke::custom_data_type_to_cpp_type(data_type);
   BLI_assert(cpp_type != nullptr);
+  if (default_value == nullptr) {
+    default_value = cpp_type->default_value();
+  }
   const int domain_size = this->attribute_domain_size(domain);
   return std::make_unique<blender::bke::ConstantReadAttribute>(
       domain, domain_size, *cpp_type, default_value);
@@ -655,6 +677,17 @@ bool PointCloudComponent::attribute_try_create(const StringRef attribute_name,
   CustomData_add_layer_named(
       &pointcloud->pdata, data_type, CD_DEFAULT, nullptr, pointcloud_->totpoint, attribute_name_c);
   return true;
+}
+
+Set<std::string> PointCloudComponent::attribute_names() const
+{
+  if (pointcloud_ == nullptr) {
+    return {};
+  }
+
+  Set<std::string> names;
+  get_custom_data_layer_attribute_names(pointcloud_->pdata, *this, ATTR_DOMAIN_POINT, names);
+  return names;
 }
 
 /** \} */
@@ -897,6 +930,24 @@ bool MeshComponent::attribute_try_create(const StringRef attribute_name,
     default:
       return false;
   }
+}
+
+Set<std::string> MeshComponent::attribute_names() const
+{
+  if (mesh_ == nullptr) {
+    return {};
+  }
+
+  Set<std::string> names;
+  names.add("Position");
+  for (StringRef name : vertex_group_names_.keys()) {
+    names.add(name);
+  }
+  get_custom_data_layer_attribute_names(mesh_->pdata, *this, ATTR_DOMAIN_CORNER, names);
+  get_custom_data_layer_attribute_names(mesh_->vdata, *this, ATTR_DOMAIN_POINT, names);
+  get_custom_data_layer_attribute_names(mesh_->edata, *this, ATTR_DOMAIN_EDGE, names);
+  get_custom_data_layer_attribute_names(mesh_->pdata, *this, ATTR_DOMAIN_POLYGON, names);
+  return names;
 }
 
 /** \} */

@@ -33,6 +33,10 @@ using blender::Vector;
 /** \name Geometry Component
  * \{ */
 
+GeometryComponent::GeometryComponent(GeometryComponentType type) : type_(type)
+{
+}
+
 GeometryComponent ::~GeometryComponent()
 {
 }
@@ -51,12 +55,12 @@ GeometryComponent *GeometryComponent::create(GeometryComponentType component_typ
   return nullptr;
 }
 
-void GeometryComponent::user_add()
+void GeometryComponent::user_add() const
 {
   users_.fetch_add(1);
 }
 
-void GeometryComponent::user_remove()
+void GeometryComponent::user_remove() const
 {
   const int new_users = users_.fetch_sub(1) - 1;
   if (new_users == 0) {
@@ -69,6 +73,16 @@ bool GeometryComponent::is_mutable() const
   /* If the item is shared, it is read-only. */
   /* The user count can be 0, when this is called from the destructor. */
   return users_ <= 1;
+}
+
+GeometryComponentType GeometryComponent::type() const
+{
+  return type_;
+}
+
+bool GeometryComponent::is_empty() const
+{
+  return false;
 }
 
 /** \} */
@@ -122,6 +136,14 @@ bool GeometrySet::has(const GeometryComponentType component_type) const
 void GeometrySet::remove(const GeometryComponentType component_type)
 {
   components_.remove(component_type);
+}
+
+void GeometrySet::add(const GeometryComponent &component)
+{
+  BLI_assert(!components_.contains(component.type()));
+  component.user_add();
+  GeometryComponentPtr component_ptr{const_cast<GeometryComponent *>(&component)};
+  components_.add_new(component.type(), std::move(component_ptr));
 }
 
 std::ostream &operator<<(std::ostream &stream, const GeometrySet &geometry_set)
@@ -233,6 +255,10 @@ PointCloud *GeometrySet::get_pointcloud_for_write()
 /** \name Mesh Component
  * \{ */
 
+MeshComponent::MeshComponent() : GeometryComponent(GeometryComponentType::Mesh)
+{
+}
+
 MeshComponent::~MeshComponent()
 {
   this->clear();
@@ -314,11 +340,20 @@ Mesh *MeshComponent::get_for_write()
   return mesh_;
 }
 
+bool MeshComponent::is_empty() const
+{
+  return mesh_ == nullptr;
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Pointcloud Component
  * \{ */
+
+PointCloudComponent::PointCloudComponent() : GeometryComponent(GeometryComponentType::PointCloud)
+{
+}
 
 PointCloudComponent::~PointCloudComponent()
 {
@@ -391,16 +426,27 @@ PointCloud *PointCloudComponent::get_for_write()
   return pointcloud_;
 }
 
+bool PointCloudComponent::is_empty() const
+{
+  return pointcloud_ == nullptr;
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Instances Component
  * \{ */
 
+InstancesComponent::InstancesComponent() : GeometryComponent(GeometryComponentType::Instances)
+{
+}
+
 GeometryComponent *InstancesComponent::copy() const
 {
   InstancesComponent *new_component = new InstancesComponent();
   new_component->positions_ = positions_;
+  new_component->rotations_ = rotations_;
+  new_component->scales_ = scales_;
   new_component->objects_ = objects_;
   return new_component;
 }
@@ -452,6 +498,11 @@ int InstancesComponent::instances_amount() const
 {
   BLI_assert(positions_.size() == objects_.size());
   return objects_.size();
+}
+
+bool InstancesComponent::is_empty() const
+{
+  return positions_.size() == 0;
 }
 
 /** \} */
