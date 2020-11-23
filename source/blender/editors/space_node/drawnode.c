@@ -3176,6 +3176,8 @@ static void node_geometry_buts_attribute_math(uiLayout *layout,
                                               PointerRNA *ptr)
 {
   uiItemR(layout, ptr, "operation", DEFAULT_FLAGS, "", ICON_NONE);
+  uiItemR(layout, ptr, "input_type_a", DEFAULT_FLAGS, IFACE_("Type A"), ICON_NONE);
+  uiItemR(layout, ptr, "input_type_b", DEFAULT_FLAGS, IFACE_("Type B"), ICON_NONE);
 }
 
 static void node_geometry_set_butfunc(bNodeType *ntype)

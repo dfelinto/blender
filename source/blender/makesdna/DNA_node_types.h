@@ -1459,6 +1459,11 @@ typedef enum GeometryNodeTriangulateQuads {
   GEO_NODE_TRIANGULATE_QUAD_SHORTEDGE = 3,
 } GeometryNodeTriangulateQuads;
 
+typedef enum GeometryNodeUseAttributeFlag {
+  GEO_NODE_USE_ATTRIBUTE_A = (1 << 0),
+  GEO_NODE_USE_ATTRIBUTE_B = (1 << 1),
+} GeometryNodeUseAttributeFlag;
+
 #ifdef __cplusplus
 }
 #endif
