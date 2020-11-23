@@ -3171,6 +3171,13 @@ static void node_geometry_buts_random_attribute(uiLayout *layout,
   uiItemR(layout, ptr, "domain", DEFAULT_FLAGS, "", ICON_NONE);
 }
 
+static void node_geometry_buts_attribute_math(uiLayout *layout,
+                                              bContext *UNUSED(C),
+                                              PointerRNA *ptr)
+{
+  uiItemR(layout, ptr, "operation", DEFAULT_FLAGS, "", ICON_NONE);
+}
+
 static void node_geometry_set_butfunc(bNodeType *ntype)
 {
   switch (ntype->type) {
@@ -3185,6 +3192,9 @@ static void node_geometry_set_butfunc(bNodeType *ntype)
       break;
     case GEO_NODE_RANDOM_ATTRIBUTE:
       ntype->draw_buttons = node_geometry_buts_random_attribute;
+      break;
+    case GEO_NODE_ATTRIBUTE_MATH:
+      ntype->draw_buttons = node_geometry_buts_attribute_math;
       break;
   }
 }

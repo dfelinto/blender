@@ -1858,15 +1858,16 @@ static StructRNA *rna_Node_register(Main *bmain,
   return nt->rna_ext.srna;
 }
 
-static const EnumPropertyItem *generic_attribute_supported_list(
-    const EnumPropertyItem *original_item_array, bool (*value_supported)(int value))
+static const EnumPropertyItem *itemf_function_check(
+    const EnumPropertyItem *original_item_array,
+    bool (*value_supported)(const EnumPropertyItem *item))
 {
   EnumPropertyItem *item_array = NULL;
   int items_len = 0;
 
   for (const EnumPropertyItem *item = original_item_array; item->identifier != NULL; item++) {
-    if (value_supported(item->value)) {
-      RNA_enum_items_add_value(&item_array, &items_len, original_item_array, item->value);
+    if (value_supported(item)) {
+      RNA_enum_item_add(&item_array, &items_len, item);
     }
   }
 
@@ -1874,28 +1875,42 @@ static const EnumPropertyItem *generic_attribute_supported_list(
   return item_array;
 }
 
-static bool attribute_random_type_supported(int value)
+static bool attribute_random_type_supported(const EnumPropertyItem *item)
 {
-  return ELEM(value, CD_PROP_FLOAT, CD_PROP_FLOAT3);
+  return ELEM(item->value, CD_PROP_FLOAT, CD_PROP_FLOAT3);
 }
 static const EnumPropertyItem *rna_GeometryNodeAttributeRandom_type_itemf(
     bContext *UNUSED(C), PointerRNA *UNUSED(ptr), PropertyRNA *UNUSED(prop), bool *r_free)
 {
   *r_free = true;
-  return generic_attribute_supported_list(rna_enum_attribute_type_items,
-                                          attribute_random_type_supported);
+  return itemf_function_check(rna_enum_attribute_type_items, attribute_random_type_supported);
 }
 
-static bool attribute_random_domain_supported(int value)
+static bool attribute_random_domain_supported(const EnumPropertyItem *item)
 {
-  return value == ATTR_DOMAIN_POINT;
+  return item->value == ATTR_DOMAIN_POINT;
 }
 static const EnumPropertyItem *rna_GeometryNodeAttributeRandom_domain_itemf(
     bContext *UNUSED(C), PointerRNA *UNUSED(ptr), PropertyRNA *UNUSED(prop), bool *r_free)
 {
   *r_free = true;
-  return generic_attribute_supported_list(rna_enum_attribute_domain_items,
-                                          attribute_random_domain_supported);
+  return itemf_function_check(rna_enum_attribute_domain_items, attribute_random_domain_supported);
+}
+
+static bool attribute_math_operation_supported(const EnumPropertyItem *item)
+{
+  return ELEM(item->value,
+              NODE_MATH_ADD,
+              NODE_MATH_SUBTRACT,
+              NODE_MATH_MULTIPLY,
+              NODE_MATH_DIVIDE) &&
+         (item->identifier[0] != '\0');
+}
+static const EnumPropertyItem *rna_GeometryNodeAttributeMath_operation_itemf(
+    bContext *UNUSED(C), PointerRNA *UNUSED(ptr), PropertyRNA *UNUSED(prop), bool *r_free)
+{
+  *r_free = true;
+  return itemf_function_check(rna_enum_node_math_items, attribute_math_operation_supported);
 }
 
 static StructRNA *rna_ShaderNode_register(Main *bmain,
@@ -8344,6 +8359,19 @@ static void def_geo_random_attribute(StructRNA *srna)
   def_geo_attribute_create_common(srna,
                                   "rna_GeometryNodeAttributeRandom_type_itemf",
                                   "rna_GeometryNodeAttributeRandom_domain_itemf");
+}
+
+static void def_geo_attribute_math(StructRNA *srna)
+{
+  PropertyRNA *prop;
+
+  prop = RNA_def_property(srna, "operation", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, NULL, "custom1");
+  RNA_def_property_enum_items(prop, rna_enum_node_math_items);
+  RNA_def_property_enum_funcs(prop, NULL, NULL, "rna_GeometryNodeAttributeMath_operation_itemf");
+  RNA_def_property_enum_default(prop, NODE_MATH_ADD);
+  RNA_def_property_ui_text(prop, "Operation", "");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
 }
 
 /* -------------------------------------------------------------------------- */

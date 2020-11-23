@@ -1346,6 +1346,7 @@ int ntreeTexExecTree(struct bNodeTree *ntree,
 #define GEO_NODE_SUBDIVISION_SURFACE 1006
 #define GEO_NODE_OBJECT_INFO 1007
 #define GEO_NODE_RANDOM_ATTRIBUTE 1008
+#define GEO_NODE_ATTRIBUTE_MATH 1009
 
 /** \} */
 
