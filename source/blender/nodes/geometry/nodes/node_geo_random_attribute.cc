@@ -92,6 +92,9 @@ static void randomize_attribute(GeometryComponent &component,
   const CustomDataType data_type = static_cast<CustomDataType>(node.custom1);
   const AttributeDomain domain = static_cast<AttributeDomain>(node.custom2);
   const std::string attribute_name = params.get_input<std::string>("Attribute");
+  if (attribute_name.empty()) {
+    return;
+  }
 
   WriteAttributePtr attribute = component.attribute_try_ensure_for_write(
       attribute_name, domain, data_type);
