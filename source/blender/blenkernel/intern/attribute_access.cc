@@ -20,6 +20,8 @@
 #include "BKE_customdata.h"
 #include "BKE_deform.h"
 #include "BKE_geometry_set.hh"
+#include "BKE_mesh.h"
+#include "BKE_pointcloud.h"
 
 #include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
@@ -334,15 +336,25 @@ static ReadAttributePtr read_attribute_from_custom_data(const CustomData &custom
   return {};
 }
 
-static WriteAttributePtr write_attribute_from_custom_data(CustomData custom_data,
-                                                          const int size,
-                                                          const StringRef attribute_name,
-                                                          const AttributeDomain domain)
+static WriteAttributePtr write_attribute_from_custom_data(
+    CustomData &custom_data,
+    const int size,
+    const StringRef attribute_name,
+    const AttributeDomain domain,
+    const std::function<void()> &update_customdata_pointers)
 {
+
   using namespace blender;
   using namespace blender::bke;
   for (const CustomDataLayer &layer : Span(custom_data.layers, custom_data.totlayer)) {
     if (layer.name != nullptr && layer.name == attribute_name) {
+      const void *data_before = layer.data;
+      /* The data layer might be shared with someone else. Since the caller wants to modify it, we
+       * copy it first. */
+      CustomData_duplicate_referenced_layer_named(&custom_data, layer.type, layer.name, size);
+      if (data_before != layer.data) {
+        update_customdata_pointers();
+      }
       switch (layer.type) {
         case CD_PROP_FLOAT:
           return std::make_unique<ArrayWriteAttribute<float>>(
@@ -592,7 +604,9 @@ WriteAttributePtr PointCloudComponent::attribute_try_get_for_write(const StringR
   }
 
   return write_attribute_from_custom_data(
-      pointcloud->pdata, pointcloud->totpoint, attribute_name, ATTR_DOMAIN_POINT);
+      pointcloud->pdata, pointcloud->totpoint, attribute_name, ATTR_DOMAIN_POINT, [&]() {
+        BKE_pointcloud_update_customdata_pointers(pointcloud);
+      });
 }
 
 bool PointCloudComponent::attribute_try_delete(const StringRef attribute_name)
@@ -745,7 +759,14 @@ WriteAttributePtr MeshComponent::attribute_try_get_for_write(const StringRef att
     return {};
   }
 
+  const std::function<void()> update_mesh_pointers = [&]() {
+    BKE_mesh_update_customdata_pointers(mesh, false);
+  };
+
   if (attribute_name == "Position") {
+    CustomData_duplicate_referenced_layer(&mesh->vdata, CD_MVERT, mesh->totvert);
+    update_mesh_pointers();
+
     auto get_vertex_position = [](const MVert &vert) { return float3(vert.co); };
     auto set_vertex_position = [](MVert &vert, const float3 &co) { copy_v3_v3(vert.co, co); };
     return std::make_unique<
@@ -760,7 +781,7 @@ WriteAttributePtr MeshComponent::attribute_try_get_for_write(const StringRef att
   }
 
   WriteAttributePtr corner_attribute = write_attribute_from_custom_data(
-      mesh_->ldata, mesh_->totloop, attribute_name, ATTR_DOMAIN_CORNER);
+      mesh_->ldata, mesh_->totloop, attribute_name, ATTR_DOMAIN_CORNER, update_mesh_pointers);
   if (corner_attribute) {
     return corner_attribute;
   }
@@ -772,19 +793,19 @@ WriteAttributePtr MeshComponent::attribute_try_get_for_write(const StringRef att
   }
 
   WriteAttributePtr vertex_attribute = write_attribute_from_custom_data(
-      mesh_->vdata, mesh_->totvert, attribute_name, ATTR_DOMAIN_POINT);
+      mesh_->vdata, mesh_->totvert, attribute_name, ATTR_DOMAIN_POINT, update_mesh_pointers);
   if (vertex_attribute) {
     return vertex_attribute;
   }
 
   WriteAttributePtr edge_attribute = write_attribute_from_custom_data(
-      mesh_->edata, mesh_->totedge, attribute_name, ATTR_DOMAIN_EDGE);
+      mesh_->edata, mesh_->totedge, attribute_name, ATTR_DOMAIN_EDGE, update_mesh_pointers);
   if (edge_attribute) {
     return edge_attribute;
   }
 
   WriteAttributePtr polygon_attribute = write_attribute_from_custom_data(
-      mesh_->pdata, mesh_->totpoly, attribute_name, ATTR_DOMAIN_POLYGON);
+      mesh_->pdata, mesh_->totpoly, attribute_name, ATTR_DOMAIN_POLYGON, update_mesh_pointers);
   if (polygon_attribute) {
     return polygon_attribute;
   }
