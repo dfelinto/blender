@@ -39,7 +39,7 @@ using blender::bke::WriteAttributePtr;
 namespace blender::bke {
 
 /* -------------------------------------------------------------------- */
-/** \name Attribute accessor implementations.
+/** \name Attribute Accessor implementations
  * \{ */
 
 ReadAttribute::~ReadAttribute() = default;
@@ -300,7 +300,7 @@ CustomDataType cpp_type_to_custom_data_type(const blender::fn::CPPType &type)
 }  // namespace blender::bke
 
 /* -------------------------------------------------------------------- */
-/** \name Utilities for accessing attributes.
+/** \name Utilities for Accessing Attributes
  * \{ */
 
 static ReadAttributePtr read_attribute_from_custom_data(const CustomData &custom_data,
@@ -383,7 +383,7 @@ static bool delete_named_custom_data_layer(CustomData &custom_data,
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name GeometryComponent
+/** \name Geometry Component
  * \{ */
 
 bool GeometryComponent::attribute_domain_supported(const AttributeDomain UNUSED(domain)) const
@@ -539,7 +539,7 @@ WriteAttributePtr GeometryComponent::attribute_try_ensure_for_write(const String
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name PointCloudComponent
+/** \name Point Cloud Component
  * \{ */
 
 bool PointCloudComponent::attribute_domain_supported(const AttributeDomain domain) const
@@ -646,7 +646,7 @@ bool PointCloudComponent::attribute_try_create(const StringRef attribute_name,
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name MeshComponent
+/** \name Mesh Component
  * \{ */
 
 bool MeshComponent::attribute_domain_supported(const AttributeDomain domain) const
