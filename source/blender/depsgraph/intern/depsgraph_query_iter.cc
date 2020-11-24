@@ -310,6 +310,7 @@ bool deg_iterator_objects_step(DEGObjectIterData *data)
       }
     }
 
+    object->runtime.select_id = DEG_get_original_object(object)->runtime.select_id;
     if (ob_visibility & OB_VISIBLE_INSTANCES) {
       deg_iterator_duplis_init(data, object);
     }
