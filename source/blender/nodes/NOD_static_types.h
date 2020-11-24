@@ -276,7 +276,7 @@ DefNode(GeometryNode, GEO_NODE_POINT_INSTANCE, 0, "POINT_INSTANCE", PointInstanc
 DefNode(GeometryNode, GEO_NODE_OBJECT_INFO, 0, "OBJECT_INFO", ObjectInfo, "Object Info", "")
 DefNode(GeometryNode, GEO_NODE_RANDOM_ATTRIBUTE, def_geo_random_attribute, "RANDOM_ATTRIBUTE", RandomAttribute, "Random Attribute", "")
 DefNode(GeometryNode, GEO_NODE_ATTRIBUTE_MATH, def_geo_attribute_math, "ATTRIBUTE_MATH", AttributeMath, "Attribute Math", "")
-DefNode(GeometryNode, GEO_NODE_JOIN, 0, "JOIN", Join, "Join", "")
+DefNode(GeometryNode, GEO_NODE_JOIN_GEOMETRY, 0, "JOIN_GEOMETRY", JoinGeometry, "Join Geometry", "")
 
 /* undefine macros */
 #undef DefNode

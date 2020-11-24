@@ -142,7 +142,7 @@ set(SRC
   geometry/nodes/node_geo_common.cc
   geometry/nodes/node_geo_boolean.cc
   geometry/nodes/node_geo_edge_split.cc
-  geometry/nodes/node_geo_join.cc
+  geometry/nodes/node_geo_join_geometry.cc
   geometry/nodes/node_geo_object_info.cc
   geometry/nodes/node_geo_subdivision_surface.cc
   geometry/nodes/node_geo_point_distribute.cc

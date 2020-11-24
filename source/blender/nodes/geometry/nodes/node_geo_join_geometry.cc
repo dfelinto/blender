@@ -23,13 +23,13 @@
 
 #include "node_geometry_util.hh"
 
-static bNodeSocketTemplate geo_node_join_in[] = {
+static bNodeSocketTemplate geo_node_join_geometry_in[] = {
     {SOCK_GEOMETRY, N_("Geometry")},
     {SOCK_GEOMETRY, N_("Geometry")},
     {-1, ""},
 };
 
-static bNodeSocketTemplate geo_node_join_out[] = {
+static bNodeSocketTemplate geo_node_join_geometry_out[] = {
     {SOCK_GEOMETRY, N_("Geometry")},
     {-1, ""},
 };
@@ -239,7 +239,7 @@ static void join_component_type(Span<const GeometrySet *> src_geometry_sets, Geo
   join_components(components, result);
 }
 
-static void geo_node_join_exec(GeoNodeExecParams params)
+static void geo_node_join_geometry_exec(GeoNodeExecParams params)
 {
   GeometrySet geometry_set_a = params.extract_input<GeometrySet>("Geometry");
   GeometrySet geometry_set_b = params.extract_input<GeometrySet>("Geometry_001");
@@ -255,12 +255,12 @@ static void geo_node_join_exec(GeoNodeExecParams params)
 }
 }  // namespace blender::nodes
 
-void register_node_type_geo_join()
+void register_node_type_geo_join_geometry()
 {
   static bNodeType ntype;
 
-  geo_node_type_base(&ntype, GEO_NODE_JOIN, "Join", 0, 0);
-  node_type_socket_templates(&ntype, geo_node_join_in, geo_node_join_out);
-  ntype.geometry_node_execute = blender::nodes::geo_node_join_exec;
+  geo_node_type_base(&ntype, GEO_NODE_JOIN_GEOMETRY, "Join Geometry", 0, 0);
+  node_type_socket_templates(&ntype, geo_node_join_geometry_in, geo_node_join_geometry_out);
+  ntype.geometry_node_execute = blender::nodes::geo_node_join_geometry_exec;
   nodeRegisterType(&ntype);
 }
