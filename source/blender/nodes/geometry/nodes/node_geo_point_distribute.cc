@@ -93,9 +93,10 @@ static Vector<float3> scatter_points_from_mesh(const Mesh *mesh,
 static void geo_node_point_distribute_exec(GeoNodeExecParams params)
 {
   GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
+  GeometrySet geometry_set_out;
 
   if (!geometry_set.has_mesh()) {
-    params.set_output("Geometry", std::move(geometry_set));
+    params.set_output("Geometry", std::move(geometry_set_out));
     return;
   }
 
@@ -103,9 +104,7 @@ static void geo_node_point_distribute_exec(GeoNodeExecParams params)
   const std::string density_attribute = params.extract_input<std::string>("Density Attribute");
 
   if (density <= 0.0f) {
-    geometry_set.replace_mesh(nullptr);
-    geometry_set.replace_pointcloud(nullptr);
-    params.set_output("Geometry", std::move(geometry_set));
+    params.set_output("Geometry", std::move(geometry_set_out));
     return;
   }
 
@@ -124,10 +123,8 @@ static void geo_node_point_distribute_exec(GeoNodeExecParams params)
     pointcloud->radius[i] = 0.05f;
   }
 
-  geometry_set.replace_mesh(nullptr);
-  geometry_set.replace_pointcloud(pointcloud);
-
-  params.set_output("Geometry", std::move(geometry_set));
+  geometry_set_out.replace_pointcloud(pointcloud);
+  params.set_output("Geometry", std::move(geometry_set_out));
 }
 }  // namespace blender::nodes
 

@@ -76,13 +76,14 @@ static void add_instances_from_geometry_component(InstancesComponent &instances,
 static void geo_node_point_instance_exec(GeoNodeExecParams params)
 {
   GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
+  GeometrySet geometry_set_out;
 
   bke::PersistentObjectHandle object_handle = params.extract_input<bke::PersistentObjectHandle>(
       "Object");
   Object *object = params.handle_map().lookup(object_handle);
 
   if (object != nullptr) {
-    InstancesComponent &instances = geometry_set.get_component_for_write<InstancesComponent>();
+    InstancesComponent &instances = geometry_set_out.get_component_for_write<InstancesComponent>();
     if (geometry_set.has<MeshComponent>()) {
       add_instances_from_geometry_component(
           instances, *geometry_set.get_component_for_read<MeshComponent>(), object, params);
@@ -93,9 +94,7 @@ static void geo_node_point_instance_exec(GeoNodeExecParams params)
     }
   }
 
-  geometry_set.remove<MeshComponent>();
-  geometry_set.remove<PointCloudComponent>();
-  params.set_output("Geometry", std::move(geometry_set));
+  params.set_output("Geometry", std::move(geometry_set_out));
 }
 }  // namespace blender::nodes
 
