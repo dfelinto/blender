@@ -28,6 +28,7 @@
 
 #include "DNA_modifier_types.h"
 #include "DNA_node_types.h"
+#include "DNA_space_types.h"
 
 #include "RNA_access.h"
 
@@ -48,7 +49,14 @@ static void geometry_node_tree_get_from_context(const bContext *C,
 
   const ModifierData *md = BKE_object_active_modifier(ob);
 
+  SpaceNode *snode = CTX_wm_space_node(C);
+  BLI_assert(snode != NULL);
+
+  /* Don't change the node tree if there is no active modifier. */
   if (md == nullptr) {
+    *r_ntree = snode->nodetree;
+    *r_from = snode->id;
+    *r_id = snode->from;
     return;
   }
 
@@ -57,7 +65,6 @@ static void geometry_node_tree_get_from_context(const bContext *C,
     if (nmd->node_group != nullptr) {
       *r_from = &ob->id;
       *r_id = &ob->id;
-      // *r_id = &nmd->node_group->id;
       *r_ntree = nmd->node_group;
     }
   }

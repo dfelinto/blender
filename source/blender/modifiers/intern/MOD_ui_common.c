@@ -306,20 +306,11 @@ static void modifier_panel_header(const bContext *C, Panel *panel)
   int index = BLI_findindex(&ob->modifiers, md);
 
   /* Modifier Icon. */
-  uiItemS_ex(layout, 0.1f);
   sub = uiLayoutRow(layout, true);
   if (mti->isDisabled && mti->isDisabled(scene, md, 0)) {
     uiLayoutSetRedAlert(sub, true);
   }
-  uiLayoutSetEmboss(sub, UI_EMBOSS_NONE);
-  uiItemFullO(sub,
-              "OBJECT_OT_modifier_set_active",
-              "",
-              RNA_struct_ui_icon(ptr->type),
-              NULL,
-              WM_OP_INVOKE_DEFAULT,
-              0,
-              NULL);
+  uiItemL(sub, "", RNA_struct_ui_icon(ptr->type));
 
   row = uiLayoutRow(layout, true);
 
