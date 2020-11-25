@@ -243,6 +243,15 @@ class DerivedNodeTree : NonCopyable, NonMovable {
                                   Vector<DParentNode *> &&all_parent_nodes);
 };
 
+namespace derived_node_tree_types {
+using nodes::DerivedNodeTree;
+using nodes::DGroupInput;
+using nodes::DInputSocket;
+using nodes::DNode;
+using nodes::DOutputSocket;
+using nodes::DParentNode;
+};  // namespace derived_node_tree_types
+
 /* --------------------------------------------------------------------
  * DSocket inline methods.
  */
