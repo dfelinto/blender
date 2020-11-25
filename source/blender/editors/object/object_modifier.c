@@ -1101,7 +1101,7 @@ static void edit_modifier_report_property(wmOperatorType *ot)
  * Using modifier names and data context.
  * \{ */
 
-static bool edit_modifier_properties_base(bContext *C, wmOperator *op)
+bool edit_modifier_invoke_properties(bContext *C, wmOperator *op)
 {
   if (RNA_struct_property_is_set(op->ptr, "modifier")) {
     return true;
@@ -1112,73 +1112,6 @@ static bool edit_modifier_properties_base(bContext *C, wmOperator *op)
     ModifierData *md = ctx_ptr.data;
     RNA_string_set(op->ptr, "modifier", md->name);
     return true;
-  }
-
-  return false;
-}
-
-static bool edit_modifier_properties_active(bContext *C, wmOperator *op)
-{
-  Object *ob = ED_object_active_context(C);
-  if (ob != NULL) {
-    ModifierData *md = BKE_object_active_modifier(ob);
-    if (md != NULL) {
-      RNA_string_set(op->ptr, "modifier", md->name);
-      return true;
-    }
-  }
-
-  return false;
-}
-
-bool edit_modifier_invoke_properties(bContext *C, wmOperator *op)
-{
-  if (edit_modifier_properties_base(C, op)) {
-    return true;
-  }
-  if (edit_modifier_properties_active(C, op)) {
-    return true;
-  }
-
-  return false;
-}
-
-/**
- * Run the regular invoke properties, then also check the custom data
- * of panels under the mouse for a modifier.
- *
- * \param event: If this isn't NULL, the operator will also look for panels underneath
- * the cursor with customdata set to a modifier.
- * \param r_retval: This should be used if #event is used in order to to return
- * #OPERATOR_PASS_THROUGH to check other operators with the same key set.
- */
-bool edit_modifier_invoke_properties_with_hover_no_active(bContext *C,
-                                                          wmOperator *op,
-                                                          const wmEvent *event,
-                                                          int *r_retval)
-{
-
-  if (edit_modifier_properties_base(C, op)) {
-    return true;
-  }
-
-  PointerRNA *panel_ptr = UI_region_panel_custom_data_under_cursor(C, event);
-
-  if (!(panel_ptr == NULL || RNA_pointer_is_null(panel_ptr))) {
-    if (RNA_struct_is_a(panel_ptr->type, &RNA_Modifier)) {
-      ModifierData *md = panel_ptr->data;
-      RNA_string_set(op->ptr, "modifier", md->name);
-      return true;
-    }
-    BLI_assert(r_retval != NULL); /* We need the return value in this case. */
-    if (r_retval != NULL) {
-      *r_retval = (OPERATOR_PASS_THROUGH | OPERATOR_CANCELLED);
-    }
-    return false;
-  }
-
-  if (r_retval != NULL) {
-    *r_retval = OPERATOR_CANCELLED;
   }
 
   return false;
@@ -1248,7 +1181,9 @@ static int modifier_remove_invoke(bContext *C, wmOperator *op, const wmEvent *UN
   if (edit_modifier_invoke_properties(C, op)) {
     return modifier_remove_exec(C, op);
   }
-  return OPERATOR_CANCELLED;
+
+  /* Work around multiple operators using the same shortcut. */
+  return (OPERATOR_PASS_THROUGH | OPERATOR_CANCELLED);
 }
 
 void OBJECT_OT_modifier_remove(wmOperatorType *ot)
@@ -1293,7 +1228,8 @@ static int modifier_move_up_invoke(bContext *C, wmOperator *op, const wmEvent *U
   if (edit_modifier_invoke_properties(C, op)) {
     return modifier_move_up_exec(C, op);
   }
-  return OPERATOR_CANCELLED;
+  /* Work around multiple operators using the same shortcut. */
+  return (OPERATOR_PASS_THROUGH | OPERATOR_CANCELLED);
 }
 
 void OBJECT_OT_modifier_move_up(wmOperatorType *ot)
@@ -1337,7 +1273,8 @@ static int modifier_move_down_invoke(bContext *C, wmOperator *op, const wmEvent 
   if (edit_modifier_invoke_properties(C, op)) {
     return modifier_move_down_exec(C, op);
   }
-  return OPERATOR_CANCELLED;
+  /* Work around multiple operators using the same shortcut. */
+  return (OPERATOR_PASS_THROUGH | OPERATOR_CANCELLED);
 }
 
 void OBJECT_OT_modifier_move_down(wmOperatorType *ot)
@@ -1483,7 +1420,8 @@ static int modifier_apply_invoke(bContext *C, wmOperator *op, const wmEvent *UNU
   if (edit_modifier_invoke_properties(C, op)) {
     return modifier_apply_exec(C, op);
   }
-  return OPERATOR_CANCELLED;
+  /* Work around multiple operators using the same shortcut. */
+  return (OPERATOR_PASS_THROUGH | OPERATOR_CANCELLED);
 }
 
 void OBJECT_OT_modifier_apply(wmOperatorType *ot)
@@ -1528,7 +1466,8 @@ static int modifier_apply_as_shapekey_invoke(bContext *C,
   if (edit_modifier_invoke_properties(C, op)) {
     return modifier_apply_as_shapekey_exec(C, op);
   }
-  return OPERATOR_CANCELLED;
+  /* Work around multiple operators using the same shortcut. */
+  return (OPERATOR_PASS_THROUGH | OPERATOR_CANCELLED);
 }
 
 static char *modifier_apply_as_shapekey_get_description(struct bContext *UNUSED(C),
@@ -1639,7 +1578,8 @@ static int modifier_copy_invoke(bContext *C, wmOperator *op, const wmEvent *UNUS
   if (edit_modifier_invoke_properties(C, op)) {
     return modifier_copy_exec(C, op);
   }
-  return OPERATOR_CANCELLED;
+  /* Work around multiple operators using the same shortcut. */
+  return (OPERATOR_PASS_THROUGH | OPERATOR_CANCELLED);
 }
 
 void OBJECT_OT_modifier_copy(wmOperatorType *ot)
@@ -1674,6 +1614,47 @@ static int modifier_set_active_exec(bContext *C, wmOperator *op)
   WM_event_add_notifier(C, NC_OBJECT | ND_MODIFIER, ob);
 
   return OPERATOR_FINISHED;
+}
+
+/**
+ * Get the modifier below the mouse cursor modifier without checking the context pointer.
+ * Used in order to set the active modifier on mouse click. If this checked the context
+ * pointer then it would always set the active modifier to the already active modifier.
+ *
+ * \param event: If this isn't NULL, the operator will also look for panels underneath
+ * the cursor with customdata set to a modifier.
+ * \param r_retval: This should be used if #event is used in order to to return
+ * #OPERATOR_PASS_THROUGH to check other operators with the same key set.
+ */
+bool edit_modifier_invoke_properties_with_hover_no_active(bContext *C,
+                                                          wmOperator *op,
+                                                          const wmEvent *event,
+                                                          int *r_retval)
+{
+  if (RNA_struct_property_is_set(op->ptr, "modifier")) {
+    return true;
+  }
+
+  PointerRNA *panel_ptr = UI_region_panel_custom_data_under_cursor(C, event);
+
+  if (!(panel_ptr == NULL || RNA_pointer_is_null(panel_ptr))) {
+    if (RNA_struct_is_a(panel_ptr->type, &RNA_Modifier)) {
+      ModifierData *md = panel_ptr->data;
+      RNA_string_set(op->ptr, "modifier", md->name);
+      return true;
+    }
+    BLI_assert(r_retval != NULL); /* We need the return value in this case. */
+    if (r_retval != NULL) {
+      *r_retval = (OPERATOR_PASS_THROUGH | OPERATOR_CANCELLED);
+    }
+    return false;
+  }
+
+  if (r_retval != NULL) {
+    *r_retval = OPERATOR_CANCELLED;
+  }
+
+  return false;
 }
 
 static int modifier_set_active_invoke(bContext *C, wmOperator *op, const wmEvent *event)
