@@ -610,7 +610,7 @@ int PointCloudComponent::attribute_domain_size(const AttributeDomain domain) con
 
 bool PointCloudComponent::attribute_is_builtin(const StringRef attribute_name) const
 {
-  return attribute_name == "Position";
+  return attribute_name == "position";
 }
 
 ReadAttributePtr PointCloudComponent::attribute_try_get_for_read(
@@ -742,7 +742,7 @@ int MeshComponent::attribute_domain_size(const AttributeDomain domain) const
 
 bool MeshComponent::attribute_is_builtin(const StringRef attribute_name) const
 {
-  return attribute_name == "Position";
+  return attribute_name == "position";
 }
 
 ReadAttributePtr MeshComponent::attribute_try_get_for_read(const StringRef attribute_name) const
@@ -751,7 +751,7 @@ ReadAttributePtr MeshComponent::attribute_try_get_for_read(const StringRef attri
     return {};
   }
 
-  if (attribute_name == "Position") {
+  if (attribute_name == "position") {
     auto get_vertex_position = [](const MVert &vert) { return float3(vert.co); };
     return std::make_unique<
         blender::bke::DerivedArrayReadAttribute<MVert, float3, decltype(get_vertex_position)>>(
@@ -802,7 +802,7 @@ WriteAttributePtr MeshComponent::attribute_try_get_for_write(const StringRef att
     BKE_mesh_update_customdata_pointers(mesh, false);
   };
 
-  if (attribute_name == "Position") {
+  if (attribute_name == "position") {
     CustomData_duplicate_referenced_layer(&mesh->vdata, CD_MVERT, mesh->totvert);
     update_mesh_pointers();
 
@@ -945,7 +945,7 @@ Set<std::string> MeshComponent::attribute_names() const
   }
 
   Set<std::string> names;
-  names.add("Position");
+  names.add("position");
   for (StringRef name : vertex_group_names_.keys()) {
     names.add(name);
   }
