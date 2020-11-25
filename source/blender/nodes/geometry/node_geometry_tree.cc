@@ -49,14 +49,7 @@ static void geometry_node_tree_get_from_context(const bContext *C,
 
   const ModifierData *md = BKE_object_active_modifier(ob);
 
-  SpaceNode *snode = CTX_wm_space_node(C);
-  BLI_assert(snode != nullptr);
-
-  /* Don't change the node tree if there is no active modifier. */
   if (md == nullptr) {
-    *r_ntree = snode->nodetree;
-    *r_from = snode->id;
-    *r_id = snode->from;
     return;
   }
 
