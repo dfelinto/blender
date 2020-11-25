@@ -3171,7 +3171,6 @@ static void node_geometry_buts_random_attribute(uiLayout *layout,
                                                 PointerRNA *ptr)
 {
   uiItemR(layout, ptr, "data_type", DEFAULT_FLAGS, "", ICON_NONE);
-  uiItemR(layout, ptr, "domain", DEFAULT_FLAGS, "", ICON_NONE);
 }
 
 static void node_geometry_buts_attribute_math(uiLayout *layout,
