@@ -25,8 +25,8 @@
 namespace blender {
 
 /**
- * A simple automatic reference counter. This should probably be moved to another file eventually.
- * It is similar to std::shared_ptr, but expects that the reference count is inside the object.
+ * A simple automatic reference counter. It is similar to std::shared_ptr, but expects that the
+ * reference count is inside the object.
  */
 template<typename T> class UserCounter {
  private:
