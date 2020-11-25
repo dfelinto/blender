@@ -533,15 +533,21 @@ ReadAttributePtr GeometryComponent::attribute_get_for_read(const StringRef attri
   if (attribute) {
     return attribute;
   }
+  return this->attribute_get_constant_for_read(domain, data_type, default_value);
+}
 
+blender::bke::ReadAttributePtr GeometryComponent::attribute_get_constant_for_read(
+    const AttributeDomain domain, const CustomDataType data_type, const void *value) const
+{
+  BLI_assert(this->attribute_domain_supported(domain));
   const blender::fn::CPPType *cpp_type = blender::bke::custom_data_type_to_cpp_type(data_type);
   BLI_assert(cpp_type != nullptr);
-  if (default_value == nullptr) {
-    default_value = cpp_type->default_value();
+  if (value == nullptr) {
+    value = cpp_type->default_value();
   }
   const int domain_size = this->attribute_domain_size(domain);
   return std::make_unique<blender::bke::ConstantReadAttribute>(
-      domain, domain_size, *cpp_type, default_value);
+      domain, domain_size, *cpp_type, value);
 }
 
 WriteAttributePtr GeometryComponent::attribute_try_ensure_for_write(const StringRef attribute_name,

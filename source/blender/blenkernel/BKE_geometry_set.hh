@@ -152,6 +152,21 @@ class GeometryComponent {
     return this->attribute_get_for_read(attribute_name, domain, type, &default_value);
   }
 
+  /* Get a read-only dummy attribute that always returns the same value. */
+  blender::bke::ReadAttributePtr attribute_get_constant_for_read(const AttributeDomain domain,
+                                                                 const CustomDataType data_type,
+                                                                 const void *value) const;
+
+  /* Get a read-only dummy attribute that always returns the same value. */
+  template<typename T>
+  blender::bke::TypedReadAttribute<T> attribute_get_constant_for_read(const AttributeDomain domain,
+                                                                      const T &value) const
+  {
+    const blender::fn::CPPType &cpp_type = blender::fn::CPPType::get<T>();
+    const CustomDataType type = blender::bke::cpp_type_to_custom_data_type(cpp_type);
+    return this->attribute_get_constant_for_read(domain, type, &value);
+  }
+
   /**
    * Returns the attribute with the given parameters if it exists.
    * If an exact match does not exist, other attributes with the same name are deleted and a new
