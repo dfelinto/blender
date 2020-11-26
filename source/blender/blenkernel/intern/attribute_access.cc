@@ -84,7 +84,7 @@ void ReadAttribute::initialize_span() const
 WriteAttribute::~WriteAttribute()
 {
   if (array_should_be_applied_) {
-    CLOG_ERROR(&LOG, "Forgot to call apply_span_if_necessary.");
+    CLOG_ERROR(&LOG, "Forgot to call apply_span.");
   }
   if (array_is_temporary_ && array_buffer_ != nullptr) {
     cpp_type_.destruct_n(array_buffer_, size_);
