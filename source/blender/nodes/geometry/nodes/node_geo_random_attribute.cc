@@ -64,10 +64,12 @@ static void randomize_attribute(FloatWriteAttribute &attribute,
                                 float max,
                                 RandomNumberGenerator &rng)
 {
+  MutableSpan<float> attribute_span = attribute.get_span();
   for (const int i : IndexRange(attribute.size())) {
     const float value = rng.get_float() * (max - min) + min;
-    attribute.set(i, value);
+    attribute_span[i] = value;
   }
+  attribute.apply_span();
 }
 
 static void randomize_attribute(Float3WriteAttribute &attribute,
@@ -75,13 +77,15 @@ static void randomize_attribute(Float3WriteAttribute &attribute,
                                 float3 max,
                                 RandomNumberGenerator &rng)
 {
+  MutableSpan<float3> attribute_span = attribute.get_span();
   for (const int i : IndexRange(attribute.size())) {
     const float x = rng.get_float();
     const float y = rng.get_float();
     const float z = rng.get_float();
     const float3 value = float3(x, y, z) * (max - min) + min;
-    attribute.set(i, value);
+    attribute_span[i] = value;
   }
+  attribute.apply_span();
 }
 
 static void randomize_attribute(GeometryComponent &component,
