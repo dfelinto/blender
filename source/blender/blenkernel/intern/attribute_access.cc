@@ -31,7 +31,11 @@
 #include "BLI_float2.hh"
 #include "BLI_span.hh"
 
+#include "CLG_log.h"
+
 #include "NOD_node_tree_multi_function.hh"
+
+static CLG_LogRef LOG = {"bke.attribute_access"};
 
 using blender::float3;
 using blender::Set;
@@ -45,8 +49,89 @@ namespace blender::bke {
 /** \name Attribute Accessor implementations
  * \{ */
 
-ReadAttribute::~ReadAttribute() = default;
-WriteAttribute::~WriteAttribute() = default;
+ReadAttribute::~ReadAttribute()
+{
+  if (array_is_temporary_ && array_buffer_ != nullptr) {
+    cpp_type_.destruct_n(array_buffer_, size_);
+    MEM_freeN(array_buffer_);
+  }
+}
+
+fn::GSpan ReadAttribute::get_span() const
+{
+  if (size_ == 0) {
+    return fn::GSpan(cpp_type_);
+  }
+  if (array_buffer_ == nullptr) {
+    std::lock_guard lock{span_mutex_};
+    if (array_buffer_ == nullptr) {
+      this->initialize_span();
+    }
+  }
+  return fn::GSpan(cpp_type_, array_buffer_, size_);
+}
+
+void ReadAttribute::initialize_span() const
+{
+  const int element_size = cpp_type_.size();
+  array_buffer_ = MEM_mallocN_aligned(size_ * element_size, cpp_type_.alignment(), __func__);
+  array_is_temporary_ = true;
+  for (const int i : IndexRange(size_)) {
+    this->get_internal(i, POINTER_OFFSET(array_buffer_, i * element_size));
+  }
+}
+
+WriteAttribute::~WriteAttribute()
+{
+  if (array_should_be_applied_) {
+    CLOG_ERROR(&LOG, "Forgot to call apply_span_if_necessary.");
+  }
+  if (array_is_temporary_ && array_buffer_ != nullptr) {
+    cpp_type_.destruct_n(array_buffer_, size_);
+    MEM_freeN(array_buffer_);
+  }
+}
+
+/**
+ * Get a mutable span that can be modified. When all modifications to the attribute are done,
+ * #apply_span_if_necessary should be called.
+ */
+fn::GMutableSpan WriteAttribute::get_span()
+{
+  if (size_ == 0) {
+    return fn::GMutableSpan(cpp_type_);
+  }
+  if (array_buffer_ == nullptr) {
+    this->initialize_span();
+  }
+  array_should_be_applied_ = true;
+  return fn::GMutableSpan(cpp_type_, array_buffer_, size_);
+}
+
+void WriteAttribute::initialize_span()
+{
+  array_buffer_ = MEM_mallocN_aligned(cpp_type_.size() * size_, cpp_type_.alignment(), __func__);
+  array_is_temporary_ = true;
+  /* This does nothing for trivial types, but is necessary for general correctness. */
+  cpp_type_.construct_default_n(array_buffer_, size_);
+}
+
+void WriteAttribute::apply_span()
+{
+  this->apply_span_if_necessary();
+  array_should_be_applied_ = false;
+}
+
+void WriteAttribute::apply_span_if_necessary()
+{
+  /* Only works when the span has been initialized beforehand. */
+  BLI_assert(array_buffer_ != nullptr);
+
+  const int element_size = cpp_type_.size();
+  for (const int i : IndexRange(size_)) {
+    this->set_internal(i, POINTER_OFFSET(array_buffer_, i * element_size));
+  }
+}
 
 class VertexWeightWriteAttribute final : public WriteAttribute {
  private:
@@ -126,6 +211,17 @@ template<typename T> class ArrayWriteAttribute final : public WriteAttribute {
   {
     data_[index] = *reinterpret_cast<const T *>(value);
   }
+
+  void initialize_span() override
+  {
+    array_buffer_ = data_.data();
+    array_is_temporary_ = false;
+  }
+
+  void apply_span_if_necessary() override
+  {
+    /* Do nothing, because the span contains the attribute itself already. */
+  }
 };
 
 template<typename T> class ArrayReadAttribute final : public ReadAttribute {
@@ -141,6 +237,13 @@ template<typename T> class ArrayReadAttribute final : public ReadAttribute {
   void get_internal(const int64_t index, void *r_value) const override
   {
     new (r_value) T(data_[index]);
+  }
+
+  void initialize_span() const override
+  {
+    /* The data will not be modified, so this const_cast is fine. */
+    array_buffer_ = const_cast<T *>(data_.data());
+    array_is_temporary_ = false;
   }
 };
 
@@ -224,6 +327,14 @@ class ConstantReadAttribute final : public ReadAttribute {
   void get_internal(const int64_t UNUSED(index), void *r_value) const override
   {
     this->cpp_type_.copy_to_uninitialized(value_, r_value);
+  }
+
+  void initialize_span() const override
+  {
+    const int element_size = cpp_type_.size();
+    array_buffer_ = MEM_mallocN_aligned(size_ * element_size, cpp_type_.alignment(), __func__);
+    array_is_temporary_ = true;
+    cpp_type_.fill_uninitialized(value_, array_buffer_, size_);
   }
 };
 
