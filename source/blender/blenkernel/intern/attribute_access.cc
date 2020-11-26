@@ -43,6 +43,9 @@ using blender::StringRef;
 using blender::bke::ReadAttributePtr;
 using blender::bke::WriteAttributePtr;
 
+/* Can't include BKE_object_deform.h right now, due to an enum forward declaration.  */
+extern "C" MDeformVert *BKE_object_defgroup_data_create(ID *id);
+
 namespace blender::bke {
 
 /* -------------------------------------------------------------------- */
@@ -135,13 +138,13 @@ void WriteAttribute::apply_span_if_necessary()
 
 class VertexWeightWriteAttribute final : public WriteAttribute {
  private:
-  MutableSpan<MDeformVert> dverts_;
+  MDeformVert *dverts_;
   const int dvert_index_;
 
  public:
   VertexWeightWriteAttribute(MDeformVert *dverts, const int totvert, const int dvert_index)
       : WriteAttribute(ATTR_DOMAIN_POINT, CPPType::get<float>(), totvert),
-        dverts_(dverts, totvert),
+        dverts_(dverts),
         dvert_index_(dvert_index)
   {
   }
@@ -157,11 +160,15 @@ class VertexWeightWriteAttribute final : public WriteAttribute {
     weight->weight = *reinterpret_cast<const float *>(value);
   }
 
-  static void get_internal(const Span<MDeformVert> dverts,
+  static void get_internal(const MDeformVert *dverts,
                            const int dvert_index,
                            const int64_t index,
                            void *r_value)
   {
+    if (dverts == nullptr) {
+      *(float *)r_value = 0.0f;
+      return;
+    }
     const MDeformVert &dvert = dverts[index];
     for (const MDeformWeight &weight : Span(dvert.dw, dvert.totweight)) {
       if (weight.def_nr == dvert_index) {
@@ -175,13 +182,13 @@ class VertexWeightWriteAttribute final : public WriteAttribute {
 
 class VertexWeightReadAttribute final : public ReadAttribute {
  private:
-  const Span<MDeformVert> dverts_;
+  const MDeformVert *dverts_;
   const int dvert_index_;
 
  public:
   VertexWeightReadAttribute(const MDeformVert *dverts, const int totvert, const int dvert_index)
       : ReadAttribute(ATTR_DOMAIN_POINT, CPPType::get<float>(), totvert),
-        dverts_(dverts, totvert),
+        dverts_(dverts),
         dvert_index_(dvert_index)
   {
   }
@@ -938,6 +945,9 @@ WriteAttributePtr MeshComponent::attribute_try_get_for_write(const StringRef att
 
   const int vertex_group_index = vertex_group_names_.lookup_default_as(attribute_name, -1);
   if (vertex_group_index >= 0) {
+    if (mesh_->dvert == nullptr) {
+      BKE_object_defgroup_data_create(&mesh_->id);
+    }
     return std::make_unique<blender::bke::VertexWeightWriteAttribute>(
         mesh_->dvert, mesh_->totvert, vertex_group_index);
   }
