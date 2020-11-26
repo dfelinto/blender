@@ -159,6 +159,7 @@ bool deg_iterator_components_step(BLI_Iterator *iter)
       *temp_object = *data->geometry_component_owner;
       temp_object->type = OB_MESH;
       temp_object->data = (void *)mesh;
+      temp_object->runtime.select_id = data->geometry_component_owner->runtime.select_id;
       iter->current = temp_object;
       return true;
     }
@@ -173,6 +174,7 @@ bool deg_iterator_components_step(BLI_Iterator *iter)
       *temp_object = *data->geometry_component_owner;
       temp_object->type = OB_POINTCLOUD;
       temp_object->data = (void *)pointcloud;
+      temp_object->runtime.select_id = data->geometry_component_owner->runtime.select_id;
       iter->current = temp_object;
       return true;
     }
@@ -228,6 +230,7 @@ bool deg_iterator_duplis_step(DEGObjectIterData *data)
         dupli_parent->runtime.local_collections_bits;
     temp_dupli_object->dt = MIN2(temp_dupli_object->dt, dupli_parent->dt);
     copy_v4_v4(temp_dupli_object->color, dupli_parent->color);
+    temp_dupli_object->runtime.select_id = dupli_parent->runtime.select_id;
 
     /* Duplicated elements shouldn't care whether their original collection is visible or not. */
     temp_dupli_object->base_flag |= BASE_VISIBLE_DEPSGRAPH;
@@ -307,6 +310,7 @@ bool deg_iterator_objects_step(DEGObjectIterData *data)
       }
     }
 
+    object->runtime.select_id = DEG_get_original_object(object)->runtime.select_id;
     if (ob_visibility & OB_VISIBLE_INSTANCES) {
       deg_iterator_duplis_init(data, object);
     }

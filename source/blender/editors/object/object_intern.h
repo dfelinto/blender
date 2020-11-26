@@ -161,10 +161,6 @@ bool edit_modifier_invoke_properties_with_hover_no_active(struct bContext *C,
                                                           struct wmOperator *op,
                                                           const struct wmEvent *event,
                                                           int *r_retval);
-bool edit_modifier_invoke_properties_with_hover(struct bContext *C,
-                                                struct wmOperator *op,
-                                                const struct wmEvent *event,
-                                                int *r_retval);
 
 struct ModifierData *edit_modifier_property_get(struct wmOperator *op,
                                                 struct Object *ob,

@@ -16,7 +16,10 @@
 
 #pragma once
 
+#include <mutex>
+
 #include "FN_cpp_type.hh"
+#include "FN_spans.hh"
 
 #include "BKE_attribute.h"
 
@@ -45,6 +48,14 @@ class ReadAttribute {
   const AttributeDomain domain_;
   const CPPType &cpp_type_;
   const int64_t size_;
+
+  /* Protects the span below, so that no two threads initialize it at the same time. */
+  mutable std::mutex span_mutex_;
+  /* When it is not null, it points to the attribute array or a temporary array that contains all
+   * the attribute values. */
+  mutable void *array_buffer_ = nullptr;
+  /* Is true when the buffer above is owned by the attribute accessor. */
+  mutable bool array_is_temporary_ = false;
 
  public:
   ReadAttribute(AttributeDomain domain, const CPPType &cpp_type, const int64_t size)
@@ -75,9 +86,14 @@ class ReadAttribute {
     this->get_internal(index, r_value);
   }
 
+  /* Get a span that contains all attribute values. */
+  fn::GSpan get_span() const;
+
  protected:
   /* r_value is expected to be uninitialized. */
   virtual void get_internal(const int64_t index, void *r_value) const = 0;
+
+  virtual void initialize_span() const;
 };
 
 /**
@@ -89,6 +105,13 @@ class WriteAttribute {
   const AttributeDomain domain_;
   const CPPType &cpp_type_;
   const int64_t size_;
+
+  /* When not null, this points either to the attribute array or to a temporary array. */
+  void *array_buffer_ = nullptr;
+  /* True, when the buffer points to a temporary array. */
+  bool array_is_temporary_ = false;
+  /* This helps to protect agains forgetting to apply changes done to the array. */
+  bool array_should_be_applied_ = false;
 
  public:
   WriteAttribute(AttributeDomain domain, const CPPType &cpp_type, const int64_t size)
@@ -125,9 +148,18 @@ class WriteAttribute {
     this->set_internal(index, value);
   }
 
+  /* Get a span that new attribute values can be written into. When all values have been changed,
+   * #apply_span has to be called. The span might not contain the original attribute values. */
+  fn::GMutableSpan get_span();
+  /* Write the changes to the span into the actual attribute, if they aren't already. */
+  void apply_span();
+
  protected:
   virtual void get_internal(const int64_t index, void *r_value) const = 0;
   virtual void set_internal(const int64_t index, const void *value) = 0;
+
+  virtual void initialize_span();
+  virtual void apply_span_if_necessary();
 };
 
 using ReadAttributePtr = std::unique_ptr<ReadAttribute>;
@@ -157,6 +189,12 @@ template<typename T> class TypedReadAttribute {
     value.~T();
     attribute_->get(index, &value);
     return value;
+  }
+
+  /* Get a span to that contains all attribute values for faster and more convenient access. */
+  Span<T> get_span() const
+  {
+    return attribute_->get_span().typed<T>();
   }
 };
 
@@ -189,6 +227,20 @@ template<typename T> class TypedWriteAttribute {
   void set(const int64_t index, const T &value)
   {
     attribute_->set(index, &value);
+  }
+
+  /* Get a span that new values can be written into. Once all values have been updated #apply_span
+   * has to be called. The span might *not* contain the initial attribute values, so one should
+   * generally only write to the span. */
+  MutableSpan<T> get_span()
+  {
+    return attribute_->get_span().typed<T>();
+  }
+
+  /* Write back all changes to the actual attribute, if necessary. */
+  void apply_span()
+  {
+    attribute_->apply_span();
   }
 };
 

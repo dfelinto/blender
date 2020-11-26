@@ -17,6 +17,7 @@
 #include "BKE_geometry_set.hh"
 #include "BKE_lib_id.h"
 #include "BKE_mesh.h"
+#include "BKE_mesh_wrapper.h"
 #include "BKE_pointcloud.h"
 
 #include "DNA_object_types.h"
@@ -144,6 +145,18 @@ void GeometrySet::add(const GeometryComponent &component)
   component.user_add();
   GeometryComponentPtr component_ptr{const_cast<GeometryComponent *>(&component)};
   components_.add_new(component.type(), std::move(component_ptr));
+}
+
+void GeometrySet::compute_boundbox_without_instances(float3 *r_min, float3 *r_max) const
+{
+  const PointCloud *pointcloud = this->get_pointcloud_for_read();
+  if (pointcloud != nullptr) {
+    BKE_pointcloud_minmax(pointcloud, *r_min, *r_max);
+  }
+  const Mesh *mesh = this->get_mesh_for_read();
+  if (mesh != nullptr) {
+    BKE_mesh_wrapper_minmax(mesh, *r_min, *r_max);
+  }
 }
 
 std::ostream &operator<<(std::ostream &stream, const GeometrySet &geometry_set)

@@ -89,7 +89,6 @@
 #include "BKE_report.h"
 #include "BKE_scene.h"
 #include "BKE_screen.h"
-
 #include "BKE_workspace.h"
 
 #include "DRW_engine.h"

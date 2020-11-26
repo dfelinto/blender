@@ -221,11 +221,11 @@ void BKE_modifier_remove_from_list(Object *ob, ModifierData *md)
 
   if (md->flag & eModifierFlag_Active) {
     /* Prefer the previous modifier but use the next if this modifier is the first in the list. */
-    if (md->prev != NULL) {
-      BKE_object_modifier_set_active(ob, md->prev);
-    }
-    else if (md->next != NULL) {
+    if (md->next != NULL) {
       BKE_object_modifier_set_active(ob, md->next);
+    }
+    else if (md->prev != NULL) {
+      BKE_object_modifier_set_active(ob, md->prev);
     }
   }
 

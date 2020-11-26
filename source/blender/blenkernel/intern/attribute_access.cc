@@ -31,7 +31,11 @@
 #include "BLI_float2.hh"
 #include "BLI_span.hh"
 
+#include "CLG_log.h"
+
 #include "NOD_node_tree_multi_function.hh"
+
+static CLG_LogRef LOG = {"bke.attribute_access"};
 
 using blender::float3;
 using blender::Set;
@@ -45,8 +49,89 @@ namespace blender::bke {
 /** \name Attribute Accessor implementations
  * \{ */
 
-ReadAttribute::~ReadAttribute() = default;
-WriteAttribute::~WriteAttribute() = default;
+ReadAttribute::~ReadAttribute()
+{
+  if (array_is_temporary_ && array_buffer_ != nullptr) {
+    cpp_type_.destruct_n(array_buffer_, size_);
+    MEM_freeN(array_buffer_);
+  }
+}
+
+fn::GSpan ReadAttribute::get_span() const
+{
+  if (size_ == 0) {
+    return fn::GSpan(cpp_type_);
+  }
+  if (array_buffer_ == nullptr) {
+    std::lock_guard lock{span_mutex_};
+    if (array_buffer_ == nullptr) {
+      this->initialize_span();
+    }
+  }
+  return fn::GSpan(cpp_type_, array_buffer_, size_);
+}
+
+void ReadAttribute::initialize_span() const
+{
+  const int element_size = cpp_type_.size();
+  array_buffer_ = MEM_mallocN_aligned(size_ * element_size, cpp_type_.alignment(), __func__);
+  array_is_temporary_ = true;
+  for (const int i : IndexRange(size_)) {
+    this->get_internal(i, POINTER_OFFSET(array_buffer_, i * element_size));
+  }
+}
+
+WriteAttribute::~WriteAttribute()
+{
+  if (array_should_be_applied_) {
+    CLOG_ERROR(&LOG, "Forgot to call apply_span.");
+  }
+  if (array_is_temporary_ && array_buffer_ != nullptr) {
+    cpp_type_.destruct_n(array_buffer_, size_);
+    MEM_freeN(array_buffer_);
+  }
+}
+
+/**
+ * Get a mutable span that can be modified. When all modifications to the attribute are done,
+ * #apply_span_if_necessary should be called.
+ */
+fn::GMutableSpan WriteAttribute::get_span()
+{
+  if (size_ == 0) {
+    return fn::GMutableSpan(cpp_type_);
+  }
+  if (array_buffer_ == nullptr) {
+    this->initialize_span();
+  }
+  array_should_be_applied_ = true;
+  return fn::GMutableSpan(cpp_type_, array_buffer_, size_);
+}
+
+void WriteAttribute::initialize_span()
+{
+  array_buffer_ = MEM_mallocN_aligned(cpp_type_.size() * size_, cpp_type_.alignment(), __func__);
+  array_is_temporary_ = true;
+  /* This does nothing for trivial types, but is necessary for general correctness. */
+  cpp_type_.construct_default_n(array_buffer_, size_);
+}
+
+void WriteAttribute::apply_span()
+{
+  this->apply_span_if_necessary();
+  array_should_be_applied_ = false;
+}
+
+void WriteAttribute::apply_span_if_necessary()
+{
+  /* Only works when the span has been initialized beforehand. */
+  BLI_assert(array_buffer_ != nullptr);
+
+  const int element_size = cpp_type_.size();
+  for (const int i : IndexRange(size_)) {
+    this->set_internal(i, POINTER_OFFSET(array_buffer_, i * element_size));
+  }
+}
 
 class VertexWeightWriteAttribute final : public WriteAttribute {
  private:
@@ -126,6 +211,17 @@ template<typename T> class ArrayWriteAttribute final : public WriteAttribute {
   {
     data_[index] = *reinterpret_cast<const T *>(value);
   }
+
+  void initialize_span() override
+  {
+    array_buffer_ = data_.data();
+    array_is_temporary_ = false;
+  }
+
+  void apply_span_if_necessary() override
+  {
+    /* Do nothing, because the span contains the attribute itself already. */
+  }
 };
 
 template<typename T> class ArrayReadAttribute final : public ReadAttribute {
@@ -141,6 +237,13 @@ template<typename T> class ArrayReadAttribute final : public ReadAttribute {
   void get_internal(const int64_t index, void *r_value) const override
   {
     new (r_value) T(data_[index]);
+  }
+
+  void initialize_span() const override
+  {
+    /* The data will not be modified, so this const_cast is fine. */
+    array_buffer_ = const_cast<T *>(data_.data());
+    array_is_temporary_ = false;
   }
 };
 
@@ -224,6 +327,14 @@ class ConstantReadAttribute final : public ReadAttribute {
   void get_internal(const int64_t UNUSED(index), void *r_value) const override
   {
     this->cpp_type_.copy_to_uninitialized(value_, r_value);
+  }
+
+  void initialize_span() const override
+  {
+    const int element_size = cpp_type_.size();
+    array_buffer_ = MEM_mallocN_aligned(size_ * element_size, cpp_type_.alignment(), __func__);
+    array_is_temporary_ = true;
+    cpp_type_.fill_uninitialized(value_, array_buffer_, size_);
   }
 };
 
@@ -533,15 +644,21 @@ ReadAttributePtr GeometryComponent::attribute_get_for_read(const StringRef attri
   if (attribute) {
     return attribute;
   }
+  return this->attribute_get_constant_for_read(domain, data_type, default_value);
+}
 
+blender::bke::ReadAttributePtr GeometryComponent::attribute_get_constant_for_read(
+    const AttributeDomain domain, const CustomDataType data_type, const void *value) const
+{
+  BLI_assert(this->attribute_domain_supported(domain));
   const blender::fn::CPPType *cpp_type = blender::bke::custom_data_type_to_cpp_type(data_type);
   BLI_assert(cpp_type != nullptr);
-  if (default_value == nullptr) {
-    default_value = cpp_type->default_value();
+  if (value == nullptr) {
+    value = cpp_type->default_value();
   }
   const int domain_size = this->attribute_domain_size(domain);
   return std::make_unique<blender::bke::ConstantReadAttribute>(
-      domain, domain_size, *cpp_type, default_value);
+      domain, domain_size, *cpp_type, value);
 }
 
 WriteAttributePtr GeometryComponent::attribute_try_ensure_for_write(const StringRef attribute_name,
@@ -604,7 +721,7 @@ int PointCloudComponent::attribute_domain_size(const AttributeDomain domain) con
 
 bool PointCloudComponent::attribute_is_builtin(const StringRef attribute_name) const
 {
-  return attribute_name == "Position";
+  return attribute_name == "position";
 }
 
 ReadAttributePtr PointCloudComponent::attribute_try_get_for_read(
@@ -736,7 +853,7 @@ int MeshComponent::attribute_domain_size(const AttributeDomain domain) const
 
 bool MeshComponent::attribute_is_builtin(const StringRef attribute_name) const
 {
-  return attribute_name == "Position";
+  return attribute_name == "position";
 }
 
 ReadAttributePtr MeshComponent::attribute_try_get_for_read(const StringRef attribute_name) const
@@ -745,7 +862,7 @@ ReadAttributePtr MeshComponent::attribute_try_get_for_read(const StringRef attri
     return {};
   }
 
-  if (attribute_name == "Position") {
+  if (attribute_name == "position") {
     auto get_vertex_position = [](const MVert &vert) { return float3(vert.co); };
     return std::make_unique<
         blender::bke::DerivedArrayReadAttribute<MVert, float3, decltype(get_vertex_position)>>(
@@ -796,7 +913,7 @@ WriteAttributePtr MeshComponent::attribute_try_get_for_write(const StringRef att
     BKE_mesh_update_customdata_pointers(mesh, false);
   };
 
-  if (attribute_name == "Position") {
+  if (attribute_name == "position") {
     CustomData_duplicate_referenced_layer(&mesh->vdata, CD_MVERT, mesh->totvert);
     update_mesh_pointers();
 
@@ -939,7 +1056,7 @@ Set<std::string> MeshComponent::attribute_names() const
   }
 
   Set<std::string> names;
-  names.add("Position");
+  names.add("position");
   for (StringRef name : vertex_group_names_.keys()) {
     names.add(name);
   }

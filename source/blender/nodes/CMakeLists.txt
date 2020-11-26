@@ -274,6 +274,7 @@ set(SRC
   texture/node_texture_util.c
 
   intern/derived_node_tree.cc
+  intern/math_functions.cc
   intern/node_common.c
   intern/node_exec.c
   intern/node_geometry_exec.cc
@@ -299,6 +300,7 @@ set(SRC
   NOD_node_tree_ref.hh
   NOD_shader.h
   NOD_geometry.h
+  NOD_math_functions.hh
   NOD_socket.h
   NOD_static_types.h
   NOD_texture.h

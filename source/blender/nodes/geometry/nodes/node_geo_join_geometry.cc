@@ -36,7 +36,7 @@ static bNodeSocketTemplate geo_node_join_geometry_out[] = {
 
 namespace blender::nodes {
 
-static Mesh *join_mesh_topologies(Span<const MeshComponent *> src_components)
+static Mesh *join_mesh_topology_and_builtin_attributes(Span<const MeshComponent *> src_components)
 {
   int totverts = 0;
   int totloops = 0;
@@ -45,17 +45,15 @@ static Mesh *join_mesh_topologies(Span<const MeshComponent *> src_components)
 
   for (const MeshComponent *mesh_component : src_components) {
     const Mesh *mesh = mesh_component->get_for_read();
-    if (mesh == nullptr) {
-      continue;
-    }
-
     totverts += mesh->totvert;
     totloops += mesh->totloop;
     totedges += mesh->totedge;
     totpolys += mesh->totpoly;
   }
 
+  const Mesh *first_input_mesh = src_components[0]->get_for_read();
   Mesh *new_mesh = BKE_mesh_new_nomain(totverts, totedges, 0, totloops, totpolys);
+  BKE_mesh_copy_settings(new_mesh, first_input_mesh);
 
   int vert_offset = 0;
   int loop_offset = 0;
@@ -67,23 +65,31 @@ static Mesh *join_mesh_topologies(Span<const MeshComponent *> src_components)
       continue;
     }
 
+    for (const int i : IndexRange(mesh->totvert)) {
+      const MVert &old_vert = mesh->mvert[i];
+      MVert &new_vert = new_mesh->mvert[vert_offset + i];
+      new_vert = old_vert;
+    }
+
     for (const int i : IndexRange(mesh->totedge)) {
       const MEdge &old_edge = mesh->medge[i];
       MEdge &new_edge = new_mesh->medge[edge_offset + i];
-      new_edge.v1 = old_edge.v1 + vert_offset;
-      new_edge.v2 = old_edge.v2 + vert_offset;
+      new_edge = old_edge;
+      new_edge.v1 += vert_offset;
+      new_edge.v2 += vert_offset;
     }
     for (const int i : IndexRange(mesh->totloop)) {
       const MLoop &old_loop = mesh->mloop[i];
       MLoop &new_loop = new_mesh->mloop[loop_offset + i];
-      new_loop.v = old_loop.v + vert_offset;
-      new_loop.e = old_loop.e + edge_offset;
+      new_loop = old_loop;
+      new_loop.v += vert_offset;
+      new_loop.e += edge_offset;
     }
     for (const int i : IndexRange(mesh->totpoly)) {
       const MPoly &old_poly = mesh->mpoly[i];
       MPoly &new_poly = new_mesh->mpoly[poly_offset + i];
-      new_poly.loopstart = old_poly.loopstart + loop_offset;
-      new_poly.totloop = old_poly.totloop;
+      new_poly = old_poly;
+      new_poly.loopstart += loop_offset;
     }
 
     vert_offset += mesh->totvert;
@@ -135,7 +141,7 @@ static void fill_new_attribute(Span<const GeometryComponent *> src_components,
                                StringRef attribute_name,
                                const CustomDataType data_type,
                                const AttributeDomain domain,
-                               WriteAttributePtr &output_attribute)
+                               fn::GMutableSpan dst_span)
 {
   const CPPType *cpp_type = bke::custom_data_type_to_cpp_type(data_type);
   BLI_assert(cpp_type != nullptr);
@@ -146,22 +152,23 @@ static void fill_new_attribute(Span<const GeometryComponent *> src_components,
     ReadAttributePtr read_attribute = component->attribute_get_for_read(
         attribute_name, domain, data_type, nullptr);
 
-    AlignedBuffer<64, 64> buffer;
-    BLI_assert(64 >= cpp_type->size());
-    for (const int i : IndexRange(domain_size)) {
-      read_attribute->get(i, buffer.ptr());
-      output_attribute->set(offset + i, buffer.ptr());
-      cpp_type->destruct(buffer.ptr());
-    }
+    fn::GSpan src_span = read_attribute->get_span();
+    const void *src_buffer = src_span.data();
+    void *dst_buffer = dst_span[offset];
+    cpp_type->copy_to_initialized_n(src_buffer, dst_buffer, domain_size);
 
     offset += domain_size;
   }
 }
 
 static void join_attributes(Span<const GeometryComponent *> src_components,
-                            GeometryComponent &result)
+                            GeometryComponent &result,
+                            Span<StringRef> ignored_attributes = {})
 {
   Set<std::string> attribute_names = find_all_attribute_names(src_components);
+  for (StringRef name : ignored_attributes) {
+    attribute_names.remove(name);
+  }
 
   for (const std::string &attribute_name : attribute_names) {
     CustomDataType data_type;
@@ -175,18 +182,21 @@ static void join_attributes(Span<const GeometryComponent *> src_components,
         write_attribute->domain() != domain) {
       continue;
     }
-    fill_new_attribute(src_components, attribute_name, data_type, domain, write_attribute);
+    fn::GMutableSpan dst_span = write_attribute->get_span();
+    fill_new_attribute(src_components, attribute_name, data_type, domain, dst_span);
+    write_attribute->apply_span();
   }
 }
 
 static void join_components(Span<const MeshComponent *> src_components, GeometrySet &result)
 {
-  Mesh *new_mesh = join_mesh_topologies(src_components);
+  Mesh *new_mesh = join_mesh_topology_and_builtin_attributes(src_components);
 
   MeshComponent &dst_component = result.get_component_for_write<MeshComponent>();
   dst_component.replace(new_mesh);
 
-  join_attributes(to_base_components(src_components), dst_component);
+  /* The position attribute is handled above already. */
+  join_attributes(to_base_components(src_components), dst_component, {"position"});
 }
 
 static void join_components(Span<const PointCloudComponent *> src_components, GeometrySet &result)

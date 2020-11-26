@@ -40,11 +40,11 @@ static void add_instances_from_geometry_component(InstancesComponent &instances,
                                                   Object *object)
 {
   Float3ReadAttribute positions = src_geometry.attribute_get_for_read<float3>(
-      "Position", ATTR_DOMAIN_POINT, {0, 0, 0});
+      "position", ATTR_DOMAIN_POINT, {0, 0, 0});
   Float3ReadAttribute rotations = src_geometry.attribute_get_for_read<float3>(
-      "Rotation", ATTR_DOMAIN_POINT, {0, 0, 0});
+      "rotation", ATTR_DOMAIN_POINT, {0, 0, 0});
   Float3ReadAttribute scales = src_geometry.attribute_get_for_read<float3>(
-      "Scale", ATTR_DOMAIN_POINT, {1, 1, 1});
+      "scale", ATTR_DOMAIN_POINT, {1, 1, 1});
 
   for (const int i : IndexRange(positions.size())) {
     instances.add_instance(object, positions[i], rotations[i], scales[i]);
@@ -60,7 +60,7 @@ static void geo_node_point_instance_exec(GeoNodeExecParams params)
       "Object");
   Object *object = params.handle_map().lookup(object_handle);
 
-  if (object != nullptr) {
+  if (object != nullptr && object != params.self_object()) {
     InstancesComponent &instances = geometry_set_out.get_component_for_write<InstancesComponent>();
     if (geometry_set.has<MeshComponent>()) {
       add_instances_from_geometry_component(
