@@ -40,6 +40,7 @@
 #include "BKE_lib_query.h"
 #include "BKE_lib_remap.h"
 #include "BKE_main.h"
+#include "BKE_mesh_wrapper.h"
 #include "BKE_modifier.h"
 #include "BKE_object.h"
 #include "BKE_pointcloud.h"
@@ -256,10 +257,23 @@ PointCloud *BKE_pointcloud_new_nomain(const int totpoint)
   return pointcloud;
 }
 
+void BKE_pointcloud_minmax(const struct PointCloud *pointcloud, float r_min[3], float r_max[3])
+{
+  float(*pointcloud_co)[3] = pointcloud->co;
+  float *pointcloud_radius = pointcloud->radius;
+  for (int a = 0; a < pointcloud->totpoint; a++) {
+    float *co = pointcloud_co[a];
+    float radius = (pointcloud_radius) ? pointcloud_radius[a] : 0.0f;
+    const float co_min[3] = {co[0] - radius, co[1] - radius, co[2] - radius};
+    const float co_max[3] = {co[0] + radius, co[1] + radius, co[2] + radius};
+    DO_MIN(co_min, r_min);
+    DO_MAX(co_max, r_max);
+  }
+}
+
 BoundBox *BKE_pointcloud_boundbox_get(Object *ob)
 {
   BLI_assert(ob->type == OB_POINTCLOUD);
-  PointCloud *pointcloud = static_cast<PointCloud *>(ob->data);
 
   if (ob->runtime.bb != nullptr && (ob->runtime.bb->flag & BOUNDBOX_DIRTY) == 0) {
     return ob->runtime.bb;
@@ -267,23 +281,18 @@ BoundBox *BKE_pointcloud_boundbox_get(Object *ob)
 
   if (ob->runtime.bb == nullptr) {
     ob->runtime.bb = static_cast<BoundBox *>(MEM_callocN(sizeof(BoundBox), "pointcloud boundbox"));
-
-    float min[3], max[3];
-    INIT_MINMAX(min, max);
-
-    float(*pointcloud_co)[3] = pointcloud->co;
-    float *pointcloud_radius = pointcloud->radius;
-    for (int a = 0; a < pointcloud->totpoint; a++) {
-      float *co = pointcloud_co[a];
-      float radius = (pointcloud_radius) ? pointcloud_radius[a] : 0.0f;
-      const float co_min[3] = {co[0] - radius, co[1] - radius, co[2] - radius};
-      const float co_max[3] = {co[0] + radius, co[1] + radius, co[2] + radius};
-      DO_MIN(co_min, min);
-      DO_MAX(co_max, max);
-    }
-
-    BKE_boundbox_init_from_minmax(ob->runtime.bb, min, max);
   }
+
+  blender::float3 min, max;
+  INIT_MINMAX(min, max);
+  if (ob->runtime.geometry_set_eval != nullptr) {
+    ob->runtime.geometry_set_eval->compute_boundbox_without_instances(&min, &max);
+  }
+  else {
+    const PointCloud *pointcloud = static_cast<PointCloud *>(ob->data);
+    BKE_pointcloud_minmax(pointcloud, min, max);
+  }
+  BKE_boundbox_init_from_minmax(ob->runtime.bb, min, max);
 
   return ob->runtime.bb;
 }
