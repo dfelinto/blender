@@ -725,6 +725,7 @@ class WeightedSampleElimination {
     return dimensions == 2 ? Sqrt(FType(2)) : std::pow(FType(2), FType(1) / FType(dimensions));
   }
 
+ public:
   // Returns the minimum radius fraction used by the default weight function.
   FType GetWeightLimitFraction(SIZE_TYPE inputSize, SIZE_TYPE outputSize) const
   {
@@ -732,7 +733,6 @@ class WeightedSampleElimination {
     return (1 - std::pow(ratio, gamma)) * beta;
   }
 
- public:
   // This is the same functions as above except that we elimiate all points that have non zero
   // weight (IE they are within d_max if we are using the default weighting function). We don't
   // stop at any specific number of points.
@@ -897,7 +897,7 @@ class WeightedSampleElimination {
     SIZE_TYPE sampleSize = inputSize;
     // Stop when the top heap item has a weight of zero.
     // We have to return at least one point otherwise the heap triggers a ASAN error
-    while (heap.GetTopItem() > FLT_EPSILON && heap.NumItemsInHeap() > 1) {
+    while (heap.GetTopItem() > (0.5f * 1e-5f) && heap.NumItemsInHeap() > 1) {
       // Pull the top sample from heap
       SIZE_TYPE i = heap.GetTopItemID();
       heap.Pop();
