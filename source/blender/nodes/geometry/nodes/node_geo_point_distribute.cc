@@ -37,6 +37,7 @@ static bNodeSocketTemplate geo_node_point_distribute_in[] = {
     {SOCK_FLOAT, N_("Minimum Distance"), 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 100000.0f, PROP_NONE},
     {SOCK_FLOAT, N_("Maximum Density"), 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 100000.0f, PROP_NONE},
     {SOCK_STRING, N_("Density Attribute")},
+    {SOCK_INT, N_("Seed"), 0, 0, 0, 0, -10000, 10000},
     {-1, ""},
 };
 
@@ -56,7 +57,8 @@ namespace blender::nodes {
 
 static Vector<float3> random_scatter_points_from_mesh(const Mesh *mesh,
                                                       const float density,
-                                                      const FloatReadAttribute &density_factors)
+                                                      const FloatReadAttribute &density_factors,
+                                                      const int seed)
 {
   /* This only updates a cache and can be considered to be logically const. */
   const MLoopTri *looptris = BKE_mesh_runtime_looptri_ensure(const_cast<Mesh *>(mesh));
@@ -80,7 +82,7 @@ static Vector<float3> random_scatter_points_from_mesh(const Mesh *mesh,
                                          3.0f;
     const float area = area_tri_v3(v0_pos, v1_pos, v2_pos);
 
-    const int looptri_seed = BLI_hash_int(looptri_index);
+    const int looptri_seed = BLI_hash_int(looptri_index + seed);
     RandomNumberGenerator looptri_rng(looptri_seed);
 
     const float points_amount_fl = area * density * looptri_density_factor;
@@ -102,7 +104,8 @@ static Vector<float3> random_scatter_points_from_mesh(const Mesh *mesh,
 static Vector<float3> poisson_scatter_points_from_mesh(const Mesh *mesh,
                                                        const float density,
                                                        const float min_dist,
-                                                       const FloatReadAttribute &density_factors)
+                                                       const FloatReadAttribute &density_factors,
+                                                       const int seed)
 {
   /* This only updates a cache and can be considered to be logically const. */
   const MLoopTri *looptris = BKE_mesh_runtime_looptri_ensure(const_cast<Mesh *>(mesh));
@@ -133,7 +136,7 @@ static Vector<float3> poisson_scatter_points_from_mesh(const Mesh *mesh,
     const float v1_density_factor = std::max(0.0f, density_factors[v1_index]);
     const float v2_density_factor = std::max(0.0f, density_factors[v2_index]);
 
-    const int looptri_seed = BLI_hash_int(looptri_index);
+    const int looptri_seed = BLI_hash_int(looptri_index + seed);
     RandomNumberGenerator looptri_rng(looptri_seed);
 
     const float points_amount_fl = area / (2.0f * sqrtf(3.0f) * min_dist * min_dist);
@@ -217,15 +220,16 @@ static void geo_node_point_distribute_exec(GeoNodeExecParams params)
 
   const FloatReadAttribute density_factors = mesh_component.attribute_get_for_read<float>(
       density_attribute, ATTR_DOMAIN_POINT, 1.0f);
+  const int seed = params.get_input<int>("Seed");
 
   Vector<float3> points;
 
   if (distribute_method == GEO_NODE_POINT_DISTRIBUTE_RANDOM) {
-    points = random_scatter_points_from_mesh(mesh_in, density, density_factors);
+    points = random_scatter_points_from_mesh(mesh_in, density, density_factors, seed);
   }
   else if (distribute_method == GEO_NODE_POINT_DISTRIBUTE_POISSON) {
     const float min_dist = params.extract_input<float>("Minimum Distance");
-    points = poisson_scatter_points_from_mesh(mesh_in, density, min_dist, density_factors);
+    points = poisson_scatter_points_from_mesh(mesh_in, density, min_dist, density_factors, seed);
   }
   else {
     // Unhandled point distribution.
