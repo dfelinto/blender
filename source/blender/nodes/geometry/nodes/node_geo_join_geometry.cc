@@ -141,7 +141,7 @@ static void fill_new_attribute(Span<const GeometryComponent *> src_components,
                                StringRef attribute_name,
                                const CustomDataType data_type,
                                const AttributeDomain domain,
-                               WriteAttributePtr &output_attribute)
+                               fn::GMutableSpan dst_span)
 {
   const CPPType *cpp_type = bke::custom_data_type_to_cpp_type(data_type);
   BLI_assert(cpp_type != nullptr);
@@ -152,13 +152,10 @@ static void fill_new_attribute(Span<const GeometryComponent *> src_components,
     ReadAttributePtr read_attribute = component->attribute_get_for_read(
         attribute_name, domain, data_type, nullptr);
 
-    AlignedBuffer<64, 64> buffer;
-    BLI_assert(64 >= cpp_type->size());
-    for (const int i : IndexRange(domain_size)) {
-      read_attribute->get(i, buffer.ptr());
-      output_attribute->set(offset + i, buffer.ptr());
-      cpp_type->destruct(buffer.ptr());
-    }
+    fn::GSpan src_span = read_attribute->get_span();
+    const void *src_buffer = src_span.data();
+    void *dst_buffer = dst_span[offset];
+    cpp_type->copy_to_initialized_n(src_buffer, dst_buffer, domain_size);
 
     offset += domain_size;
   }
@@ -185,7 +182,9 @@ static void join_attributes(Span<const GeometryComponent *> src_components,
         write_attribute->domain() != domain) {
       continue;
     }
-    fill_new_attribute(src_components, attribute_name, data_type, domain, write_attribute);
+    fn::GMutableSpan dst_span = write_attribute->get_span();
+    fill_new_attribute(src_components, attribute_name, data_type, domain, dst_span);
+    write_attribute->apply_span();
   }
 }
 
