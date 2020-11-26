@@ -33,10 +33,7 @@ def geometry_node_group_empty_new(context):
 
     return group
 
-def node_editor_geometry_modifier_poll(context) -> bool:
-    if not (context.area.type == 'NODE_EDITOR' and context.space_data.tree_type == 'GeometryNodeTree'):
-        return False
-
+def geometry_modifier_poll(context) -> bool:
     ob = context.object
 
     # Test object support for geometry node modifier (No volume or hair object support yet)
@@ -54,7 +51,7 @@ class NewGeometryNodeModifier(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        return node_editor_geometry_modifier_poll(context)
+        return geometry_modifier_poll(context)
 
     def execute(self, context):
         modifier = context.object.modifiers.new("Empty", "NODES")
@@ -65,7 +62,6 @@ class NewGeometryNodeModifier(bpy.types.Operator):
         group = geometry_node_group_empty_new(context)
         modifier.node_group = group
 
-        context.space_data.node_tree = group
         return {'FINISHED'}
 
 
@@ -78,7 +74,7 @@ class NewGeometryNodeTreeAssign(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        return node_editor_geometry_modifier_poll(context)
+        return geometry_modifier_poll(context)
 
     def execute(self, context):
         modifier = context.object.modifiers.active
@@ -88,7 +84,6 @@ class NewGeometryNodeTreeAssign(bpy.types.Operator):
 
         group = geometry_node_group_empty_new(context)
         modifier.node_group = group
-        context.space_data.node_tree = group
 
         return {'FINISHED'}
 

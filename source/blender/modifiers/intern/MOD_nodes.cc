@@ -940,7 +940,7 @@ static void draw_property_for_socket(uiLayout *layout,
   }
 }
 
-static void panel_draw(const bContext *UNUSED(C), Panel *panel)
+static void panel_draw(const bContext *C, Panel *panel)
 {
   uiLayout *layout = panel->layout;
 
@@ -948,9 +948,19 @@ static void panel_draw(const bContext *UNUSED(C), Panel *panel)
   NodesModifierData *nmd = static_cast<NodesModifierData *>(ptr->data);
 
   uiLayoutSetPropSep(layout, true);
+  /* This should be removed, but animation currently doesn't work with the IDProperties. */
   uiLayoutSetPropDecorate(layout, false);
 
-  uiItemR(layout, ptr, "node_group", 0, nullptr, ICON_NODETREE);
+  uiTemplateID(layout,
+               C,
+               ptr,
+               "node_group",
+               "node.new_geometry_node_group_assign",
+               nullptr,
+               nullptr,
+               0,
+               ICON_NONE,
+               nullptr);
 
   if (nmd->node_group != nullptr && nmd->settings.properties != nullptr) {
     PointerRNA settings_ptr;
