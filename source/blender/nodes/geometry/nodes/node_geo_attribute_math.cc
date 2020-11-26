@@ -73,15 +73,21 @@ static void do_math_operation(const FloatReadAttribute &input_a,
 {
   const int size = input_a.size();
 
+  Span<float> span_a = input_a.get_span();
+  Span<float> span_b = input_b.get_span();
+  MutableSpan<float> span_result = result.get_span();
+
   bool success = try_dispatch_float_math_fl_fl_to_fl(
       operation, [&](auto math_function, const FloatMathOperationInfo &UNUSED(info)) {
         for (const int i : IndexRange(size)) {
-          const float in1 = input_a[i];
-          const float in2 = input_b[i];
+          const float in1 = span_a[i];
+          const float in2 = span_b[i];
           const float out = math_function(in1, in2);
-          result.set(i, out);
+          span_result[i] = out;
         }
       });
+
+  result.apply_span();
 
   /* The operation is not supported by this node currently. */
   BLI_assert(success);
