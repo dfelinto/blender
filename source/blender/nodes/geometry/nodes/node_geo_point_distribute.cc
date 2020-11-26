@@ -35,7 +35,7 @@
 static bNodeSocketTemplate geo_node_point_distribute_in[] = {
     {SOCK_GEOMETRY, N_("Geometry")},
     {SOCK_FLOAT, N_("Minimum Distance"), 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 100000.0f, PROP_NONE},
-    {SOCK_FLOAT, N_("Maximum Density"), 10.0f, 0.0f, 0.0f, 0.0f, 0.0f, 100000.0f, PROP_NONE},
+    {SOCK_FLOAT, N_("Maximum Density"), 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 100000.0f, PROP_NONE},
     {SOCK_STRING, N_("Density Attribute")},
     {-1, ""},
 };
@@ -110,7 +110,7 @@ static Vector<float3> poisson_scatter_points_from_mesh(const Mesh *mesh,
 
   Vector<float3> points;
 
-  if (min_dist <= 0.0f || density <= 0.0f) {
+  if (min_dist <= FLT_EPSILON || density <= FLT_EPSILON) {
     return points;
   }
 
@@ -118,7 +118,7 @@ static Vector<float3> poisson_scatter_points_from_mesh(const Mesh *mesh,
   // good quality possion disk distributions.
 
   int quality = 5;
-  Vector<int> point_weights;
+  Vector<bool> remove_point;
 
   for (const int looptri_index : IndexRange(looptris_len)) {
     const MLoopTri &looptri = looptris[looptri_index];
@@ -137,9 +137,7 @@ static Vector<float3> poisson_scatter_points_from_mesh(const Mesh *mesh,
     RandomNumberGenerator looptri_rng(looptri_seed);
 
     const float points_amount_fl = area / (2.0f * sqrtf(3.0f) * min_dist * min_dist);
-    const float add_point_probability = fractf(points_amount_fl);
-    const bool add_point = add_point_probability > looptri_rng.get_float();
-    const int point_amount = quality * ((int)points_amount_fl + (int)add_point);
+    const int point_amount = quality * (int)ceilf(points_amount_fl);
 
     for (int i = 0; i < point_amount; i++) {
       const float3 bary_coords = looptri_rng.get_barycentric_coordinates();
@@ -149,7 +147,7 @@ static Vector<float3> poisson_scatter_points_from_mesh(const Mesh *mesh,
 
       const float weight = bary_coords[0] * v0_density_factor +
                            bary_coords[1] * v1_density_factor + bary_coords[2] * v2_density_factor;
-      point_weights.append(density * weight);
+      remove_point.append(looptri_rng.get_float() <= density * weight);
     }
   }
 
@@ -163,7 +161,7 @@ static Vector<float3> poisson_scatter_points_from_mesh(const Mesh *mesh,
 
   float d_min = d_max * wse.GetWeightLimitFraction(points.size(), points.size() / quality);
   float alpha = wse.GetParamAlpha();
-  int num_points = wse.Eliminate_all(
+  std::vector<size_t> output_idx = wse.Eliminate_all(
       points.data(),
       points.size(),
       output_points.data(),
@@ -179,8 +177,16 @@ static Vector<float3> poisson_scatter_points_from_mesh(const Mesh *mesh,
         return std::pow(1.0f - d / d_max, alpha);
       });
 
-  output_points.resize(num_points);
-  points = output_points;
+  output_points.resize(output_idx.size());
+  points.clear();
+  points.reserve(output_points.size());
+
+  for (int i = 0; i < output_points.size(); i++) {
+    if (!remove_point[output_idx[i]]) {
+      continue;
+    }
+    points.append(output_points[i]);
+  }
 
   return points;
 }

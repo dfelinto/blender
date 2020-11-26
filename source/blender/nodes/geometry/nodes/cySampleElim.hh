@@ -737,27 +737,27 @@ class WeightedSampleElimination {
   // weight (IE they are within d_max if we are using the default weighting function). We don't
   // stop at any specific number of points.
   template<typename WeightFunction>
-  SIZE_TYPE Eliminate_all(PointType const *inputPoints,
-                          SIZE_TYPE inputSize,
-                          PointType *outputPoints,
-                          SIZE_TYPE outputSize,
-                          bool progressive,
-                          FType d_max,
-                          int dimensions,
-                          WeightFunction weightFunction) const
+  std::vector<SIZE_TYPE> Eliminate_all(PointType const *inputPoints,
+                                       SIZE_TYPE inputSize,
+                                       PointType *outputPoints,
+                                       SIZE_TYPE outputSize,
+                                       bool progressive,
+                                       FType d_max,
+                                       int dimensions,
+                                       WeightFunction weightFunction) const
   {
     BLI_assert(outputSize == inputSize);
     BLI_assert(dimensions <= DIMENSIONS && dimensions >= 2);
     if (d_max <= FType(0)) {
       d_max = 2 * GetMaxPoissonDiskRadius(dimensions, outputSize);
     }
-    SIZE_TYPE remaining_points = DoEliminate_all(
+    std::vector<SIZE_TYPE> remaining_points = DoEliminate_all(
         inputPoints, inputSize, outputPoints, outputSize, d_max, weightFunction, false);
     if (progressive) {
-      std::vector<PointType> tmpPoints(remaining_points);
+      std::vector<PointType> tmpPoints(remaining_points.size());
       PointType *inPts = outputPoints;
       PointType *outPts = tmpPoints.data();
-      SIZE_TYPE inSize = remaining_points;
+      SIZE_TYPE inSize = remaining_points.size();
       SIZE_TYPE outSize = 0;
       while (inSize >= 3) {
         outSize = inSize / 2;
@@ -778,13 +778,13 @@ class WeightedSampleElimination {
     return remaining_points;
   }
 
-  SIZE_TYPE Eliminate_all(PointType const *inputPoints,
-                          SIZE_TYPE inputSize,
-                          PointType *outputPoints,
-                          SIZE_TYPE outputSize,
-                          bool progressive = false,
-                          FType d_max = FType(0),
-                          int dimensions = DIMENSIONS) const
+  std::vector<SIZE_TYPE> Eliminate_all(PointType const *inputPoints,
+                                       SIZE_TYPE inputSize,
+                                       PointType *outputPoints,
+                                       SIZE_TYPE outputSize,
+                                       bool progressive = false,
+                                       FType d_max = FType(0),
+                                       int dimensions = DIMENSIONS) const
   {
     if (d_max <= FType(0)) {
       d_max = 2 * GetMaxPoissonDiskRadius(dimensions, outputSize);
@@ -826,13 +826,13 @@ class WeightedSampleElimination {
 
  private:
   template<typename WeightFunction>
-  SIZE_TYPE DoEliminate_all(PointType const *inputPoints,
-                            SIZE_TYPE inputSize,
-                            PointType *outputPoints,
-                            SIZE_TYPE outputSize,
-                            FType d_max,
-                            WeightFunction weightFunction,
-                            bool copyEliminated) const
+  std::vector<SIZE_TYPE> DoEliminate_all(PointType const *inputPoints,
+                                         SIZE_TYPE inputSize,
+                                         PointType *outputPoints,
+                                         SIZE_TYPE outputSize,
+                                         FType d_max,
+                                         WeightFunction weightFunction,
+                                         bool copyEliminated) const
   {
     // Build a k-d tree for samples
     PointCloud<PointType, FType, DIMENSIONS, SIZE_TYPE> kdtree;
@@ -908,11 +908,15 @@ class WeightedSampleElimination {
     }
 
     // Copy the samples to the output array
-    SIZE_TYPE targetSize = copyEliminated ? inputSize : outputSize;
+    SIZE_TYPE targetSize = copyEliminated ? inputSize : sampleSize;
+    std::vector<SIZE_TYPE> orig_point_idx;
+    orig_point_idx.reserve(targetSize);
     for (SIZE_TYPE i = 0; i < targetSize; i++) {
-      outputPoints[i] = inputPoints[heap.GetIDFromHeap(i)];
+      SIZE_TYPE idx = heap.GetIDFromHeap(i);
+      outputPoints[i] = inputPoints[idx];
+      orig_point_idx.push_back(idx);
     }
-    return sampleSize;
+    return orig_point_idx;
   }
 };
 
