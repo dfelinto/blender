@@ -60,7 +60,7 @@ static void geo_node_point_instance_exec(GeoNodeExecParams params)
       "Object");
   Object *object = params.handle_map().lookup(object_handle);
 
-  if (object != nullptr) {
+  if (object != nullptr && object != params.self_object()) {
     InstancesComponent &instances = geometry_set_out.get_component_for_write<InstancesComponent>();
     if (geometry_set.has<MeshComponent>()) {
       add_instances_from_geometry_component(
