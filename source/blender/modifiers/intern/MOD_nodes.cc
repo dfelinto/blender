@@ -134,9 +134,13 @@ static void updateDepsgraph(ModifierData *md, const ModifierUpdateDepsgraphConte
     findUsedIds(*nmd->node_group, used_ids);
     for (ID *id : used_ids) {
       if (GS(id->name) == ID_OB) {
-        DEG_add_object_relation(ctx->node, (Object *)id, DEG_OB_COMP_TRANSFORM, "Nodes Modifier");
+        Object *object = reinterpret_cast<Object *>(id);
+        DEG_add_object_relation(ctx->node, object, DEG_OB_COMP_TRANSFORM, "Nodes Modifier");
         if (id != &ctx->object->id) {
-          DEG_add_object_relation(ctx->node, (Object *)id, DEG_OB_COMP_GEOMETRY, "Nodes Modifier");
+          if (object->type != OB_EMPTY) {
+            DEG_add_object_relation(
+                ctx->node, (Object *)id, DEG_OB_COMP_GEOMETRY, "Nodes Modifier");
+          }
         }
       }
     }
