@@ -139,8 +139,10 @@ static Vector<float3> poisson_scatter_points_from_mesh(const Mesh *mesh,
     const int looptri_seed = BLI_hash_int(looptri_index + seed);
     RandomNumberGenerator looptri_rng(looptri_seed);
 
-    const float points_amount_fl = area / (2.0f * sqrtf(3.0f) * min_dist * min_dist);
-    const int point_amount = quality * (int)ceilf(points_amount_fl);
+    const float points_amount_fl = quality * area / (2.0f * sqrtf(3.0f) * min_dist * min_dist);
+    const float add_point_probability = fractf(points_amount_fl);
+    const bool add_point = add_point_probability > looptri_rng.get_float();
+    const int point_amount = (int)points_amount_fl + (int)add_point;
 
     for (int i = 0; i < point_amount; i++) {
       const float3 bary_coords = looptri_rng.get_barycentric_coordinates();
