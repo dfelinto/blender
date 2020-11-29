@@ -19,6 +19,7 @@
 #include "BLI_math_vector.h"
 #include "BLI_rand.hh"
 #include "BLI_span.hh"
+#include "BLI_timeit.hh"
 
 #include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
@@ -123,74 +124,88 @@ static Vector<float3> poisson_scatter_points_from_mesh(const Mesh *mesh,
   int quality = 5;
   Vector<bool> remove_point;
 
-  for (const int looptri_index : IndexRange(looptris_len)) {
-    const MLoopTri &looptri = looptris[looptri_index];
-    const int v0_index = mesh->mloop[looptri.tri[0]].v;
-    const int v1_index = mesh->mloop[looptri.tri[1]].v;
-    const int v2_index = mesh->mloop[looptri.tri[2]].v;
-    const float3 v0_pos = mesh->mvert[v0_index].co;
-    const float3 v1_pos = mesh->mvert[v1_index].co;
-    const float3 v2_pos = mesh->mvert[v2_index].co;
-    const float area = area_tri_v3(v0_pos, v1_pos, v2_pos);
-    const float v0_density_factor = std::max(0.0f, density_factors[v0_index]);
-    const float v1_density_factor = std::max(0.0f, density_factors[v1_index]);
-    const float v2_density_factor = std::max(0.0f, density_factors[v2_index]);
+  {
+    SCOPED_TIMER("poisson random dist points");
 
-    const int looptri_seed = BLI_hash_int(looptri_index + seed);
-    RandomNumberGenerator looptri_rng(looptri_seed);
+    for (const int looptri_index : IndexRange(looptris_len)) {
+      const MLoopTri &looptri = looptris[looptri_index];
+      const int v0_index = mesh->mloop[looptri.tri[0]].v;
+      const int v1_index = mesh->mloop[looptri.tri[1]].v;
+      const int v2_index = mesh->mloop[looptri.tri[2]].v;
+      const float3 v0_pos = mesh->mvert[v0_index].co;
+      const float3 v1_pos = mesh->mvert[v1_index].co;
+      const float3 v2_pos = mesh->mvert[v2_index].co;
+      const float area = area_tri_v3(v0_pos, v1_pos, v2_pos);
+      const float v0_density_factor = std::max(0.0f, density_factors[v0_index]);
+      const float v1_density_factor = std::max(0.0f, density_factors[v1_index]);
+      const float v2_density_factor = std::max(0.0f, density_factors[v2_index]);
 
-    const float points_amount_fl = quality * area / (2.0f * sqrtf(3.0f) * min_dist * min_dist);
-    const float add_point_probability = fractf(points_amount_fl);
-    const bool add_point = add_point_probability > looptri_rng.get_float();
-    const int point_amount = (int)points_amount_fl + (int)add_point;
+      const int looptri_seed = BLI_hash_int(looptri_index + seed);
+      RandomNumberGenerator looptri_rng(looptri_seed);
 
-    for (int i = 0; i < point_amount; i++) {
-      const float3 bary_coords = looptri_rng.get_barycentric_coordinates();
-      float3 point_pos;
-      interp_v3_v3v3v3(point_pos, v0_pos, v1_pos, v2_pos, bary_coords);
-      points.append(point_pos);
+      const float points_amount_fl = quality * area / (2.0f * sqrtf(3.0f) * min_dist * min_dist);
+      const float add_point_probability = fractf(points_amount_fl);
+      const bool add_point = add_point_probability > looptri_rng.get_float();
+      const int point_amount = (int)points_amount_fl + (int)add_point;
 
-      const float weight = bary_coords[0] * v0_density_factor +
-                           bary_coords[1] * v1_density_factor + bary_coords[2] * v2_density_factor;
-      remove_point.append(looptri_rng.get_float() <= density * weight);
+      for (int i = 0; i < point_amount; i++) {
+        const float3 bary_coords = looptri_rng.get_barycentric_coordinates();
+        float3 point_pos;
+        interp_v3_v3v3v3(point_pos, v0_pos, v1_pos, v2_pos, bary_coords);
+        points.append(point_pos);
+
+        const float weight = bary_coords[0] * v0_density_factor +
+                             bary_coords[1] * v1_density_factor +
+                             bary_coords[2] * v2_density_factor;
+        remove_point.append(looptri_rng.get_float() <= density * weight);
+      }
     }
   }
 
   // Eliminate the scattered points until we get a possion distribution.
-
-  cy::WeightedSampleElimination<float3, float, 3, size_t> wse;
+  std::vector<size_t> output_idx;
   Vector<float3> output_points(points.size());
-  bool is_progressive = false;
+  {
+    SCOPED_TIMER("Total poisson sample elim");
 
-  float d_max = 2 * min_dist;
+    cy::WeightedSampleElimination<float3, float, 3, size_t> wse;
+    bool is_progressive = false;
 
-  float d_min = d_max * wse.GetWeightLimitFraction(points.size(), points.size() / quality);
-  float alpha = wse.GetParamAlpha();
-  std::vector<size_t> output_idx = wse.Eliminate_all(
-      points.data(),
-      points.size(),
-      output_points.data(),
-      output_points.size(),
-      is_progressive,
-      d_max,
-      2,
-      [d_min, alpha](float3 const & /*unused*/, float3 const & /*unused*/, float d2, float d_max) {
-        float d = sqrtf(d2);
-        if (d < d_min) {
-          d = d_min;
-        }
-        return std::pow(1.0f - d / d_max, alpha);
-      });
+    float d_max = 2 * min_dist;
 
-  output_points.resize(output_idx.size());
-  points.clear();
-  points.reserve(output_points.size());
+    float d_min = d_max * wse.GetWeightLimitFraction(points.size(), points.size() / quality);
+    float alpha = wse.GetParamAlpha();
+    output_idx = wse.Eliminate_all(
+        points.data(),
+        points.size(),
+        output_points.data(),
+        output_points.size(),
+        is_progressive,
+        d_max,
+        2,
+        [d_min,
+         alpha](float3 const & /*unused*/, float3 const & /*unused*/, float d2, float d_max) {
+          float d = sqrtf(d2);
+          if (d < d_min) {
+            d = d_min;
+          }
+          return std::pow(1.0f - d / d_max, alpha);
+        });
+  }
 
-  for (int i = 0; i < output_points.size(); i++) {
-    if (!remove_point[output_idx[i]]) {
-      continue;
+  // Check if we have any points we should remove from the final possion distribition.
+  {
+    SCOPED_TIMER("poisson weight map elim");
+    output_points.resize(output_idx.size());
+    points.clear();
+    points.reserve(output_points.size());
+
+    for (int i = 0; i < output_points.size(); i++) {
+      if (!remove_point[output_idx[i]]) {
+        continue;
+      }
+      points.append(output_points[i]);
     }
-    points.append(output_points[i]);
   }
 
   return points;

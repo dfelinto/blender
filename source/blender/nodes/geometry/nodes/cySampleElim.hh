@@ -60,10 +60,13 @@
 //-------------------------------------------------------------------------------
 
 #include "MEM_guardedalloc.h"
+
 #include <BLI_assert.h>
 #include <BLI_float3.hh>
 #include <BLI_heap.h>
 #include <BLI_kdtree.h>
+#include <BLI_timeit.hh>
+
 #include <cmath>
 #include <functional>
 #include <vector>
@@ -870,8 +873,11 @@ class WeightedSampleElimination {
                          }
                        });
     };
-    for (SIZE_TYPE i = 0; i < inputSize; i++) {
-      AddWeights(i, inputPoints[i]);
+    {
+      SCOPED_TIMER("poisson KDtree weight assignmet");
+      for (SIZE_TYPE i = 0; i < inputSize; i++) {
+        AddWeights(i, inputPoints[i]);
+      }
     }
 
     // Build a heap for the samples using their weights
@@ -895,16 +901,20 @@ class WeightedSampleElimination {
                        });
     };
     SIZE_TYPE sampleSize = inputSize;
-    // Stop when the top heap item has a weight of zero.
-    // We have to return at least one point otherwise the heap triggers a ASAN error
-    while (heap.GetTopItem() > (0.5f * 1e-5f) && heap.NumItemsInHeap() > 1) {
-      // Pull the top sample from heap
-      SIZE_TYPE i = heap.GetTopItemID();
-      heap.Pop();
-      // For each sample around it, remove its weight contribution and update
-      // the heap
-      RemoveWeights(i, inputPoints[i]);
-      sampleSize--;
+
+    {
+      SCOPED_TIMER("poisson Heap weight elimination");
+      // Stop when the top heap item has a weight of zero.
+      // We have to return at least one point otherwise the heap triggers a ASAN error
+      while (heap.GetTopItem() > (0.5f * 1e-5f) && heap.NumItemsInHeap() > 1) {
+        // Pull the top sample from heap
+        SIZE_TYPE i = heap.GetTopItemID();
+        heap.Pop();
+        // For each sample around it, remove its weight contribution and update
+        // the heap
+        RemoveWeights(i, inputPoints[i]);
+        sampleSize--;
+      }
     }
 
     // Copy the samples to the output array
