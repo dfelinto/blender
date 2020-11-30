@@ -49,7 +49,7 @@ static void geo_node_attribute_math_init(bNodeTree *UNUSED(tree), bNode *node)
   node->custom2 = GEO_NODE_USE_ATTRIBUTE_A | GEO_NODE_USE_ATTRIBUTE_B;
 }
 
-static void geo_node_random_attribute_update(bNodeTree *UNUSED(ntree), bNode *node)
+static void geo_node_attribute_math_update(bNodeTree *UNUSED(ntree), bNode *node)
 {
   bNodeSocket *sock_attribute_a = (bNodeSocket *)BLI_findlink(&node->inputs, 1);
   bNodeSocket *sock_float_a = sock_attribute_a->next;
@@ -161,7 +161,7 @@ void register_node_type_geo_attribute_math()
   geo_node_type_base(&ntype, GEO_NODE_ATTRIBUTE_MATH, "Attribute Math", 0, 0);
   node_type_socket_templates(&ntype, geo_node_attribute_math_in, geo_node_attribute_math_out);
   ntype.geometry_node_execute = blender::nodes::geo_node_attribute_math_exec;
-  node_type_update(&ntype, geo_node_random_attribute_update);
+  node_type_update(&ntype, geo_node_attribute_math_update);
   node_type_init(&ntype, geo_node_attribute_math_init);
   nodeRegisterType(&ntype);
 }
