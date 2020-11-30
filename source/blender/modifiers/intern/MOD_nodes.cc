@@ -134,9 +134,13 @@ static void updateDepsgraph(ModifierData *md, const ModifierUpdateDepsgraphConte
     findUsedIds(*nmd->node_group, used_ids);
     for (ID *id : used_ids) {
       if (GS(id->name) == ID_OB) {
-        DEG_add_object_relation(ctx->node, (Object *)id, DEG_OB_COMP_TRANSFORM, "Nodes Modifier");
+        Object *object = reinterpret_cast<Object *>(id);
+        DEG_add_object_relation(ctx->node, object, DEG_OB_COMP_TRANSFORM, "Nodes Modifier");
         if (id != &ctx->object->id) {
-          DEG_add_object_relation(ctx->node, (Object *)id, DEG_OB_COMP_GEOMETRY, "Nodes Modifier");
+          if (object->type != OB_EMPTY) {
+            DEG_add_object_relation(
+                ctx->node, (Object *)id, DEG_OB_COMP_GEOMETRY, "Nodes Modifier");
+          }
         }
       }
     }
@@ -621,6 +625,28 @@ static const SocketPropertyType *get_socket_property_type(const bNodeSocket &bso
           },
       };
       return &boolean_type;
+    }
+    case SOCK_STRING: {
+      static const SocketPropertyType string_type = {
+          [](const bNodeSocket &socket, const char *name) {
+            bNodeSocketValueString *value = (bNodeSocketValueString *)socket.default_value;
+            return IDP_NewString(
+                value->value, name, BLI_strnlen(value->value, sizeof(value->value)) + 1);
+          },
+          nullptr,
+          nullptr,
+          [](const bNodeSocket &socket, const char *name) {
+            bNodeSocketValueString *value = (bNodeSocketValueString *)socket.default_value;
+            return IDP_NewString(
+                value->value, name, BLI_strnlen(value->value, sizeof(value->value)) + 1);
+          },
+          nullptr,
+          [](const IDProperty &property) { return property.type == IDP_STRING; },
+          [](const IDProperty &property, void *r_value) {
+            new (r_value) std::string(IDP_String(&property));
+          },
+      };
+      return &string_type;
     }
     default: {
       return nullptr;

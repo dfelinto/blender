@@ -194,7 +194,7 @@ template<typename T> class TypedReadAttribute {
   /* Get a span to that contains all attribute values for faster and more convenient access. */
   Span<T> get_span() const
   {
-    return attribute_->get_span().typed<T>();
+    return attribute_->get_span().template typed<T>();
   }
 };
 
