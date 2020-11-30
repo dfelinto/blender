@@ -147,6 +147,7 @@ class GeoNodeExecParams {
   }
 
  private:
+  /* Utilities for detecting common errors at when using this class. */
   void check_extract_input(StringRef identifier, const CPPType *requested_type = nullptr) const;
   void check_set_output(StringRef identifier, const CPPType &value_type) const;
 };

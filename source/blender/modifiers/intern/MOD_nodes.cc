@@ -1044,7 +1044,7 @@ static void freeData(ModifierData *md)
 }
 
 ModifierTypeInfo modifierType_Nodes = {
-    /* name */ "Empty",
+    /* name */ "GeometryNodes",
     /* structName */ "NodesModifierData",
     /* structSize */ sizeof(NodesModifierData),
     /* srna */ &RNA_NodesModifier,
