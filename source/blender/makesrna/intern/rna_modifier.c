@@ -143,7 +143,7 @@ const EnumPropertyItem rna_enum_object_modifier_type_items[] = {
      ICON_MOD_EDGESPLIT,
      "Edge Split",
      "Split away joined faces at the edges"},
-    {eModifierType_Nodes, "NODES", ICON_NODETREE, "Empty", ""},
+    {eModifierType_Nodes, "NODES", ICON_NODETREE, "Geometry Nodes", ""},
     {eModifierType_Mask,
      "MASK",
      ICON_MOD_MASK,
