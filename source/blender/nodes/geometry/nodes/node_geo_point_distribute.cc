@@ -25,6 +25,7 @@
 #include "DNA_meshdata_types.h"
 #include "DNA_pointcloud_types.h"
 
+#include "BKE_bvhutils.h"
 #include "BKE_deform.h"
 #include "BKE_mesh.h"
 #include "BKE_mesh_runtime.h"
@@ -102,16 +103,32 @@ static Vector<float3> random_scatter_points_from_mesh(const Mesh *mesh,
   return points;
 }
 
-static Vector<float3> poisson_scatter_points_from_mesh(const Mesh *mesh,
+struct RayCastAll_Data {
+  void *bvhdata;
+
+  BVHTree_RayCastCallback raycast_callback;
+
+  Vector<float3> *projected_points;
+};
+
+static void project_2d_bvh_callback(void *userdata,
+                                    int index,
+                                    const BVHTreeRay *ray,
+                                    BVHTreeRayHit *hit)
+{
+  struct RayCastAll_Data *data = (RayCastAll_Data *)userdata;
+  data->raycast_callback(data->bvhdata, index, ray, hit);
+  if (hit->index != -1) {
+    data->projected_points->append(hit->co);
+  }
+}
+
+static Vector<float3> poisson_scatter_points_from_mesh(Mesh *mesh,
                                                        const float density,
                                                        const float min_dist,
                                                        const FloatReadAttribute &density_factors,
                                                        const int seed)
 {
-  /* This only updates a cache and can be considered to be logically const. */
-  const MLoopTri *looptris = BKE_mesh_runtime_looptri_ensure(const_cast<Mesh *>(mesh));
-  const int looptris_len = BKE_mesh_runtime_looptri_len(mesh);
-
   Vector<float3> points;
 
   if (min_dist <= FLT_EPSILON || density <= FLT_EPSILON) {
@@ -122,93 +139,89 @@ static Vector<float3> poisson_scatter_points_from_mesh(const Mesh *mesh,
   // good quality possion disk distributions.
 
   int quality = 5;
-  Vector<bool> remove_point;
+  const int output_points_target = 1000;
+  points.resize(output_points_target * quality);
 
+  const float required_area = output_points_target * (2.0f * sqrtf(3.0f) * min_dist * min_dist);
+  const float point_scale_multiplier = sqrtf(required_area);
+
+  cy::WeightedSampleElimination<float3, float, 3, size_t> wse;
   {
     SCOPED_TIMER("poisson random dist points");
+    const int rnd_seed = BLI_hash_int(seed);
+    RandomNumberGenerator point_rng(rnd_seed);
 
-    for (const int looptri_index : IndexRange(looptris_len)) {
-      const MLoopTri &looptri = looptris[looptri_index];
-      const int v0_index = mesh->mloop[looptri.tri[0]].v;
-      const int v1_index = mesh->mloop[looptri.tri[1]].v;
-      const int v2_index = mesh->mloop[looptri.tri[2]].v;
-      const float3 v0_pos = mesh->mvert[v0_index].co;
-      const float3 v1_pos = mesh->mvert[v1_index].co;
-      const float3 v2_pos = mesh->mvert[v2_index].co;
-      const float area = area_tri_v3(v0_pos, v1_pos, v2_pos);
-      const float v0_density_factor = std::max(0.0f, density_factors[v0_index]);
-      const float v1_density_factor = std::max(0.0f, density_factors[v1_index]);
-      const float v2_density_factor = std::max(0.0f, density_factors[v2_index]);
+    float3 bounds_max = float3(point_scale_multiplier, point_scale_multiplier, 0);
+    wse.SetBoundsMax(bounds_max);
+    wse.SetTiling();
 
-      const int looptri_seed = BLI_hash_int(looptri_index + seed);
-      RandomNumberGenerator looptri_rng(looptri_seed);
-
-      const float points_amount_fl = quality * area / (2.0f * sqrtf(3.0f) * min_dist * min_dist);
-      const float add_point_probability = fractf(points_amount_fl);
-      const bool add_point = add_point_probability > looptri_rng.get_float();
-      const int point_amount = (int)points_amount_fl + (int)add_point;
-
-      for (int i = 0; i < point_amount; i++) {
-        const float3 bary_coords = looptri_rng.get_barycentric_coordinates();
-        float3 point_pos;
-        interp_v3_v3v3v3(point_pos, v0_pos, v1_pos, v2_pos, bary_coords);
-        points.append(point_pos);
-
-        const float weight = bary_coords[0] * v0_density_factor +
-                             bary_coords[1] * v1_density_factor +
-                             bary_coords[2] * v2_density_factor;
-        remove_point.append(looptri_rng.get_float() <= density * weight);
-      }
+    for (int i = 0; i < points.size(); i++) {
+      points[i].x = point_rng.get_float() * point_scale_multiplier;
+      points[i].y = point_rng.get_float() * point_scale_multiplier;
+      points[i].z = 0.0f;
     }
   }
 
   // Eliminate the scattered points until we get a possion distribution.
-  std::vector<size_t> output_idx;
-  Vector<float3> output_points(points.size());
+  Vector<float3> output_points(output_points_target);
   {
     SCOPED_TIMER("Total poisson sample elim");
 
-    cy::WeightedSampleElimination<float3, float, 3, size_t> wse;
     bool is_progressive = false;
 
     float d_max = 2 * min_dist;
-
-    float d_min = d_max * wse.GetWeightLimitFraction(points.size(), points.size() / quality);
-    float alpha = wse.GetParamAlpha();
-    output_idx = wse.Eliminate_all(
-        points.data(),
-        points.size(),
-        output_points.data(),
-        output_points.size(),
-        is_progressive,
-        d_max,
-        2,
-        [d_min,
-         alpha](float3 const & /*unused*/, float3 const & /*unused*/, float d2, float d_max) {
-          float d = sqrtf(d2);
-          if (d < d_min) {
-            d = d_min;
-          }
-          return std::pow(1.0f - d / d_max, alpha);
-        });
+    wse.Eliminate(points.data(),
+                  points.size(),
+                  output_points.data(),
+                  output_points.size(),
+                  is_progressive,
+                  d_max,
+                  2);
   }
 
+  Vector<float3> final_points;
+  // TODO do some clever reserveing based on bounding box size perhaps?
+  final_points.reserve(output_points_target);
   // Check if we have any points we should remove from the final possion distribition.
   {
-    SCOPED_TIMER("poisson weight map elim");
-    output_points.resize(output_idx.size());
-    points.clear();
-    points.reserve(output_points.size());
+    SCOPED_TIMER("poisson projection mapping");
+    BVHTreeFromMesh treedata;
+    BKE_bvhtree_from_mesh_get(&treedata, mesh, BVHTREE_FROM_LOOPTRI, 2);
 
-    for (int i = 0; i < output_points.size(); i++) {
-      if (!remove_point[output_idx[i]]) {
-        continue;
+    float3 bb_min, bb_max;
+    BLI_bvhtree_get_bounding_box(treedata.tree, bb_min, bb_max);
+
+    struct RayCastAll_Data data;
+    data.bvhdata = &treedata;
+    data.raycast_callback = treedata.raycast_callback;
+    data.projected_points = &final_points;
+
+    const float max_dist = bb_max[2] - bb_min[2];
+    const float3 dir = float3(0, 0, -1);
+    float3 raystart;
+    raystart.z = bb_max[2];
+
+    float tile_start_x_coord = bb_min[0];
+    int tile_repeat_x = ceilf((bb_max[0] - bb_min[0]) / point_scale_multiplier);
+
+    float tile_start_y_coord = bb_min[1];
+    int tile_repeat_y = ceilf((bb_max[1] - bb_min[1]) / point_scale_multiplier);
+
+    for (int x = 0; x < tile_repeat_x; x++) {
+      for (int y = 0; y < tile_repeat_y; y++) {
+        for (auto &point : output_points) {
+          raystart.x = point.x + tile_start_x_coord;
+          raystart.y = point.y + tile_start_y_coord;
+          BLI_bvhtree_ray_cast_all(
+              treedata.tree, raystart, dir, 0.0f, max_dist, project_2d_bvh_callback, &data);
+        }
+        tile_start_y_coord += point_scale_multiplier;
       }
-      points.append(output_points[i]);
+      tile_start_x_coord += point_scale_multiplier;
     }
   }
 
-  return points;
+  return final_points;
 }
 
 static void geo_node_point_distribute_exec(GeoNodeExecParams params)
@@ -232,8 +245,9 @@ static void geo_node_point_distribute_exec(GeoNodeExecParams params)
     return;
   }
 
-  const MeshComponent &mesh_component = *geometry_set.get_component_for_read<MeshComponent>();
-  const Mesh *mesh_in = mesh_component.get_for_read();
+  // Non const because of mesh BVH generaton when projection mapping is used.
+  MeshComponent &mesh_component = geometry_set.get_component_for_write<MeshComponent>();
+  Mesh *mesh_in = mesh_component.get_for_write();
 
   const FloatReadAttribute density_factors = mesh_component.attribute_get_for_read<float>(
       density_attribute, ATTR_DOMAIN_POINT, 1.0f);
