@@ -985,7 +985,7 @@ static void panel_draw(const bContext *C, Panel *panel)
                nullptr,
                nullptr,
                0,
-               ICON_NONE,
+               false,
                nullptr);
 
   if (nmd->node_group != nullptr && nmd->settings.properties != nullptr) {
