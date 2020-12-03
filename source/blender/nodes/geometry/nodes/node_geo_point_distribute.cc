@@ -196,10 +196,10 @@ static Vector<float3> poisson_scatter_points_from_mesh(Mesh *mesh,
     data.raycast_callback = treedata.raycast_callback;
     data.projected_points = &final_points;
 
-    const float max_dist = bb_max[2] - bb_min[2];
+    const float max_dist = bb_max[2] - bb_min[2] + 2.0f;
     const float3 dir = float3(0, 0, -1);
     float3 raystart;
-    raystart.z = bb_max[2];
+    raystart.z = bb_max[2] + 1.0f;
 
     float tile_start_x_coord = bb_min[0];
     int tile_repeat_x = ceilf((bb_max[0] - bb_min[0]) / point_scale_multiplier);
@@ -207,17 +207,18 @@ static Vector<float3> poisson_scatter_points_from_mesh(Mesh *mesh,
     float tile_start_y_coord = bb_min[1];
     int tile_repeat_y = ceilf((bb_max[1] - bb_min[1]) / point_scale_multiplier);
 
+    // TODO this can easily be multithreaded.
     for (int x = 0; x < tile_repeat_x; x++) {
+      float tile_curr_x_coord = x * point_scale_multiplier + tile_start_x_coord;
       for (int y = 0; y < tile_repeat_y; y++) {
+        float tile_curr_y_coord = y * point_scale_multiplier + tile_start_y_coord;
         for (auto &point : output_points) {
-          raystart.x = point.x + tile_start_x_coord;
-          raystart.y = point.y + tile_start_y_coord;
+          raystart.x = point.x + tile_curr_x_coord;
+          raystart.y = point.y + tile_curr_y_coord;
           BLI_bvhtree_ray_cast_all(
               treedata.tree, raystart, dir, 0.0f, max_dist, project_2d_bvh_callback, &data);
         }
-        tile_start_y_coord += point_scale_multiplier;
       }
-      tile_start_x_coord += point_scale_multiplier;
     }
   }
 
