@@ -154,7 +154,7 @@ static void project_2d_bvh_callback(void *userdata,
   }
 }
 
-static Vector<float3> poisson_scatter_points_from_mesh(Mesh *mesh,
+static Vector<float3> poisson_scatter_points_from_mesh(const Mesh *mesh,
                                                        const float density,
                                                        const float min_dist,
                                                        const FloatReadAttribute &density_factors,
@@ -217,7 +217,7 @@ static Vector<float3> poisson_scatter_points_from_mesh(Mesh *mesh,
   {
     SCOPED_TIMER("poisson projection mapping");
     BVHTreeFromMesh treedata;
-    BKE_bvhtree_from_mesh_get(&treedata, mesh, BVHTREE_FROM_LOOPTRI, 2);
+    BKE_bvhtree_from_mesh_get(&treedata, const_cast<Mesh *>(mesh), BVHTREE_FROM_LOOPTRI, 2);
 
     float3 bb_min, bb_max;
     BLI_bvhtree_get_bounding_box(treedata.tree, bb_min, bb_max);
@@ -283,10 +283,8 @@ static void geo_node_point_distribute_exec(GeoNodeExecParams params)
     return;
   }
 
-  // Non const because of mesh BVH generaton when projection mapping is used.
-  // TODO should we just const cast for BVH gen instead?
-  MeshComponent &mesh_component = geometry_set.get_component_for_write<MeshComponent>();
-  Mesh *mesh_in = mesh_component.get_for_write();
+  const MeshComponent &mesh_component = *geometry_set.get_component_for_read<MeshComponent>();
+  const Mesh *mesh_in = mesh_component.get_for_read();
 
   const FloatReadAttribute density_factors = mesh_component.attribute_get_for_read<float>(
       density_attribute, ATTR_DOMAIN_POINT, 1.0f);
