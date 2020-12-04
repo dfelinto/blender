@@ -178,7 +178,7 @@ static Vector<float3> poisson_scatter_points_from_mesh(const Mesh *mesh,
 
   cy::WeightedSampleElimination<float3, float, 3, size_t> wse;
   {
-    SCOPED_TIMER("poisson random dist points");
+    // SCOPED_TIMER("poisson random dist points");
     const int rnd_seed = BLI_hash_int(seed);
     RandomNumberGenerator point_rng(rnd_seed);
 
@@ -196,7 +196,7 @@ static Vector<float3> poisson_scatter_points_from_mesh(const Mesh *mesh,
   // Eliminate the scattered points until we get a possion distribution.
   Vector<float3> output_points(output_points_target);
   {
-    SCOPED_TIMER("Total poisson sample elim");
+    // SCOPED_TIMER("Total poisson sample elim");
 
     bool is_progressive = true;
 
@@ -215,7 +215,7 @@ static Vector<float3> poisson_scatter_points_from_mesh(const Mesh *mesh,
   final_points.reserve(output_points_target);
   // Check if we have any points we should remove from the final possion distribition.
   {
-    SCOPED_TIMER("poisson projection mapping");
+    // SCOPED_TIMER("poisson projection mapping");
     BVHTreeFromMesh treedata;
     BKE_bvhtree_from_mesh_get(&treedata, const_cast<Mesh *>(mesh), BVHTREE_FROM_LOOPTRI, 2);
 
@@ -228,7 +228,9 @@ static Vector<float3> poisson_scatter_points_from_mesh(const Mesh *mesh,
     data.mesh = mesh;
     data.projected_points = &final_points;
     data.density_factors = const_cast<FloatReadAttribute *>(&density_factors);
-    data.base_weight = density;
+    data.base_weight = std::min(
+        1.0f,
+        density / (output_points.size() / (point_scale_multiplier * point_scale_multiplier)));
 
     const float max_dist = bb_max[2] - bb_min[2] + 2.0f;
     const float3 dir = float3(0, 0, -1);
