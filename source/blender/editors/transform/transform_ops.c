@@ -376,7 +376,7 @@ static int transformops_data(bContext *C, wmOperator *op, const wmEvent *event)
 {
   int retval = 1;
   if (op->customdata == NULL) {
-    TransInfo *t = MEM_callocN(sizeof(TransInfo), "TransInfo data2");
+    TransInfo *t = op->customdata = MEM_callocN(sizeof(TransInfo), "TransInfo data2");
     TransformModeItem *tmode;
     int mode = -1;
 
@@ -396,10 +396,10 @@ static int transformops_data(bContext *C, wmOperator *op, const wmEvent *event)
     /* store data */
     if (retval) {
       G.moving = special_transform_moving(t);
-      op->customdata = t;
     }
     else {
       MEM_freeN(t);
+      op->customdata = NULL;
     }
   }
 
@@ -1040,8 +1040,7 @@ static void TRANSFORM_OT_mirror(struct wmOperatorType *ot)
   ot->poll = ED_operator_screenactive;
   ot->poll_property = transform_poll_property;
 
-  Transform_Properties(
-      ot, P_ORIENT_MATRIX | P_CONSTRAINT | P_PROPORTIONAL | P_GPENCIL_EDIT | P_CENTER);
+  Transform_Properties(ot, P_ORIENT_MATRIX | P_CONSTRAINT | P_GPENCIL_EDIT | P_CENTER);
 }
 
 static void TRANSFORM_OT_bbone_resize(struct wmOperatorType *ot)
