@@ -108,7 +108,11 @@ struct RayCastAll_Data {
 
   BVHTree_RayCastCallback raycast_callback;
 
+  const Mesh *mesh;
+  float base_weight;
+  FloatReadAttribute *density_factors;
   Vector<float3> *projected_points;
+  float cur_point_weight;
 };
 
 static void project_2d_bvh_callback(void *userdata,
@@ -119,7 +123,34 @@ static void project_2d_bvh_callback(void *userdata,
   struct RayCastAll_Data *data = (RayCastAll_Data *)userdata;
   data->raycast_callback(data->bvhdata, index, ray, hit);
   if (hit->index != -1) {
-    data->projected_points->append(hit->co);
+    /* This only updates a cache and can be considered to be logically const. */
+    const MLoopTri *looptris = BKE_mesh_runtime_looptri_ensure(const_cast<Mesh *>(data->mesh));
+    const MVert *mvert = data->mesh->mvert;
+
+    const MLoopTri &looptri = looptris[index];
+    const FloatReadAttribute &density_factors = data->density_factors[0];
+
+    const int v0_index = data->mesh->mloop[looptri.tri[0]].v;
+    const int v1_index = data->mesh->mloop[looptri.tri[1]].v;
+    const int v2_index = data->mesh->mloop[looptri.tri[2]].v;
+
+    const float v0_density_factor = std::max(0.0f, density_factors[v0_index]);
+    const float v1_density_factor = std::max(0.0f, density_factors[v1_index]);
+    const float v2_density_factor = std::max(0.0f, density_factors[v2_index]);
+
+    // Calculate barycentric weights for hit point.
+    float3 weights;
+    interp_weights_tri_v3(
+        weights, mvert[v0_index].co, mvert[v1_index].co, mvert[v2_index].co, hit->co);
+
+    float point_weight = weights[0] * v0_density_factor + weights[1] * v1_density_factor +
+                         weights[2] * v2_density_factor;
+
+    point_weight *= data->base_weight;
+
+    if (point_weight >= FLT_EPSILON && data->cur_point_weight <= point_weight) {
+      data->projected_points->append(hit->co);
+    }
   }
 }
 
@@ -167,7 +198,7 @@ static Vector<float3> poisson_scatter_points_from_mesh(Mesh *mesh,
   {
     SCOPED_TIMER("Total poisson sample elim");
 
-    bool is_progressive = false;
+    bool is_progressive = true;
 
     float d_max = 2 * min_dist;
     wse.Eliminate(points.data(),
@@ -194,7 +225,10 @@ static Vector<float3> poisson_scatter_points_from_mesh(Mesh *mesh,
     struct RayCastAll_Data data;
     data.bvhdata = &treedata;
     data.raycast_callback = treedata.raycast_callback;
+    data.mesh = mesh;
     data.projected_points = &final_points;
+    data.density_factors = const_cast<FloatReadAttribute *>(&density_factors);
+    data.base_weight = density;
 
     const float max_dist = bb_max[2] - bb_min[2] + 2.0f;
     const float3 dir = float3(0, 0, -1);
@@ -212,9 +246,12 @@ static Vector<float3> poisson_scatter_points_from_mesh(Mesh *mesh,
       float tile_curr_x_coord = x * point_scale_multiplier + tile_start_x_coord;
       for (int y = 0; y < tile_repeat_y; y++) {
         float tile_curr_y_coord = y * point_scale_multiplier + tile_start_y_coord;
-        for (auto &point : output_points) {
-          raystart.x = point.x + tile_curr_x_coord;
-          raystart.y = point.y + tile_curr_y_coord;
+        for (int idx = 0; idx < output_points.size(); idx++) {
+          raystart.x = output_points[idx].x + tile_curr_x_coord;
+          raystart.y = output_points[idx].y + tile_curr_y_coord;
+
+          data.cur_point_weight = (float)idx / (float)output_points.size();
+
           BLI_bvhtree_ray_cast_all(
               treedata.tree, raystart, dir, 0.0f, max_dist, project_2d_bvh_callback, &data);
         }
@@ -247,6 +284,7 @@ static void geo_node_point_distribute_exec(GeoNodeExecParams params)
   }
 
   // Non const because of mesh BVH generaton when projection mapping is used.
+  // TODO should we just const cast for BVH gen instead?
   MeshComponent &mesh_component = geometry_set.get_component_for_write<MeshComponent>();
   Mesh *mesh_in = mesh_component.get_for_write();
 
