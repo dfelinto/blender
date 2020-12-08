@@ -47,10 +47,13 @@ struct wmKeyConfig;
 struct wmOperatorType;
 
 typedef struct SpaceOutliner_Runtime {
-  /**
-   * Internal C++ object to create and manage the tree for a specific display type (View Layers,
-   * Scenes, Blender File, etc.). */
+  /** Internal C++ object to create and manage the tree for a specific display type (View Layers,
+   *  Scenes, Blender File, etc.). */
   struct TreeDisplay *tree_display;
+
+  /** Pointers to tree-store elements, grouped by `(id, type, nr)`
+   *  in hash-table for faster searching. */
+  struct GHash *treehash;
 } SpaceOutliner_Runtime;
 
 typedef enum TreeElementInsertType {
@@ -72,6 +75,14 @@ typedef TreeTraversalAction (*TreeTraversalFunc)(struct TreeElement *te, void *c
 
 typedef struct TreeElement {
   struct TreeElement *next, *prev, *parent;
+
+  /**
+   * Handle to the new C++ object (a derived type of base #AbstractTreeElement) that should replace
+   * #TreeElement. Step by step, data should be moved to it and operations based on the type should
+   * become virtual methods of the class hierarchy.
+   */
+  struct TreeElementType *type;
+
   ListBase subtree;
   int xs, ys;                /* Do selection. */
   TreeStoreElem *store_elem; /* Element in tree store. */

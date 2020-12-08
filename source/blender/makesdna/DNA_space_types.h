@@ -1,4 +1,4 @@
-/*
+﻿/*
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
  * as published by the Free Software Foundation; either version 2
@@ -278,11 +278,6 @@ typedef struct SpaceOutliner {
   char filter_state;
   char show_restrict_flags;
   short filter_id_type;
-
-  /**
-   * Pointers to treestore elements, grouped by (id, type, nr)
-   * in hashtable for faster searching */
-  void *treehash;
 
   SpaceOutliner_Runtime *runtime;
 } SpaceOutliner;
@@ -703,7 +698,7 @@ typedef struct FileSelectParams {
 
   /* short */
   /** XXXXX for now store type here, should be moved to the operator. */
-  short type;
+  short type; /* eFileSelectType */
   /** Settings for filter, hiding dots files. */
   short flag;
   /** Sort order. */
@@ -812,12 +807,14 @@ enum eFileDetails {
 #define FILE_MAX_LIBEXTRA (FILE_MAX + MAX_ID_NAME)
 
 /* filesel types */
-#define FILE_UNIX 8
-#define FILE_BLENDER 8 /* don't display relative paths */
-#define FILE_SPECIAL 9
+typedef enum eFileSelectType {
+  FILE_LOADLIB = 1,
+  FILE_MAIN = 2,
 
-#define FILE_LOADLIB 1
-#define FILE_MAIN 2
+  FILE_UNIX = 8,
+  FILE_BLENDER = 8, /* don't display relative paths */
+  FILE_SPECIAL = 9,
+} eFileSelectType;
 
 /* filesel op property -> action */
 typedef enum eFileSel_Action {
