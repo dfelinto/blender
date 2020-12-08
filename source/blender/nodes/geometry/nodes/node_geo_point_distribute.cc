@@ -19,7 +19,6 @@
 #include "BLI_math_vector.h"
 #include "BLI_rand.hh"
 #include "BLI_span.hh"
-#include "BLI_timeit.hh"
 
 #include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
@@ -138,7 +137,7 @@ static void project_2d_bvh_callback(void *userdata,
     const float v1_density_factor = std::max(0.0f, density_factors[v1_index]);
     const float v2_density_factor = std::max(0.0f, density_factors[v2_index]);
 
-    // Calculate barycentric weights for hit point.
+    /* Calculate barycentric weights for hit point. */
     float3 weights;
     interp_weights_tri_v3(
         weights, mvert[v0_index].co, mvert[v1_index].co, mvert[v2_index].co, hit->co);
@@ -166,9 +165,9 @@ static Vector<float3> poisson_scatter_points_from_mesh(const Mesh *mesh,
     return points;
   }
 
-  // Scatter points randomly on the mesh with higher density (5-7) times higher than desired for
-  // good quality possion disk distributions.
-
+  /* Scatter points randomly on the mesh with higher density (5-7) times higher than desired for
+   * good quality possion disk distributions.
+   */
   int quality = 5;
   const int output_points_target = 1000;
   points.resize(output_points_target * quality);
@@ -178,7 +177,6 @@ static Vector<float3> poisson_scatter_points_from_mesh(const Mesh *mesh,
 
   cy::WeightedSampleElimination<float3, float, 3, size_t> wse;
   {
-    // SCOPED_TIMER("poisson random dist points");
     const int rnd_seed = BLI_hash_int(seed);
     RandomNumberGenerator point_rng(rnd_seed);
 
@@ -193,70 +191,64 @@ static Vector<float3> poisson_scatter_points_from_mesh(const Mesh *mesh,
     }
   }
 
-  // Eliminate the scattered points until we get a possion distribution.
+  /* Eliminate the scattered points until we get a possion distribution. */
   Vector<float3> output_points(output_points_target);
-  {
-    // SCOPED_TIMER("Total poisson sample elim");
 
-    bool is_progressive = true;
+  bool is_progressive = true;
 
-    float d_max = 2 * min_dist;
-    wse.Eliminate(points.data(),
-                  points.size(),
-                  output_points.data(),
-                  output_points.size(),
-                  is_progressive,
-                  d_max,
-                  2);
-  }
+  float d_max = 2 * min_dist;
+  wse.Eliminate(points.data(),
+                points.size(),
+                output_points.data(),
+                output_points.size(),
+                is_progressive,
+                d_max,
+                2);
 
   Vector<float3> final_points;
   // TODO do some clever reserveing based on bounding box size perhaps?
   final_points.reserve(output_points_target);
-  // Check if we have any points we should remove from the final possion distribition.
-  {
-    // SCOPED_TIMER("poisson projection mapping");
-    BVHTreeFromMesh treedata;
-    BKE_bvhtree_from_mesh_get(&treedata, const_cast<Mesh *>(mesh), BVHTREE_FROM_LOOPTRI, 2);
 
-    float3 bb_min, bb_max;
-    BLI_bvhtree_get_bounding_box(treedata.tree, bb_min, bb_max);
+  /* Check if we have any points we should remove from the final possion distribition. */
+  BVHTreeFromMesh treedata;
+  BKE_bvhtree_from_mesh_get(&treedata, const_cast<Mesh *>(mesh), BVHTREE_FROM_LOOPTRI, 2);
 
-    struct RayCastAll_Data data;
-    data.bvhdata = &treedata;
-    data.raycast_callback = treedata.raycast_callback;
-    data.mesh = mesh;
-    data.projected_points = &final_points;
-    data.density_factors = const_cast<FloatReadAttribute *>(&density_factors);
-    data.base_weight = std::min(
-        1.0f,
-        density / (output_points.size() / (point_scale_multiplier * point_scale_multiplier)));
+  float3 bb_min, bb_max;
+  BLI_bvhtree_get_bounding_box(treedata.tree, bb_min, bb_max);
 
-    const float max_dist = bb_max[2] - bb_min[2] + 2.0f;
-    const float3 dir = float3(0, 0, -1);
-    float3 raystart;
-    raystart.z = bb_max[2] + 1.0f;
+  struct RayCastAll_Data data;
+  data.bvhdata = &treedata;
+  data.raycast_callback = treedata.raycast_callback;
+  data.mesh = mesh;
+  data.projected_points = &final_points;
+  data.density_factors = const_cast<FloatReadAttribute *>(&density_factors);
+  data.base_weight = std::min(
+      1.0f, density / (output_points.size() / (point_scale_multiplier * point_scale_multiplier)));
 
-    float tile_start_x_coord = bb_min[0];
-    int tile_repeat_x = ceilf((bb_max[0] - bb_min[0]) / point_scale_multiplier);
+  const float max_dist = bb_max[2] - bb_min[2] + 2.0f;
+  const float3 dir = float3(0, 0, -1);
+  float3 raystart;
+  raystart.z = bb_max[2] + 1.0f;
 
-    float tile_start_y_coord = bb_min[1];
-    int tile_repeat_y = ceilf((bb_max[1] - bb_min[1]) / point_scale_multiplier);
+  float tile_start_x_coord = bb_min[0];
+  int tile_repeat_x = ceilf((bb_max[0] - bb_min[0]) / point_scale_multiplier);
 
-    // TODO this can easily be multithreaded.
-    for (int x = 0; x < tile_repeat_x; x++) {
-      float tile_curr_x_coord = x * point_scale_multiplier + tile_start_x_coord;
-      for (int y = 0; y < tile_repeat_y; y++) {
-        float tile_curr_y_coord = y * point_scale_multiplier + tile_start_y_coord;
-        for (int idx = 0; idx < output_points.size(); idx++) {
-          raystart.x = output_points[idx].x + tile_curr_x_coord;
-          raystart.y = output_points[idx].y + tile_curr_y_coord;
+  float tile_start_y_coord = bb_min[1];
+  int tile_repeat_y = ceilf((bb_max[1] - bb_min[1]) / point_scale_multiplier);
 
-          data.cur_point_weight = (float)idx / (float)output_points.size();
+  // TODO this can easily be multithreaded.
+  for (int x = 0; x < tile_repeat_x; x++) {
+    float tile_curr_x_coord = x * point_scale_multiplier + tile_start_x_coord;
+    for (int y = 0; y < tile_repeat_y; y++) {
+      float tile_curr_y_coord = y * point_scale_multiplier + tile_start_y_coord;
+      for (int idx = 0; idx < output_points.size(); idx++) {
+        raystart.x = output_points[idx].x + tile_curr_x_coord;
+        raystart.y = output_points[idx].y + tile_curr_y_coord;
 
-          BLI_bvhtree_ray_cast_all(
-              treedata.tree, raystart, dir, 0.0f, max_dist, project_2d_bvh_callback, &data);
-        }
+        data.cur_point_weight = (float)idx / (float)output_points.size();
+
+        BLI_bvhtree_ray_cast_all(
+            treedata.tree, raystart, dir, 0.0f, max_dist, project_2d_bvh_callback, &data);
       }
     }
   }
@@ -302,7 +294,7 @@ static void geo_node_point_distribute_exec(GeoNodeExecParams params)
     points = poisson_scatter_points_from_mesh(mesh_in, density, min_dist, density_factors, seed);
   }
   else {
-    // Unhandled point distribution.
+    /* Unhandled point distribution. */
     BLI_assert(false);
   }
 

@@ -62,6 +62,8 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "NOD_socket.h"
+
 #include "RNA_access.h"
 
 #include "SEQ_sequencer.h"
@@ -1222,6 +1224,47 @@ void blo_do_versions_290(FileData *fd, Library *UNUSED(lib), Main *bmain)
     }
     LISTBASE_FOREACH (PointCloud *, pointcloud, &bmain->pointclouds) {
       do_versions_point_attribute_names(&pointcloud->pdata);
+    }
+
+    /* Fix inputs for the point distrubiton geometry node. A new input was added so the existing
+     * ones need to shift index one space.
+     *
+     * The for loop for the input ids is at the top level otherwise we lose the animation
+     * keyframe data.
+     * */
+    for (int input_id = 3; input_id >= 1; input_id--) {
+      FOREACH_NODETREE_BEGIN (bmain, ntree, id) {
+        if (ntree->type == NTREE_GEOMETRY) {
+          LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
+            if (node->type != GEO_NODE_POINT_DISTRIBUTE) {
+              continue;
+            }
+            // TODO doesn't work... Random stuff I tried.
+            // for (bNodeSocket *sock = node->inputs.first; sock; sock = sock->next) {
+            //  printf("Sock name: %s\n", sock->name);
+            //  if (STREQ("Density", sock->name)) {
+            //    BLI_strncpy(sock->name, "Maximum Density", sizeof(sock->name));
+            //    /* Make sure new sockets are properly created. */
+            //    node_verify_socket_templates(ntree, node);
+            //    break;
+            //  }
+            //}
+
+            // const size_t node_name_length = strlen(node->name);
+            // const size_t node_name_escaped_max_length = (node_name_length * 2);
+            // char *node_name_escaped = MEM_mallocN(node_name_escaped_max_length + 1,
+            //                                      "escaped name");
+            // BLI_strescape(node_name_escaped, node->name, node_name_escaped_max_length);
+            // char *rna_path_prefix = BLI_sprintfN("nodes[\"%s\"].inputs", node_name_escaped);
+
+            // BKE_animdata_fix_paths_rename_all_ex(
+            //    bmain, id, rna_path_prefix, NULL, NULL, input_id, input_id + 1, false);
+            // MEM_freeN(rna_path_prefix);
+            // MEM_freeN(node_name_escaped);
+          }
+        }
+      }
+      FOREACH_NODETREE_END;
     }
   }
 }
