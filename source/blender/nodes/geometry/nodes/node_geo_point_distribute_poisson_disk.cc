@@ -55,16 +55,6 @@ static void tile_point(std::vector<float3> *tiled_points,
 }
 
 /**
- * The poisson disk radius is half the expected distance for each point.
- */
-static float maximum_poisson_disk_radius(const size_t sample_count, const float3 boundbox)
-{
-  float domain_size = std::pow(boundbox[0], 3);
-  float sample_area = domain_size / sample_count;
-  return std::pow(sample_area / (4.0f * std::sqrt(2.0f)), 1.0f / 3.0f);
-}
-
-/**
  * Returns the weight the point gets based on the distance to another point.
  */
 static float point_weight_influence_get(const float maximum_distance,
@@ -246,10 +236,6 @@ void poisson_disk_point_elimination(Vector<float3> const *input_points,
                                     float maximum_density,
                                     float3 boundbox)
 {
-  if (maximum_density == 0) {
-    maximum_density = FLT_MAX;
-  }
-
   weighted_sample_elimination(input_points, output_points, maximum_density, boundbox);
 
   /* Re-order the points for progressive sampling. */
