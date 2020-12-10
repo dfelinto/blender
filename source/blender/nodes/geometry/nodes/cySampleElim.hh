@@ -1,59 +1,8 @@
-// cyCodeBase by Cem Yuksel
-// [www.cemyuksel.com]
-//-------------------------------------------------------------------------------
-//! \file   cySampleElim.h
-//! \author Cem Yuksel
-//!
-//! \brief  Implementation of the weighted sample elimination method.
-//!
-//! This file includes an implementation of the weighted sample elimination
-//! method for generating Poisson disk sample sets.
-//!
-//! Blue noise (Poisson disk) sample sets produce high-quality sampling. They
-//! often lead to lower noise and better convergence with Monte Carlo sampling.
-//! They provide a uniform sample distribution over a sampling domain. Unlike
-//! regular random sampling, Poisson disk sample sets avoid placing any two
-//! samples too close together (determined by a Poisson disk radius).
-//!
-//! The weighted sample elimination method implemented in this file generates a
-//! subset of samples with blue noise (Poisson disk) characteristics from a
-//! given input sample set. The weighted sample elimination method is simple,
-//! computationally efficient, and suitable for any sampling domain. It produces
-//! high-quality blue noise sample sets with a relatively large average Poisson
-//! disk radius without the need for specifying a Poisson disk radius. It also
-//! allows progressive (adaptive) sampling and it is efficient for high-
-//! dimensional sampling. However, it does not guarantee maximal coverage.
-//!
-//! More details can be found in the original publication:
-//!
-//! Cem Yuksel. 2015. Sample Elimination for Generating Poisson Disk Sample
+// Based on Cem Yuksel. 2015. Sample Elimination for Generating Poisson Disk Sample
 //! Sets. Computer Graphics Forum 34, 2 (May 2015), 25-32.
 //! http://www.cemyuksel.com/research/sampleelimination/
-//!
-//-------------------------------------------------------------------------------
-//
 // Copyright (c) 2016, Cem Yuksel <cem@cemyuksel.com>
 // All rights reserved.
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-//
-//-------------------------------------------------------------------------------
 
 #pragma once
 
@@ -185,108 +134,13 @@ template<> PointCloud<blender::float3, float, 3, size_t>::~PointCloud()
   BLI_kdtree_3d_free((KDTree_3d *)kd_tree);
 }
 
-#if 0
-template<typename FType, typename SIZE_TYPE> class Heap {
-  ::Heap *heap;  // BLI_Heap
-  FType *weight_arr;
-  SIZE_TYPE weight_arr_len;
-  std::vector<HeapNode *> heap_nodes;
-
-  int calls = 0;
-
- public:
-  ~Heap()
-  {
-    BLI_heap_free(heap, nullptr);
-  }
-
-  // Stub out the member functions so we abort if we have not explicity implemented the
-  // member functions for the type combinations.
-  void SetDataPointer(FType * /*unused*/, SIZE_TYPE /*unused*/)
-  {
-    BLI_assert(false);
-  }
-
-  void Build()
-  {
-    heap = BLI_heap_new_ex(weight_arr_len);
-    heap_nodes.reserve(weight_arr_len);
-    std::cout << "called build: " << weight_arr_len << std::endl;
-    for (SIZE_TYPE i = 0; i < weight_arr_len; i++) {
-      heap_nodes.push_back(BLI_heap_insert(heap, weight_arr[i], POINTER_FROM_INT(i)));
-    }
-  }
-
-  void MoveItemDown(SIZE_TYPE /*unused*/)
-  {
-    BLI_assert(false);
-  }
-
-  SIZE_TYPE GetIDFromHeap(SIZE_TYPE /*unused*/)
-  {
-    BLI_assert(false);
-    return 0;
-  }
-
-  SIZE_TYPE GetTopItemID()
-  {
-    BLI_assert(false);
-    return 0;
-  }
-
-  void Pop()
-  {
-    BLI_heap_pop_min(heap);
-  }
-};
-
-template<> void Heap<float, size_t>::SetDataPointer(float *value_arr, size_t size)
-{
-  std::cout << "called set data: " << size << std::endl;
-  this->weight_arr = value_arr;
-  this->weight_arr_len = size;
-}
-
-template<> void Heap<float, size_t>::MoveItemDown(size_t idx)
-{
-  std::cout << "move down" << std::endl;
-  BLI_heap_node_value_update(heap, heap_nodes[idx], weight_arr[idx]);
-
-  // TODO BLI heap bug? (Sort of, we are updating values of popped nodes)
-  HeapNode *node = BLI_heap_top(heap);
-  BLI_assert((size_t)BLI_heap_node_ptr(node) < weight_arr_len);
-}
-
-template<> size_t Heap<float, size_t>::GetIDFromHeap(size_t idx)
-{
-  std::cout << "heap idx: " << idx << std::endl;
-  HeapNode *node = BLI_heap_idx(heap, idx);
-  return (size_t)BLI_heap_node_ptr(node);
-}
-
-template<> size_t Heap<float, size_t>::GetTopItemID()
-{
-  std::cout << "call: " << calls << std::endl;
-  std::cout << "vec size: " << heap_nodes.size() << std::endl;
-  calls++;
-  HeapNode *node = BLI_heap_top(heap);
-  size_t idx = POINTER_AS_INT(BLI_heap_node_ptr(node));
-  std::cout << idx << std::endl;
-  return idx;
-}
-
-#endif
-
 // ------
 // Blender functions end
 // ------
 
 //! An implementation of the weighted sample elimination method.
 //!
-//! Cem Yuksel. 2015. Sample Elimination for Generating Poisson Disk Sample
-//! Sets. Computer Graphics Forum 34, 2 (May 2015), 25-32.
-//! http://www.cemyuksel.com/research/sampleelimination/
-//!
+
 //! This class keeps a number of parameters for the weighted sample elimination
 //! algorithm. The main algorithm is implemented in the Eliminate method.
 
