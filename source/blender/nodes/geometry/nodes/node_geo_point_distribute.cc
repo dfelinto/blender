@@ -174,14 +174,9 @@ static Vector<float3> poisson_scatter_points_from_mesh(const Mesh *mesh,
   const float required_area = output_points_target * (2.0f * sqrtf(3.0f) * min_dist * min_dist);
   const float point_scale_multiplier = sqrtf(required_area);
 
-  cy::WeightedSampleElimination<float3, float, 3, size_t> wse;
   {
     const int rnd_seed = BLI_hash_int(seed);
     RandomNumberGenerator point_rng(rnd_seed);
-
-    float3 bounds_max = float3(point_scale_multiplier, point_scale_multiplier, 0);
-    wse.SetBoundsMax(bounds_max);
-    wse.SetTiling();
 
     for (int i = 0; i < points.size(); i++) {
       points[i].x = point_rng.get_float() * point_scale_multiplier;
@@ -194,8 +189,10 @@ static Vector<float3> poisson_scatter_points_from_mesh(const Mesh *mesh,
   Vector<float3> output_points(output_points_target);
 
   bool is_progressive = true;
-
   float d_max = 2 * min_dist;
+
+  float3 bounds_max = float3(point_scale_multiplier, point_scale_multiplier, 0);
+  cy::WeightedSampleElimination<float3, float, 3, size_t> wse(bounds_max);
   wse.Eliminate(points.data(),
                 points.size(),
                 output_points.data(),

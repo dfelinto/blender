@@ -134,21 +134,11 @@ template<> PointCloud<blender::float3, float, 3, size_t>::~PointCloud()
   BLI_kdtree_3d_free((KDTree_3d *)kd_tree);
 }
 
-// ------
-// Blender functions end
-// ------
-
-//! An implementation of the weighted sample elimination method.
-//!
-
-//! This class keeps a number of parameters for the weighted sample elimination
-//! algorithm. The main algorithm is implemented in the Eliminate method.
-
 template<typename PointType, typename FType, int DIMENSIONS, typename SIZE_TYPE = size_t>
 class WeightedSampleElimination {
  public:
   //! The constructor sets the default parameters.
-  WeightedSampleElimination()
+  WeightedSampleElimination(PointType const &bmax)
   {
     for (int d = 0; d < DIMENSIONS; d++) {
       boundsMin[d] = FType(0);
@@ -157,120 +147,9 @@ class WeightedSampleElimination {
     alpha = FType(8);
     beta = FType(0.65);
     gamma = FType(1.5);
-    tiling = false;
+    tiling = true;
     weightLimiting = true;
-  }
-
-  //! Tiling determines whether the generated samples are tile-able.
-  //! Tiling is off by default, but it is a good idea to turn it on for
-  //! box-shaped sampling domains. Note that when tiling is off, weighted sample
-  //! elimination is less likely to eliminate samples near the boundaries of the
-  //! sampling domain. If you turn on tiling, make sure to set the correct
-  //! boundaries for the sampling domain.
-  void SetTiling(bool on = true)
-  {
-    tiling = on;
-  }
-
-  //! Returns true if the tiling parameter is turned on.
-  bool IsTiling() const
-  {
-    return tiling;
-  }
-
-  //! Weight limiting is used by the default weight function and it is on by
-  //! default. Using weight limiting typically leads to more pronounced blue
-  //! noise characteristics; therefore, it is recommended. The beta parameter
-  //! determines the amount of weight limiting. Setting the beta parameter to
-  //! zero effectively turns off weight limiting.
-  void SetWeightLimiting(bool on = true)
-  {
-    weightLimiting = on;
-  }
-
-  //! Returns true if weight limiting is turned on.
-  bool IsWeightLimiting() const
-  {
-    return weightLimiting;
-  }
-
-  //! Returns the minimum bounds of the sampling domain.
-  //! The sampling domain boundaries are used for tiling and computing the
-  //! maximum possible Poisson disk radius for the sampling domain. The default
-  //! boundaries are between 0 and 1.
-  PointType const &GetBoundsMin() const
-  {
-    return boundsMin;
-  }
-
-  //! Returns the maximum bounds of the sampling domain.
-  //! The sampling domain boundaries are used for tiling and computing the
-  //! maximum possible Poisson disk radius for the sampling domain. The default
-  //! boundaries are between 0 and 1.
-  PointType const &GetBoundsMax() const
-  {
-    return boundsMax;
-  }
-
-  //! Sets the minimum bounds of the sampling domain.
-  //! The sampling domain boundaries are used for tiling and computing the
-  //! maximum possible Poisson disk radius for the sampling domain. The default
-  //! boundaries are between 0 and 1.
-  void SetBoundsMin(PointType const &bmin)
-  {
-    boundsMin = bmin;
-  }
-
-  //! Sets the maximum bounds of the sampling domain.
-  //! The sampling domain boundaries are used for tiling and computing the
-  //! maximum possible Poisson disk radius for the sampling domain. The default
-  //! boundaries are between 0 and 1.
-  void SetBoundsMax(PointType const &bmax)
-  {
     boundsMax = bmax;
-  }
-
-  //! Sets the alpha parameter that is used by the default weight function.
-  void SetParamAlpha(FType a)
-  {
-    alpha = a;
-  }
-
-  //! Returns the alpha parameter that is used by the default weight function.
-  FType GetParamAlpha() const
-  {
-    return alpha;
-  }
-
-  //! Sets the beta parameter that is used by weight limiting for the default
-  //! weight function. Setting the beta parameter to zero effectively turns off
-  //! weight limiting. If weight limiting is off, this parameter has no effect.
-  void SetParamBeta(FType b)
-  {
-    beta = b;
-  }
-
-  //! Returns the beta parameter that is used by weight limiting for the default
-  //! weight function.
-  FType GetParamBeta() const
-  {
-    return beta;
-  }
-
-  //! Sets the gamma parameter that is used by weight limiting for the default
-  //! weight function. The gamma parameter adjusts weight limiting based on the
-  //! ratio of the input and output counts. If weight limiting is off, this
-  //! parameter has no effect.
-  void SetParamGamma(FType c)
-  {
-    gamma = c;
-  }
-
-  //! Returns the gamma parameter that is used by weight limiting for the
-  //! default weight function.
-  FType GetParamGamma() const
-  {
-    return gamma;
   }
 
   //! This is the main method that uses weighted sample elimination for
