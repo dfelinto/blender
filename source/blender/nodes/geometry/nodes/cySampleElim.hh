@@ -58,8 +58,6 @@ template<typename PointType, typename FType, int DIMENSIONS, typename SIZE_TYPE>
   void *kd_tree;
 
  public:
-  // Stub out the member functions so we abort if we have not explicity implemented the
-  // member functions for the type combinations.
   ~PointCloud()
   {
     BLI_assert(false);
@@ -188,14 +186,14 @@ class WeightedSampleElimination {
   //! parameter is on, the d_max value sent to the weight function can be
   //! different than the d_max value passed to this method.
   template<typename WeightFunction>
-  void Eliminate(PointType const *inputPoints,
-                 SIZE_TYPE inputSize,
-                 PointType *outputPoints,
-                 SIZE_TYPE outputSize,
-                 bool progressive,
-                 FType d_max,
-                 int dimensions,
-                 WeightFunction weightFunction) const
+  void Eliminate_ex(PointType const *inputPoints,
+                    SIZE_TYPE inputSize,
+                    PointType *outputPoints,
+                    SIZE_TYPE outputSize,
+                    bool progressive,
+                    FType d_max,
+                    int dimensions,
+                    WeightFunction weightFunction) const
   {
     BLI_assert(outputSize < inputSize);
     BLI_assert(dimensions <= DIMENSIONS && dimensions >= 2);
@@ -259,40 +257,23 @@ class WeightedSampleElimination {
       d_max = 2 * GetMaxPoissonDiskRadius(dimensions, outputSize);
     }
     FType alpha = this->alpha;
-    if (weightLimiting) {
-      FType d_min = d_max * GetWeightLimitFraction(inputSize, outputSize);
-      Eliminate(
-          inputPoints,
-          inputSize,
-          outputPoints,
-          outputSize,
-          progressive,
-          d_max,
-          dimensions,
-          [d_min, alpha](
-              PointType const & /*unused*/, PointType const & /*unused*/, FType d2, FType d_max) {
-            FType d = Sqrt(d2);
-            if (d < d_min) {
-              d = d_min;
-            }
-            return std::pow(FType(1) - d / d_max, alpha);
-          });
-    }
-    else {
-      Eliminate(
-          inputPoints,
-          inputSize,
-          outputPoints,
-          outputSize,
-          progressive,
-          d_max,
-          dimensions,
-          [alpha](
-              PointType const & /*unused*/, PointType const & /*unused*/, FType d2, FType d_max) {
-            FType d = Sqrt(d2);
-            return std::pow(FType(1) - d / d_max, alpha);
-          });
-    }
+    FType d_min = d_max * GetWeightLimitFraction(inputSize, outputSize);
+    Eliminate_ex(
+        inputPoints,
+        inputSize,
+        outputPoints,
+        outputSize,
+        progressive,
+        d_max,
+        dimensions,
+        [d_min, alpha](
+            PointType const & /*unused*/, PointType const & /*unused*/, FType d2, FType d_max) {
+          FType d = Sqrt(d2);
+          if (d < d_min) {
+            d = d_min;
+          }
+          return std::pow(FType(1) - d / d_max, alpha);
+        });
   }
 
   //! Returns the maximum possible Poisson disk radius in the given dimensions
@@ -471,198 +452,7 @@ class WeightedSampleElimination {
     return (1 - std::pow(ratio, gamma)) * beta;
   }
 
-  // This is the same functions as above except that we elimiate all points that have non zero
-  // weight (IE they are within d_max if we are using the default weighting function). We don't
-  // stop at any specific number of points.
-  template<typename WeightFunction>
-  std::vector<SIZE_TYPE> Eliminate_all(PointType const *inputPoints,
-                                       SIZE_TYPE inputSize,
-                                       PointType *outputPoints,
-                                       SIZE_TYPE outputSize,
-                                       bool progressive,
-                                       FType d_max,
-                                       int dimensions,
-                                       WeightFunction weightFunction) const
-  {
-    BLI_assert(outputSize == inputSize);
-    BLI_assert(dimensions <= DIMENSIONS && dimensions >= 2);
-    if (d_max <= FType(0)) {
-      d_max = 2 * GetMaxPoissonDiskRadius(dimensions, outputSize);
-    }
-    std::vector<SIZE_TYPE> remaining_points = DoEliminate_all(
-        inputPoints, inputSize, outputPoints, outputSize, d_max, weightFunction, false);
-    if (progressive) {
-      std::vector<PointType> tmpPoints(remaining_points.size());
-      PointType *inPts = outputPoints;
-      PointType *outPts = tmpPoints.data();
-      SIZE_TYPE inSize = remaining_points.size();
-      SIZE_TYPE outSize = 0;
-      while (inSize >= 3) {
-        outSize = inSize / 2;
-        d_max *= ProgressiveRadiusMultiplier(dimensions);
-        DoEliminate(inPts, inSize, outPts, outSize, d_max, weightFunction, true);
-        if (outPts != outputPoints) {
-          MemCopy(outputPoints + outSize, outPts + outSize, inSize - outSize);
-        }
-        PointType *tmpPts = inPts;
-        inPts = outPts;
-        outPts = tmpPts;
-        inSize = outSize;
-      }
-      if (inPts != outputPoints) {
-        MemCopy(outputPoints, inPts, outSize);
-      }
-    }
-    return remaining_points;
-  }
-
-  std::vector<SIZE_TYPE> Eliminate_all(PointType const *inputPoints,
-                                       SIZE_TYPE inputSize,
-                                       PointType *outputPoints,
-                                       SIZE_TYPE outputSize,
-                                       bool progressive = false,
-                                       FType d_max = FType(0),
-                                       int dimensions = DIMENSIONS) const
-  {
-    if (d_max <= FType(0)) {
-      d_max = 2 * GetMaxPoissonDiskRadius(dimensions, outputSize);
-    }
-    FType alpha = this->alpha;
-    if (weightLimiting) {
-      FType d_min = d_max * GetWeightLimitFraction(inputSize, outputSize);
-      return Eliminate_all(
-          inputPoints,
-          inputSize,
-          outputPoints,
-          outputSize,
-          progressive,
-          d_max,
-          dimensions,
-          [d_min, alpha](
-              PointType const & /*unused*/, PointType const & /*unused*/, FType d2, FType d_max) {
-            FType d = Sqrt(d2);
-            if (d < d_min) {
-              d = d_min;
-            }
-            return std::pow(FType(1) - d / d_max, alpha);
-          });
-    }
-    return Eliminate_all(
-        inputPoints,
-        inputSize,
-        outputPoints,
-        outputSize,
-        progressive,
-        d_max,
-        dimensions,
-        [alpha](
-            PointType const & /*unused*/, PointType const & /*unused*/, FType d2, FType d_max) {
-          FType d = Sqrt(d2);
-          return std::pow(FType(1) - d / d_max, alpha);
-        });
-  }
-
  private:
-  template<typename WeightFunction>
-  std::vector<SIZE_TYPE> DoEliminate_all(PointType const *inputPoints,
-                                         SIZE_TYPE inputSize,
-                                         PointType *outputPoints,
-                                         SIZE_TYPE outputSize,
-                                         FType d_max,
-                                         WeightFunction weightFunction,
-                                         bool copyEliminated) const
-  {
-    // Build a k-d tree for samples
-    PointCloud<PointType, FType, DIMENSIONS, SIZE_TYPE> kdtree;
-    if (tiling) {
-      std::vector<PointType> point(inputPoints, inputPoints + inputSize);
-      std::vector<SIZE_TYPE> index(inputSize);
-      for (SIZE_TYPE i = 0; i < inputSize; i++) {
-        index[i] = i;
-      }
-      auto AppendPoint = [&](SIZE_TYPE ix, PointType const &pt) {
-        point.push_back(pt);
-        index.push_back(ix);
-      };
-      for (SIZE_TYPE i = 0; i < inputSize; i++) {
-        TilePoint(i, inputPoints[i], d_max, AppendPoint);
-      }
-      kdtree.Build(point.size(), point.data(), index.data());
-    }
-    else {
-      kdtree.Build(inputSize, inputPoints);
-    }
-
-    // Assign weights to each sample
-    std::vector<FType> w(inputSize, FType(0));
-    auto AddWeights = [&](SIZE_TYPE index, PointType const &point) {
-      kdtree.GetPoints(point,
-                       d_max,
-                       [&weightFunction, d_max, &w, index, &point, &inputSize](
-                           SIZE_TYPE i, PointType const &p, FType d2, FType & /*unused*/) {
-                         if (i >= inputSize) {
-                           return;
-                         }
-                         if (i != index) {
-                           w[index] += weightFunction(point, p, d2, d_max);
-                         }
-                       });
-    };
-    {
-      SCOPED_TIMER("poisson KDtree weight assignmet");
-      for (SIZE_TYPE i = 0; i < inputSize; i++) {
-        AddWeights(i, inputPoints[i]);
-      }
-    }
-
-    // Build a heap for the samples using their weights
-    Heap<FType, SIZE_TYPE> heap;
-    heap.SetDataPointer(w.data(), inputSize);
-    heap.Build();
-
-    // While the number of samples is greater than desired
-    auto RemoveWeights = [&](SIZE_TYPE index, PointType const &point) {
-      kdtree.GetPoints(point,
-                       d_max,
-                       [&weightFunction, d_max, &w, index, &point, &heap, &inputSize](
-                           SIZE_TYPE i, PointType const &p, FType d2, FType & /*unused*/) {
-                         if (i >= inputSize) {
-                           return;
-                         }
-                         if (i != index) {
-                           w[i] -= weightFunction(point, p, d2, d_max);
-                           heap.MoveItemDown(i);
-                         }
-                       });
-    };
-    SIZE_TYPE sampleSize = inputSize;
-
-    {
-      SCOPED_TIMER("poisson Heap weight elimination");
-      // Stop when the top heap item has a weight of zero.
-      // We have to return at least one point otherwise the heap triggers a ASAN error
-      while (heap.GetTopItem() > (0.5f * 1e-5f) && heap.NumItemsInHeap() > 1) {
-        // Pull the top sample from heap
-        SIZE_TYPE i = heap.GetTopItemID();
-        heap.Pop();
-        // For each sample around it, remove its weight contribution and update
-        // the heap
-        RemoveWeights(i, inputPoints[i]);
-        sampleSize--;
-      }
-    }
-
-    // Copy the samples to the output array
-    SIZE_TYPE targetSize = copyEliminated ? inputSize : sampleSize;
-    std::vector<SIZE_TYPE> orig_point_idx;
-    orig_point_idx.reserve(targetSize);
-    for (SIZE_TYPE i = 0; i < targetSize; i++) {
-      SIZE_TYPE idx = heap.GetIDFromHeap(i);
-      outputPoints[i] = inputPoints[idx];
-      orig_point_idx.push_back(idx);
-    }
-    return orig_point_idx;
-  }
 };
 
 }  // namespace cy
