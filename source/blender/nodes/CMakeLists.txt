@@ -146,6 +146,7 @@ set(SRC
   geometry/nodes/node_geo_object_info.cc
   geometry/nodes/node_geo_subdivision_surface.cc
   geometry/nodes/node_geo_point_distribute.cc
+  geometry/nodes/node_geo_point_distribute_poisson_disk.cc
   geometry/nodes/node_geo_point_instance.cc
   geometry/nodes/node_geo_random_attribute.cc
   geometry/nodes/node_geo_transform.cc

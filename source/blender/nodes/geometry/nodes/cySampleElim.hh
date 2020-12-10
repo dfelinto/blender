@@ -6,6 +6,8 @@
 
 #pragma once
 
+#pragma warning(push, 0)
+
 //-------------------------------------------------------------------------------
 
 #include "MEM_guardedalloc.h"
@@ -664,3 +666,5 @@ class WeightedSampleElimination {
 };
 
 }  // namespace cy
+
+#pragma warning(pop)

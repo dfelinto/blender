@@ -26,6 +26,7 @@
 
 #include "BKE_bvhutils.h"
 #include "BKE_deform.h"
+#include "BKE_global.h"
 #include "BKE_mesh.h"
 #include "BKE_mesh_runtime.h"
 #include "BKE_pointcloud.h"
@@ -155,13 +156,13 @@ static void project_2d_bvh_callback(void *userdata,
 
 static Vector<float3> poisson_scatter_points_from_mesh(const Mesh *mesh,
                                                        const float density,
-                                                       const float min_dist,
+                                                       const float minimum_distance,
                                                        const FloatReadAttribute &density_factors,
                                                        const int seed)
 {
   Vector<float3> points;
 
-  if (min_dist <= FLT_EPSILON || density <= FLT_EPSILON) {
+  if (minimum_distance <= FLT_EPSILON || density <= FLT_EPSILON) {
     return points;
   }
 
@@ -171,7 +172,8 @@ static Vector<float3> poisson_scatter_points_from_mesh(const Mesh *mesh,
   const int output_points_target = 1000;
   points.resize(output_points_target * quality);
 
-  const float required_area = output_points_target * (2.0f * sqrtf(3.0f) * min_dist * min_dist);
+  const float required_area = output_points_target *
+                              (2.0f * sqrtf(3.0f) * minimum_distance * minimum_distance);
   const float point_scale_multiplier = sqrtf(required_area);
 
   {
@@ -188,19 +190,20 @@ static Vector<float3> poisson_scatter_points_from_mesh(const Mesh *mesh,
   /* Eliminate the scattered points until we get a possion distribution. */
   Vector<float3> output_points(output_points_target);
 
-  bool is_progressive = true;
-  float d_max = 2 * min_dist;
-
-  float3 bounds_max = float3(point_scale_multiplier, point_scale_multiplier, 0);
-  cy::WeightedSampleElimination<float3, float, 3, size_t> wse(bounds_max);
-  wse.Eliminate(points.data(),
-                points.size(),
-                output_points.data(),
-                output_points.size(),
-                is_progressive,
-                d_max,
-                2);
-
+  const float3 bounds_max = float3(point_scale_multiplier, point_scale_multiplier, 0);
+  if (G.debug_value == 1) {
+    cy::WeightedSampleElimination<float3, float, 3, size_t> wse(bounds_max);
+    wse.Eliminate(points.data(),
+                  points.size(),
+                  output_points.data(),
+                  output_points.size(),
+                  true,
+                  2.0f * minimum_distance,
+                  2);
+  }
+  else {
+    poisson_disk_point_elimination(&points, &output_points, 2.0f * minimum_distance, bounds_max);
+  }
   Vector<float3> final_points;
   final_points.reserve(output_points_target);
 
