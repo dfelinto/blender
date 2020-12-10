@@ -14,6 +14,14 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
+/*
+ * Based on Cem Yuksel. 2015. Sample Elimination for Generating Poisson Disk Sample
+ * ! Sets. Computer Graphics Forum 34, 2 (May 2015), 25-32.
+ * ! http://www.cemyuksel.com/research/sampleelimination/
+ * Copyright (c) 2016, Cem Yuksel <cem@cemyuksel.com>
+ * All rights reserved.
+ */
+
 #include "BLI_heap.h"
 #include "BLI_kdtree.h"
 
