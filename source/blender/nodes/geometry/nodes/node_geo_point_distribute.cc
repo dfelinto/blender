@@ -284,16 +284,14 @@ static void geo_node_point_distribute_exec(GeoNodeExecParams params)
 
   Vector<float3> points;
 
-  if (distribute_method == GEO_NODE_POINT_DISTRIBUTE_RANDOM) {
-    points = random_scatter_points_from_mesh(mesh_in, density, density_factors, seed);
-  }
-  else if (distribute_method == GEO_NODE_POINT_DISTRIBUTE_POISSON) {
-    const float min_dist = params.extract_input<float>("Minimum Distance");
-    points = poisson_scatter_points_from_mesh(mesh_in, density, min_dist, density_factors, seed);
-  }
-  else {
-    /* Unhandled point distribution. */
-    BLI_assert(false);
+  switch (distribute_method) {
+    case GEO_NODE_POINT_DISTRIBUTE_RANDOM:
+      points = random_scatter_points_from_mesh(mesh_in, density, density_factors, seed);
+      break;
+    case GEO_NODE_POINT_DISTRIBUTE_POISSON:
+      const float min_dist = params.extract_input<float>("Minimum Distance");
+      points = poisson_scatter_points_from_mesh(mesh_in, density, min_dist, density_factors, seed);
+      break;
   }
 
   PointCloud *pointcloud = BKE_pointcloud_new_nomain(points.size());
