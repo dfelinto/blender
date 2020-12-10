@@ -166,8 +166,7 @@ static Vector<float3> poisson_scatter_points_from_mesh(const Mesh *mesh,
   }
 
   /* Scatter points randomly on the mesh with higher density (5-7) times higher than desired for
-   * good quality possion disk distributions.
-   */
+   * good quality possion disk distributions. */
   int quality = 5;
   const int output_points_target = 1000;
   points.resize(output_points_target * quality);
@@ -206,7 +205,6 @@ static Vector<float3> poisson_scatter_points_from_mesh(const Mesh *mesh,
                 2);
 
   Vector<float3> final_points;
-  // TODO do some clever reserveing based on bounding box size perhaps?
   final_points.reserve(output_points_target);
 
   /* Check if we have any points we should remove from the final possion distribition. */
