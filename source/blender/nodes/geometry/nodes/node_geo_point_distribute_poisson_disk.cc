@@ -183,7 +183,8 @@ static void points_tiling(Vector<float3> const *input_points,
 static void weighted_sample_elimination(Vector<float3> const *input_points,
                                         Vector<float3> *output_points,
                                         const float maximum_distance,
-                                        const float3 boundbox)
+                                        const float3 boundbox,
+                                        const bool do_copy_eliminated)
 {
   const float minimum_distance = maximum_distance *
                                  weight_limit_fraction_get(input_points->size(),
@@ -232,6 +233,7 @@ static void weighted_sample_elimination(Vector<float3> const *input_points,
   }
 
   /* Copy the samples to the output array. */
+  size_t target_size = do_copy_eliminated ? input_points->size() : output_points->size();
   for (size_t i = 0; i < output_points->size(); i++) {
     size_t index = POINTER_AS_INT(BLI_heap_pop_min(heap));
     output_points->data()[i] = input_points->data()[index];
@@ -247,7 +249,7 @@ void poisson_disk_point_elimination(Vector<float3> const *input_points,
                                     float maximum_density,
                                     float3 boundbox)
 {
-  weighted_sample_elimination(input_points, output_points, maximum_density, boundbox);
+  weighted_sample_elimination(input_points, output_points, maximum_density, boundbox, false);
 
   /* Re-order the points for progressive sampling. */
 #if 0
@@ -260,7 +262,7 @@ void poisson_disk_point_elimination(Vector<float3> const *input_points,
         outSize = inSize / 2;
         // dmax *= Sqrt(2.0f)
         d_max *= ProgressiveRadiusMultiplier(dimensions);
-        //  weighted_sample_elimination(input_points, output_points, maximum_density, boundbox);
+        //  weighted_sample_elimination(input_points, output_points, maximum_density, boundbox, true);
         DoEliminate(inPts, inSize, outPts, outSize, d_max, weightFunction, true);
         if (outPts != outputPoints) {
           MemCopy(outputPoints + outSize, outPts + outSize, inSize - outSize);
