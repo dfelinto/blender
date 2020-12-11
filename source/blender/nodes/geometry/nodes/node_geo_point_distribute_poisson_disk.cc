@@ -89,8 +89,8 @@ static void points_distance_weight_calculate(std::vector<float> *weights,
                                              const size_t point_id,
                                              Vector<float3> const *input_points,
                                              const void *kd_tree,
-                                             const size_t minimum_distance,
-                                             const size_t maximum_distance,
+                                             const float minimum_distance,
+                                             const float maximum_distance,
                                              Heap *heap,
                                              std::vector<HeapNode *> *nodes)
 {
@@ -149,9 +149,9 @@ static void weighted_sample_elimination(Vector<float3> const *input_points,
                                         const float maximum_distance,
                                         const float3 boundbox)
 {
-  const size_t minimum_distance = maximum_distance *
-                                  weight_limit_fraction_get(input_points->size(),
-                                                            output_points->size());
+  const float minimum_distance = maximum_distance *
+                                 weight_limit_fraction_get(input_points->size(),
+                                                           output_points->size());
 
   void *kd_tree = BLI_kdtree_3d_new(input_points->size());
   {
