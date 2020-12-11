@@ -144,6 +144,42 @@ static float weight_limit_fraction_get(const size_t input_size, const size_t out
   return (1.0f - std::pow(ratio, gamma)) * beta;
 }
 
+/**
+ * Tile the input points.
+ */
+static void points_tiling(Vector<float3> const *input_points,
+                          const void *kd_tree,
+                          const float maximum_distance,
+                          const float3 boundbox)
+
+{
+  std::vector<float3> tiled_points(input_points->data(),
+                                   input_points->data() + input_points->size());
+  std::vector<size_t> indices(input_points->size());
+
+  /* Start building a kdtree for the samples. */
+  for (size_t i = 0; i < input_points->size(); i++) {
+    indices[i] = i;
+    BLI_kdtree_3d_insert((KDTree_3d *)kd_tree, i, input_points->data()[i]);
+  }
+  BLI_kdtree_3d_balance((KDTree_3d *)kd_tree);
+
+  /* Tile the tree based on the boundbox. */
+  for (size_t i = 0; i < input_points->size(); i++) {
+    tile_point(&tiled_points, &indices, maximum_distance, boundbox, input_points->data()[i], i);
+  }
+
+  /* Re-use the same kdtree, so free it before re-creating it. */
+  BLI_kdtree_3d_free((KDTree_3d *)kd_tree);
+
+  /* Build a new tree with the new indices and tiled points. */
+  kd_tree = BLI_kdtree_3d_new(tiled_points.size());
+  for (size_t i = 0; i < tiled_points.size(); i++) {
+    BLI_kdtree_3d_insert((KDTree_3d *)kd_tree, indices[i], tiled_points[i]);
+  }
+  BLI_kdtree_3d_balance((KDTree_3d *)kd_tree);
+}
+
 static void weighted_sample_elimination(Vector<float3> const *input_points,
                                         Vector<float3> *output_points,
                                         const float maximum_distance,
@@ -154,40 +190,7 @@ static void weighted_sample_elimination(Vector<float3> const *input_points,
                                                            output_points->size());
 
   void *kd_tree = BLI_kdtree_3d_new(input_points->size());
-  {
-    std::vector<float3> tiled_points(input_points->data(),
-                                     input_points->data() + input_points->size());
-    std::vector<size_t> indices(input_points->size());
-
-    /* Start building a kdtree for the samples. */
-    for (size_t i = 0; i < input_points->size(); i++) {
-      indices[i] = i;
-      BLI_kdtree_3d_insert((KDTree_3d *)kd_tree, i, input_points->data()[i]);
-    }
-    BLI_kdtree_3d_balance((KDTree_3d *)kd_tree);
-
-    /* Tile the tree based on the boundbox. */
-    for (size_t i = 0; i < input_points->size(); i++) {
-      tile_point(&tiled_points, &indices, maximum_distance, boundbox, input_points->data()[i], i);
-    }
-
-    /* Re-use the same kdtree, so free it before re-creating it. */
-    BLI_kdtree_3d_free((KDTree_3d *)kd_tree);
-
-    /* Build a new tree with the new indices and tiled points. */
-    kd_tree = BLI_kdtree_3d_new(tiled_points.size());
-    for (size_t i = 0; i < tiled_points.size(); i++) {
-      BLI_kdtree_3d_insert((KDTree_3d *)kd_tree, indices[i], tiled_points[i]);
-    }
-    BLI_kdtree_3d_balance((KDTree_3d *)kd_tree);
-  }
-#else
-  UNUSED_VARS(boundbox);
-  for (size_t i = 0; i < input_points->size(); i++) {
-    BLI_kdtree_3d_insert((KDTree_3d *)kd_tree, i, input_points->data()[i]);
-  }
-  BLI_kdtree_3d_balance((KDTree_3d *)kd_tree);
-#endif
+  points_tiling(input_points, kd_tree, maximum_distance, boundbox);
 
   /* Assign weights to each sample. */
   std::vector<float> weights(input_points->size(), 0.0f);
