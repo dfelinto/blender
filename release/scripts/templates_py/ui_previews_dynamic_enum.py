@@ -40,7 +40,8 @@ def enum_previews_from_directory_items(self, context):
         return pcoll.my_previews
 
     print("Scanning directory: %s" % directory)
-
+    # Get absolute path from Blender relative path
+    directory = bpy.path.abspath(directory) 
     if directory and os.path.exists(directory):
         # Scan the directory for png files
         image_paths = []
